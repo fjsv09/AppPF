@@ -55,13 +55,13 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
   // 2. Fetch Movements
   let query = adminClient
     .from('movimientos_financieros')
-    .select('*, cuentas_financieras(nombre, tipo)')
+    .select('*, cuentas_financieras:cuentas_financieras!movimientos_financieros_cuenta_origen_id_fkey(nombre, tipo)')
     .order('created_at', { ascending: false })
 
   if (cuentaFilter) {
-    query = query.eq('cuenta_id', cuentaFilter)
+    query = query.eq('cuenta_origen_id', cuentaFilter)
   } else {
-    query = query.in('cuenta_id', accIds)
+    query = query.in('cuenta_origen_id', accIds)
   }
 
   const { data: movements, error: mError } = await query
@@ -74,7 +74,7 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/5 pb-6">
         <div className="space-y-4">
           <div className="flex items-center gap-3">
-             <BackButton className="bg-slate-900 border-slate-800" />
+             <BackButton />
              <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[9px] font-black uppercase tracking-widest py-0.5">
                 Financial Audit
              </Badge>

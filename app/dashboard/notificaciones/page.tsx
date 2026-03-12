@@ -73,11 +73,30 @@ export default function NotificacionesPage() {
     }, [])
 
     const subscribePush = async () => {
-        if (!registration) {
-            toast.error('Service Worker no está registrado o cargando.')
-            return
+        let currentReg = registration
+        
+        // Si no tenemos registro, intentamos registrar de nuevo.
+        if (!currentReg) {
+            if ('serviceWorker' in navigator && 'PushManager' in window) {
+                try {
+                    currentReg = await navigator.serviceWorker.register('/sw.js')
+                    setRegistration(currentReg)
+                } catch (err: any) {
+                    toast.error(`Error al registrar SW: ${err.message}`)
+                    return
+                }
+            } else {
+                toast.error('Las notificaciones Push no son soportadas en este navegador.')
+                return
+            }
         }
         
+        // Si aún así no lo tenemos, abortamos
+        if (!currentReg) {
+            toast.error('No se pudo inicializar el Service Worker.')
+            return
+        }
+
         if (!VAPID_PUBLIC_KEY) {
             toast.error('Faltan claves VAPID en el servidor (Vercel). Configura las variables de entorno.')
             return
@@ -91,7 +110,7 @@ export default function NotificacionesPage() {
                 return
             }
 
-            const sub = await registration.pushManager.subscribe({
+            const sub = await currentReg.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
             })

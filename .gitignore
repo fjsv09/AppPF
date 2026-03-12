@@ -48,6 +48,7 @@ next-env.d.ts
 !postcss.config.js
 !tailwind.config.ts
 !eslint.config.mjs
+!public/sw.js
 !middleware.ts
 *.json
 !package.json

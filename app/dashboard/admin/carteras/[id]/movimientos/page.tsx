@@ -55,13 +55,17 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
   // 2. Fetch Movements
   let query = adminClient
     .from('movimientos_financieros')
-    .select('*, cuentas_financieras:cuentas_financieras!movimientos_financieros_cuenta_origen_id_fkey(nombre, tipo)')
+    .select(`
+      *,
+      origen:cuentas_financieras!movimientos_financieros_cuenta_origen_id_fkey(nombre, tipo),
+      destino:cuentas_financieras!movimientos_financieros_cuenta_destino_id_fkey(nombre, tipo)
+    `)
     .order('created_at', { ascending: false })
 
   if (cuentaFilter) {
-    query = query.eq('cuenta_origen_id', cuentaFilter)
+    query = query.or(`cuenta_origen_id.eq.${cuentaFilter},cuenta_destino_id.eq.${cuentaFilter}`)
   } else {
-    query = query.in('cuenta_origen_id', accIds)
+    query = query.eq('cartera_id', id)
   }
 
   const { data: movements, error: mError } = await query
@@ -165,8 +169,12 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
                           </div>
                        </td>
                        <td className="px-6 py-6">
-                          <p className="text-xs font-bold text-slate-300 uppercase">{m.cuentas_financieras?.nombre}</p>
-                          <p className="text-[10px] text-slate-500 uppercase font-medium">{m.cuentas_financieras?.tipo}</p>
+                          <p className="text-xs font-bold text-slate-300 uppercase">
+                             {m.origen?.nombre || m.destino?.nombre || 'Cuenta Desconocida'}
+                          </p>
+                          <p className="text-[10px] text-slate-500 uppercase font-medium">
+                             {m.origen?.tipo || m.destino?.tipo || 'N/A'}
+                          </p>
                        </td>
                        <td className="px-6 py-6">
                           <p className="text-sm text-slate-200 font-medium group-hover:text-white transition-colors">

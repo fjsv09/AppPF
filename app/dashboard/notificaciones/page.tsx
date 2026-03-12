@@ -74,6 +74,12 @@ export default function NotificacionesPage() {
 
     const subscribePush = async () => {
         if (!registration) return
+        
+        if (!VAPID_PUBLIC_KEY) {
+            toast.error('Faltan claves VAPID en el servidor (Vercel). Configura las variables de entorno.')
+            return
+        }
+
         try {
             const sub = await registration.pushManager.subscribe({
                 userVisibleOnly: true,

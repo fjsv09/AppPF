@@ -41,6 +41,7 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
         { href: '/dashboard', label: 'Inicio', icon: Home, roles: ['admin', 'supervisor', 'asesor'], category: 'Principal' },
         { href: '/dashboard/clientes', label: 'Clientes', icon: Users, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
         { href: '/dashboard/notificaciones', label: 'Notificaciones', icon: Bell, roles: ['admin', 'supervisor', 'asesor'], category: 'Principal' },
+        { href: '/dashboard/prestamos', label: 'Préstamos', icon: Banknote, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
         
         // --- Gestión Financiera ---
         { href: '/dashboard/admin/cuadres', label: 'Aprobar Cuadres', icon: Landmark, roles: ['admin'], category: 'Finanzas' },
@@ -51,7 +52,6 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
         { href: '/dashboard/metas', label: 'Metas y Bonos', icon: Award, roles: ['admin', 'supervisor', 'asesor'], category: 'Finanzas' },
         
         // --- Operaciones ---
-        { href: '/dashboard/prestamos', label: 'Préstamos', icon: Banknote, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
         { href: '/dashboard/solicitudes', label: 'Solicitudes', icon: FileText, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
         { href: '/dashboard/renovaciones', label: 'Renovaciones', icon: RefreshCw, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
         { href: '/dashboard/tareas', label: 'Tareas', icon: Camera, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },

@@ -1,0 +1,787 @@
+'use client'
+
+import { useState, useMemo, useEffect, useTransition } from 'react'
+import Link from 'next/link'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { ImageLightbox } from '@/components/ui/image-lightbox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ClientDetailDrawer } from '@/components/clientes/client-detail-drawer'
+import { Users, Search, Phone, ChevronLeft, ChevronRight, Calendar, Loader2, Link as LinkIcon, Eye, Download, CheckSquare, Square, ChevronDown, Trash2, CalendarHeart, HandCoins, ExternalLink, ListFilter, MoreVertical, MessageCircle, MapPin, X, Map } from 'lucide-react'
+import { cn } from "@/lib/utils"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import dynamic from 'next/dynamic'
+import { ClientEditModal } from './client-edit-modal'
+import { Edit } from 'lucide-react'
+
+const ClientesMapa = dynamic(() => import('./clientes-mapa'), { 
+    ssr: false,
+    loading: () => <div className="h-[500px] w-full rounded-2xl bg-slate-900 border border-slate-800 animate-pulse flex items-center justify-center text-slate-500">Cargando mapa interactivo...</div>
+})
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { toast } from 'sonner'
+import { createClient } from '@/utils/supabase/client'
+
+const TableSkeleton = () => (
+    <div className="animate-pulse space-y-4 p-4">
+        {/* Mobile Skeleton */}
+        <div className="md:hidden space-y-4">
+            {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-slate-900 border border-slate-800 rounded-xl p-4 h-32 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-800/10 to-transparent skew-x-12 animate-shimmer" />
+                    <div className="flex gap-4">
+                        <div className="h-10 w-10 bg-slate-800 rounded-xl" />
+                        <div className="space-y-2 flex-1">
+                            <div className="h-4 w-3/4 bg-slate-800 rounded" />
+                            <div className="h-3 w-1/2 bg-slate-800 rounded" />
+                        </div>
+                    </div>
+                </div>
+            ))}
+        </div>
+        
+        {/* Desktop Skeleton */}
+        <div className="hidden md:block space-y-4">
+             <div className="flex gap-4 border-b border-slate-800/50 pb-4">
+                {[1,2,3,4,5,6].map(i => <div key={i} className="h-4 bg-slate-800 rounded flex-1 opacity-50" />)}
+             </div>
+             {[1,2,3,4,5,6,7,8].map((i) => (
+                <div key={i} className="flex gap-4 items-center py-3 border-b border-slate-800/30">
+                    <div className="h-10 w-10 rounded-xl bg-slate-800" />
+                    <div className="h-4 w-48 bg-slate-800 rounded" />
+                    <div className="h-4 flex-1 bg-slate-800 rounded opacity-50" />
+                    <div className="h-6 w-20 bg-slate-800 rounded-full" />
+                </div>
+             ))}
+        </div>
+    </div>
+)
+
+interface ClientDirectoryProps {
+    clientes: any[]
+    perfiles?: any[] 
+    userRol?: 'admin' | 'supervisor' | 'asesor'
+    userId?: string
+}
+
+type FilterTab = 'todos' | 'activos' | 'con_deuda' | 'sin_prestamos' | 'inactivos'
+
+const ITEMS_PER_PAGE = 10
+
+const formatMoney = (value: number): string => {
+    return value.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', userId = '' }: ClientDirectoryProps) {
+    const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
+    const [isPending, startTransition] = useTransition()
+
+    // 1. Get Filters from URL
+    const activeFilter = (searchParams.get('tab') as FilterTab) || 'todos'
+    const searchQuery = searchParams.get('q') || ''
+    const filtroSupervisor = searchParams.get('supervisor') || 'todos'
+    const filtroAsesor = searchParams.get('asesor') || 'todos'
+    const filtroSector = searchParams.get('sector') || 'todos'
+    const currentPage = Number(searchParams.get('page')) || 1
+
+    // 2. Local state
+    const [localSearch, setLocalSearch] = useState(searchQuery)
+    const [fechaFiltro, setFechaFiltro] = useState<string>('')
+    const [selectedClients, setSelectedClients] = useState<string[]>([]) // For bulk actions
+    const [showMap, setShowMap] = useState<boolean>(false)
+    
+    // Asignacion masiva
+    const [isReasignModalOpen, setIsReasignModalOpen] = useState(false)
+    const [selectedNewAsesor, setSelectedNewAsesor] = useState<string>('')
+    const [isReassigning, setIsReassigning] = useState(false)
+
+    // Edit Modal State
+    const [editingCliente, setEditingCliente] = useState<any>(null)
+
+    // 3. Helper to update URL
+    const updateParams = (updates: Record<string, string | null>) => {
+        const params = new URLSearchParams(searchParams.toString())
+        Object.entries(updates).forEach(([key, value]) => {
+            if (value === null) params.delete(key)
+            else params.set(key, value)
+        })
+        
+        startTransition(() => {
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+        })
+    }
+
+    // 4. Sync local search with URL
+    useEffect(() => {
+        setLocalSearch(searchQuery)
+    }, [searchQuery])
+
+    // Debounce Search Effect
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (localSearch !== searchQuery) {
+                updateParams({ q: localSearch || null, page: '1' })
+            }
+        }, 600)
+        return () => clearTimeout(timer)
+    }, [localSearch, searchQuery])
+
+    // Supervisores for Admin
+    const supervisores = useMemo(() => {
+        return perfiles.filter(p => p.rol === 'supervisor')
+    }, [perfiles])
+
+    // Asesores Filtered
+    const asesores = useMemo(() => {
+        if (filtroSupervisor !== 'todos') {
+            return perfiles.filter(p => p.rol === 'asesor' && p.supervisor_id === filtroSupervisor)
+        }
+        if (userRol === 'supervisor') {
+            return perfiles.filter(p => p.rol === 'asesor' && p.supervisor_id === userId)
+        }
+        return perfiles.filter(p => p.rol === 'asesor')
+    }, [perfiles, filtroSupervisor, userRol, userId])
+
+    // Unique Sectors
+    const sectoresList = useMemo(() => {
+        const unique = new globalThis.Map<string, string>()
+        clientes.forEach(c => {
+            if (c.sector_id && c.sectores?.nombre) {
+                unique.set(c.sector_id, c.sectores.nombre)
+            }
+        })
+        return Array.from(unique.entries()).map((entry) => {
+            const [id, nombre] = entry as [string, string]
+            return { id, nombre }
+        }).sort((a, b) => a.nombre.localeCompare(b.nombre))
+    }, [clientes])
+
+    // Tabs logic
+    const tabs = useMemo(() => [
+        { id: 'todos' as FilterTab, label: 'Todos', count: clientes.length },
+        { id: 'activos' as FilterTab, label: 'Activos', count: clientes.filter(c => c.estado === 'activo').length },
+        { id: 'con_deuda' as FilterTab, label: 'Con Deuda', count: clientes.filter(c => c.stats.totalDebt > 0).length },
+        { id: 'sin_prestamos' as FilterTab, label: 'Sin Préstamos', count: clientes.filter(c => c.stats.activeLoansCount === 0).length },
+        { id: 'inactivos' as FilterTab, label: 'Inactivos', count: clientes.filter(c => c.estado !== 'activo').length },
+    ], [clientes])
+
+    // Filtering logic
+    const filteredClientes = useMemo(() => {
+        let result = clientes
+
+        // Supervisor
+        if (userRol === 'admin' && filtroSupervisor !== 'todos') {
+             const advisorIds = perfiles
+                .filter(p => p.supervisor_id === filtroSupervisor)
+                .map(p => p.id)
+             result = result.filter(c => advisorIds.includes(c.asesor_id))
+        }
+
+        // Asesor
+        if (filtroAsesor !== 'todos') {
+            result = result.filter(c => c.asesor_id === filtroAsesor)
+        }
+
+        // Sector
+        if (filtroSector !== 'todos') {
+            result = result.filter(c => c.sector_id === filtroSector)
+        }
+
+        // Tabs
+        switch (activeFilter) {
+            case 'activos': result = result.filter(c => c.estado === 'activo'); break;
+            case 'con_deuda': result = result.filter(c => c.stats.totalDebt > 0); break;
+            case 'sin_prestamos': result = result.filter(c => c.stats.activeLoansCount === 0); break;
+            case 'inactivos': result = result.filter(c => c.estado !== 'activo'); break;
+        }
+
+        // Search
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase()
+            result = result.filter(c => 
+                c.nombres?.toLowerCase().includes(query) ||
+                c.dni?.includes(query) ||
+                c.telefono?.includes(query) ||
+                c.sectores?.nombre?.toLowerCase().includes(query)
+            )
+        }
+
+        return result
+    }, [clientes, activeFilter, searchQuery, filtroSupervisor, filtroAsesor, filtroSector, userRol, perfiles])
+
+    // Pagination
+    const totalPages = Math.ceil(filteredClientes.length / ITEMS_PER_PAGE)
+    const paginatedClientes = useMemo(() => {
+        const start = (currentPage - 1) * ITEMS_PER_PAGE
+        return filteredClientes.slice(start, start + ITEMS_PER_PAGE)
+    }, [filteredClientes, currentPage])
+
+    const totalDebt = filteredClientes.reduce((acc, c) => acc + (c.stats.totalDebt || 0), 0)
+
+    const handleFilterChange = (val: string) => updateParams({ tab: val, page: '1' })
+    const handleSupervisorChange = (val: string) => updateParams({ supervisor: val, page: '1' })
+    const handleAsesorChange = (val: string) => updateParams({ asesor: val, page: '1' })
+    const handleSectorChange = (val: string) => updateParams({ sector: val, page: '1' })
+    const handlePageChange = (page: number) => updateParams({ page: String(page) })
+
+    // Bulk Actions Logic
+    const toggleSelectClient = (id: string) => {
+        setSelectedClients(prev => 
+            prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+        )
+    }
+
+    const toggleSelectAll = () => {
+        if (selectedClients.length === paginatedClientes.length) {
+            setSelectedClients([])
+        } else {
+            setSelectedClients(paginatedClientes.map(c => c.id))
+        }
+    }
+
+    const handleReassignSubmit = async () => {
+        if (!selectedNewAsesor) {
+            toast.error("Seleccione un asesor destino")
+            return
+        }
+        
+        setIsReassigning(true)
+        try {
+            const supabase = createClient()
+            const { error } = await supabase
+                .from('clientes')
+                .update({ asesor_id: selectedNewAsesor })
+                .in('id', selectedClients)
+                
+            if (error) throw error
+            
+            toast.success(`Se han reasignado ${selectedClients.length} clientes exitosamente.`)
+            setSelectedClients([])
+            setIsReasignModalOpen(false)
+            setSelectedNewAsesor('')
+            
+            // Forzar recarga de los datos en la vista actual
+            window.location.reload()
+            
+        } catch (error: any) {
+            console.error("Error al reasignar", error)
+            toast.error("Error al reasignar: " + error.message)
+        } finally {
+            setIsReassigning(false)
+        }
+    }
+
+    return (
+        <div className="space-y-4">
+             {/* Header Actions (Export CSV, Bulk Reassign) - Only Admin */}
+             {userRol === 'admin' && (
+                <div className="flex justify-end gap-2 mb-2">
+                    {selectedClients.length > 0 && userRol === 'admin' && (
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="bg-slate-900 border-slate-700 text-slate-300 hover:text-white"
+                            onClick={() => setIsReasignModalOpen(true)}
+                        >
+                            <Users className="w-4 h-4 mr-2" />
+                            Reasignar ({selectedClients.length})
+                        </Button>
+                    )}
+                    <Button variant="outline" size="sm" className="bg-slate-900 border-slate-700 text-slate-300 hover:text-white">
+                        <Download className="w-4 h-4 mr-2" />
+                        Exportar CSV
+                    </Button>
+                </div>
+             )}
+
+             {/* Main Filter Bar - Responsive & Clean */}
+             <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
+                {/* Search */}
+                <div className="relative w-full md:flex-1 md:max-w-none">
+                    {isPending ? (
+                         <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 animate-spin" />
+                    ) : (
+                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                    )}
+                    <Input
+                        placeholder="Buscar cliente (DNI, Nombre)..."
+                        value={localSearch}
+                        onChange={(e) => setLocalSearch(e.target.value)}
+                        className={cn("h-10 pl-9 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:bg-slate-900 transition-colors w-full", isPending && "opacity-70 cursor-wait")}
+                        disabled={isPending}
+                    />
+                </div>
+
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+                    {/* Status Filter */}
+                    <div className="w-auto shrink-0">
+                        <Select value={activeFilter} onValueChange={handleFilterChange}>
+                            <SelectTrigger className={cn("h-10 w-auto min-w-[150px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
+                                {isPending ? <Loader2 className="w-3 h-3 mr-2 animate-spin text-emerald-400" /> : <ListFilter className="w-3 h-3 mr-2 text-emerald-400 shrink-0" />}
+                                <SelectValue placeholder="Estado" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-slate-700">
+                                {tabs.map((tab) => (
+                                    <SelectItem key={tab.id} value={tab.id} className="focus:bg-slate-800 focus:text-white">
+                                        <div className="flex items-center justify-between w-full gap-2">
+                                            <span>{tab.label}</span>
+                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">
+                                                {tab.count}
+                                            </Badge>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {/* Map Toggle */}
+                    <div className="w-auto shrink-0">
+                        <Button
+                            variant={showMap ? "default" : "outline"}
+                            onClick={() => setShowMap(!showMap)}
+                            className={cn(
+                                "h-10 px-3 shrink-0 transition-colors",
+                                showMap 
+                                    ? "bg-blue-600 hover:bg-blue-700 text-white border-transparent" 
+                                    : "bg-slate-950/50 border-slate-700 text-slate-300 hover:bg-slate-900"
+                            )}
+                            disabled={isPending}
+                        >
+                            <Map className={cn("w-4 h-4 mr-2", showMap ? "text-white" : "text-blue-400")} />
+                            {showMap ? "Ocultar Mapa" : "Ver en Mapa"}
+                        </Button>
+                    </div>
+
+                    {/* Supervisor Filter (Admin) */}
+                    {userRol === 'admin' && supervisores.length > 0 && (
+                        <div className="w-auto shrink-0">
+                            <Select value={filtroSupervisor} onValueChange={handleSupervisorChange} disabled={isPending}>
+                                <SelectTrigger className={cn("h-10 w-auto min-w-[150px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
+                                    {isPending ? <Loader2 className="w-3 h-3 mr-2 animate-spin text-purple-400" /> : <Users className="w-3 h-3 mr-2 text-purple-400 shrink-0" />}
+                                    <SelectValue placeholder="Supervisor" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-900 border-slate-700">
+                                    <SelectItem value="todos">Todos Supervisores</SelectItem>
+                                    {supervisores.map(s => (
+                                        <SelectItem key={s.id} value={s.id}>{s.nombre_completo}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+
+                    {/* Asesor Filter */}
+                    {(userRol === 'admin' || userRol === 'supervisor') && asesores.length > 0 && (
+                        <div className="w-auto shrink-0">
+                            <Select value={filtroAsesor} onValueChange={handleAsesorChange} disabled={isPending}>
+                                <SelectTrigger className={cn("h-10 w-auto min-w-[150px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
+                                    {isPending ? <Loader2 className="w-3 h-3 mr-2 animate-spin text-blue-400" /> : <Users className="w-3 h-3 mr-2 text-blue-400 shrink-0" />}
+                                    <SelectValue placeholder="Asesor" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-900 border-slate-700">
+                                    <SelectItem value="todos">Todos Asesores</SelectItem>
+                                    {asesores.map(a => (
+                                        <SelectItem key={a.id} value={a.id}>{a.nombre_completo}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+
+                    {/* Sector Filter */}
+                    {sectoresList.length > 0 && (
+                        <div className="w-auto shrink-0">
+                            <Select value={filtroSector} onValueChange={handleSectorChange} disabled={isPending}>
+                                <SelectTrigger className={cn("h-10 w-auto min-w-[150px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
+                                    {isPending ? <Loader2 className="w-3 h-3 mr-2 animate-spin text-emerald-400" /> : <MapPin className="w-3 h-3 mr-2 text-emerald-400 shrink-0" />}
+                                    <SelectValue placeholder="Sector" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-900 border-slate-700">
+                                    <SelectItem value="todos">Todos Sectores</SelectItem>
+                                    {sectoresList.map((s: {id: string, nombre: string}) => (
+                                        <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Content Area (Map or Table) */}
+            {showMap ? (
+                <div className="w-full animate-in fade-in duration-300">
+                    <ClientesMapa clientes={filteredClientes} />
+                </div>
+            ) : (
+            <div className="md:bg-slate-900/50 md:border md:border-slate-800 md:rounded-2xl md:overflow-hidden bg-transparent border-0">
+                
+                {/* Desktop Header */}
+                <div 
+                    className="hidden md:grid gap-4 px-6 py-3 bg-slate-950/50 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500 items-center"
+                    style={{ gridTemplateColumns: 'repeat(14, minmax(0, 1fr))' }}
+                >
+                    {(userRol === 'admin') && (
+                        <div className="col-span-1 flex justify-center">
+                            <button onClick={toggleSelectAll} className="p-1 hover:text-white transition-colors">
+                                {selectedClients.length > 0 && selectedClients.length === paginatedClientes.length ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}
+                            </button>
+                        </div>
+                    )}
+                    <div className={cn(
+                        userRol === 'admin' ? "col-span-3" : 
+                        userRol === 'supervisor' ? "col-span-4" : "col-span-5"
+                    )}>Cliente</div>
+                    <div className="col-span-2 text-left">Sector</div>
+                    {(userRol === 'admin' || userRol === 'supervisor') && (
+                        <div className="col-span-2 text-left">Asesor</div>
+                    )}
+                    <div className="col-span-1 text-right">DNI</div>
+                    <div className="col-span-1 text-right">Teléfono</div>
+                    <div className="col-span-1 text-right">Deuda Total</div>
+                    <div className="col-span-1 text-center">Préstamos</div>
+                    <div className={cn("col-span-1 text-center", userRol === 'asesor' && "col-span-2")}>Estado</div>
+                    <div className="col-span-1 text-right">Acciones</div>
+                </div>
+
+                {/* Content */}
+                <div className="flex flex-col gap-4 md:gap-0 md:block md:space-y-0 md:divide-y md:divide-slate-800/50">
+                    {isPending ? (
+                        <div className="p-0"><TableSkeleton /></div>
+                    ) : (
+                    <>
+                    {paginatedClientes.map((cliente) => {
+                         const asesorName = (userRol === 'admin' || userRol === 'supervisor') 
+                            ? perfiles.find(p => p.id === cliente.asesor_id)?.nombre_completo 
+                            : null
+                         const isSelected = selectedClients.includes(cliente.id)
+
+                         return (
+                        <div key={cliente.id} className="contents group">
+                            {/* Mobile Card View (< md) */}
+                            <div className="md:hidden p-4 rounded-xl border border-slate-800 bg-slate-900/40 shadow-sm md:shadow-none hover:bg-slate-800/30 transition-colors border-l-4 border-l-slate-600 data-[debt=true]:border-l-amber-500" data-debt={cliente.stats.totalDebt > 0}>
+                                <div className="flex justify-between items-start mb-3">
+                                    <div className="flex items-start gap-3">
+                                        {(userRol === 'admin') && (
+                                            <div className="pt-1">
+                                              <button onClick={() => toggleSelectClient(cliente.id)} className="p-1 text-slate-500 hover:text-white transition-colors -ml-1">
+                                                  {isSelected ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}
+                                              </button>
+                                            </div>
+                                        )}
+                                        <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center overflow-hidden shrink-0 border border-slate-700/50">
+                                            {cliente.foto_perfil ? (
+                                                <ImageLightbox 
+                                                    src={cliente.foto_perfil} 
+                                                    alt={cliente.nombres} 
+                                                    className="w-full h-full" 
+                                                    thumbnail={<img src={cliente.foto_perfil} alt={cliente.nombres} className="w-full h-full object-cover" />} 
+                                                />
+                                            ) : (
+                                                <span className="text-sm font-bold text-slate-400">{cliente.nombres?.charAt(0)}</span>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <h3 className="text-slate-100 font-bold text-sm truncate max-w-[150px]">{cliente.nombres}</h3>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <Badge variant="outline" className={cn("px-1.5 py-0 text-[9px] h-4 rounded-sm border-0", 
+                                                    cliente.estado === 'activo' ? "bg-emerald-500/10 text-emerald-400" : "bg-slate-700/50 text-slate-400"
+                                                )}>
+                                                    {cliente.estado?.toUpperCase()}
+                                                </Badge>
+                                                {cliente.sectores?.nombre && (
+                                                    <span className="text-[10px] text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 font-medium truncate max-w-[80px]">
+                                                        {cliente.sectores.nombre}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-[10px] text-slate-500 uppercase font-bold">Deuda</div>
+                                        <div className={cn("text-sm font-bold", cliente.stats.totalDebt > 0 ? "text-amber-400" : "text-slate-400")}>
+                                            ${formatMoney(cliente.stats.totalDebt)}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2 mt-3 pt-3 border-t border-slate-800/50">
+                                    <Button size="sm" variant="outline" className="flex-1 bg-slate-900 border-slate-700 text-slate-300 h-8 text-[11px] hover:text-white px-0" onClick={() => window.open(`tel:${cliente.telefono}`)}>
+                                        <Phone className="w-3.5 h-3.5 mr-1" /> Llamar
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="flex-1 bg-green-900/20 border-green-900/50 text-green-400 h-8 text-[11px] hover:bg-green-900/40 px-0" onClick={() => window.open(`https://wa.me/${cliente.telefono}`, '_blank')}>
+                                        <MessageCircle className="w-3.5 h-3.5 mr-1" /> WhatsApp
+                                    </Button>
+                                    {(cliente.gps_coordenadas || cliente.direccion) && (
+                                        <Button size="sm" variant="outline" className="flex-1 bg-blue-900/20 border-blue-900/50 text-blue-400 h-8 text-[11px] hover:bg-blue-900/40 px-0" onClick={() => {
+                                            const query = cliente.gps_coordenadas || cliente.direccion;
+                                            if (query) {
+                                                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank')
+                                            }
+                                        }}>
+                                            <MapPin className="w-3.5 h-3.5 mr-1" /> GPS
+                                        </Button>
+                                    )}
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button size="sm" variant="ghost" className="px-2 h-8 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-white hover:bg-slate-700 transition-all data-[state=open]:bg-slate-700">
+                                                <MoreVertical className="w-4 h-4" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-48 bg-slate-900 border-slate-800 text-slate-200">
+                                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                            <DropdownMenuSeparator className="bg-slate-800" />
+                                            {userRol === 'admin' && (
+                                                <DropdownMenuItem onClick={() => setEditingCliente(cliente)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400">
+                                                    <Edit className="w-4 h-4 mr-2" /> Editar Datos
+                                                </DropdownMenuItem>
+                                            )}
+                                            <DropdownMenuItem onClick={() => router.push(`?client=${cliente.id}`)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
+                                                <Eye className="w-4 h-4 mr-2" /> Ver Detalle Rápido
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => router.push(`/dashboard/clientes/${cliente.id}`)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
+                                                <Users className="w-4 h-4 mr-2" /> Ir a Perfil Completo
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
+                            </div>
+
+                            {/* Desktop Row View (>= md) */}
+                            <div 
+                                className={cn(
+                                    "hidden md:grid gap-4 px-6 py-4 items-center hover:bg-slate-800/30 transition-colors border-l-4",
+                                    cliente.stats.totalDebt > 0 ? "border-l-amber-500" : "border-l-slate-700",
+                                    isSelected && "bg-blue-900/10 border-l-blue-500"
+                                )}
+                                style={{ gridTemplateColumns: 'repeat(14, minmax(0, 1fr))' }}
+                            >
+                                {(userRol === 'admin') && (
+                                    <div className="col-span-1 flex justify-center">
+                                        <button onClick={() => toggleSelectClient(cliente.id)} className="p-1 text-slate-500 hover:text-white transition-colors">
+                                            {isSelected ? <CheckSquare className="w-4 h-4 text-blue-500"/> : <Square className="w-4 h-4"/>}
+                                        </button>
+                                    </div>
+                                )}
+                                
+                                <div className={cn("flex items-center gap-3", 
+                                    userRol === 'admin' ? "col-span-3" : 
+                                    userRol === 'supervisor' ? "col-span-4" : "col-span-5"
+                                )}>
+                                    <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center overflow-hidden shrink-0 border border-slate-700">
+                                        {cliente.foto_perfil ? (
+                                            <ImageLightbox src={cliente.foto_perfil} alt={cliente.nombres} className="w-full h-full" thumbnail={<img src={cliente.foto_perfil} alt={cliente.nombres} className="w-full h-full object-cover" />} />
+                                        ) : (
+                                            <span className="text-xs font-bold text-slate-400">{cliente.nombres?.charAt(0)}</span>
+                                        )}
+                                    </div>
+                                    <div className="min-w-0 flex flex-col justify-center">
+                                        <div className="text-sm font-medium text-slate-200 truncate leading-tight">{cliente.nombres}</div>
+                                    </div>
+                                </div>
+
+                                <div className="col-span-2 min-w-0 flex items-center justify-start">
+                                    {cliente.sectores?.nombre ? (
+                                        <span className="text-[9px] text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 uppercase tracking-widest font-medium truncate">
+                                            {cliente.sectores.nombre}
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] text-slate-500 italic">No asignado</span>
+                                    )}
+                                </div>
+
+                                {(userRol === 'admin' || userRol === 'supervisor') && (
+                                    <div className="col-span-2 min-w-0 flex items-center gap-2">
+                                        <Users className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                                        <span className="text-sm text-slate-300 truncate">{asesorName || 'No asignado'}</span>
+                                    </div>
+                                )}
+
+                                <div className="col-span-1 text-right">
+                                    <div className="text-sm text-slate-300 font-mono">{cliente.dni}</div>
+                                </div>
+                                <div className="col-span-1 text-right">
+                                    <div className="text-xs text-slate-500">{cliente.telefono}</div>
+                                </div>
+
+                                <div className="col-span-1 text-right">
+                                    <div className={cn("text-sm font-bold", cliente.stats.totalDebt > 0 ? "text-amber-400" : "text-slate-400")}>
+                                        ${formatMoney(cliente.stats.totalDebt)}
+                                    </div>
+
+                                </div>
+
+                                <div className="col-span-1 text-center">
+                                    <Badge variant="outline" className="bg-slate-800 border-slate-700 text-slate-400">{cliente.stats.activeLoansCount}</Badge>
+                                </div>
+
+                                <div className={cn("col-span-1 text-center flex flex-col items-center", userRol === 'asesor' && "col-span-2")}>
+                                    <Badge variant="outline" className={cn("border", 
+                                        cliente.estado === 'activo' ? "bg-emerald-950/30 text-emerald-400 border-emerald-900/50" : 
+                                        "bg-slate-800 text-slate-500 border-slate-700"
+                                    )}>
+                                        {cliente.estado?.toUpperCase()}
+                                    </Badge>
+                                </div>
+
+                                <div className="col-span-1 flex justify-end gap-2 text-right">
+                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all" onClick={() => window.open(`https://wa.me/${cliente.telefono}`, '_blank')}>
+                                        <MessageCircle className="w-4 h-4" />
+                                    </Button>
+                                    {userRol === 'admin' && (
+                                        <Button 
+                                            size="sm" 
+                                            variant="ghost" 
+                                            className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50 transition-all"
+                                            onClick={() => setEditingCliente(cliente)}
+                                        >
+                                            <Edit className="w-4 h-4" />
+                                        </Button>
+                                    )}
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-white hover:bg-slate-700 transition-all data-[state=open]:bg-slate-700">
+                                                <MoreVertical className="w-4 h-4" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-48 bg-slate-900 border-slate-800 text-slate-200">
+                                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                            <DropdownMenuSeparator className="bg-slate-800" />
+                                            {userRol === 'admin' && (
+                                                <DropdownMenuItem onClick={() => setEditingCliente(cliente)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400">
+                                                    <Edit className="w-4 h-4 mr-2" /> Editar Datos
+                                                </DropdownMenuItem>
+                                            )}
+                                            <DropdownMenuItem onClick={() => router.push(`?client=${cliente.id}`)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
+                                                <Eye className="w-4 h-4 mr-2" /> Ver Detalle Rápido
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => router.push(`/dashboard/clientes/${cliente.id}`)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
+                                                <Users className="w-4 h-4 mr-2" /> Ir a Perfil Completo
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
+                            </div>
+                        </div>
+                    )})}
+                    </>
+                    )}
+                </div>
+
+                {/* Empty State */}
+                {!isPending && filteredClientes.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+                        <Users className="w-12 h-12 mb-4 opacity-20" />
+                        <p className="text-lg font-medium">No se encontraron clientes</p>
+                    </div>
+                )}
+            </div>
+            )}
+            
+            {/* Pagination Components */}
+            {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-6 px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl">
+                    <div className="text-sm text-slate-400">
+                        Mostrando <span className="font-medium text-slate-200">{((currentPage - 1) * ITEMS_PER_PAGE) + 1}</span> a <span className="font-medium text-slate-200">{Math.min(currentPage * ITEMS_PER_PAGE, filteredClientes.length)}</span> de <span className="font-medium text-slate-200">{filteredClientes.length}</span> clientes
+                    </div>
+                    <div className="flex space-x-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(currentPage - 1)}
+                            disabled={currentPage === 1}
+                            className="bg-slate-900 border-slate-700 text-slate-300 pointer-events-auto hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                        >
+                            <ChevronLeft className="h-4 w-4 mr-1" />
+                            Anterior
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                            className="bg-slate-900 border-slate-700 text-slate-300 pointer-events-auto hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                        >
+                            Siguiente
+                            <ChevronRight className="h-4 w-4 ml-1" />
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+            {/* Reassign Modal */}
+            <Dialog open={isReasignModalOpen} onOpenChange={setIsReasignModalOpen}>
+                <DialogContent className="bg-slate-900 border border-slate-800">
+                    <DialogHeader>
+                        <DialogTitle className="text-white">Reasignar Cartera de Clientes</DialogTitle>
+                        <DialogDescription className="text-slate-400">
+                            Está a punto de reasignar {selectedClients.length} cliente(s) a un nuevo asesor. Esta acción transferirá su gestión, pagos pendientes y dependencias asociadas.
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="py-4">
+                        <label className="text-sm text-slate-300 mb-2 block">Seleccione el Asesor Destino</label>
+                        <Select value={selectedNewAsesor} onValueChange={setSelectedNewAsesor}>
+                            <SelectTrigger className="w-full bg-slate-950/50 border-slate-700 text-slate-200">
+                                <SelectValue placeholder="Elegir asesor..." />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-slate-700">
+                                {asesores.map(a => (
+                                    <SelectItem key={a.id} value={a.id}>{a.nombre_completo}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <DialogFooter>
+                        <Button 
+                            variant="outline" 
+                            onClick={() => setIsReasignModalOpen(false)}
+                            className="bg-transparent border-slate-700 text-slate-300 hover:bg-slate-800"
+                        >
+                            Cancelar
+                        </Button>
+                        <Button 
+                            onClick={handleReassignSubmit} 
+                            disabled={isReassigning || !selectedNewAsesor}
+                            className="bg-purple-600 hover:bg-purple-500 text-white"
+                        >
+                            {isReassigning ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Transfiriendo...
+                                </>
+                            ) : (
+                                'Confirmar Reasignación'
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            
+            {/* Client Detail Drawer */}
+            <ClientDetailDrawer 
+                cliente={clientes.find(c => c.id === searchParams.get('client'))} 
+                isOpen={!!searchParams.get('client')} 
+                onClose={() => updateParams({ client: null })}
+                userRol={userRol}
+            />
+
+            {editingCliente && (
+                <ClientEditModal
+                    cliente={editingCliente}
+                    isOpen={!!editingCliente}
+                    onClose={() => setEditingCliente(null)}
+                    onSuccess={() => {
+                        setEditingCliente(null)
+                        router.refresh()
+                    }}
+                />
+            )}
+        </div>
+    )
+}

@@ -1,0 +1,59 @@
+import { createClient } from '@/utils/supabase/server'
+import { NextResponse } from 'next/server'
+
+export async function PATCH(request: Request) {
+    try {
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (!user) {
+            return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+        }
+
+        // Verificar que sea admin
+        const { data: perfil } = await supabase
+            .from('perfiles')
+            .select('rol')
+            .eq('id', user.id)
+            .single()
+
+        if (perfil?.rol !== 'admin') {
+            return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+        }
+
+        const { clave, valor } = await request.json()
+
+        if (!clave || valor === undefined) {
+            return NextResponse.json({ error: 'Clave y valor requeridos' }, { status: 400 })
+        }
+
+        // Actualizar o insertar configuración
+        const { error } = await supabase
+            .from('configuracion_sistema')
+            .upsert({ 
+                clave: clave, 
+                valor: valor.toString() 
+            }, { 
+                onConflict: 'clave' 
+            })
+
+        if (error) {
+            console.error('Error updating config:', error)
+            return NextResponse.json({ error: error.message }, { status: 500 })
+        }
+
+        // Registrar en auditoría
+        await supabase.from('auditoria').insert({
+            tabla: 'configuracion_sistema',
+            accion: 'update',
+            registro_id: clave,
+            usuario_id: user.id,
+            detalles: { clave, valor_nuevo: valor }
+        })
+
+        return NextResponse.json({ success: true })
+    } catch (error: any) {
+        console.error('Error in PATCH /api/configuracion:', error)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+}

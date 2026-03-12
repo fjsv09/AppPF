@@ -1,0 +1,454 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { ScoreIndicator } from '@/components/ui/score-indicator'
+import { 
+    CheckCircle2, XCircle, Clock, AlertTriangle, Eye, 
+    MessageSquare, Loader2, RefreshCw, User, CalendarDays,
+    DollarSign, ChevronRight, Calculator
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+import { formatMoney } from '@/utils/format'
+
+interface Solicitud {
+    id: string
+    prestamo_id: string
+    cliente_id: string
+    monto_solicitado: number
+    interes: number
+    cuotas: number
+    modalidad: string
+    fecha_inicio_propuesta: string
+    score_al_solicitar: number
+    resumen_comportamiento: any
+    monto_maximo_permitido: number
+    monto_minimo_permitido: number
+    requiere_excepcion: boolean
+    tipo_excepcion: string | null
+    estado_solicitud: string
+    observacion_supervisor: string | null
+    motivo_rechazo: string | null
+    created_at: string
+    cliente: { id: string; nombres: string; dni: string }
+    prestamo: { id: string; monto: number; estado: string; estado_mora: string; frecuencia: string }
+    asesor: { id: string; nombre_completo: string }
+    supervisor?: { id: string; nombre_completo: string }
+}
+
+interface RenovacionesSolicitudesProps {
+    solicitudes: Solicitud[]
+    userRole: 'asesor' | 'supervisor' | 'admin'
+    userId: string
+}
+
+const estadoConfig: Record<string, { label: string; icon: any; color: string; bg: string }> = {
+    'pendiente_supervision': { 
+        label: 'Pendiente Supervisión', 
+        icon: Clock, 
+        color: 'text-amber-400',
+        bg: 'bg-amber-500/20 border-amber-500/30'
+    },
+    'en_correccion': { 
+        label: 'En Corrección', 
+        icon: MessageSquare, 
+        color: 'text-orange-400',
+        bg: 'bg-orange-500/20 border-orange-500/30'
+    },
+    'pre_aprobado': { 
+        label: 'Pre-Aprobado', 
+        icon: CheckCircle2, 
+        color: 'text-blue-400',
+        bg: 'bg-blue-500/20 border-blue-500/30'
+    },
+    'aprobado': { 
+        label: 'Aprobado', 
+        icon: CheckCircle2, 
+        color: 'text-emerald-400',
+        bg: 'bg-emerald-500/20 border-emerald-500/30'
+    },
+    'rechazado': { 
+        label: 'Rechazado', 
+        icon: XCircle, 
+        color: 'text-red-400',
+        bg: 'bg-red-500/20 border-red-500/30'
+    }
+}
+
+export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: RenovacionesSolicitudesProps) {
+    const router = useRouter()
+    const [actionDialog, setActionDialog] = useState<{
+        type: 'preprobar' | 'observar' | 'aprobar' | 'rechazar' | null
+        solicitud: Solicitud | null
+    }>({ type: null, solicitud: null })
+    const [loading, setLoading] = useState(false)
+    const [inputText, setInputText] = useState('')
+
+    const handleAction = async () => {
+        if (!actionDialog.type || !actionDialog.solicitud) return
+        
+        setLoading(true)
+        try {
+            const endpoint = `/api/renovaciones/${actionDialog.solicitud.id}/${actionDialog.type}`
+            const body: any = {}
+            
+            if (actionDialog.type === 'observar') {
+                body.observacion = inputText
+            } else if (actionDialog.type === 'rechazar') {
+                body.motivo = inputText
+            } else if (actionDialog.type === 'preprobar') {
+                body.observacion = inputText || null
+                if (actionDialog.solicitud.requiere_excepcion) {
+                    body.aprobar_excepcion = true
+                }
+            }
+
+            const response = await fetch(endpoint, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+
+            const result = await response.json()
+            
+            if (!response.ok) {
+                throw new Error(result.error || 'Error procesando acción')
+            }
+
+            toast.success(
+                actionDialog.type === 'preprobar' ? 'Solicitud pre-aprobada' :
+                actionDialog.type === 'observar' ? 'Observación enviada' :
+                actionDialog.type === 'aprobar' ? 'Renovación aprobada' :
+                'Solicitud rechazada'
+            )
+            
+            setActionDialog({ type: null, solicitud: null })
+            setInputText('')
+            router.refresh()
+        } catch (error: any) {
+            toast.error(error.message)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const openAction = (type: typeof actionDialog.type, solicitud: Solicitud) => {
+        setActionDialog({ type, solicitud })
+        setInputText('')
+    }
+
+    if (solicitudes.length === 0) {
+        return (
+            <div className="bg-slate-900/50 backdrop-blur-sm rounded-2xl border border-slate-800 p-12 text-center">
+                <RefreshCw className="h-16 w-16 text-slate-600 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-slate-400 mb-2">
+                    No hay solicitudes de renovación
+                </h3>
+                <p className="text-slate-500 text-sm">
+                    {userRole === 'asesor' 
+                        ? 'Las solicitudes que crees aparecerán aquí'
+                        : 'Las solicitudes pendientes de revisión aparecerán aquí'}
+                </p>
+            </div>
+        )
+    }
+
+    return (
+        <>
+            <div className="md:bg-slate-900/50 md:border md:border-slate-800 md:rounded-2xl md:overflow-hidden bg-transparent border-0 space-y-4 md:space-y-0">
+                
+                {/* Desktop Header */}
+                <div 
+                    className="hidden md:grid gap-4 px-6 py-3 bg-slate-950/50 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500 items-center"
+                    style={{ gridTemplateColumns: 'repeat(12, minmax(0, 1fr))' }}
+                >
+                    <div className="col-span-3">Cliente</div>
+                    <div className="col-span-2 text-right">Solicitado</div>
+                    <div className="col-span-2 text-left">Asesor</div>
+                    <div className="col-span-2 text-left">Estado</div>
+                    <div className="col-span-3 text-right">Acciones</div>
+                </div>
+
+                {/* Content */}
+                <div className="flex flex-col gap-4 md:gap-0 md:block md:divide-y md:divide-slate-800/50">
+                    {solicitudes.map((sol) => {
+                        const estado = estadoConfig[sol.estado_solicitud] || estadoConfig['pendiente_supervision']
+                        const IconEstado = estado.icon
+
+                        return (
+                            <div key={sol.id} className="contents group">
+                                {/* ================== MOBILE VIEW ================== */}
+                                <div className={cn("md:hidden p-4 rounded-xl border border-slate-800/60 bg-slate-900 shadow-sm transition-all duration-200 border-l-[4px]", 
+                                    sol.estado_solicitud === 'aprobado' ? "border-l-emerald-500" :
+                                    sol.estado_solicitud === 'rechazado' ? "border-l-red-500" :
+                                    sol.estado_solicitud === 'en_correccion' ? "border-l-orange-500" :
+                                    "border-l-amber-500"
+                                )}>
+                                    <div className="flex flex-col py-1 gap-3 relative">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="shrink-0">
+                                                     <ScoreIndicator score={sol.score_al_solicitar} size="sm" showLabel={false} />
+                                                </div>
+                                                <div className="flex flex-col min-w-0">
+                                                    <h3 className="text-slate-100 font-bold text-base leading-tight truncate pr-1">
+                                                        {sol.cliente?.nombres}
+                                                    </h3>
+                                                    <span className="text-xs text-slate-500 font-mono mt-0.5">{sol.cliente?.dni}</span>
+                                                </div>
+                                            </div>
+                                            <div className="shrink-0 text-right">
+                                                 <Badge className={cn('text-[10px] py-0 h-5 border px-1.5', estado.bg, estado.color)}>
+                                                     {estado.label}
+                                                 </Badge>
+                                                 {sol.requiere_excepcion && (
+                                                     <div className="mt-1">
+                                                        <Badge className="bg-amber-500/10 border-amber-500/20 text-amber-500 text-[9px] py-0 h-4">
+                                                            <AlertTriangle className="h-2.5 w-2.5 mr-1" /> Exc
+                                                        </Badge>
+                                                     </div>
+                                                 )}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2 mt-2 bg-slate-950/30 p-2.5 rounded-lg border border-slate-800/50">
+                                            <div className="flex flex-col">
+                                                <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Monto</span>
+                                                <span className="font-mono text-slate-300 text-sm whitespace-nowrap">
+                                                    <DollarSign className="inline w-3 h-3 text-emerald-500 mr-0.5 -mt-0.5" />
+                                                    {formatMoney(sol.monto_solicitado)}
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Asesor</span>
+                                                <span className="text-sm text-slate-300 flex items-center gap-1 truncate">
+                                                    <User className="h-3 w-3 text-blue-400" />
+                                                    {sol.asesor?.nombre_completo.split(' ')[0]}
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-col col-span-2">
+                                                <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Condiciones</span>
+                                                <span className="text-xs text-slate-400 flex items-center gap-1">
+                                                    <CalendarDays className="h-3 w-3 text-slate-500" /> {sol.cuotas} {sol.modalidad} 
+                                                    <Calculator className="h-3 w-3 text-slate-500 ml-2" /> {sol.interes}%
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Observación o motivo de rechazo */}
+                                        {sol.observacion_supervisor && sol.estado_solicitud === 'en_correccion' && (
+                                            <div className="mt-1 text-xs bg-orange-900/20 border border-orange-700/30 rounded p-2 text-orange-300">
+                                                <strong>Obs:</strong> {sol.observacion_supervisor}
+                                            </div>
+                                        )}
+                                        {sol.motivo_rechazo && (
+                                            <div className="mt-1 text-xs bg-red-900/20 border border-red-700/30 rounded p-2 text-red-300">
+                                                <strong>Rechazo:</strong> {sol.motivo_rechazo}
+                                            </div>
+                                        )}
+
+                                        <div className="flex items-center gap-2 mt-2 pt-3 border-t border-slate-800/50">
+                                            <Button size="sm" variant="outline" className="flex-1 bg-slate-900 border-slate-700 text-slate-300 h-8 text-xs hover:text-white" onClick={() => router.push(`/dashboard/renovaciones/${sol.id}`)}>
+                                                <Eye className="w-3.5 h-3.5 mr-1" /> Ver Caso
+                                            </Button>
+
+                                            {userRole === 'supervisor' && sol.estado_solicitud === 'pendiente_supervision' && (
+                                                <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-500 text-white h-8 text-xs" onClick={() => openAction('preprobar', sol)}>
+                                                    Pre-aprobar
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ================== DESKTOP VIEW ================== */}
+                                <div 
+                                    className={cn("hidden md:grid gap-4 px-6 py-4 items-center hover:bg-slate-800/30 transition-colors border-l-4", 
+                                        sol.estado_solicitud === 'aprobado' ? "border-l-emerald-500" :
+                                        sol.estado_solicitud === 'rechazado' ? "border-l-red-500" :
+                                        sol.estado_solicitud === 'en_correccion' ? "border-l-orange-500" :
+                                        "border-l-amber-500"
+                                    )}
+                                    style={{ gridTemplateColumns: 'repeat(12, minmax(0, 1fr))' }}
+                                >
+                                    {/* Cliente */}
+                                    <div className="col-span-3 flex items-center gap-3 min-w-0">
+                                        <div className="shrink-0">
+                                            <ScoreIndicator score={sol.score_al_solicitar} size="sm" showLabel={false} />
+                                        </div>
+                                        <div className="min-w-0 flex flex-col justify-center">
+                                            <div className="text-sm font-medium text-slate-200 truncate leading-tight">{sol.cliente?.nombres}</div>
+                                            <div className="text-[10px] text-slate-500 font-mono mt-0.5">{sol.cliente?.dni}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Solicitado */}
+                                    <div className="col-span-2 text-right flex flex-col items-end justify-center min-w-0">
+                                        <div className="text-sm font-mono text-slate-200">${formatMoney(sol.monto_solicitado)}</div>
+                                        <div className="text-[10px] text-slate-400 mt-0.5">{sol.cuotas} {sol.modalidad} al {sol.interes}%</div>
+                                    </div>
+
+                                    {/* Asesor */}
+                                    <div className="col-span-2 text-left flex items-center gap-2 min-w-0">
+                                        <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                                        <span className="text-sm text-slate-300 truncate">{sol.asesor?.nombre_completo}</span>
+                                    </div>
+
+                                    {/* Estado */}
+                                    <div className="col-span-2 flex flex-col items-start justify-center gap-1.5 min-w-0">
+                                         <Badge className={cn('text-[10px] py-0 h-5 border px-1.5', estado.bg, estado.color)}>
+                                             <IconEstado className="h-3 w-3 mr-1" />
+                                             {estado.label}
+                                         </Badge>
+                                         {sol.requiere_excepcion && (
+                                             <Badge className="bg-amber-500/10 border-amber-500/20 text-amber-400 text-[9px] py-0 h-4">
+                                                 <AlertTriangle className="h-2.5 w-2.5 mr-1" /> Excepción
+                                             </Badge>
+                                         )}
+                                    </div>
+
+                                    {/* Acciones */}
+                                    <div className="col-span-3 flex justify-end items-center gap-2 text-right">
+                                        {userRole === 'supervisor' && sol.estado_solicitud === 'pendiente_supervision' && (
+                                            <>
+                                                <Button size="sm" variant="outline" className="h-8 border-orange-600/50 text-orange-400 hover:bg-orange-900/40 text-[11px]" onClick={() => openAction('observar', sol)}>
+                                                    <MessageSquare className="h-3.5 w-3.5 mr-1" /> Obs
+                                                </Button>
+                                                <Button size="sm" className="h-8 bg-blue-600/20 text-blue-400 border border-blue-600/30 hover:bg-blue-600/40 text-[11px]" onClick={() => openAction('preprobar', sol)}>
+                                                    Pre-aprobar
+                                                </Button>
+                                            </>
+                                        )}
+                                        {userRole === 'admin' && sol.estado_solicitud === 'pre_aprobado' && (
+                                            <>
+                                                <Button size="sm" variant="outline" className="h-8 border-red-600/50 text-red-400 hover:bg-red-900/40 text-[11px]" onClick={() => openAction('rechazar', sol)}>
+                                                    Rechazar
+                                                </Button>
+                                                <Button size="sm" className="h-8 bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/40 text-[11px]" onClick={() => openAction('aprobar', sol)}>
+                                                    Aprobar
+                                                </Button>
+                                            </>
+                                        )}
+                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-white transition-all" onClick={() => router.push(`/dashboard/renovaciones/${sol.id}`)}>
+                                            <Eye className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            </div>
+
+            {/* Diálogo de acción */}
+            <Dialog 
+                open={actionDialog.type !== null} 
+                onOpenChange={(open) => !open && setActionDialog({ type: null, solicitud: null })}
+            >
+                <DialogContent className="bg-slate-900 border-slate-800 text-white">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {actionDialog.type === 'preprobar' && 'Pre-aprobar Solicitud'}
+                            {actionDialog.type === 'observar' && 'Enviar Observaciones'}
+                            {actionDialog.type === 'aprobar' && 'Aprobar Renovación'}
+                            {actionDialog.type === 'rechazar' && 'Rechazar Solicitud'}
+                        </DialogTitle>
+                        <DialogDescription className="text-slate-400">
+                            {actionDialog.solicitud?.cliente?.nombres} - ${formatMoney(actionDialog.solicitud?.monto_solicitado)}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {actionDialog.solicitud?.requiere_excepcion && actionDialog.type === 'preprobar' && (
+                        <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-3 flex items-start gap-3">
+                            <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                            <div>
+                                <p className="text-amber-400 font-medium text-sm">Esta solicitud requiere excepción</p>
+                                <p className="text-slate-400 text-xs mt-0.5">
+                                    Tipo: {actionDialog.solicitud.tipo_excepcion}. Al pre-aprobar, estarás autorizando la excepción.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {(actionDialog.type === 'observar' || actionDialog.type === 'rechazar') && (
+                        <div className="grid gap-2">
+                            <Label>
+                                {actionDialog.type === 'observar' ? 'Observaciones' : 'Motivo de rechazo'}
+                            </Label>
+                            <Textarea
+                                value={inputText}
+                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputText(e.target.value)}
+                                placeholder={
+                                    actionDialog.type === 'observar' 
+                                        ? 'Describe las correcciones necesarias...'
+                                        : 'Explica el motivo del rechazo...'
+                                }
+                                className="bg-slate-950 border-slate-800 min-h-[100px]"
+                            />
+                        </div>
+                    )}
+
+                    {actionDialog.type === 'preprobar' && (
+                        <div className="grid gap-2">
+                            <Label>Observaciones (opcional)</Label>
+                            <Textarea
+                                value={inputText}
+                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputText(e.target.value)}
+                                placeholder="Agregar comentarios para el admin..."
+                                className="bg-slate-950 border-slate-800 min-h-[80px]"
+                            />
+                        </div>
+                    )}
+
+                    {actionDialog.type === 'aprobar' && (
+                        <div className="text-center py-4">
+                            <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto mb-3" />
+                            <p className="text-slate-300">
+                                ¿Confirmas aprobar esta renovación?
+                            </p>
+                            <p className="text-slate-500 text-sm mt-1">
+                                Se creará el nuevo préstamo y se cerrará el anterior.
+                            </p>
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        <Button 
+                            variant="outline" 
+                            onClick={() => setActionDialog({ type: null, solicitud: null })}
+                            disabled={loading}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button 
+                            onClick={handleAction}
+                            disabled={loading || ((actionDialog.type === 'observar' || actionDialog.type === 'rechazar') && !inputText.trim())}
+                            className={cn(
+                                actionDialog.type === 'rechazar' ? 'bg-red-600 hover:bg-red-500' :
+                                actionDialog.type === 'aprobar' ? 'bg-emerald-600 hover:bg-emerald-500' :
+                                'bg-blue-600 hover:bg-blue-500'
+                            )}
+                        >
+                            {loading ? (
+                                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Procesando...</>
+                            ) : (
+                                <>
+                                    {actionDialog.type === 'preprobar' && 'Pre-aprobar'}
+                                    {actionDialog.type === 'observar' && 'Enviar Observaciones'}
+                                    {actionDialog.type === 'aprobar' && 'Aprobar'}
+                                    {actionDialog.type === 'rechazar' && 'Rechazar'}
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
+    )
+}

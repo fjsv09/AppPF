@@ -128,7 +128,7 @@ async function NominaDirecta({ userId }: { userId: string }) {
   )
 }
 
-export function NominaContent({ currentPayroll, perfil, payrollHistory, totalCalculated, today, nombreTrabajador }: any) {
+function NominaContent({ currentPayroll, perfil, payrollHistory, totalCalculated, today, nombreTrabajador }: any) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
       <div className="lg:col-span-12 xl:col-span-8 space-y-6">

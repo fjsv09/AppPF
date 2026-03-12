@@ -73,7 +73,10 @@ export default function NotificacionesPage() {
     }, [])
 
     const subscribePush = async () => {
-        if (!registration) return
+        if (!registration) {
+            toast.error('Service Worker no está registrado o cargando.')
+            return
+        }
         
         if (!VAPID_PUBLIC_KEY) {
             toast.error('Faltan claves VAPID en el servidor (Vercel). Configura las variables de entorno.')
@@ -81,6 +84,13 @@ export default function NotificacionesPage() {
         }
 
         try {
+            // Solicitar permiso explícitamente primero
+            const permission = await Notification.requestPermission()
+            if (permission !== 'granted') {
+                toast.error('Permiso de notificaciones denegado por el navegador.')
+                return
+            }
+
             const sub = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
@@ -100,9 +110,9 @@ export default function NotificacionesPage() {
                 const errData = await res.json()
                 toast.error(`Error de servidor: ${errData.error || 'Desconocido'}`)
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('Push subscription failed:', err)
-            toast.error('Error al suscribir. Verifica los permisos.')
+            toast.error(`Error al suscribir: ${err.message || 'Verifica los permisos.'}`)
         }
     }
 

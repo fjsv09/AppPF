@@ -54,6 +54,10 @@ interface PrestamosTableProps {
         horario_cierre: string
         desbloqueo_hasta: string
     }
+    umbralCpp?: number
+    umbralMoroso?: number
+    umbralCppOtros?: number
+    umbralMorosoOtros?: number
 }
 
 type FilterTab = 'ruta_hoy' | 'cobranza' | 'morosos' | 'notificar' | 'semana' | 'en_curso' | 'renovaciones' | 'finalizados' | 'todos' | 'supervisor_alertas' | 'supervisor_mora' | 'renovados' | 'refinanciados' | 'anulados' | 'pendientes'
@@ -108,7 +112,11 @@ export function PrestamosTable({
     renovacionMinPagado = 60,
     refinanciacionMinMora = 50,
     prestamoIdsProductoRefinanciamiento = [],
-    systemSchedule
+    systemSchedule,
+    umbralCpp = 4,
+    umbralMoroso = 7,
+    umbralCppOtros = 1,
+    umbralMorosoOtros = 2
 }: PrestamosTableProps) {
 
     // Calcular el último préstamo de cada cliente (el más reciente por fecha_inicio o created_at)
@@ -1497,22 +1505,23 @@ export function PrestamosTable({
                                         const isDiario = prestamo.frecuencia?.toLowerCase() === 'diario'
                                         
                                         // Definición robusta de Finalizado / Renovado / Refinanciado
+                                        const metrics = prestamo.metrics
                                         const isEffectivelyFinalized = 
                                             prestamo.isFinalizado || 
                                             prestamo.estado === 'finalizado' || 
                                             prestamo.estado === 'renovado' ||
                                             prestamo.estado === 'refinanciado' ||
-                                            prestamo.saldo_pendiente <= 0
+                                            (metrics?.saldoPendiente || 0) <= 0.01
 
                                         const getTooltip = () => {
                                             if (prestamo.estado === 'refinanciado') return 'Préstamo refinanciado administrativamente'
                                             if (prestamo.estado === 'renovado') return 'Préstamo renovado'
                                             if (isEffectivelyFinalized) return 'Préstamo pagado completamente'
-                                            if (prestamo.estado_mora === 'vencido') return 'Préstamo pasó su fecha de fin con deuda pendiente'
-                                            if (prestamo.estado_mora === 'moroso') return isDiario ? 'Diario: 10+ cuotas atrasadas' : 'Semanal/Otro: 7+ días desde primera cuota vencida'
-                                            if (prestamo.estado_mora === 'cpp') return isDiario ? 'Diario: 4-9 cuotas atrasadas' : 'Semanal/Otro: 4-6 días desde primera cuota vencida'
-                                            if (prestamo.deudaHoy > 0) return `Deuda exigible hoy: $${prestamo.deudaHoy.toFixed(2)}`
-                                            return 'Sin deuda pendiente a la fecha'
+                                            if (prestamo.estado_mora === 'vencido') return 'Venció con deuda pendiente'
+                                            if (prestamo.estado_mora === 'moroso') return isDiario ? `Status Moroso: ≥${umbralMoroso} cuotas atrasadas (Conf. Actual)` : `Status Moroso: ≥${umbralMorosoOtros} cuotas atrasadas (Conf. Actual)`
+                                            if (prestamo.estado_mora === 'cpp') return isDiario ? `Status CPP: ≥${umbralCpp} cuotas atrasadas (Conf. Actual)` : `Status CPP: ≥${umbralCppOtros} cuotas atrasadas (Conf. Actual)`
+                                            if (prestamo.estado_mora === 'deuda') return `Pendiente de cobro hoy: $${metrics?.deudaExigibleHoy?.toFixed(2)}`
+                                            return 'Al día (OK)'
                                         }
                                         
                                         return (
@@ -1524,25 +1533,24 @@ export function PrestamosTable({
                                                     prestamo.estado === 'refinanciado' ? "border-indigo-500 text-indigo-400" :
                                                     prestamo.estado === 'renovado' ? "border-slate-600 text-slate-500" :
                                                     isEffectivelyFinalized ? "border-slate-600 text-slate-500" :
-                                                    prestamo.estado_mora === 'vencido' ? "border-rose-500 text-rose-500" :
-                                                    prestamo.estado_mora === 'moroso' ? "border-red-600 text-red-600" :
+                                                    (prestamo.estado_mora === 'moroso' || prestamo.estado_mora === 'vencido') ? "border-rose-500 text-rose-500 animate-pulse" :
                                                     prestamo.estado_mora === 'cpp' ? "border-orange-500 text-orange-500" :
-                                                    prestamo.deudaHoy > 0 ? "border-amber-400 text-amber-400" : 
+                                                    prestamo.estado_mora === 'deuda' ? "border-amber-400 text-amber-400" : 
                                                     "border-emerald-500 text-emerald-500"
                                                 )}>
                                                 {prestamo.estado === 'refinanciado' ? 'Refin' :
                                                  prestamo.estado === 'renovado' ? 'Renov' :
                                                  isEffectivelyFinalized ? 'Final' :
-                                                 prestamo.estado_mora === 'vencido' ? 'Venc' :
-                                                 prestamo.estado_mora === 'moroso' ? 'Mora' :
+                                                 prestamo.estado_mora === 'vencido' ? 'Vencido' :
+                                                 prestamo.estado_mora === 'moroso' ? 'Moroso' :
                                                  prestamo.estado_mora === 'cpp' ? 'CPP' :
-                                                 prestamo.deudaHoy > 0 ? 'Deuda' : 'OK'}
+                                                 prestamo.estado_mora === 'deuda' ? 'Deuda' : 'OK'}
                                             </Badge>
                                         )
                                     })()}
                                     {/* Warning: Finalized with historical delinquency (using estado_mora) */}
-                                    {(prestamo.isFinalizado || prestamo.estado === 'finalizado' || prestamo.estado === 'renovado' || prestamo.estado === 'refinanciado' || prestamo.saldo_pendiente <= 0) && ['vencido', 'moroso'].includes(prestamo.estado_mora) && (
-                                        <span className="text-amber-500 text-xs" title={`Tuvo problemas: ${prestamo.estado_mora}`}>⚠️</span>
+                                    {(prestamo.isFinalizado || prestamo.estado === 'finalizado' || prestamo.estado === 'renovado' || prestamo.estado === 'refinanciado' || (prestamo.metrics?.saldoPendiente || 0) <= 0.01) && ['vencido', 'moroso'].includes(prestamo.estado_mora) && (
+                                        <span className="text-amber-500 text-xs" title={`Tuvo problemas históricos: ${prestamo.estado_mora}`}>⚠️</span>
                                     )}
                                 </div>
 

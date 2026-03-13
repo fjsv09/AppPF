@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, Wallet, TrendingUp, AlertCircle, Users } from "lucide-react";
 import { PrestamosTable } from "@/components/prestamos/prestamos-table";
 import { BackButton } from "@/components/ui/back-button";
+import { getTodayPeru, calculateLoanMetrics } from "@/lib/financial-logic";
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -58,19 +59,25 @@ export default async function PrestamosPage() {
     prestamosRaw?.forEach(p => console.log(`ID: ${p.id.slice(0,4)}... | Estado: ${p.estado} | Mora: ${p.estado_mora}`))
 
     // Fetch Configuración Sistema BEFORE mapping
-    const { data: configRenovacion } = await supabaseAdmin
+    const { data: configSistema } = await supabaseAdmin
         .from('configuracion_sistema')
         .select('clave, valor')
-        .in('clave', ['renovacion_min_pagado', 'refinanciacion_min_mora'])
+        .in('clave', ['renovacion_min_pagado', 'refinanciacion_min_mora', 'umbral_cpp_cuotas', 'umbral_moroso_cuotas', 'umbral_cpp_otros', 'umbral_moroso_otros'])
     
     // Valor por defecto 60% si no existe
-    const configRenovacionValor = configRenovacion?.find(c => c.clave === 'renovacion_min_pagado')?.valor
+    const configRenovacionValor = configSistema?.find(c => c.clave === 'renovacion_min_pagado')?.valor
     const renovacionMinPagado = configRenovacionValor ? parseInt(configRenovacionValor) : 60
     const renovacionMinPagadoDecimal = renovacionMinPagado / 100
 
     // Valor por defecto 50% si no existe
-    const configRefinanciacionValor = configRenovacion?.find(c => c.clave === 'refinanciacion_min_mora')?.valor
+    const configRefinanciacionValor = configSistema?.find(c => c.clave === 'refinanciacion_min_mora')?.valor
     const refinanciacionMinMora = configRefinanciacionValor ? parseInt(configRefinanciacionValor) : 50
+
+    // Umbrales de mora
+    const umbralCpp = parseInt(configSistema?.find(c => c.clave === 'umbral_cpp_cuotas')?.valor || '4')
+    const umbralMoroso = parseInt(configSistema?.find(c => c.clave === 'umbral_moroso_cuotas')?.valor || '7')
+    const umbralCppOtros = parseInt(configSistema?.find(c => c.clave === 'umbral_cpp_otros')?.valor || '1')
+    const umbralMorosoOtros = parseInt(configSistema?.find(c => c.clave === 'umbral_moroso_otros')?.valor || '2')
 
     // Fetch HORARIO
     const { data: configHorario } = await supabaseAdmin
@@ -101,58 +108,18 @@ export default async function PrestamosPage() {
 
     // 2. KPI Calculation & Mapping
     const prestamos = filteredList.map(p => {
-        const cronograma = p.cronograma_cuotas || []
-        // Flatten payments from quotas since there is no direct relationship loan->payments
-        const pagos = cronograma.flatMap((c: any) => c.pagos || [])
+        const todayPeru = getTodayPeru()
+        const metrics = calculateLoanMetrics(p, todayPeru, { 
+            renovacionMinPagado, 
+            umbralCpp, 
+            umbralMoroso,
+            umbralCppOtros,
+            umbralMorosoOtros
+        })
         
         const totalPagar = p.monto * (1 + (p.interes / 100))
         
-        const todayPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
-        
-        // Cuota del Día (Estricto HOY) - Para "Ruta de Cobro"
-        const cuotaDiaHoy = cronograma
-            .filter((c: any) => c.fecha_vencimiento === todayPeru)
-            .reduce((sum: number, c: any) => sum + (c.monto_cuota - (c.monto_pagado || 0)), 0)
 
-        // Deuda Exigible Hoy (Vencido + Hoy) - Timezone Corrected
-        const deudaExigibleHoy = cronograma
-            .filter((c: any) => c.fecha_vencimiento <= todayPeru)
-            .reduce((sum: number, c: any) => sum + (c.monto_cuota - (c.monto_pagado || 0)), 0)
-
-        // Cuotas Mora Real (< Hoy)
-        const cuotasMoraReal = cronograma
-            .filter((c: any) => c.fecha_vencimiento < todayPeru && c.estado !== 'pagado' && (c.monto_cuota - (c.monto_pagado || 0)) > 0.01)
-            .length
-
-        // Total Pagado
-        const totalPagadoAcumulado = cronograma
-            .reduce((sum: number, c: any) => sum + (c.monto_pagado || 0), 0)
-
-        // Riesgo Capital (Vencido / Total Deuda)
-        const capitalVencido = cronograma
-            .filter((c: any) => c.fecha_vencimiento < todayPeru)
-            .reduce((sum: number, c: any) => sum + (c.monto_cuota - (c.monto_pagado || 0)), 0)
-        
-        const saldoCapitalActivo = cronograma
-            .reduce((sum: number, c: any) => sum + (c.monto_cuota - (c.monto_pagado || 0)), 0) || 1
-            
-        const riesgoPorcentaje = totalPagar > 0 ? (capitalVencido / saldoCapitalActivo) * 100 : 0
-
-        // Dias sin pago
-        let diasSinPago = 0
-        if (pagos.length > 0) {
-            const lastPaymentDate = new Date(Math.max(...pagos.map((pay: any) => new Date(pay.created_at).getTime())))
-            const diffTime = Math.abs(new Date().getTime() - lastPaymentDate.getTime())
-            diasSinPago = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) 
-        } else if (p.fecha_inicio) {
-            const diffTime = Math.abs(new Date().getTime() - new Date(p.fecha_inicio).getTime())
-            diasSinPago = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-        }
-
-        // Valor Cuota Promedio
-        const valorCuotaPromedio = cronograma.length > 0 
-            ? cronograma.reduce((s: number, c: any) => s + c.monto_cuota, 0) / cronograma.length
-            : 0
 
         // Extract Coordinates
         const solicitudesCoords = p.clientes?.solicitudes
@@ -169,21 +136,20 @@ export default async function PrestamosPage() {
             asesor_nombre: p.clientes?.asesor?.nombre_completo,
             gps_coordenadas,
             
-            deuda_exigible_hoy: deudaExigibleHoy,
-            cuota_dia_hoy: cuotaDiaHoy, // NUEVA PROPIEDAD
-            total_pagado_acumulado: totalPagadoAcumulado,
-            riesgo_capital_real_porcentaje: riesgoPorcentaje,
-            dias_sin_pago: diasSinPago,
-            valor_cuota_promedio: valorCuotaPromedio,
-            cuotas_mora_real: cuotasMoraReal,
+            deuda_exigible_hoy: metrics.deudaExigibleHoy,
+            cuota_dia_hoy: metrics.cuotaDiaHoy,
+            cobrado_hoy: metrics.cobradoHoy,
+            total_pagado_acumulado: metrics.totalPagadoAcumulado,
+            riesgo_capital_real_porcentaje: metrics.riesgoPorcentaje,
+            dias_sin_pago: metrics.diasSinPago,
+            valor_cuota_promedio: metrics.valorCuotaPromedio,
+            cuotas_mora_real: metrics.cuotasAtrasadas,
             
-            es_renovable: (
-                totalPagadoAcumulado > 0 &&
-                totalPagadoAcumulado >= (totalPagar * renovacionMinPagadoDecimal) && 
-                riesgoPorcentaje < 10 &&
-                !['vencido', 'legal', 'castigado'].includes(p.estado_mora)
-            ),
+            es_renovable: metrics.esRenovable,
             isFinalizado: p.estado === 'finalizado',
+            
+            // Attach metrics for optimized aggregate calculation
+            metrics: metrics,
             
             clientes: p.clientes
         }
@@ -217,23 +183,15 @@ export default async function PrestamosPage() {
     // Daily -> 7+ overdue. Other -> 2+ overdue.
     // Alertas Graves (Supervisor Rule):
     // Daily -> 7+ overdue. Other -> 2+ overdue.
-    const alertasGraves = prestamos.filter(p => {
-        const isDiario = p.frecuencia?.toLowerCase() === 'diario'
-        const atrasadas = p.cuotas_mora_real || 0
-        return (isDiario && atrasadas >= 7) || (!isDiario && atrasadas >= 2)
-    }).length
+    const alertasGraves = prestamos.filter(p => p.metrics?.isCritico).length
     
     // Mora (Supervisor Rule - Early Deterioration):
-    // Daily -> 4+ overdue. Other -> 1+ overdue.
-    const clientesEnMora = prestamos.filter(p => {
-        const isDiario = p.frecuencia?.toLowerCase() === 'diario'
-        const atrasadas = p.cuotas_mora_real || 0
-        return (isDiario && atrasadas >= 4) || (!isDiario && atrasadas >= 1)
-    }).length
+    const clientesEnMora = prestamos.filter(p => p.metrics?.isMora).length
 
-    // Asesor Specific - UPDATED LOGIC FOR DAILY ROUTE
-    // Meta Ruta Hoy: Suma de cuotas del día (sin mora acumulada)
-    const metaCobranzaHoy = prestamos.reduce((acc, p) => acc + (p.cuota_dia_hoy || 0), 0)
+    // Meta de Ruta Hoy: Suma de lo que falta cobrar hoy (sin los adelantos previos)
+    const prestamosActivosHoy = prestamos.filter(p => p.estado === 'activo')
+    const metaCobranzaHoy = prestamosActivosHoy.reduce((acc: number, p: any) => acc + (p.cuota_dia_hoy || 0), 0)
+    const recaudadoTotalHoy = prestamosActivosHoy.reduce((acc: number, p: any) => acc + (p.cobrado_hoy || 0), 0)
     
     // Pendientes Hoy: Clientes que tienen pago programado hoy > 0 y pendiente
     const clientesPendientesHoy = prestamos.filter(p => p.cuota_dia_hoy > 0).length
@@ -388,13 +346,20 @@ export default async function PrestamosPage() {
                              <div className="absolute right-0 top-0 p-2 opacity-5">
                                 <Wallet className="w-16 h-16 text-emerald-500" />
                             </div>
-                            <p className="text-emerald-500 font-bold text-[10px] uppercase tracking-wider mb-1">Meta Hoy</p>
-                            <h2 className="text-2xl md:text-4xl font-bold text-white tracking-tight truncate">${metaCobranzaHoy.toLocaleString()}</h2>
-                            <div className="mt-2 text-emerald-400">
-                                <span className="bg-emerald-950/50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-emerald-900/50">
-                                    Objetivo
-                                </span>
-                            </div>
+                             <p className="text-emerald-500 font-bold text-[10px] uppercase tracking-wider mb-1">Meta Hoy</p>
+                             <div className="flex items-baseline gap-2">
+                                <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight truncate">${recaudadoTotalHoy.toLocaleString()}</h2>
+                                <span className="text-slate-500 text-xs font-medium">/ ${metaCobranzaHoy.toLocaleString()}</span>
+                             </div>
+                             <div className="mt-2 w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                <div 
+                                    className="h-full bg-emerald-500 transition-all duration-500" 
+                                    style={{ width: `${metaCobranzaHoy > 0 ? (recaudadoTotalHoy / metaCobranzaHoy) * 100 : 0}%` }}
+                                />
+                             </div>
+                             <p className="mt-2 text-[10px] font-bold text-emerald-400 uppercase tracking-wide">
+                                {metaCobranzaHoy > 0 ? Math.round((recaudadoTotalHoy / metaCobranzaHoy) * 100) : 0}% Cobrado
+                             </p>
                         </div>
 
                          <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group">
@@ -432,13 +397,13 @@ export default async function PrestamosPage() {
                     <div className="flex items-start gap-2">
                         <AlertCircle className="w-4 h-4 text-rose-500 mt-0.5 shrink-0" />
                         <div>
-                            <span className="text-rose-400 font-bold">ALERTAS:</span> Diario ≥7 atrasadas. Otros ≥2 atrasadas.
+                            <span className="text-rose-400 font-bold">MOROSO:</span> Diario ≥{umbralMoroso} atr. Otros ≥{umbralMorosoOtros} atr.
                         </div>
                     </div>
                     <div className="flex items-start gap-2">
                         <TrendingUp className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
                         <div>
-                            <span className="text-amber-400 font-bold">MORA:</span> Diario ≥4 atrasadas. Otros ≥1 atrasadas.
+                            <span className="text-amber-400 font-bold">CPP:</span> Diario ≥{umbralCpp} atr. Otros ≥{umbralCppOtros} atr.
                         </div>
                     </div>
                 </div>
@@ -458,6 +423,10 @@ export default async function PrestamosPage() {
                 refinanciacionMinMora={refinanciacionMinMora}
                 prestamoIdsProductoRefinanciamiento={prestamoIdsProductoRefinanciamiento}
                 systemSchedule={systemSchedule}
+                umbralCpp={umbralCpp}
+                umbralMoroso={umbralMoroso}
+                umbralCppOtros={umbralCppOtros}
+                umbralMorosoOtros={umbralMorosoOtros}
             />
         </div>
     )

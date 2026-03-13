@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { Home, Users, Banknote, Calendar, ShieldAlert, History, LogOut, Settings, ChartBar, FileText, Menu, RefreshCw, Cog, Briefcase, Camera, Bell, Landmark, Wallet, UserCog, Receipt, CreditCard, Target, Award } from 'lucide-react'
+import { Home, Users, Banknote, Calendar, ShieldAlert, History, LogOut, Settings, ChartBar, FileText, Menu, RefreshCw, Cog, Briefcase, Camera, Bell, Landmark, Wallet, UserCog, Receipt, CreditCard, Target, Award, Contact, ChevronLeft, ChevronRight } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Button } from './ui/button'
@@ -17,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useSidebar } from './providers/sidebar-provider'
 
 type Role = 'admin' | 'supervisor' | 'asesor'
 
@@ -30,6 +31,7 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
     const router = useRouter()
     const supabase = createClient()
     const { unreadCount } = useNotifications()
+    const { isCollapsed, toggleSidebar } = useSidebar()
 
     const handleSignOut = async () => {
         await supabase.auth.signOut()
@@ -44,6 +46,7 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
         { href: '/dashboard/prestamos', label: 'Préstamos', icon: Banknote, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
         
         // --- Gestión Financiera ---
+        { href: '/dashboard/admin/carteras', label: 'Gestionar Carteras', icon: Briefcase, roles: ['admin'], category: 'Finanzas' },
         { href: '/dashboard/admin/cuadres', label: 'Aprobar Cuadres', icon: Landmark, roles: ['admin'], category: 'Finanzas' },
         { href: '/dashboard/cuadre', label: 'Cuadre de Caja', icon: Wallet, roles: ['asesor'], category: 'Finanzas' },
         { href: '/dashboard/gastos', label: 'Gastos Operativos', icon: Receipt, roles: ['admin', 'supervisor', 'asesor'], category: 'Finanzas' },
@@ -62,8 +65,7 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
         { href: '/dashboard/auditoria', label: 'Auditoría', icon: History, roles: ['admin', 'supervisor'], category: 'Gestión' },
         
         // --- Configuración y Admin ---
-        { href: '/dashboard/admin/carteras', label: 'Gestionar Carteras', icon: Briefcase, roles: ['admin'], category: 'Configuración' },
-        { href: '/dashboard/usuarios', label: 'Gestionar Equipo', icon: UserCog, roles: ['admin'], category: 'Configuración' },
+        { href: '/dashboard/usuarios', label: 'Gestión de Equipo', icon: UserCog, roles: ['admin'], category: 'Configuración' },
         { href: '/dashboard/admin/sectores', label: 'Sectores', icon: Briefcase, roles: ['admin'], category: 'Configuración' },
         { href: '/dashboard/config-sistema', label: 'Configuración', icon: Cog, roles: ['admin'], category: 'Configuración' },
         { href: '/dashboard/alertas', label: 'Alertas', icon: ShieldAlert, roles: ['admin'], category: 'Configuración' },
@@ -76,34 +78,55 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
     return (
         <>
             {/* Desktop Sidebar */}
-            <nav className="hidden md:flex flex-col w-72 border-r border-white/5 bg-slate-950/40 backdrop-blur-xl p-6 h-full fixed left-0 top-0 z-[100]">
+            <nav className={cn(
+                "hidden md:flex flex-col border-r border-white/5 bg-slate-950/40 backdrop-blur-xl h-full fixed left-0 top-0 z-[100] transition-all duration-300",
+                isCollapsed ? "w-20 p-2" : "w-72 p-6"
+            )}>
                 {/* Brand / Logo */}
-                <div className="mb-8 flex items-center justify-between px-2">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-900/20">
+                <div className={cn(
+                    "mb-8 flex items-center px-2",
+                    isCollapsed ? "flex-col gap-4 px-0" : "justify-between"
+                )}>
+                    <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex-shrink-0 flex items-center justify-center shadow-lg shadow-blue-900/20">
                             <Banknote className="w-6 h-6 text-white" />
                         </div>
-                        <div>
-                            <h1 className="text-xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-                                Sistema PF
-                            </h1>
-                            <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold border-t border-slate-800/50 pt-0.5 mt-0.5 block">
-                                Professional
-                            </span>
-                        </div>
+                        {!isCollapsed && (
+                            <div className="animate-in fade-in slide-in-from-left-2 duration-300">
+                                <h1 className="text-xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent truncate w-32" title="Sistema PF">
+                                    Sistema PF
+                                </h1>
+                                <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold border-t border-slate-800/50 pt-0.5 mt-0.5 block">
+                                    Professional
+                                </span>
+                            </div>
+                        )}
                     </div>
                     {/* Top Actions */}
-                    <div className="flex items-center gap-2">
+                    <div className={cn(
+                        "flex items-center gap-2 animate-in fade-in duration-300",
+                        isCollapsed ? "justify-center" : ""
+                    )}>
                         <NotificationsDropdown />
                     </div>
                 </div>
 
+                {/* Sidebar Collapse Toggle */}
+                <button
+                    onClick={toggleSidebar}
+                    className="absolute -right-3 top-20 w-6 h-6 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all z-50 shadow-md"
+                >
+                    {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+                </button>
+
                 <div className="flex-1 space-y-6 overflow-y-auto custom-scrollbar pr-2 -mr-2">
                     {categories.map((category) => (
                         <div key={category} className="space-y-2">
-                            <h2 className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-500/70">
-                                {category}
-                            </h2>
+                            {!isCollapsed && (
+                                <h2 className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-500/70 animate-in fade-in duration-300">
+                                    {category}
+                                </h2>
+                            )}
                             <div className="space-y-1">
                                 {filteredLinks
                                     .filter(link => link.category === category && link.href !== '/dashboard/notificaciones')
@@ -115,8 +138,10 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
                                             <Link
                                                 key={link.href}
                                                 href={link.href}
+                                                title={isCollapsed ? link.label : ""}
                                                 className={cn(
-                                                    "group flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-300 relative overflow-hidden",
+                                                    "group flex items-center rounded-xl p-2.5 text-sm font-medium transition-all duration-300 relative overflow-hidden",
+                                                    isCollapsed ? "justify-center" : "gap-3 px-4",
                                                     isActive
                                                         ? "text-white shadow-lg shadow-blue-900/20"
                                                         : "text-slate-400 hover:text-white hover:bg-white/5"
@@ -127,12 +152,15 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
                                                 )}
                                                 
                                                 <Icon className={cn(
-                                                    "h-5 w-5 transition-colors relative z-10",
+                                                    "h-5 w-5 transition-colors relative z-10 flex-shrink-0",
                                                     isActive ? "text-blue-400" : "text-slate-500 group-hover:text-slate-300"
                                                 )} />
-                                                <span className="relative z-10">{link.label}</span>
                                                 
-                                                {isActive && (
+                                                {!isCollapsed && (
+                                                    <span className="relative z-10 animate-in fade-in slide-in-from-left-1 duration-300">{link.label}</span>
+                                                )}
+                                                
+                                                {isActive && !isCollapsed && (
                                                     <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)]" />
                                                 )}
                                             </Link>
@@ -145,26 +173,38 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
 
                 {/* User Profile / Footer */}
                 <div className="mt-8 pt-6 border-t border-white/5">
-                    <div className="flex items-center gap-3 px-2 mb-4">
-                        <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 border border-slate-600 flex items-center justify-center text-slate-300 font-bold text-sm shadow-inner">
+                    <div className={cn(
+                        "flex items-center gap-3 px-2 mb-4",
+                        isCollapsed ? "justify-center" : ""
+                    )}>
+                        <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 border border-slate-600 flex-shrink-0 flex items-center justify-center text-slate-300 font-bold text-sm shadow-inner">
                             {userName.slice(0, 2).toUpperCase()}
                         </div>
-                        <div className="overflow-hidden">
-                            <p className="text-sm font-bold text-slate-200 truncate">{userName}</p>
-                            <div className="flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                <p className="text-xs text-slate-500 capitalize">{role}</p>
+                        {!isCollapsed && (
+                            <div className="overflow-hidden animate-in fade-in slide-in-from-left-2 duration-300">
+                                <p className="text-sm font-bold text-slate-200 truncate">{userName}</p>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    <p className="text-xs text-slate-500 capitalize">{role}</p>
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                     
                     <Button 
                         variant="ghost" 
-                        className="w-full justify-start text-slate-400 hover:text-white hover:bg-red-500/10 hover:text-red-400 transition-all group rounded-xl" 
+                        title={isCollapsed ? "Cerrar Sesión" : ""}
+                        className={cn(
+                            "w-full text-slate-400 hover:text-white hover:bg-red-500/10 hover:text-red-400 transition-all group rounded-xl",
+                            isCollapsed ? "justify-center px-0" : "justify-start"
+                        )} 
                         onClick={handleSignOut}
                     >
-                        <LogOut className="mr-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                        Cerrar Sesión
+                        <LogOut className={cn(
+                            "group-hover:translate-x-1 transition-transform",
+                            isCollapsed ? "h-5 w-5" : "mr-2 h-4 w-4"
+                        )} />
+                        {!isCollapsed && <span>Cerrar Sesión</span>}
                     </Button>
                 </div>
             </nav>

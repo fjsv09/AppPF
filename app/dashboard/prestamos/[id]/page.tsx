@@ -115,6 +115,7 @@ export default async function LoanDetailPage(props: { params: Promise<{ id: stri
         .select('id, fecha_inicio, created_at')
         .eq('cliente_id', prestamo.cliente_id)
         .order('fecha_inicio', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(1)
     
     const esUltimoPrestamo = prestamosDelCliente?.[0]?.id === prestamo.id

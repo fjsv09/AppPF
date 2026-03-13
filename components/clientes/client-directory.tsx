@@ -66,7 +66,7 @@ interface ClientDirectoryProps {
     userId?: string
 }
 
-type FilterTab = 'todos' | 'activos' | 'con_deuda' | 'sin_prestamos' | 'inactivos'
+type FilterTab = 'todos' | 'activos' | 'con_deuda' | 'sin_prestamos' | 'inactivos' | 'al_dia' | 'mora' | 'recaptables'
 
 const ITEMS_PER_PAGE = 10
 
@@ -163,6 +163,9 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     // Tabs logic
     const tabs = useMemo(() => [
         { id: 'todos' as FilterTab, label: 'Todos', count: clientes.length },
+        { id: 'al_dia' as FilterTab, label: 'Al Día', count: clientes.filter(c => c.situacion === 'ok' || c.situacion === 'deuda').length },
+        { id: 'mora' as FilterTab, label: 'En Mora', count: clientes.filter(c => ['cpp', 'moroso', 'vencido'].includes(c.situacion)).length },
+        { id: 'recaptables' as FilterTab, label: 'Recaptables', count: clientes.filter(c => c.isRecaptable).length },
         { id: 'activos' as FilterTab, label: 'Activos', count: clientes.filter(c => c.estado === 'activo').length },
         { id: 'con_deuda' as FilterTab, label: 'Con Deuda', count: clientes.filter(c => c.stats.totalDebt > 0).length },
         { id: 'sin_prestamos' as FilterTab, label: 'Sin Préstamos', count: clientes.filter(c => c.stats.activeLoansCount === 0).length },
@@ -197,6 +200,9 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             case 'con_deuda': result = result.filter(c => c.stats.totalDebt > 0); break;
             case 'sin_prestamos': result = result.filter(c => c.stats.activeLoansCount === 0); break;
             case 'inactivos': result = result.filter(c => c.estado !== 'activo'); break;
+            case 'al_dia': result = result.filter(c => c.situacion === 'ok' || c.situacion === 'deuda'); break;
+            case 'mora': result = result.filter(c => ['cpp', 'moroso', 'vencido'].includes(c.situacion)); break;
+            case 'recaptables': result = result.filter(c => c.isRecaptable); break;
         }
 
         // Search
@@ -251,21 +257,26 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         
         setIsReassigning(true)
         try {
-            const supabase = createClient()
-            const { error } = await supabase
-                .from('clientes')
-                .update({ asesor_id: selectedNewAsesor })
-                .in('id', selectedClients)
+            const response = await fetch('/api/admin/reasignar-clientes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    clientIds: selectedClients,
+                    newAsesorId: selectedNewAsesor
+                })
+            })
+
+            const result = await response.json()
                 
-            if (error) throw error
+            if (!response.ok) throw new Error(result.error || 'Error en la reasignación')
             
             toast.success(`Se han reasignado ${selectedClients.length} clientes exitosamente.`)
             setSelectedClients([])
             setIsReasignModalOpen(false)
             setSelectedNewAsesor('')
             
-            // Forzar recarga de los datos en la vista actual
-            window.location.reload()
+            // Actualización suave de datos del servidor
+            router.refresh()
             
         } catch (error: any) {
             console.error("Error al reasignar", error)
@@ -424,7 +435,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                 {/* Desktop Header */}
                 <div 
                     className="hidden md:grid gap-4 px-6 py-3 bg-slate-950/50 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500 items-center"
-                    style={{ gridTemplateColumns: 'repeat(14, minmax(0, 1fr))' }}
+                    style={{ gridTemplateColumns: 'repeat(15, minmax(0, 1fr))' }}
                 >
                     {(userRol === 'admin') && (
                         <div className="col-span-1 flex justify-center">
@@ -442,6 +453,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                         <div className="col-span-2 text-left">Asesor</div>
                     )}
                     <div className="col-span-1 text-right">DNI</div>
+                    <div className="col-span-1 text-right">Registro</div>
                     <div className="col-span-1 text-right">Teléfono</div>
                     <div className="col-span-1 text-right">Deuda Total</div>
                     <div className="col-span-1 text-center">Préstamos</div>
@@ -487,12 +499,27 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                             )}
                                         </div>
                                         <div>
-                                            <h3 className="text-slate-100 font-bold text-sm truncate max-w-[150px]">{cliente.nombres}</h3>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="text-slate-100 font-bold text-sm truncate max-w-[150px]">{cliente.nombres}</h3>
+                                                <span className="text-[9px] text-slate-500 font-medium">Reg: {new Date(cliente.created_at).toLocaleDateString('es-PE')}</span>
+                                            </div>
                                             <div className="flex items-center gap-2 mt-0.5">
-                                                <Badge variant="outline" className={cn("px-1.5 py-0 text-[9px] h-4 rounded-sm border-0", 
-                                                    cliente.estado === 'activo' ? "bg-emerald-500/10 text-emerald-400" : "bg-slate-700/50 text-slate-400"
+                                                <Badge variant="outline" className={cn("px-1.5 py-0 text-[10px] h-5 rounded-sm border-0 font-bold", 
+                                                    cliente.situacion === 'vencido' ? "bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse" :
+                                                    cliente.situacion === 'moroso' ? "bg-rose-500/20 text-rose-400 border border-rose-500/30" : 
+                                                    cliente.situacion === 'cpp' ? "bg-amber-500/20 text-orange-400 border border-amber-500/30" : 
+                                                    cliente.situacion === 'deuda' ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" : 
+                                                    cliente.situacion === 'ok' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : 
+                                                    cliente.situacion === 'sin_deuda' ? "bg-blue-500/20 text-blue-400 border border-blue-500/30" :
+                                                    "bg-slate-700/50 text-slate-400"
                                                 )}>
-                                                    {cliente.estado?.toUpperCase()}
+                                                    {cliente.situacion === 'vencido' ? 'VENCIDO' :
+                                                     cliente.situacion === 'moroso' ? 'MOROSO' :
+                                                     cliente.situacion === 'cpp' ? 'CPP' :
+                                                     cliente.situacion === 'deuda' ? 'DEUDA' :
+                                                     cliente.situacion === 'ok' ? 'OK' :
+                                                     cliente.situacion === 'sin_deuda' ? 'SIN DEUDA' :
+                                                     cliente.estado?.toUpperCase()}
                                                 </Badge>
                                                 {cliente.sectores?.nombre && (
                                                     <span className="text-[10px] text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 font-medium truncate max-w-[80px]">
@@ -558,7 +585,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                     cliente.stats.totalDebt > 0 ? "border-l-amber-500" : "border-l-slate-700",
                                     isSelected && "bg-blue-900/10 border-l-blue-500"
                                 )}
-                                style={{ gridTemplateColumns: 'repeat(14, minmax(0, 1fr))' }}
+                                style={{ gridTemplateColumns: 'repeat(15, minmax(0, 1fr))' }}
                             >
                                 {(userRol === 'admin') && (
                                     <div className="col-span-1 flex justify-center">
@@ -605,6 +632,9 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                     <div className="text-sm text-slate-300 font-mono">{cliente.dni}</div>
                                 </div>
                                 <div className="col-span-1 text-right">
+                                    <div className="text-[11px] text-slate-400">{new Date(cliente.created_at).toLocaleDateString('es-PE')}</div>
+                                </div>
+                                <div className="col-span-1 text-right">
                                     <div className="text-xs text-slate-500">{cliente.telefono}</div>
                                 </div>
 
@@ -620,11 +650,22 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                 </div>
 
                                 <div className={cn("col-span-1 text-center flex flex-col items-center", userRol === 'asesor' && "col-span-2")}>
-                                    <Badge variant="outline" className={cn("border", 
-                                        cliente.estado === 'activo' ? "bg-emerald-950/30 text-emerald-400 border-emerald-900/50" : 
+                                    <Badge variant="outline" className={cn("border font-bold text-[10px] px-2 py-0.5", 
+                                        cliente.situacion === 'vencido' ? "bg-rose-950/30 text-rose-400 border-rose-900/50 animate-pulse" :
+                                        cliente.situacion === 'moroso' ? "bg-rose-950/30 text-rose-400 border-rose-900/50" : 
+                                        cliente.situacion === 'cpp' ? "bg-amber-950/30 text-orange-400 border-amber-900/50" : 
+                                        cliente.situacion === 'deuda' ? "bg-amber-950/30 text-amber-400 border-amber-900/50" : 
+                                        cliente.situacion === 'ok' ? "bg-emerald-950/30 text-emerald-400 border-emerald-900/50" : 
+                                        cliente.situacion === 'sin_deuda' ? "bg-blue-950/30 text-blue-400 border-blue-900/50" :
                                         "bg-slate-800 text-slate-500 border-slate-700"
                                     )}>
-                                        {cliente.estado?.toUpperCase()}
+                                        {cliente.situacion === 'vencido' ? 'VENCIDO' : 
+                                         cliente.situacion === 'moroso' ? 'MOROSO' : 
+                                         cliente.situacion === 'cpp' ? 'CPP' : 
+                                         cliente.situacion === 'deuda' ? 'DEUDA' : 
+                                         cliente.situacion === 'ok' ? 'OK' : 
+                                         cliente.situacion === 'sin_deuda' ? 'SIN DEUDA' :
+                                         cliente.estado?.toUpperCase()}
                                     </Badge>
                                 </div>
 
@@ -651,11 +692,6 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                         <DropdownMenuContent align="end" className="w-48 bg-slate-900 border-slate-800 text-slate-200">
                                             <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                                             <DropdownMenuSeparator className="bg-slate-800" />
-                                            {userRol === 'admin' && (
-                                                <DropdownMenuItem onClick={() => setEditingCliente(cliente)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400">
-                                                    <Edit className="w-4 h-4 mr-2" /> Editar Datos
-                                                </DropdownMenuItem>
-                                            )}
                                             <DropdownMenuItem onClick={() => router.push(`?client=${cliente.id}`)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
                                                 <Eye className="w-4 h-4 mr-2" /> Ver Detalle Rápido
                                             </DropdownMenuItem>

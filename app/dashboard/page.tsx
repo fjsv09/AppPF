@@ -1,9 +1,10 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
-import { Users, Banknote, ArrowRight, TrendingUp, FileText, Receipt, Clock, Briefcase, ShieldCheck, Wallet, Award } from 'lucide-react'
+import { Users, Banknote, ArrowRight, TrendingUp, FileText, Receipt, Clock, Briefcase, ShieldCheck, Wallet, Award, Contact } from 'lucide-react'
 import Link from 'next/link'
 import { AdminKPIs } from '@/components/dashboard/admin-kpis'
 import { PendingTasks } from '@/components/dashboard/pending-tasks'
+import { SupervisorEfficiency } from '@/components/dashboard/supervisor-efficiency'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,8 +59,11 @@ export default async function DashboardPage() {
             {/* ADMIN: Show KPIs Dashboard */}
             {isAdmin && <AdminKPIs />}
 
-            {/* NON-ADMIN: Show simplified view */}
-            {!isAdmin && (
+            {/* SUPERVISOR: Efficiency Machine */}
+            {perfil?.rol === 'supervisor' && <SupervisorEfficiency />}
+
+            {/* ASESOR: Show simplified view */}
+            {perfil?.rol === 'asesor' && (
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {/* Metric 1: Clients */}
                     <Link href="/dashboard/clientes">
@@ -71,7 +75,7 @@ export default async function DashboardPage() {
                                 <div className="p-3 bg-blue-500/10 rounded-xl group-hover:bg-blue-500/20 transition-colors border border-blue-500/10">
                                     <Users className="w-6 h-6 text-blue-400" />
                                 </div>
-                                <div>
+                                <div className="overflow-hidden">
                                     <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Clientes Totales</p>
                                     <h3 className="text-3xl font-bold text-white mt-1 group-hover:text-blue-200 transition-colors">{clientCount || 0}</h3>
                                 </div>
@@ -92,7 +96,7 @@ export default async function DashboardPage() {
                                 <div className="p-3 bg-emerald-500/10 rounded-xl group-hover:bg-emerald-500/20 transition-colors border border-emerald-500/10">
                                     <TrendingUp className="w-6 h-6 text-emerald-400" />
                                 </div>
-                                <div>
+                                <div className="overflow-hidden">
                                     <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Capital Activo</p>
                                     <h3 className="text-3xl font-bold text-white mt-1 group-hover:text-emerald-200 transition-colors">${formatMoney(activeVolume)}</h3>
                                 </div>
@@ -111,16 +115,13 @@ export default async function DashboardPage() {
                                 <Receipt className="w-5 h-5 text-orange-400 mb-2 group-hover/btn:scale-110 transition-transform" />
                                 <span className="text-[10px] font-bold text-slate-300 group-hover/btn:text-white">Registrar Gasto</span>
                             </Link>
-                            
-                            {/* Solo Asesor realiza cuadre */}
-                            {perfil?.rol === 'asesor' && (
-                                <Link href="/dashboard/cuadre" className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/50 hover:bg-blue-600/20 border border-slate-700 hover:border-blue-500/50 transition-all group/btn">
-                                    <Clock className="w-5 h-5 text-blue-400 mb-2 group-hover/btn:scale-110 transition-transform" />
-                                    <span className="text-[10px] font-bold text-slate-300 group-hover/btn:text-white">Realizar Cuadre</span>
-                                </Link>
-                            )}
 
-                            <Link href="/dashboard/metas" className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/50 hover:bg-amber-600/20 border border-slate-700 hover:border-amber-500/50 transition-all group/btn">
+                            <Link href="/dashboard/cuadre" className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/50 hover:bg-blue-600/20 border border-slate-700 hover:border-blue-500/50 transition-all group/btn">
+                                <Clock className="w-5 h-5 text-blue-400 mb-2 group-hover/btn:scale-110 transition-transform" />
+                                <span className="text-[10px] font-bold text-slate-300 group-hover/btn:text-white">Realizar Cuadre</span>
+                            </Link>
+
+                            <Link href="/dashboard/metas" className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/50 hover:bg-amber-600/20 border border-slate-700 hover:border-amber-500/50 transition-all group/btn col-span-2">
                                 <Award className="w-5 h-5 text-amber-400 mb-2 group-hover/btn:scale-110 transition-transform" />
                                 <span className="text-[10px] font-bold text-slate-300 group-hover/btn:text-white">Mis Metas</span>
                             </Link>
@@ -143,6 +144,10 @@ export default async function DashboardPage() {
                     <Link href="/dashboard/usuarios" className="flex items-center gap-3 p-4 rounded-xl bg-slate-900/50 border border-slate-800 hover:border-blue-500/50 hover:bg-slate-800/50 transition-all group">
                         <Users className="w-5 h-5 text-blue-400 group-hover:scale-110 transition-transform" />
                         <span className="text-sm font-medium text-slate-300 group-hover:text-white">Gestionar Equipo</span>
+                    </Link>
+                    <Link href="/dashboard/admin/empleados" className="flex items-center gap-3 p-4 rounded-xl bg-slate-900/50 border border-slate-800 hover:border-purple-500/50 hover:bg-slate-800/50 transition-all group">
+                        <Contact className="w-5 h-5 text-purple-400 group-hover:scale-110 transition-transform" />
+                        <span className="text-sm font-medium text-slate-300 group-hover:text-white">Directorio Empleados</span>
                     </Link>
                     <Link href="/dashboard/gastos" className="flex items-center gap-3 p-4 rounded-xl bg-slate-900/50 border border-slate-800 hover:border-orange-500/50 hover:bg-slate-800/50 transition-all group">
                         <Receipt className="w-5 h-5 text-orange-400 group-hover:scale-110 transition-transform" />

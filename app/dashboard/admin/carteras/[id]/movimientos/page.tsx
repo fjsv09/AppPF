@@ -64,6 +64,9 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
 
   if (cuentaFilter) {
     query = query.or(`cuenta_origen_id.eq.${cuentaFilter},cuenta_destino_id.eq.${cuentaFilter}`)
+  } else if (accIds.length > 0) {
+    const idsStr = `(${accIds.join(',')})`
+    query = query.or(`cuenta_origen_id.in.${idsStr},cuenta_destino_id.in.${idsStr}`)
   } else {
     query = query.eq('cartera_id', id)
   }

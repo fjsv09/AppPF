@@ -137,7 +137,7 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
           
           const { data: cuotasHoy } = await supabase
             .from('cronograma_cuotas')
-            .select('id, monto_cuota')
+            .select('id, monto_cuota, monto_pagado')
             .in('prestamo_id', prestamoIds)
             .eq('fecha_vencimiento', hoyPeru)
 
@@ -170,20 +170,33 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
             let metaEfectivaHoy = 0
             let cuotasCobradasHoy = 0
 
-            cuotasHoy.forEach(c => {
+            let cuotasObjetivoDiaCount = 0
+            cuotasHoy.forEach((c: any) => {
                const metaCuota = Number(c.monto_cuota)
                const pagos = pagosPorCuota[c.id]
                
-               // Cuánto de esta cuota quedaba pendiente para cobrar hoy (si se cobró algo ayer, resta)
-               const pendienteHoy = Math.max(0, metaCuota - pagos.antes)
-               metaEfectivaHoy += pendienteHoy
+               // Usamos monto_pagado total guardado en DB como referencia maestra
+               const totalPagadoAcumulado = Number(c.monto_pagado || 0)
                
-               // Del total que trajo HOY para esta cuota, solo suma hasta el límite que se debía HOY
-               const recaudoRealParaEstaCuota = Math.min(pagos.hoy, pendienteHoy)
-               totalRecaudadoHoyEfectivo += recaudoRealParaEstaCuota
+               // Lo pagado antes de hoy es lo acumulado menos lo que entró hoy
+               const pagadoAntes = Math.max(0, totalPagadoAcumulado - pagos.hoy)
+               
+               // ¿Cuánto faltaba cobrar de esta cuota al iniciar el día?
+               const pendienteAlInicio = Math.max(0, metaCuota - pagadoAntes)
+               
+               // Si ya estaba pagada totalmente antes de hoy, no se agrega a la meta del día
+               if (pendienteAlInicio <= 0.01) return
 
-               // Si ya se completó el 100% de la cuota (antes + hoy >= meta)
-               if (pagos.antes + pagos.hoy >= metaCuota) {
+               // La meta del día es solo lo que queda por cobrar hoy
+               metaEfectivaHoy += pendienteAlInicio
+               cuotasObjetivoDiaCount++
+               
+               // El recaudo de hoy es lo que se cobra HOY para cubrir ese pendiente
+               const recaudoHoyEfectivo = Math.min(pagos.hoy, pendienteAlInicio)
+               totalRecaudadoHoyEfectivo += recaudoHoyEfectivo
+
+               // Si se terminó de pagar hoy mismo (o se trajo algo hoy que completa la cuota)
+               if (pagos.hoy > 0 && (totalPagadoAcumulado >= metaCuota)) {
                   cuotasCobradasHoy++
                }
             })
@@ -197,7 +210,7 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
                ...prev,
                monto_objetivo_dia: metaEfectivaHoy,
                monto_cobrado_dia: totalRecaudadoHoyEfectivo,
-               cuotas_objetivo_dia: cuotasHoy.length,
+               cuotas_objetivo_dia: cuotasObjetivoDiaCount,
                cuotas_cobradas_dia: cuotasCobradasHoy
             }))
           }

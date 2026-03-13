@@ -1,10 +1,10 @@
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { redirect } from "next/navigation";
-import { CreateUserForm } from "@/components/admin/create-user-form";
+import { EmployeeManager } from "@/components/admin/employee-manager";
 import { BackButton } from "@/components/ui/back-button";
-import { UserPlus, Users, Shield, User, AlertTriangle } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { UserPlus, Users, ShieldAlert, Cake, CalendarDays, Shield, AlertTriangle } from "lucide-react";
+import { isSameDay, isSameMonth } from 'date-fns';
 
 export const dynamic = 'force-dynamic'
 
@@ -28,41 +28,6 @@ export default async function UsuariosPage() {
 
     const isAdmin = perfil?.rol === 'admin'
 
-    // Get all users (only if admin) - use Admin Client
-    let usuarios: any[] = []
-    let supervisores: any[] = []
-    if (isAdmin) {
-        const { data } = await supabaseAdmin
-            .from('perfiles')
-            .select('*')
-            .order('created_at', { ascending: false })
-        usuarios = data || []
-
-        // Get supervisors for the form
-        const { data: sups } = await supabaseAdmin
-            .from('perfiles')
-            .select('id, nombre_completo')
-            .eq('rol', 'supervisor')
-            .order('nombre_completo')
-        supervisores = sups || []
-    }
-
-    const getRoleIcon = (rol: string) => {
-        switch (rol) {
-            case 'admin': return <Shield className="w-4 h-4 text-red-400" />
-            case 'supervisor': return <Users className="w-4 h-4 text-purple-400" />
-            default: return <User className="w-4 h-4 text-blue-400" />
-        }
-    }
-
-    const getRoleBadgeClass = (rol: string) => {
-        switch (rol) {
-            case 'admin': return 'bg-red-950/50 text-red-400 border-red-900/50'
-            case 'supervisor': return 'bg-purple-950/50 text-purple-400 border-purple-900/50'
-            default: return 'bg-blue-950/50 text-blue-400 border-blue-900/50'
-        }
-    }
-
     // If not admin, show access denied
     if (!isAdmin) {
         return (
@@ -79,83 +44,101 @@ export default async function UsuariosPage() {
         )
     }
 
+    // Fetch all profiles
+    const { data: profiles } = await supabaseAdmin
+        .from('perfiles')
+        .select('*, supervisor:supervisor_id(nombre_completo)')
+        .order('nombre_completo')
+
+    // Fetch all auth users to get emails
+    const { data: { users } } = await supabaseAdmin.auth.admin.listUsers()
+
+    // Merge email into profile data
+    const employees = profiles?.map(profile => {
+        const authUser = users.find(u => u.id === profile.id)
+        return {
+            ...profile,
+            email: authUser?.email || ''
+        }
+    }) || []
+
+    const supervisors = employees.filter(e => e.rol === 'supervisor' || e.rol === 'admin')
+
+    // Birthdays today
+    const today = new Date()
+    const birthdaysToday = employees?.filter(e => {
+        if (!e.fecha_nacimiento) return false
+        // Assuming fecha_nacimiento is 'YYYY-MM-DD'
+        const bday = new Date(e.fecha_nacimiento + 'T00:00:00') 
+        return bday.getDate() === today.getDate() && bday.getMonth() === today.getMonth()
+    })
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
-            {/* Header */}
+            {/* Header Section */}
             <div className="border-b border-white/5 pb-6">
-                <div className="flex items-center gap-3">
-                    <BackButton />
-                    <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight">Gestión de Usuarios</h1>
-                </div>
-                <p className="text-slate-400 mt-2 md:mt-1">Administra los usuarios del sistema</p>
-            </div>
-
-            <div className="grid lg:grid-cols-3 gap-8">
-                {/* Create User Form */}
-                <div className="lg:col-span-1">
-                    <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-6 shadow-xl sticky top-8">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 bg-emerald-900/30 rounded-xl flex items-center justify-center">
-                                <UserPlus className="w-5 h-5 text-emerald-400" />
-                            </div>
-                            <div>
-                                <h2 className="text-lg font-bold text-white">Nuevo Usuario</h2>
-                                <p className="text-xs text-slate-400">Crear cuenta de acceso</p>
-                            </div>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <div className="flex items-center gap-3">
+                            <BackButton />
+                            <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
+                                <Users className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />
+                                Gestión de Equipo
+                            </h1>
                         </div>
-                        <CreateUserForm supervisores={supervisores} />
+                        <p className="text-slate-400 mt-2 md:mt-1 md:ml-11">
+                            Administra accesos, información de personal y jerarquía organizacional.
+                        </p>
                     </div>
                 </div>
+            </div>
 
-                {/* Users List */}
-                <div className="lg:col-span-2">
-                    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden">
-                        {/* Header */}
-                        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
-                            <h3 className="font-bold text-white flex items-center gap-2">
-                                <Users className="w-5 h-5 text-slate-500" />
-                                Usuarios Registrados
-                            </h3>
-                            <span className="text-sm text-slate-500">{usuarios.length} usuarios</span>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                {/* Main Content: Employee List */}
+                <div className="lg:col-span-12 xl:col-span-9 space-y-8">
+                    <EmployeeManager employees={employees || []} supervisors={supervisors} />
+                </div>
+
+                {/* Sidebar: Info */}
+                <div className="lg:col-span-12 xl:col-span-3 space-y-6">
+                    {/* Birthdays Card */}
+                    <div className="p-6 rounded-2xl bg-gradient-to-br from-purple-600/10 to-transparent border border-purple-500/20 shadow-xl overflow-hidden relative group">
+                        <div className="absolute -right-4 -top-4 opacity-10 group-hover:rotate-12 transition-transform duration-500">
+                            <Cake className="w-24 h-24 text-purple-400" />
                         </div>
-
-                        {/* Table */}
-                        <div className="divide-y divide-slate-800/50">
-                            {usuarios.map((usuario) => (
-                                <div key={usuario.id} className="px-6 py-4 hover:bg-slate-800/30 transition-colors flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold
-                                            ${usuario.rol === 'admin' ? 'bg-red-900/30 text-red-400' : 
-                                              usuario.rol === 'supervisor' ? 'bg-purple-900/30 text-purple-400' : 
-                                              'bg-blue-900/30 text-blue-400'}`}>
-                                            {usuario.nombre_completo?.charAt(0) || '?'}
+                        <h4 className="text-purple-400 font-bold mb-4 flex items-center gap-2">
+                            <CalendarDays className="w-5 h-5" />
+                            Cumpleaños de hoy
+                        </h4>
+                        <div className="space-y-4 relative z-10">
+                            {birthdaysToday?.length === 0 ? (
+                                <p className="text-xs text-slate-500 italic">No hay cumpleaños registrados para hoy.</p>
+                            ) : (
+                                birthdaysToday?.map(e => (
+                                    <div key={e.id} className="flex items-center gap-3 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                                        <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center font-bold text-purple-400">
+                                            {e.nombre_completo.charAt(0)}
                                         </div>
-                                        <div>
-                                            <p className="font-medium text-white">{usuario.nombre_completo || 'Sin nombre'}</p>
-                                            <p className="text-xs text-slate-500 font-mono">{usuario.id.slice(0, 8)}...</p>
-                                        </div>
+                                        <p className="text-sm font-bold text-white uppercase">{e.nombre_completo}</p>
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                        <Badge variant="outline" className={getRoleBadgeClass(usuario.rol)}>
-                                            <span className="flex items-center gap-1.5">
-                                                {getRoleIcon(usuario.rol)}
-                                                {usuario.rol.toUpperCase()}
-                                            </span>
-                                        </Badge>
-                                    </div>
-                                </div>
-                            ))}
-
-                            {usuarios.length === 0 && (
-                                <div className="px-6 py-12 text-center text-slate-500">
-                                    <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                                    <p>No hay usuarios registrados</p>
-                                </div>
+                                ))
                             )}
                         </div>
+                    </div>
+
+                    {/* Security Warning */}
+                    <div className="p-6 rounded-2xl bg-rose-600/5 border border-rose-500/20">
+                        <div className="flex items-center gap-3 mb-3">
+                            <ShieldAlert className="w-5 h-5 text-rose-500" />
+                            <h4 className="text-rose-400 font-bold text-sm">Control de Seguridad</h4>
+                        </div>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                            Al <span className="text-rose-400 font-bold">suspender</span> a un colaborador, este perderá acceso inmediato a todas las funciones del sistema.
+                        </p>
                     </div>
                 </div>
             </div>
         </div>
     )
 }
+

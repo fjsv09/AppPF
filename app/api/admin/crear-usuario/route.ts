@@ -15,7 +15,7 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: NextRequest) {
     try {
-        const { email, password, nombre, rol, supervisor_id } = await request.json()
+        const { email, password, nombre, rol, supervisor_id, sueldo_base, fecha_nacimiento } = await request.json()
 
         // Validate inputs
         if (!email || !password || !nombre || !rol) {
@@ -41,50 +41,50 @@ export async function POST(request: NextRequest) {
         const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
         const existingUser = existingUsers?.users?.find(u => u.email === email)
 
-        let userId: string
-
         if (existingUser) {
-            // User exists - just update/create their profile
-            userId = existingUser.id
-            console.log('User already exists, updating profile:', userId)
-        } else {
-            // Create new user in Supabase Auth
-            const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-                email,
-                password,
-                email_confirm: true,
-                user_metadata: {
-                    nombre_completo: nombre,
-                    rol: rol
-                }
-            })
-
-            if (authError) {
-                console.error('Auth error:', authError)
-                return NextResponse.json(
-                    { error: authError.message },
-                    { status: 400 }
-                )
-            }
-
-            if (!authData.user) {
-                return NextResponse.json(
-                    { error: 'No se pudo crear el usuario' },
-                    { status: 500 }
-                )
-            }
-
-            userId = authData.user.id
+            return NextResponse.json(
+                { error: 'El correo electrónico ya está registrado en el sistema. Use uno diferente o edite el usuario existente.' },
+                { status: 400 }
+            )
         }
 
-        // Create or update profile in perfiles table (upsert)
+        // Create new user in Supabase Auth
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true,
+            user_metadata: {
+                nombre_completo: nombre,
+                rol: rol
+            }
+        })
+
+        if (authError) {
+            console.error('Auth error:', authError)
+            return NextResponse.json(
+                { error: authError.message },
+                { status: 400 }
+            )
+        }
+
+        if (!authData.user) {
+            return NextResponse.json(
+                { error: 'No se pudo crear el usuario' },
+                { status: 500 }
+            )
+        }
+
+        const userId = authData.user.id
+
         const { error: profileError } = await supabaseAdmin
             .from('perfiles')
             .upsert({
                 id: userId,
                 rol: rol,
                 nombre_completo: nombre,
-                supervisor_id: rol === 'asesor' ? supervisor_id || null : null
+                supervisor_id: rol === 'asesor' ? supervisor_id || null : null,
+                sueldo_base: sueldo_base || 0,
+                fecha_nacimiento: fecha_nacimiento || null
             }, { onConflict: 'id' })
 
         if (profileError) {

@@ -29,16 +29,28 @@ const CONFIG_LABELS: Record<string, { nombre: string; descripcion: string; min?:
         max: 100
     },
     'umbral_cpp_cuotas': {
-        nombre: 'Umbral CPP (Cartera Pesada)',
-        descripcion: 'Número de cuotas vencidas para marcar préstamo como CPP',
+        nombre: 'Umbral CPP (Diario)',
+        descripcion: 'Cuotas vencidas para marcar como CPP en créditos diarios',
         min: 1,
         max: 30
     },
     'umbral_moroso_cuotas': {
-        nombre: 'Umbral Moroso',
-        descripcion: 'Número de cuotas vencidas para marcar préstamo como Moroso',
+        nombre: 'Umbral Moroso (Diario)',
+        descripcion: 'Cuotas vencidas para marcar como Moroso en créditos diarios',
         min: 1,
         max: 90
+    },
+    'umbral_cpp_otros': {
+        nombre: 'Umbral CPP (Sem/Quin/Mens)',
+        descripcion: 'Cuotas vencidas para marcar como CPP en créditos NO diarios',
+        min: 1,
+        max: 10
+    },
+    'umbral_moroso_otros': {
+        nombre: 'Umbral Moroso (Sem/Quin/Mens)',
+        descripcion: 'Cuotas vencidas para marcar como Moroso en créditos NO diarios',
+        min: 1,
+        max: 20
     },
     'refinanciacion_min_mora': {
         nombre: 'Límite de Refinanciación Directa (Admin)',
@@ -146,6 +158,8 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         'renovacion_min_pagado', 
         'umbral_cpp_cuotas', 
         'umbral_moroso_cuotas', 
+        'umbral_cpp_otros',
+        'umbral_moroso_otros',
         'refinanciacion_min_mora',
         'horario_apertura',
         'horario_cierre',

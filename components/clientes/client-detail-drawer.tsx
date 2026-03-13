@@ -55,11 +55,24 @@ export function ClientDetailDrawer({ cliente, isOpen, onClose, userRol = "asesor
                  <div>
                     <SheetTitle className="text-xl font-bold text-white leading-tight mb-1">{cliente.nombres}</SheetTitle>
                     <div className="flex items-center gap-2">
-                       <Badge variant="outline" className={cn("text-[10px] px-2 py-0.5 h-5 rounded-full border", 
-                          cliente.estado === 'activo' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-slate-800 text-slate-400 border-slate-700"
+                       <Badge variant="outline" className={cn("text-[10px] px-2 py-0.5 h-5 rounded-full border font-bold", 
+                          cliente.situacion === 'critico' ? "bg-rose-500/10 text-rose-400 border-rose-500/30" : 
+                          cliente.situacion === 'atrasado' ? "bg-amber-500/10 text-amber-400 border-amber-500/30" : 
+                          cliente.situacion === 'al_dia' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : 
+                          cliente.situacion === 'sin_deuda' ? "bg-blue-500/10 text-blue-400 border-blue-500/30" :
+                          "bg-slate-800 text-slate-400 border-slate-700"
                        )}>
-                          <div className={cn("w-1.5 h-1.5 rounded-full mr-1.5", cliente.estado === 'activo' ? "bg-emerald-500 animate-pulse" : "bg-slate-500")} />
-                          {cliente.estado?.toUpperCase()}
+                          <div className={cn("w-1.5 h-1.5 rounded-full mr-1.5", 
+                             cliente.situacion === 'al_dia' ? "bg-emerald-500 animate-pulse" : 
+                             cliente.situacion === 'critico' ? "bg-rose-500 animate-bounce" :
+                             cliente.situacion === 'atrasado' ? "bg-amber-500 animate-pulse" :
+                             "bg-slate-500"
+                          )} />
+                          {cliente.situacion === 'critico' ? 'CRÍTICO' : 
+                           cliente.situacion === 'atrasado' ? 'EN MORA' : 
+                           cliente.situacion === 'al_dia' ? 'AL DÍA' : 
+                           cliente.situacion === 'sin_deuda' ? 'SIN DEUDA' :
+                           cliente.estado?.toUpperCase()}
                        </Badge>
                        <span className="text-xs text-slate-400 font-mono">{cliente.dni}</span>
                      </div>

@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
         // Obtener préstamos activos, cpp o morosos (no finalizados)
         const { data: prestamos, error: prestamosError } = await supabaseAdmin
             .from('prestamos')
-            .select('id, estado, estado_mora, fecha_fin, monto, interes')
+            .select('id, estado, estado_mora, fecha_fin, monto, interes, frecuencia')
             .in('estado', ['activo'])
             .in('estado_mora', ['normal', 'cpp', 'moroso'])
 
@@ -81,14 +81,14 @@ Deno.serve(async (req) => {
                     continue
                 }
 
-                // Calcular cuotas vencidas (no pagadas y fecha < hoy)
-                const cuotasVencidas = (cuotas || []).filter(c => 
+                // Calcular cuotas debidas (no pagadas y fecha <= hoy)
+                const cuotasDebidasArr = (cuotas || []).filter(c => 
                     c.estado !== 'pagado' && 
-                    c.monto_pagado < c.monto_cuota &&
-                    new Date(c.fecha_vencimiento) < hoy
+                    c.monto_pagado < (c.monto_cuota - 0.5) &&
+                    new Date(c.fecha_vencimiento) <= hoy
                 )
 
-                const diasAtraso = cuotasVencidas.length
+                const cuotasDebidas = cuotasDebidasArr.length
 
                 // Calcular saldo pendiente
                 const saldoPendiente = (cuotas || []).reduce((acc, c) => 
@@ -99,13 +99,27 @@ Deno.serve(async (req) => {
                 const { data: configData } = await supabaseAdmin
                     .from('configuracion_sistema')
                     .select('clave, valor')
-                    .in('clave', ['umbral_cpp_cuotas', 'umbral_moroso_cuotas'])
+                    .in('clave', ['umbral_cpp_cuotas', 'umbral_moroso_cuotas', 'umbral_cpp_otros', 'umbral_moroso_otros'])
 
-                const minCpp = parseInt(configData?.find(c => c.clave === 'umbral_cpp_cuotas')?.valor || '3')
-                const minMoroso = parseInt(configData?.find(c => c.clave === 'umbral_moroso_cuotas')?.valor || '6')
+                const cfgCpp = parseInt(configData?.find(c => c.clave === 'umbral_cpp_cuotas')?.valor || '4')
+                const cfgMoroso = parseInt(configData?.find(c => c.clave === 'umbral_moroso_cuotas')?.valor || '7')
+                const cfgCppOtros = parseInt(configData?.find(c => c.clave === 'umbral_cpp_otros')?.valor || '1')
+                const cfgMorosoOtros = parseInt(configData?.find(c => c.clave === 'umbral_moroso_otros')?.valor || '2')
+
+                // Frecuencia del préstamo
+                const frecuencia = (prestamo as any).frecuencia?.toLowerCase() || 'diario'
+                
+                // Determinar umbrales específicos por frecuencia
+                let minCpp = cfgCpp
+                let minMoroso = cfgMoroso
+
+                if (frecuencia !== 'diario') {
+                    minCpp = cfgCppOtros
+                    minMoroso = cfgMorosoOtros
+                }
 
                 // Determinar nuevo estado
-                let nuevoEstadoMora = 'normal'
+                let nuevoEstadoMora = 'ok'
                 let motivo = ''
 
                 // Regla 1: Si saldo == 0, préstamo finalizado
@@ -116,7 +130,7 @@ Deno.serve(async (req) => {
                     // Actualizar estado del préstamo a finalizado
                     await supabaseAdmin
                         .from('prestamos')
-                        .update({ estado: 'finalizado', estado_mora: 'normal' })
+                        .update({ estado: 'finalizado', estado_mora: 'ok' })
                         .eq('id', prestamo.id)
 
                     // Registrar en historial
@@ -144,14 +158,14 @@ Deno.serve(async (req) => {
                     motivo = `Contrato vencido con saldo pendiente de $${saldoPendiente.toFixed(2)}`
                 }
                 // Regla 3: minMoroso+ cuotas de atraso -> MOROSO (según umbral_moroso_cuotas)
-                else if (diasAtraso >= minMoroso) {
+                else if (cuotasDebidas >= minMoroso) {
                     nuevoEstadoMora = 'moroso'
-                    motivo = `${diasAtraso} cuotas vencidas sin pagar`
+                    motivo = `${cuotasDebidas} cuotas vencidas sin pagar`
                 }
                 // Regla 4: minCpp+ cuotas de atraso -> CPP (según umbral_cpp_cuotas)
-                else if (diasAtraso >= minCpp && diasAtraso < minMoroso) {
+                else if (cuotasDebidas >= minCpp && cuotasDebidas < minMoroso) {
                     nuevoEstadoMora = 'cpp'
-                    motivo = `${diasAtraso} cuotas vencidas - Cartera Pesada Potencial`
+                    motivo = `${cuotasDebidas} cuotas vencidas - Cartera Pesada Potencial`
                 }
 
                 // Si hay cambio de estado, actualizar
@@ -172,7 +186,7 @@ Deno.serve(async (req) => {
                         p_prestamo_id: prestamo.id,
                         p_estado_anterior: prestamo.estado_mora,
                         p_estado_nuevo: nuevoEstadoMora,
-                        p_dias_atraso: diasAtraso,
+                        p_dias_atraso: cuotasDebidas,
                         p_motivo: motivo,
                         p_responsable: 'sistema'
                     })
@@ -198,7 +212,7 @@ Deno.serve(async (req) => {
                     resultados.cambios.push({
                         prestamo_id: prestamo.id,
                         cambio: `${prestamo.estado_mora} -> ${nuevoEstadoMora}`,
-                        dias_atraso: diasAtraso,
+                        dias_atraso: cuotasDebidas,
                         motivo
                     })
                     resultados.actualizados++

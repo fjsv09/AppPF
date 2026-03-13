@@ -2,6 +2,8 @@ import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
 import { DashboardNav } from '@/components/dashboard-nav'
+import { SidebarProvider } from '@/components/providers/sidebar-provider'
+import { DashboardMain } from '@/components/dashboard-main'
 
 export default async function DashboardLayout({
   children,
@@ -38,11 +40,13 @@ export default async function DashboardLayout({
   const userName = perfil?.nombre_completo || 'Usuario'
 
   return (
-    <div className="min-h-screen text-slate-200">
-      <DashboardNav role={userRole} userName={userName} />
-      <main className="md:pl-80 p-6 md:p-10 pt-8 pb-24 md:pb-10 w-full min-h-screen">
-        {children}
-      </main>
-    </div>
+    <SidebarProvider>
+      <div className="min-h-screen text-slate-200">
+        <DashboardNav role={userRole} userName={userName} />
+        <DashboardMain>
+          {children}
+        </DashboardMain>
+      </div>
+    </SidebarProvider>
   )
 }

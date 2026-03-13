@@ -4,8 +4,9 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { BackButton } from '@/components/ui/back-button'
-import { Users, TrendingUp, CreditCard, Plus } from 'lucide-react'
+import { Users, TrendingUp, CreditCard, Plus, Zap, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { ClientDirectory } from '@/components/clientes/client-directory'
+import { getTodayPeru, calculateClientSituation, calculateLoanMetrics } from '@/lib/financial-logic'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,9 @@ export default async function ClientesPage() {
         .single()
 
     const userRole = perfil?.rol || 'asesor'
+    
+    // 0. Auto-update Mora Status (Robot)
+    await supabaseAdmin.rpc('actualizar_estados_mora')
 
     // Build base query based on role
     let clientsQuery = supabaseAdmin
@@ -32,9 +36,19 @@ export default async function ClientesPage() {
                 id,
                 estado,
                 monto,
+                interes,
+                frecuencia,
+                fecha_inicio,
+                estado_mora,
                 cronograma_cuotas (
                     monto_cuota,
-                    monto_pagado
+                    monto_pagado,
+                    fecha_vencimiento,
+                    estado,
+                    pagos (
+                        created_at,
+                        monto_pagado
+                    )
                 )
             ),
             solicitudes (
@@ -71,16 +85,24 @@ export default async function ClientesPage() {
     }
     // Admin sees all (no filter)
 
-    const { data: clientsRaw, error } = await clientsQuery
+    const { data: clientsRaw } = await clientsQuery
+    const todayPeru = getTodayPeru()
     
     // Process clients to add calculated stats
-    const clients = clientsRaw?.map((client: any) => {
+    const clients = (clientsRaw || [])?.map((client: any) => {
         const activeLoans = client.prestamos?.filter((p: any) => p.estado === 'activo') || []
-        const totalDebt = activeLoans.reduce((total: number, p: any) => {
-            const pending = p.cronograma_cuotas?.reduce((acc: number, c: any) => acc + (c.monto_cuota - (c.monto_pagado || 0)), 0) || 0
-            return total + pending
-        }, 0)
+        const situacion = calculateClientSituation(client)
+
+        // Totales básicos
+        let totalDebt = 0
+        let isRecaptable = false
+        activeLoans.forEach((p: any) => {
+            const metrics = calculateLoanMetrics(p, todayPeru)
+            totalDebt += metrics.deudaExigibleTotal
+            if (metrics.esRenovable) isRecaptable = true
+        })
         
+
         // Get latest GPS coordinates from solicitudes
         const latestSolicitud = client.solicitudes?.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
         const gps_coordenadas = latestSolicitud?.gps_coordenadas || null
@@ -102,6 +124,7 @@ export default async function ClientesPage() {
 
         return {
             ...client,
+            situacion, // Nueva situación financiera calculada
             gps_coordenadas, // Attach to root
             documentos, // Attach to root
             prestamo_activo_id: activeLoans[0]?.id || latestLoanId, // Usar activo o el más reciente
@@ -109,6 +132,7 @@ export default async function ClientesPage() {
             fuentes_ingresos: latestSolicitud?.fuentes_ingresos,
             ingresos_mensuales: latestSolicitud?.ingresos_mensuales,
             motivo_prestamo: latestSolicitud?.motivo_prestamo,
+            isRecaptable,
             stats: {
                 activeLoansCount: activeLoans.length,
                 totalDebt: totalDebt,
@@ -119,8 +143,9 @@ export default async function ClientesPage() {
 
     // Calc Header Stats
     const totalClients = clients.length
-    const activeClients = clients.filter(c => c.estado === 'activo').length
-    const totalDebtAll = clients.reduce((acc, c) => acc + c.stats.totalDebt, 0)
+    const clientsAlDia = clients.filter((c: any) => c.situacion === 'ok' || c.situacion === 'deuda').length
+    const clientsMora = clients.filter((c: any) => ['cpp', 'moroso', 'vencido'].includes(c.situacion)).length
+    const recaptablesCount = clients.filter((c: any) => c.isRecaptable).length
 
     // Fetch perfiles for filters (if admin or supervisor)
     let perfiles: any[] = []
@@ -155,47 +180,67 @@ export default async function ClientesPage() {
             </div>
 
              {/* Hero Stats */}
-             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6">
+             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
                  {/* Card 1: Total */}
-                 <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-blue-500/30 transition-all">
-                    <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
-                        <Users className="w-16 h-16 text-blue-500" />
-                    </div>
-                    <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Total Clientes</p>
-                    <h2 className="text-xl md:text-3xl font-bold text-white">{totalClients}</h2>
-                    <div className="mt-2 flex items-center text-blue-400">
-                         <span className="bg-blue-950/50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-blue-900/50">REGISTRADOS</span>
-                    </div>
-                 </div>
+                 <Link href="?tab=todos" className="block h-full">
+                     <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-blue-500/30 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                        <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <Users className="w-16 h-16 text-blue-500" />
+                        </div>
+                        <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Total Clientes</p>
+                        <h2 className="text-xl md:text-3xl font-bold text-white">{totalClients}</h2>
+                        <div className="mt-2 flex items-center text-blue-400">
+                             <span className="bg-blue-950/50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-blue-900/50">REGISTRADOS</span>
+                        </div>
+                     </div>
+                 </Link>
 
-                 {/* Card 2: Active */}
-                 <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-emerald-500/30 transition-all">
-                    <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
-                        <TrendingUp className="w-16 h-16 text-emerald-500" />
-                    </div>
-                    <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Activos</p>
-                    <h2 className="text-xl md:text-3xl font-bold text-white">{activeClients}</h2>
-                    <div className="mt-2 text-emerald-400 flex items-center gap-1">
-                        <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                        </span>
-                        <span className="text-[10px] font-bold">OPERANDO</span>
-                    </div>
-                 </div>
+                 {/* Card 2: Al Día */}
+                 <Link href="?tab=al_dia" className="block h-full">
+                     <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-emerald-500/30 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                        <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <CheckCircle2 className="w-16 h-16 text-emerald-500" />
+                        </div>
+                        <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Clientes al Día</p>
+                        <h2 className="text-xl md:text-3xl font-bold text-white">{clientsAlDia}</h2>
+                        <div className="mt-2 text-emerald-400 flex items-center gap-1">
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                            <span className="text-[10px] font-bold">AL CORRIENTE</span>
+                        </div>
+                     </div>
+                 </Link>
 
-                 {/* Card 3: Cartera Total (Full width on mobile if odd number of cards? Or just let it flow) */}
-                 <div className="col-span-2 md:col-span-1 bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-purple-500/30 transition-all">
-                    <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
-                        <CreditCard className="w-16 h-16 text-purple-500" />
-                    </div>
-                    <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Cartera</p>
-                    <h2 className="text-xl md:text-3xl font-bold text-white truncate">${totalDebtAll.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</h2>
-                    <div className="mt-2 text-purple-400 flex items-center gap-1">
-                         <span className="bg-purple-950/50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-purple-900/50">POR COBRAR</span>
-                    </div>
-                 </div>
-            </div>
+                 {/* Card 3: En Mora */}
+                 <Link href="?tab=mora" className="block h-full">
+                     <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-rose-500/30 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                        <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <AlertTriangle className="w-16 h-16 text-rose-500" />
+                        </div>
+                        <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">En Mora / Riesgo</p>
+                        <h2 className="text-xl md:text-3xl font-bold text-white">{clientsMora}</h2>
+                        <div className="mt-2 text-rose-400 flex items-center gap-1">
+                            <span className="bg-rose-950/50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-rose-900/50">POR GESTIONAR</span>
+                        </div>
+                     </div>
+                 </Link>
+
+                 {/* Card 4: Recaptables */}
+                 <Link href="?tab=recaptables" className="block h-full">
+                     <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-purple-500/30 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                        <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <Zap className="w-16 h-16 text-purple-500" />
+                        </div>
+                        <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Clientes Recaptables</p>
+                        <h2 className="text-xl md:text-3xl font-bold text-white">{recaptablesCount}</h2>
+                        <div className="mt-2 text-purple-400 flex items-center gap-1">
+                             <span className="bg-purple-950/50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-purple-900/50">APTOS RENOVACIÓN</span>
+                        </div>
+                     </div>
+                 </Link>
+             </div>
 
              {/* Client Directory with Detail View */}
              <ClientDirectory 

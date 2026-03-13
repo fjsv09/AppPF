@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { UserPlus, Loader2, Users, Shield, User, Eye, EyeOff } from 'lucide-react'
+import { UserPlus, Loader2, Users, Shield, User, Eye, EyeOff, Wallet, Calendar } from 'lucide-react'
 
 interface Supervisor {
     id: string
@@ -26,7 +26,9 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
         password: '',
         nombre: '',
         rol: 'asesor' as 'admin' | 'supervisor' | 'asesor',
-        supervisor_id: '' as string
+        supervisor_id: '' as string,
+        sueldo_base: '' as string,
+        fecha_nacimiento: '' as string
     })
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -55,7 +57,9 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...formData,
-                    supervisor_id: formData.rol === 'asesor' ? formData.supervisor_id : null
+                    supervisor_id: formData.rol === 'asesor' ? formData.supervisor_id : null,
+                    sueldo_base: formData.sueldo_base ? parseFloat(formData.sueldo_base) : 0,
+                    fecha_nacimiento: formData.fecha_nacimiento || null
                 })
             })
 
@@ -66,7 +70,7 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
             }
 
             toast.success(`Usuario ${formData.nombre} creado exitosamente`)
-            setFormData({ email: '', password: '', nombre: '', rol: 'asesor', supervisor_id: '' })
+            setFormData({ email: '', password: '', nombre: '', rol: 'asesor', supervisor_id: '', sueldo_base: '', fecha_nacimiento: '' })
             onSuccess?.()
         } catch (error: any) {
             toast.error(error.message)
@@ -130,6 +134,40 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
                         >
                             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    {/* Sueldo Base */}
+                    <div className="space-y-2">
+                        <Label htmlFor="sueldo_base" className="text-slate-300 flex items-center gap-2">
+                            <Wallet className="w-3.5 h-3.5" />
+                            Sueldo Base
+                        </Label>
+                        <Input
+                            id="sueldo_base"
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={formData.sueldo_base}
+                            onChange={(e) => setFormData({ ...formData, sueldo_base: e.target.value })}
+                            className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
+                        />
+                    </div>
+
+                    {/* Fecha de Nacimiento */}
+                    <div className="space-y-2">
+                        <Label htmlFor="fecha_nacimiento" className="text-slate-300 flex items-center gap-2">
+                            <Calendar className="w-3.5 h-3.5" />
+                            Nacimiento
+                        </Label>
+                        <Input
+                            id="fecha_nacimiento"
+                            type="date"
+                            value={formData.fecha_nacimiento}
+                            onChange={(e) => setFormData({ ...formData, fecha_nacimiento: e.target.value })}
+                            className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
+                        />
                     </div>
                 </div>
 

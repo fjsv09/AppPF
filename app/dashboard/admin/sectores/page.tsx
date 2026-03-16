@@ -155,8 +155,8 @@ export default function AdminSectoresPage() {
         <div className="flex items-center gap-3">
           <BackButton />
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight">Sectores de Clientes</h1>
-            <p className="text-slate-400 mt-1">
+            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Sectores de Clientes</h1>
+            <p className="text-slate-500 text-xs mt-0.5">
               Administra los sectores o rutas de cobranza para asignar y agrupar a los clientes.
             </p>
           </div>

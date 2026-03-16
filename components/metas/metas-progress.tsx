@@ -31,6 +31,7 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
     cuotas_cobradas_dia: 0
   })
   const [bonosPagadosHoy, setBonosPagadosHoy] = useState<string[]>([])
+  const [bonosPagadosMes, setBonosPagadosMes] = useState<string[]>([])
   const [historialBonos, setHistorialBonos] = useState<any[]>([])
   const [historialDescuentos, setHistorialDescuentos] = useState<any[]>([])
   const [asesoresInfo, setAsesoresInfo] = useState<any[]>([])
@@ -50,15 +51,24 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
       
       setMetas(metasData || [])
 
-      // 2. Obtener Bonos ya pagados hoy (Usando zona horaria correcta de Perú)
+      // 2. Obtener Bonos ya pagados (Hoy y Mes)
       const hoyPeruStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
-      const { data: pagosAuditados } = await supabase
+      const mesActualStr = hoyPeruStr.slice(0, 7) // YYYY-MM
+      
+      const { data: pagosHoy } = await supabase
         .from('bonos_pagados')
         .select('meta_id')
         .eq('asesor_id', userId)
         .eq('fecha', hoyPeruStr)
       
-      setBonosPagadosHoy(pagosAuditados?.map(p => p.meta_id) || [])
+      const { data: pagosMes } = await supabase
+        .from('bonos_pagados')
+        .select('meta_id')
+        .eq('asesor_id', userId)
+        .gte('fecha', `${mesActualStr}-01`)
+      
+      setBonosPagadosHoy(pagosHoy?.map(p => p.meta_id) || [])
+      setBonosPagadosMes(pagosMes?.map(p => p.meta_id) || [])
 
       // 2b. Historial completo de bonos
       const { data: histBonos } = await supabase
@@ -272,8 +282,23 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
   const checkAndPayBonus = async (meta: any) => {
     // Si todavía estamos cargando o no hay meta ID, cancelar
     if (loading || !meta.id) return
-    // Si ya se pagó hoy o está en proceso, cancelar
-    if (bonosPagadosHoy.includes(meta.id)) return
+    
+    // 0. Determinar si es momento de pagar según el periodo
+    const hoyPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+    const today = new Date(hoyPeru + 'T12:00:00') // Usar mediodía para evitar problemas de desfase
+    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+    const isLastDay = today.getDate() === lastDayOfMonth
+
+    // Si la meta es mensual (como retención), solo se abona el último día del mes
+    if (meta.periodo === 'mensual' && !isLastDay) {
+       return
+    }
+
+    // 0b. Verificar si ya se pagó en su periodo correspondiente
+    if (meta.periodo === 'diario' && bonosPagadosHoy.includes(meta.id)) return
+    if (meta.periodo === 'mensual' && bonosPagadosMes.includes(meta.id)) return
+    
+    // Bloqueo de procesamiento concurrente
     if (processingMetas.current.has(meta.id)) return
 
     let cumplida = false
@@ -327,8 +352,12 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
               icon: <Award className="w-5 h-5 text-amber-500" />
           })
           setBonosPagadosHoy(prev => [...prev, meta.id])
+          setBonosPagadosMes(prev => [...prev, meta.id])
           
-          // Refresh history to show newly paid bonus
+          // Refresh history and bonus status
+          const hoyPeruStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+          const mesActualStr = hoyPeruStr.slice(0, 7)
+          
           const { data: histBonos } = await supabase
             .from('bonos_pagados')
             .select('*')
@@ -473,7 +502,9 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
             </CardHeader>
              <CardContent className="space-y-3">
                 {metas.filter(m => (m.bono_monto > 0 || m.bono_por_cliente > 0)).map((m, idx) => {
-                    const isPaid = bonosPagadosHoy.includes(m.id)
+                    const isPaidInPeriod = m.periodo === 'mensual' 
+                      ? bonosPagadosMes.includes(m.id)
+                      : bonosPagadosHoy.includes(m.id)
                     let isReached = false
                     let bonoLabel = 'Bono Gestión'
                     let bonoDisplay = `S/ ${m.bono_monto || 0}`
@@ -503,8 +534,8 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
                             label={bonoLabel} 
                             range={m.periodo} 
                             bonus={bonoDisplay} 
-                            active={isReached || isPaid}
-                            paid={isPaid}
+                            active={isReached || isPaidInPeriod}
+                            paid={isPaidInPeriod}
                         />
                     )
                 })}

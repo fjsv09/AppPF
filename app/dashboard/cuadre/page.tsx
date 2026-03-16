@@ -47,12 +47,11 @@ export default async function CuadrePage() {
         <div>
           <div className="flex items-center gap-3">
             <BackButton />
-            <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight flex items-center gap-2">
-              <Clock className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />
+            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
               Cuadre de Caja
             </h1>
           </div>
-          <p className="text-slate-400 text-sm md:text-lg mt-1 md:ml-11">
+          <p className="text-slate-500 text-xs mt-0.5">
             Realiza el cierre de tu jornada y entrega el dinero recaudado.
           </p>
         </div>

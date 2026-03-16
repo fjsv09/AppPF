@@ -115,10 +115,10 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
                <Briefcase className="w-5 h-5 text-blue-400" />
             </div>
             <div>
-               <h1 className="text-2xl font-black text-white tracking-tight uppercase leading-none">
+               <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight leading-none">
                   {cartera.nombre}
                </h1>
-               <p className="text-slate-500 text-[10px] mt-1 font-medium tracking-wide">
+               <p className="text-slate-500 text-xs mt-0.5">
                   ID: <span className="font-mono bg-slate-900 px-1 py-0.5 rounded border border-slate-800 text-slate-400">{id.slice(0, 12)}...</span>
                </p>
             </div>

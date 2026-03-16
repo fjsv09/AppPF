@@ -262,14 +262,14 @@ export default function NuevaSolicitudPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 py-8 px-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-8 flex flex-col items-start gap-4">
+        <div className="mb-8 flex flex-col items-start gap-1">
           <div className="flex items-center gap-3">
             <BackButton />
-            <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight">
+            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
                 {isEditMode ? 'Corregir Solicitud' : (wizardState.clienteExistenteId ? 'Nueva Solicitud' : 'Nuevo Prospecto')}
             </h1>
           </div>
-          <p className="text-white/60">
+          <p className="text-slate-500 text-xs mt-0.5">
             {isEditMode 
                 ? 'Modifique la información necesaria y reenvíe la solicitud a supervisión'
                 : 'Complete los 3 pasos para registrar la solicitud de crédito'

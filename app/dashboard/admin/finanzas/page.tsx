@@ -53,11 +53,10 @@ export default async function AdminFinanzasPage() {
         <div className="flex items-center gap-3">
           <BackButton />
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-              <TrendingUp className="w-8 h-8 text-blue-500" />
+            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
               Consolidado Financiero
             </h1>
-            <p className="text-slate-400 mt-1">Vista global de todas las carteras y flujos de efectivo.</p>
+            <p className="text-slate-500 text-xs mt-0.5">Vista global de todas las carteras y flujos de efectivo.</p>
           </div>
         </div>
         <div className="flex gap-2">

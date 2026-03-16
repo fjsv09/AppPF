@@ -32,24 +32,15 @@ export default async function DashboardPage() {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
-            {/* Welcome Hero - Premium Dark */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-950 to-blue-950/30 border border-white/5 shadow-2xl p-8 md:p-10 mb-8">
-                {/* Abstract Background Shapes */}
-                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-600/5 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
-                <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-purple-600/5 rounded-full blur-3xl -ml-20 -mb-20 pointer-events-none" />
-                
-                <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                    <div>
-                        <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight mb-2">
-                            Hola, <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">{perfil?.nombre_completo?.split(' ')[0] || 'Usuario'}</span>
-                        </h1>
-                        <p className="text-slate-400 text-lg max-w-xl leading-relaxed">
-                            {isAdmin 
-                                ? 'Panel administrativo con métricas en tiempo real de tu cartera.'
-                                : 'Bienvenido a tu centro de control. Todo está listo para que gestiones tu cartera de forma eficiente hoy.'
-                            }
-                        </p>
-                    </div>
+            {/* Welcome Hero - Ultra Compact */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-blue-950/30 border border-white/5 shadow-xl p-4 md:p-6 mb-4">
+                <div className="relative z-10">
+                    <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight mb-0.5">
+                        Hola, <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">{perfil?.nombre_completo?.split(' ')[0] || 'Usuario'}</span>
+                    </h1>
+                    <p className="text-slate-400 text-xs md:text-base">
+                        {isAdmin ? 'Panel administrativo real-time.' : 'Gestión de cartera hoy.'}
+                    </p>
                 </div>
             </div>
 

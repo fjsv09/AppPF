@@ -95,9 +95,9 @@ export default async function SolicitudesPage() {
                 <div>
                     <div className="flex items-center gap-3">
                         <BackButton />
-                        <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight">Solicitud de Prospectos y Préstamos</h1>
+                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Solicitud de Prospectos y Préstamos</h1>
                     </div>
-                    <p className="text-slate-400 mt-2 md:mt-1">Gestiona las solicitudes de préstamos y nuevos prospectos</p>
+                    <p className="text-slate-500 text-xs mt-0.5">Gestiona las solicitudes de préstamos y nuevos prospectos</p>
                 </div>
                 {perfil?.rol === 'asesor' && (
                     <Link href={canCreateDueToTime ? "/dashboard/solicitudes/nueva" : "#"}>

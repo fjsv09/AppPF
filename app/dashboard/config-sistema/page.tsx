@@ -61,11 +61,11 @@ export default async function ConfiguracionPage() {
                 <div>
                     <div className="flex items-center gap-3">
                         <BackButton />
-                        <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight">
+                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
                             Configuración del Sistema
                         </h1>
                     </div>
-                    <p className="text-slate-400 mt-2 md:mt-1 md:pl-0">Administra los parámetros globales y operativos de la plataforma.</p>
+                    <p className="text-slate-500 text-xs mt-0.5">Administra los parámetros globales y operativos de la plataforma.</p>
                 </div>
             </div>
 

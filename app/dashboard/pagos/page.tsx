@@ -41,18 +41,27 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         .in('rol', ['supervisor', 'asesor'])
         .order('nombre_completo')
 
-    // Fetch simple payments first to debug
-    const { data: pagos, error: pagosError } = await supabaseAdmin
+    // Build pagos query with role-based filtering
+    let pagosQuery = supabaseAdmin
         .from('pagos')
         .select(`
             *,
-            cronograma_cuotas (
+            cronograma_cuotas!inner (
                 numero_cuota,
-                prestamos (
-                    clientes (nombres)
+                prestamos!inner (
+                    clientes!inner (nombres, asesor_id)
                 )
             )
         `)
+
+    if (userRol === 'asesor') {
+        pagosQuery = pagosQuery.eq('cronograma_cuotas.prestamos.clientes.asesor_id', userId)
+    } else if (userRol === 'supervisor') {
+        const teamAsesorIds = perfiles?.filter(p => p.supervisor_id === userId).map(p => p.id) || []
+        pagosQuery = pagosQuery.in('cronograma_cuotas.prestamos.clientes.asesor_id', teamAsesorIds)
+    }
+
+    const { data: pagos, error: pagosError } = await pagosQuery
         .order('fecha_pago', { ascending: false })
         .limit(20)
 
@@ -206,9 +215,9 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
                 <div>
                      <div className="flex items-center gap-3">
                         <BackButton />
-                        <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight">Transacciones</h1>
+                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Transacciones</h1>
                      </div>
-                    <p className="text-slate-400 mt-2 md:mt-1">Gestión de cobros y pagos</p>
+                    <p className="text-slate-500 text-xs mt-0.5">Gestión de cobros y pagos</p>
                 </div>
                 <Link href="/dashboard/pagos/registrar" className="w-full md:w-auto">
                     <Button className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20 px-6 py-6 rounded-xl text-lg font-bold transition-all hover:scale-105 active:scale-95">

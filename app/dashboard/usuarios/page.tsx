@@ -81,12 +81,9 @@ export default async function UsuariosPage() {
                     <div>
                         <div className="flex items-center gap-3">
                             <BackButton />
-                            <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-                                <Users className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />
-                                Gestión de Equipo
-                            </h1>
+                            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Gestión de Equipo</h1>
                         </div>
-                        <p className="text-slate-400 mt-2 md:mt-1 md:ml-11">
+                        <p className="text-slate-500 text-xs mt-0.5">
                             Administra accesos, información de personal y jerarquía organizacional.
                         </p>
                     </div>

@@ -41,14 +41,13 @@ export default async function AdminEmployeesPage() {
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-3">
             <BackButton />
-            <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-              <Users className="w-8 h-8 text-blue-500" />
+            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
               Directorio de Empleados
             </h1>
           </div>
-          <p className="text-slate-400 text-sm md:text-lg md:ml-11">
+          <p className="text-slate-500 text-xs mt-0.5">
             Administra el equipo, sus accesos y su información base.
           </p>
         </div>

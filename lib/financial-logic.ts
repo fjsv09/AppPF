@@ -23,8 +23,10 @@ interface LoanMetrics {
   cuotasAtrasadas: number;
   deudaExigibleTotal: number;
   deudaExigibleHoy: number;
-  cuotaDiaHoy: number;
-  cobradoHoy: number;
+  cuotaDiaHoy: number;     // Lo que falta cobrar hoy de la cuota de hoy (disminuye al pagar)
+  cuotaDiaProgramada: number; // Lo que se debía cobrar hoy al iniciar el día (fijo)
+  cobradoHoy: number;      // Total recaudado hoy (efectivo total)
+  cobradoRutaHoy: number;  // Recaudado hoy que aplica a cuotas vencidas o de hoy (para avance de meta)
   totalPagadoAcumulado: number;
   saldoPendiente: number;
   riesgoPorcentaje: number;
@@ -43,7 +45,7 @@ interface LoanMetrics {
 export function calculateLoanMetrics(
   loan: any, 
   today: string = getTodayPeru(),
-  config: SystemConfig = { renovacionMinPagado: 60, umbralCpp: 4, umbralMoroso: 7, umbralCppOtros: 1, umbralMorosoOtros: 2 }
+  config: SystemConfig = { renovacionMinPagado: 60, umbralCpp: 1, umbralMoroso: 4, umbralCppOtros: 1, umbralMorosoOtros: 2 }
 ): LoanMetrics {
   if (!loan || loan.estado !== 'activo') {
     const totalPagado = (loan.cronograma_cuotas || []).reduce((sum: number, c: any) => sum + (c.monto_pagado || 0), 0);
@@ -52,7 +54,9 @@ export function calculateLoanMetrics(
       deudaExigibleTotal: 0,
       deudaExigibleHoy: 0,
       cuotaDiaHoy: 0,
+      cuotaDiaProgramada: 0,
       cobradoHoy: 0,
+      cobradoRutaHoy: 0,
       totalPagadoAcumulado: totalPagado,
       saldoPendiente: 0,
       riesgoPorcentaje: 0,
@@ -75,10 +79,61 @@ export function calculateLoanMetrics(
     .filter((c: any) => c.fecha_vencimiento === today)
     .reduce((sum: number, c: any) => sum + Math.max(0, Number(c.monto_cuota) - (Number(c.monto_pagado) || 0)), 0);
 
-  // 2. Cobrado Hoy (Basado en la fecha de creación del pago)
+  // 2. Cobrados Hoy
+  const getIsToday = (date: string) => {
+    if (!date) return false;
+    try {
+      // Usar un formato ultra-robusto para comparación
+      const dateDate = new Date(date).toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+      return dateDate === today;
+    } catch (e) {
+      return false;
+    }
+  };
+
   const cobradoHoy = pagos
-    .filter((pay: any) => pay.created_at && new Date(pay.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Lima' }) === today)
-    .reduce((sum: number, pay: any) => sum + Number(pay.monto_pagado), 0);
+    .filter((pay: any) => getIsToday(pay.created_at))
+    .reduce((sum: number, pay: any) => sum + (Number(pay.monto_pagado) || 0), 0);
+
+  // Cobrado Ruta Hoy: SOLO lo que pagó de la cuota que vence HOY (Meta de la ruta)
+  const cobradoRutaHoy = cronograma
+    .filter((c: any) => c.fecha_vencimiento === today)
+    .reduce((sum: number, c: any) => {
+      const pagosDeEstaCuotaHoy = (c.pagos || [])
+        .filter((p: any) => getIsToday(p.created_at))
+        .reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
+      
+      const metaCuota = Number(c.monto_cuota);
+      const totalPagadoAcumulado = Number(c.monto_pagado || 0);
+      
+      // ¿Cuánto se pagó ANTES de hoy?
+      const pagadoAntes = Math.max(0, totalPagadoAcumulado - pagosDeEstaCuotaHoy);
+      
+      // ¿Cuánto faltaba cobrar de esta cuota al iniciar el día? (ESTO ES LA META REAL)
+      const pendienteAlInicio = Math.max(0, metaCuota - pagadoAntes);
+      
+      // El avance es el pago de hoy, pero topado por lo que faltaba (no contar adelantos/intereses de más como "avance")
+      return sum + Math.min(pagosDeEstaCuotaHoy, pendienteAlInicio);
+    }, 0);
+
+  // 2.5. Cuota Programada para Hoy: La meta real al iniciar el día
+  const cuotaDiaProgramada = cronograma
+    .filter((c: any) => c.fecha_vencimiento === today)
+    .reduce((sum: number, c: any) => {
+      const pagosDeEstaCuotaHoy = (c.pagos || [])
+        .filter((p: any) => getIsToday(p.created_at))
+        .reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
+      
+      const metaCuota = Number(c.monto_cuota);
+      const totalPagadoAcumulado = Number(c.monto_pagado || 0);
+      const pagadoAntes = Math.max(0, totalPagadoAcumulado - pagosDeEstaCuotaHoy);
+      const pendienteAlInicio = Math.max(0, metaCuota - pagadoAntes);
+      
+      // Si ya estaba pagada totalmente antes de hoy (pendiente 0), no se agrega a la meta del día
+      if (pendienteAlInicio <= 0.01) return sum;
+
+      return sum + pendienteAlInicio;
+    }, 0);
 
   // 3. Deuda Exigible Hoy (Todo lo vencido hasta hoy inclusive)
   const deudaExigibleHoy = cronograma
@@ -91,18 +146,18 @@ export function calculateLoanMetrics(
     .filter((c: any) => c.fecha_vencimiento <= today && c.estado !== 'pagado' && (c.monto_cuota - (c.monto_pagado || 0)) > 0.5)
     .length;
 
-  // 4.5. Cuotas Mora Real (Vencidas ANTES de hoy)
+  // 4.5. Cuotas Mora Real (Incluye HOY si no está pagado)
   const cuotasAtrasadas = cronograma
-    .filter((c: any) => c.fecha_vencimiento < today && c.estado !== 'pagado' && (c.monto_cuota - (c.monto_pagado || 0)) > 0.01)
+    .filter((c: any) => c.fecha_vencimiento <= today && c.estado !== 'pagado' && (c.monto_cuota - (c.monto_pagado || 0)) > 0.01)
     .length;
 
   // 5. Acumulados
   const totalPagadoAcumulado = cronograma.reduce((sum: number, c: any) => sum + (Number(c.monto_pagado) || 0), 0);
   const saldoPendiente = Math.max(0, totalPagar - totalPagadoAcumulado);
 
-  // 6. Riesgo Capital % (Vencido < hoy / Saldo Pendiente)
+  // 6. Riesgo Capital % (Vencido <= hoy / Saldo Pendiente)
   const capitalVencido = cronograma
-    .filter((c: any) => c.fecha_vencimiento < today)
+    .filter((c: any) => c.fecha_vencimiento <= today)
     .reduce((sum: number, c: any) => sum + (Number(c.monto_cuota) - (Number(c.monto_pagado) || 0)), 0);
   const riesgoPorcentaje = totalPagar > 0 ? (capitalVencido / totalPagar) * 100 : 0;
 
@@ -151,7 +206,9 @@ export function calculateLoanMetrics(
     deudaExigibleTotal: saldoPendiente,
     deudaExigibleHoy,
     cuotaDiaHoy,
+    cuotaDiaProgramada,
     cobradoHoy,
+    cobradoRutaHoy,
     totalPagadoAcumulado,
     saldoPendiente,
     riesgoPorcentaje,

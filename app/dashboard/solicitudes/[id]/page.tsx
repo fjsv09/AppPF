@@ -83,22 +83,20 @@ export default async function SolicitudDetailPage({ params }: { params: Promise<
             {/* Componente para actualización en tiempo real */}
             <SolicitudRealtime solicitudId={id} currentEstado={solicitud.estado_solicitud} />
             
-            <div className="flex flex-col md:flex-row justify-between items-start gap-4 border-b border-white/5 pb-6">
+            <div className="flex flex-col items-start gap-1">
                 <div className="flex items-center gap-3">
                     <BackButton />
-                    <div>
-                        <div className="flex items-center gap-3 mb-2">
-                            <h1 className="text-3xl font-bold text-white tracking-tight">Solicitud de Crédito</h1>
-                            <Badge className={`${config.color} border flex items-center gap-1`}>
-                                <IconComponent className="w-3 h-3" />
-                                {config.label}
-                            </Badge>
-                        </div>
-                        <p className="text-slate-400">
-                            Creada el {format(new Date(solicitud.created_at), "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}
-                        </p>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Solicitud de Crédito</h1>
+                        <Badge className={`${config.color} border flex items-center gap-1`}>
+                            <IconComponent className="w-3 h-3" />
+                            {config.label}
+                        </Badge>
                     </div>
                 </div>
+                <p className="text-slate-500 text-xs mt-0.5">
+                    Creada el {format(new Date(solicitud.created_at), "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}
+                </p>
             </div>
 
             {/* Alert for pending action */}

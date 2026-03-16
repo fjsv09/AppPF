@@ -130,7 +130,7 @@ export default async function RenovacionDetailPage({ params }: { params: Promise
                                     {estado.label}
                                 </Badge>
                             </h1>
-                            <p className="text-slate-400 text-sm font-mono mt-1">
+                            <p className="text-slate-500 text-xs mt-0.5">
                                 #{id.split('-')[0]} • {formatDate(solicitud.created_at)}
                             </p>
                         </div>

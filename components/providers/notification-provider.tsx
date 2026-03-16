@@ -29,10 +29,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }, [])
 
     const showBrowserNotification = async (titulo: string, mensaje: string) => {
-        console.log('Intentando mostrar notificación de navegador:', titulo)
+        console.log('--- NOTIFICACIÓN NATIVA ---')
+        console.log('Título:', titulo)
+        console.log('Estado Permiso:', Notification.permission)
+
         if (!("Notification" in window)) {
-            console.warn('Este navegador no soporta notificaciones de escritorio')
+            console.error('Navegador no soporta notificaciones')
             return
+        }
+
+        // Si el permiso es 'default', lo pedimos de nuevo (puede fallar si no es por click, pero intentamos)
+        if (Notification.permission === "default") {
+            const permission = await Notification.requestPermission()
+            if (permission !== "granted") return
         }
 
         if (Notification.permission === "granted") {
@@ -41,69 +50,54 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     body: mensaje, 
                     icon: '/favicon.ico',
                     badge: '/favicon.ico',
-                    tag: 'notif-' + Date.now()
+                    tag: 'notif-' + Date.now(),
+                    requireInteraction: true, // Para que no se cierre sola en Chrome
+                    silent: false
                 }
 
-                // Intentar usar Service Worker si está listo (más confiable)
-                if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
+                // Usar Service Worker si está registrado y listo
+                if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
                     const registration = await navigator.serviceWorker.ready;
                     if (registration && 'showNotification' in registration) {
-                        registration.showNotification(titulo, options);
+                        await registration.showNotification(titulo, options);
+                        console.log('Enviada vía SW');
                         return;
                     }
                 }
 
-                // Fallback a objeto Notification tradicional
+                // Fallback tradicional
                 new Notification(titulo, options)
+                console.log('Enviada vía Objeto Notification');
             } catch (err) {
-                console.error('Error al crear objeto Notification:', err)
-            }
-        } else if (Notification.permission !== "denied") {
-            const permission = await Notification.requestPermission()
-            if (permission === "granted") {
-                showBrowserNotification(titulo, mensaje)
+                console.error('Error disparando notificación:', err)
             }
         } else {
-            console.warn('Permiso de notificación denegado')
+            console.warn('Permisos de notificación denegados o no habilitados')
         }
     }
 
     useEffect(() => {
-        // Cargar usuario inicial
-        supabase.auth.getUser().then(({ data: { user } }) => {
+        // Cargar usuario inicial y persistir en Ref
+        const initUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser()
             userIdRef.current = user?.id || null
-            
-            // Sync Push Subscription if enabled
-            if (user && 'serviceWorker' in navigator && 'PushManager' in window) {
-                navigator.serviceWorker.ready.then(reg => {
-                    reg.pushManager.getSubscription().then(sub => {
-                        if (sub) {
-                            // Enviar al servidor para asegurar que esté actualizada
-                            fetch('/api/push/subscribe', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(sub)
-                            }).catch(err => console.error('Error syncing push sub:', err))
-                        }
-                    })
-                })
-            }
-        })
-
+            console.log('NotificationProvider: Usuario cargado ->', userIdRef.current)
+        }
+        
+        initUser()
         fetchUnread()
         
-        // Solicitar permiso de forma proactiva
+        // Registro proactivo de permisos
         if (typeof window !== 'undefined' && "Notification" in window) {
             if (Notification.permission === "default") {
-                Notification.requestPermission()
+                Notification.requestPermission().then(p => console.log('Respuesta permiso inicial:', p))
             }
         }
 
-        console.log('Iniciando suscripción Realtime para notificaciones...')
+        console.log('Configurando canal realtime para notificaciones...')
         
-        // Suscripción Realtime a nuevas notificaciones
         const channel = supabase
-            .channel('realtime_notifications')
+            .channel('notificaciones-globales')
             .on(
                 'postgres_changes',
                 {
@@ -112,28 +106,31 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     table: 'notificaciones'
                 },
                 (payload) => {
-                    console.log('Evento Realtime recibido:', payload)
                     const newNotif = payload.new as any
+                    console.log('Recibida nueva notificación DB:', newNotif)
                     
+                    // Solo si es para mí
                     if (userIdRef.current && newNotif.usuario_destino_id === userIdRef.current) {
-                        console.log('Notificación válida para el usuario actual!')
                         setUnreadCount(prev => prev + 1)
                         
-                        // Sonner Toast
-                        toast.info(newNotif.titulo, {
+                        // 1. Toast de Sonner (UI interna)
+                        toast.success(newNotif.titulo, {
                             description: newNotif.mensaje,
+                            duration: 8000,
                             action: newNotif.link_accion ? {
-                                label: 'Ver',
+                                label: 'Ver Clientes',
                                 onClick: () => window.location.href = newNotif.link_accion
                             } : undefined
                         })
                         
-                        // Browser Notification
+                        // 2. Notificación Nativa de Chrome
                         showBrowserNotification(newNotif.titulo, newNotif.mensaje)
                     }
                 }
             )
-            .subscribe()
+            .subscribe((status) => {
+                console.log('Estado suscripción realtime:', status)
+            })
 
         return () => {
             supabase.removeChannel(channel)

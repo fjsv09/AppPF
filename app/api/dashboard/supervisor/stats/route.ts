@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
+import { getTodayPeru, calculateLoanMetrics } from '@/lib/financial-logic'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,31 +23,35 @@ export async function GET() {
         return NextResponse.json({ error: 'Solo supervisores' }, { status: 403 })
     }
 
-    const today = new Date().toISOString().split('T')[0]
+    const today = getTodayPeru()
     
     // 2. Obtener asesores a cargo
     let asesoresQuery = supabaseAdmin
         .from('perfiles')
-        .select('id, nombre_completo, foto_url')
+        .select('id, nombre_completo')
         .eq('rol', 'asesor')
 
     if (perfil.rol === 'supervisor') {
         asesoresQuery = asesoresQuery.eq('supervisor_id', user.id)
     }
 
-    const { data: asesores } = await asesoresQuery
+    const { data: asesores, error: asesoresError } = await asesoresQuery
+    if (asesoresError) {
+        console.error('Error fetching asesores:', asesoresError)
+        return NextResponse.json({ error: 'Error al obtener equipo' }, { status: 500 })
+    }
+
     const asesorIds = asesores?.map(a => a.id) || []
 
     if (asesorIds.length === 0) {
         return NextResponse.json({ 
-            teamSummary: { totalAsesores: 0, totalClientes: 0, totalCapitalActivo: 0, moraGlobal: 0, eficienciaHoy: 0 },
+            teamSummary: { totalAsesores: 0, totalClientes: 0, totalCapitalActivo: 0, moraGlobal: 0, eficienciaHoy: 0, metaHoyMonto: 0, metaHoyPagado: 0, metaHoyPrestamosTotal: 0, metaHoyPrestamosPagados: 0 },
             asesores: [],
             pendientes: { solicitudes: [], renovaciones: [] }
         })
     }
 
     // 3. Obtener préstamos activos de estos asesores
-    // Primero necesitamos los clientes de estos asesores
     const { data: clientes } = await supabaseAdmin
         .from('clientes')
         .select('id, asesor_id')
@@ -55,28 +60,40 @@ export async function GET() {
     const clienteIds = clientes?.map(c => c.id) || []
     const clientToAsesorMap = new Map(clientes?.map(c => [c.id, c.asesor_id]))
 
-    const { data: prestamos } = await supabaseAdmin
+    const { data: prestamosRaw } = await supabaseAdmin
         .from('prestamos')
         .select(`
-            id, monto, cliente_id, interes,
+            *,
             cronograma_cuotas (
-                monto_cuota,
-                monto_pagado,
-                estado,
-                fecha_vencimiento
+                *,
+                pagos (*)
             )
         `)
         .in('cliente_id', clienteIds)
         .eq('estado', 'activo')
 
-    // 4. Calcular métricas por asesor y globales
+    // 4. Obtener Configuración Sistema
+    const { data: configSistema } = await supabaseAdmin
+        .from('configuracion_sistema')
+        .select('clave, valor')
+
+    const config = {
+        renovacionMinPagado: parseInt(configSistema?.find(c => c.clave === 'renovacion_min_pagado')?.valor || '60'),
+        umbralCpp: parseInt(configSistema?.find(c => c.clave === 'umbral_cpp_cuotas')?.valor || '4'),
+        umbralMoroso: parseInt(configSistema?.find(c => c.clave === 'umbral_moroso_cuotas')?.valor || '7'),
+        umbralCppOtros: parseInt(configSistema?.find(c => c.clave === 'umbral_cpp_otros')?.valor || '1'),
+        umbralMorosoOtros: parseInt(configSistema?.find(c => c.clave === 'umbral_moroso_otros')?.valor || '2')
+    }
+
+    // 5. Calcular métricas por asesor y globales
     const statsByAsesor = new Map<string, any>()
     asesores?.forEach(a => {
         statsByAsesor.set(a.id, {
             id: a.id,
             nombre: a.nombre_completo,
-            foto: a.foto_url,
+            foto: null,
             capitalActivo: 0,
+            originalCapitalTotal: 0,
             moraMonto: 0,
             cuotasHoyTotal: 0,
             cuotasHoyPagado: 0,
@@ -84,53 +101,99 @@ export async function GET() {
         })
     })
 
-    let totalCapitalGlobal = 0
-    let totalMoraGlobal = 0
-    let totalCuotasHoyMonto = 0
-    let totalCuotasHoyPagado = 0
+    let totalOriginalCapitalGlobal = 0
+    let totalMoraGlobalMonto = 0
+    
+    // Global KPIs (ONLY Today's installments - the "Today's Route")
+    let totalMetaHoyMonto = 0
+    let totalMetaHoyPagado = 0
+    
+    // Efficiency KPIs (Today + Arrears - for Advisor Performance)
+    let totalEfcMetaEquipo = 0
+    let totalEfcPagadoEquipo = 0
+    let totalCapitalEnRiesgoGlobal = 0
+    
+    let prestamosHoyTotalContado = new Set<string>()
+    let prestamosHoyPagadosContado = new Set<string>()
 
-    prestamos?.forEach(p => {
+    // Helper for today verification
+    const isToday = (date: string) => {
+        if (!date) return false;
+        try {
+            return new Date(date).toLocaleDateString('en-CA', { timeZone: 'America/Lima' }) === today;
+        } catch (e) { return false; }
+    };
+
+    prestamosRaw?.forEach(p => {
         const asesorId = clientToAsesorMap.get(p.cliente_id)
         if (!asesorId || !statsByAsesor.has(asesorId)) return
 
         const asesorData = statsByAsesor.get(asesorId)
         asesorData.clientesActivos.add(p.cliente_id)
 
-        const montoCapital = parseFloat(p.monto) || 0
-        const cuotas = p.cronograma_cuotas || []
-        const totalCuotasCount = cuotas.length
-        const capitalPorCuota = totalCuotasCount > 0 ? montoCapital / totalCuotasCount : 0
+        // Usar Lógica Centralizada
+        const metrics = calculateLoanMetrics(p, today, config)
 
-        cuotas.forEach((c: any) => {
-            const mCuota = parseFloat(c.monto_cuota) || 0
-            const mPagado = parseFloat(c.monto_pagado) || 0
-            const pendiente = mCuota - mPagado
+        const montoCapitalOriginal = parseFloat(p.monto) || 0
+        asesorData.originalCapitalTotal += montoCapitalOriginal
+        totalOriginalCapitalGlobal += montoCapitalOriginal
 
-            // Capital Activo (lo que falta cobrar de capital)
-            if (c.estado !== 'pagado') {
+        // Mora Bancaria (Capital de cuotas vencidas <= HOY)
+        const capitalVencido = (p.cronograma_cuotas || [])
+            .filter((c: any) => c.fecha_vencimiento <= today)
+            .reduce((sum: number, c: any) => {
+                const montoCapitalOriginalFull = parseFloat(p.monto) || 0
+                const numCuotas = (p.cronograma_cuotas || []).length || 1
+                const capPorCuota = montoCapitalOriginalFull / numCuotas
+                const mCuota = parseFloat(c.monto_cuota) || 0
+                const mPagado = parseFloat(c.monto_pagado) || 0
+                const pendiente = Math.max(0, mCuota - mPagado)
                 const proporcionPendiente = mCuota > 0 ? pendiente / mCuota : 1
-                const capitalPendienteCuota = capitalPorCuota * proporcionPendiente
-                asesorData.capitalActivo += capitalPendienteCuota
-                totalCapitalGlobal += capitalPendienteCuota
+                return sum + (capPorCuota * proporcionPendiente)
+            }, 0)
 
-                // Mora (si ya venció)
-                if (c.fecha_vencimiento < today && pendiente > 0.1) {
-                    asesorData.moraMonto += capitalPendienteCuota
-                    totalMoraGlobal += capitalPendienteCuota
-                }
+        asesorData.moraMonto += capitalVencido
+        totalMoraGlobalMonto += capitalVencido
+
+        asesorData.capitalActivo += metrics.deudaExigibleTotal 
+        totalCapitalEnRiesgoGlobal += metrics.deudaExigibleTotal
+
+        // 1. KPI GLOBAL (Meta Hoy - Solo lo que toca hoy)
+        if (metrics.cuotaDiaProgramada > 0) {
+            prestamosHoyTotalContado.add(p.id)
+            totalMetaHoyMonto += metrics.cuotaDiaProgramada
+            totalMetaHoyPagado += metrics.cobradoRutaHoy
+            
+            if (metrics.cobradoRutaHoy >= metrics.cuotaDiaProgramada - 0.1) {
+                prestamosHoyPagadosContado.add(p.id)
             }
+        }
 
-            // Eficiencia Hoy
-            if (c.fecha_vencimiento === today) {
-                asesorData.cuotasHoyTotal += mCuota
-                asesorData.cuotasHoyPagado += mPagado
-                totalCuotasHoyMonto += mCuota
-                totalCuotasHoyPagado += mPagado
+        // 2. EFICIENCIA ASESOR (Cálculo Diferente: Hoy + Atrasadas)
+        const cronograma = p.cronograma_cuotas || []
+        cronograma.forEach((c: any) => {
+            if (c.fecha_vencimiento <= today) {
+                const pagosDeEstaCuotaHoy = (c.pagos || [])
+                    .filter((pay: any) => isToday(pay.created_at))
+                    .reduce((s: number, pay: any) => s + (Number(pay.monto_pagado) || 0), 0)
+                
+                const metaCuota = Number(c.monto_cuota)
+                const totalPagadoAcumulado = Number(c.monto_pagado || 0)
+                const pagadoAntes = Math.max(0, totalPagadoAcumulado - pagosDeEstaCuotaHoy)
+                const pendienteAlInicio = Math.max(0, metaCuota - pagadoAntes)
+                
+                if (pendienteAlInicio > 0.01) {
+                    asesorData.cuotasHoyTotal += pendienteAlInicio
+                    asesorData.cuotasHoyPagado += Math.min(pagosDeEstaCuotaHoy, pendienteAlInicio)
+                    
+                    totalEfcMetaEquipo += pendienteAlInicio
+                    totalEfcPagadoEquipo += Math.min(pagosDeEstaCuotaHoy, pendienteAlInicio)
+                }
             }
         })
     })
 
-    // 5. Pendientes (Solicitudes y Renovaciones)
+    // 6. Pendientes (Solicitudes y Renovaciones)
     const { data: solicitudes } = await supabaseAdmin
         .from('solicitudes')
         .select(`
@@ -153,7 +216,7 @@ export async function GET() {
         .eq('estado', 'pendiente_supervision')
         .limit(5)
 
-    // 6. Formatear respuesta
+    // 7. Formatear respuesta
     const asesoresList = Array.from(statsByAsesor.values()).map(a => ({
         ...a,
         clientesActivos: a.clientesActivos.size,
@@ -164,9 +227,15 @@ export async function GET() {
         teamSummary: {
             totalAsesores: asesorIds.length,
             totalClientes: Array.from(new Set(clientes?.map(c => c.id))).length,
-            totalCapitalActivo: Math.round(totalCapitalGlobal),
-            moraGlobal: totalCapitalGlobal > 0 ? (totalMoraGlobal / totalCapitalGlobal) * 100 : 0,
-            eficienciaHoy: totalCuotasHoyMonto > 0 ? (totalCuotasHoyPagado / totalCuotasHoyMonto) * 100 : 0
+            totalCapitalActivo: Math.round(totalCapitalEnRiesgoGlobal),
+            moraGlobal: totalOriginalCapitalGlobal > 0 ? (totalMoraGlobalMonto / totalOriginalCapitalGlobal) * 100 : 0,
+            eficienciaHoy: totalEfcMetaEquipo > 0 ? (totalEfcPagadoEquipo / totalEfcMetaEquipo) * 100 : 0,
+            eficienciaMonto: totalEfcMetaEquipo,
+            eficienciaPagado: totalEfcPagadoEquipo,
+            metaHoyMonto: totalMetaHoyMonto,
+            metaHoyPagado: totalMetaHoyPagado,
+            metaHoyPrestamosTotal: prestamosHoyTotalContado.size,
+            metaHoyPrestamosPagados: prestamosHoyPagadosContado.size
         },
         asesores: asesoresList,
         pendientes: {

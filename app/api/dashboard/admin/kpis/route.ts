@@ -112,7 +112,7 @@ export async function GET() {
             prestamo_id,
             prestamos!inner (estado, monto, interes)
         `)
-        .lt('fecha_vencimiento', today)
+        .lte('fecha_vencimiento', today)
         .in('estado', ['pendiente', 'parcial', 'vencido'])
 
     // Agrupar por préstamo para calcular capital por cuota

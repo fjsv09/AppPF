@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectLa
 import { 
     AlertCircle, Wallet, Search, Users, Calendar, MoreVertical, 
     CalendarDays, CheckCircle2, AlertTriangle, MapPin, DollarSign, FileText, ChevronRight, Eye,
-    X, RotateCcw, MessageCircle, Loader2, ListFilter
+    X, RotateCcw, MessageCircle, Loader2, ListFilter, LayoutGrid, TableProperties
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
@@ -220,6 +220,7 @@ export function PrestamosTable({
     const searchParams = useSearchParams()
 
     // --- URL STATE MANAGEMENT ---
+    const [viewType, setViewType] = useState<'cards' | 'table'>('cards')
     const [showMap, setShowMap] = useState(false)
     const [isPending, startTransition] = useTransition() // Transition state for router pushes
     const activeFilter = (searchParams.get('tab') as FilterTab) || 'ruta_hoy'
@@ -227,7 +228,7 @@ export function PrestamosTable({
     const filtroSupervisor = searchParams.get('supervisor') || 'todos'
     const filtroAsesor = searchParams.get('asesor') || 'todos'
     const filtroSector = searchParams.get('sector') || 'todos'
-    const fechaFiltro = searchParams.get('date') || ''
+    const filtroFrecuencia = searchParams.get('frecuencia') || 'todos'
     
     // Sorting State
     const sortBy = (searchParams.get('sortBy') as SortBy) || 'fecha_inicio'
@@ -313,7 +314,7 @@ export function PrestamosTable({
              setIsFiltering(false)
         }, 500) // 500ms perception delay
         return () => clearTimeout(timer)
-    }, [activeFilter, filtroSupervisor, filtroAsesor, filtroSector, fechaFiltro]) // Trigger on any filter change
+    }, [activeFilter, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia]) // Trigger on any filter change
 
     // --- CONTRACT VIEWER STATE ---
     const [contractOpen, setContractOpen] = useState(false)
@@ -368,6 +369,17 @@ export function PrestamosTable({
         })
         return Array.from(unique.entries()).map(([id, nombre]) => ({ id, nombre }))
             .sort((a, b) => a.nombre.localeCompare(b.nombre))
+    }, [prestamos])
+
+    // Frecuencias Logic
+    const frecuenciasList = useMemo(() => {
+        const unique = new Set<string>()
+        prestamos.forEach((p: any) => {
+            if (p.frecuencia) {
+                unique.add(p.frecuencia)
+            }
+        })
+        return Array.from(unique).sort((a, b) => a.localeCompare(b))
     }, [prestamos])
 
     // Process loans with new View Data + Visual Helpers
@@ -454,9 +466,9 @@ export function PrestamosTable({
             filtered = filtered.filter(p => p.clientes?.sector_id === filtroSector)
         }
         
-        // 4. Date Filter
-        if (fechaFiltro) {
-             filtered = filtered.filter(p => p.fecha_inicio === fechaFiltro)
+        // 4. Frequency Filter
+        if (filtroFrecuencia !== 'todos') {
+            filtered = filtered.filter(p => p.frecuencia?.toLowerCase() === filtroFrecuencia.toLowerCase())
         }
 
         // 5. Tab Filter (The Big One)
@@ -586,7 +598,7 @@ export function PrestamosTable({
         })
 
         return filtered
-    }, [processedPrestamos, activeFilter, searchQuery, filtroSupervisor, filtroAsesor, filtroSector, fechaFiltro, userRol, perfiles, sortBy, sortOrder]) // Dependencies Updated
+    }, [processedPrestamos, activeFilter, searchQuery, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia, userRol, perfiles, sortBy, sortOrder]) // Dependencies Updated
 
     // --------------------------------------------------------------------------------
     // 3. STATS/COUNTS Logic (Must use PROCESSED but ALL data to count correctly)
@@ -640,46 +652,33 @@ export function PrestamosTable({
         })
 
         return counts
-    }, [processedPrestamos, prestamoIdsConSolicitudPendiente, ultimoPrestamoDeCliente, userRol])
+    }, [processedPrestamos, prestamoIdsConSolicitudPendiente, ultimoPrestamoDeCliente, userRol]);
 
-    // REMOVED: const filteredPrestamos = processedPrestamos
+    const handleTabChange = (tab: FilterTab) => updateParams({ tab });
+    const handleSearch = (term: string) => updateParams({ search: term });
+    const handleSupervisorFilter = (val: string) => updateParams({ supervisor: val });
+    const handleAsesorFilter = (val: string) => updateParams({ asesor: val });
+    const handleSectorFilter = (val: string) => updateParams({ sector: val });
+    const handleFrequencyFilter = (val: string) => updateParams({ frecuencia: val });
+    const handleSortBy = (val: SortBy) => updateParams({ sortBy: val });
+    const handleSortOrder = (val: SortOrder) => updateParams({ sortOrder: val });
+    const handleClearFilters = () => router.push(pathname);
 
-    // --- HANDLERS (Updated to use URL) ---
-    const handleTabChange = (tab: FilterTab) => updateParams({ tab })
-    const handleSearch = (term: string) => updateParams({ search: term })
-    const handleSupervisorFilter = (val: string) => updateParams({ supervisor: val })
-    const handleAsesorFilter = (val: string) => updateParams({ asesor: val })
-    const handleSectorFilter = (val: string) => updateParams({ sector: val })
-    const handleDateFilter = (val: string) => updateParams({ date: val })
-    
-    // Sorting Handlers
-    const handleSortBy = (val: SortBy) => updateParams({ sortBy: val })
-    const handleSortOrder = (val: SortOrder) => updateParams({ sortOrder: val })
-    
-    // NEW: Clear Filters
-    const handleClearFilters = () => {
-        router.push(pathname) // Effectively clears all query params
-    }
+    const hasActiveFilters = searchQuery || filtroSupervisor !== 'todos' || filtroAsesor !== 'todos' || filtroSector !== 'todos' || filtroFrecuencia !== 'todos' || activeFilter !== 'ruta_hoy';
 
-    const hasActiveFilters = searchQuery || filtroSupervisor !== 'todos' || filtroAsesor !== 'todos' || filtroSector !== 'todos' || fechaFiltro || activeFilter !== 'ruta_hoy'
-
-    // Supervisores Logic... (unchanged)
     const supervisores = useMemo(() => {
-        return perfiles.filter(p => p.rol === 'supervisor')
-    }, [perfiles])
+        return perfiles.filter(p => p.rol === 'supervisor');
+    }, [perfiles]);
 
-    // Asesores Logic... (unchanged)
     const asesores = useMemo(() => {
         if (filtroSupervisor !== 'todos') {
-            return perfiles.filter(p => p.rol === 'asesor' && p.supervisor_id === filtroSupervisor)
+            return perfiles.filter(p => p.rol === 'asesor' && p.supervisor_id === filtroSupervisor);
         }
         if (userRol === 'supervisor') {
-            return perfiles.filter(p => p.rol === 'asesor' && p.supervisor_id === userId)
+            return perfiles.filter(p => p.rol === 'asesor' && p.supervisor_id === userId);
         }
-        return perfiles.filter(p => p.rol === 'asesor')
-    }, [perfiles, filtroSupervisor, userRol, userId])
-
-
+        return perfiles.filter(p => p.rol === 'asesor');
+    }, [perfiles, filtroSupervisor, userRol, userId]);
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -712,8 +711,19 @@ export function PrestamosTable({
                         </Button>
                     )}
                 </div>
-
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+                    {/* View Toggle */}
+                    <div className="shrink-0 md:hidden">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setViewType(viewType === 'cards' ? 'table' : 'cards')}
+                            className="h-10 w-10 bg-slate-950/50 border border-slate-700 text-slate-400 hover:text-white"
+                            title={viewType === 'cards' ? 'Vista Tabla' : 'Vista Tarjetas'}
+                        >
+                            {viewType === 'cards' ? <TableProperties className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+                        </Button>
+                    </div>
                     {/* View Filter (Auto Width) */}
                     <Select value={activeFilter} onValueChange={(val) => handleTabChange(val as FilterTab)}>
                         <SelectTrigger className={cn("h-10 w-auto min-w-[150px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
@@ -725,25 +735,25 @@ export function PrestamosTable({
                                 <SelectLabel className="text-[10px] uppercase text-slate-500">Operativas</SelectLabel>
                                 <SelectItem value="ruta_hoy" className="focus:bg-slate-800 focus:text-white">
                                     <div className="flex items-center justify-between w-full gap-2">
-                                        <span className="text-emerald-400">Ruta de Hoy (Prioridad)</span>
+                                        <span className="text-emerald-400">Ruta de Hoy</span>
                                         <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.ruta_hoy}</Badge>
                                     </div>
                                 </SelectItem>
                                 <SelectItem value="cobranza" className="focus:bg-slate-800 focus:text-white">
                                     <div className="flex items-center justify-between w-full gap-2">
-                                        <span className="text-amber-400">Cobranza (Barrido)</span>
+                                        <span className="text-amber-400">Cobranza</span>
                                         <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.cobranza}</Badge>
                                     </div>
                                 </SelectItem>
                                 <SelectItem value="morosos" className="focus:bg-slate-800 focus:text-white">
                                     <div className="flex items-center justify-between w-full gap-2">
-                                        <span className="text-rose-400">Morosos ({'>'} Riesgo)</span>
+                                        <span className="text-amber-400">Advertencia</span>
                                         <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.morosos}</Badge>
                                     </div>
                                 </SelectItem>
                                 <SelectItem value="notificar" className="focus:bg-slate-800 focus:text-white">
                                     <div className="flex items-center justify-between w-full gap-2">
-                                        <span className="text-orange-400">Notificar (Alertas)</span>
+                                        <span className="text-rose-400">Alerta Crítica</span>
                                         <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.notificar}</Badge>
                                     </div>
                                 </SelectItem>
@@ -759,7 +769,7 @@ export function PrestamosTable({
                                 </SelectItem>
                                 <SelectItem value="en_curso" className="focus:bg-slate-800 focus:text-white">
                                     <div className="flex items-center justify-between w-full gap-2">
-                                        <span>En Curso (Cartera Activa)</span>
+                                        <span>En Proceso</span>
                                         <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.en_curso}</Badge>
                                     </div>
                                 </SelectItem>
@@ -817,52 +827,19 @@ export function PrestamosTable({
                         </SelectContent>
                     </Select>
 
-                    {/* Sort Controls (Auto Width) */}
-                    <div className="flex gap-1 shrink-0 bg-slate-950/30 p-1 rounded-lg border border-slate-800/50">
-                        <Select value={sortBy} onValueChange={(val) => handleSortBy(val as SortBy)}>
-                            <SelectTrigger className={cn("h-10 w-auto min-w-[110px] bg-transparent border-0 text-slate-300 focus:ring-0 text-xs px-2", isPending && "opacity-70 cursor-wait")}>
-                                {isPending && <Loader2 className="w-3 h-3 mr-1 animate-spin text-slate-500" />}
-                                {!isPending && <span className="text-slate-500 mr-1 hidden sm:inline">Ordenar:</span>}
-                                <SelectValue placeholder="Ordenar" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-slate-800">
-                                <SelectItem value="fecha_inicio">Fecha Inicio</SelectItem>
-                                <SelectItem value="frecuencia">Frecuencia</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        
-                        <div className="w-px bg-slate-800 my-1 mx-1 shrink-0"></div>
-
-                        <div className="flex shrink-0">
-                            <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className={cn("h-8 w-8 rounded hover:bg-slate-800 shrink-0", sortOrder === 'asc' ? "text-blue-400 bg-blue-950/20" : "text-slate-500")}
-                                onClick={() => handleSortOrder('asc')}
-                                title="Ascendente"
-                            >
-                                <span className="text-sm">↑</span>
-                            </Button>
-                            <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className={cn("h-8 w-8 rounded hover:bg-slate-800 shrink-0", sortOrder === 'desc' ? "text-blue-400 bg-blue-950/20" : "text-slate-500")}
-                                onClick={() => handleSortOrder('desc')}
-                                title="Descendente"
-                            >
-                                <span className="text-sm">↓</span>
-                            </Button>
-                        </div>
-                    </div>
-
-                    {/* Date Filter (Auto Width) */}
-                    <input
-                        type="date"
-                        value={fechaFiltro}
-                        onChange={(e) => handleDateFilter(e.target.value)}
-                        disabled={isPending}
-                        className={cn("w-auto min-w-[130px] shrink-0 bg-slate-950/50 border border-slate-700 text-slate-200 text-xs rounded-md px-3 h-10 focus:outline-none focus:ring-1 focus:ring-slate-600 appearance-none [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert-[0.5] [&::-webkit-calendar-picker-indicator]:opacity-50 hover:[&::-webkit-calendar-picker-indicator]:opacity-100", isPending && "opacity-70 cursor-wait")}
-                    />
+                    {/* Frequency Filter (Auto Width) */}
+                    <Select value={filtroFrecuencia} onValueChange={handleFrequencyFilter} disabled={isPending}>
+                        <SelectTrigger className={cn("h-10 w-auto min-w-[140px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
+                            {isPending ? <Loader2 className="w-3 h-3 mr-2 animate-spin text-emerald-400" /> : <CalendarDays className="w-3 h-3 mr-2 text-emerald-400 shrink-0" />}
+                            <SelectValue placeholder="Frecuencia" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-800">
+                            <SelectItem value="todos">Todas Frecuencias</SelectItem>
+                            {frecuenciasList.map((f: string) => (
+                                <SelectItem key={f} value={f}>{f}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
 
                     {/* Supervisor Filter (Auto Width) */}
                     {userRol === 'admin' && (
@@ -943,8 +920,11 @@ export function PrestamosTable({
                 </div>
             ) : (
                 <>
-                {/* -------------------- MOBILE VIEW (CARDS) -------------------- */}
-             <div className="md:hidden space-y-4">
+                {/* -------------------- MOBILE CARDS VIEW -------------------- */}
+             <div className={cn(
+                 "space-y-4",
+                 viewType === 'cards' ? "md:hidden" : "hidden"
+             )}>
                 {filteredPrestamos.map((prestamo) => (
                     <div
                         key={prestamo.id}
@@ -996,10 +976,7 @@ export function PrestamosTable({
                                             {prestamo.clientes?.nombres}
                                         </h3>
                                         <div className="flex flex-col gap-0.5 mt-0.5">
-                                            <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                                                <FileText className="w-3 h-3 opacity-70"/> 
-                                                <span className="font-mono">{prestamo.clientes?.dni}</span>
-                                            </div>
+
                                             {prestamo.clientes?.sectores?.nombre && (
                                                 <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
                                                     <MapPin className="w-2.5 h-2.5 opacity-70 text-indigo-400" />
@@ -1063,41 +1040,46 @@ export function PrestamosTable({
                                                                     ⚠️
                                                                 </span>
                                                             )}
-                                                            <span 
-                                                                onClick={(e) => {
-                                                                    e.preventDefault();
-                                                                    e.stopPropagation();
-                                                                    toast(getTooltipText(), {
-                                                                        description: prestamo.estado === 'refinanciado' ? 'El cliente refinanció este saldo.' : undefined
-                                                                    })
-                                                                }}
-                                                                className={cn(
-                                                                    "cursor-pointer text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md border",
-                                                                    prestamo.estado === 'refinanciado' ? "border-indigo-500 text-indigo-400 bg-slate-900/50" :
-                                                                    prestamo.estado === 'renovado' ? "border-slate-600 text-slate-500 bg-slate-900/50" :
-                                                                    isEffectivelyFinalized ? "border-slate-600 text-slate-500 bg-slate-900/50" :
-                                                                    prestamo.estado_mora === 'vencido' ? "border-rose-500 text-rose-500 bg-slate-900/50" :
-                                                                    prestamo.estado_mora === 'moroso' ? "border-red-600 text-red-600 bg-slate-900/50" :
-                                                                    prestamo.estado_mora === 'cpp' ? "border-orange-500 text-orange-500 bg-slate-900/50" :
-                                                                    prestamo.deudaHoy > 0 ? "border-amber-400 text-amber-400 bg-slate-900/50" : 
-                                                                    "border-emerald-500 text-emerald-500 bg-slate-900/50"
-                                                                )}>
-                                                                {prestamo.estado === 'refinanciado' ? 'Refin' :
-                                                                 prestamo.estado === 'renovado' ? 'Renov' :
-                                                                 isEffectivelyFinalized ? 'Final' :
-                                                                 prestamo.estado_mora === 'vencido' ? 'Venc' :
-                                                                 prestamo.estado_mora === 'moroso' ? 'Mora' :
-                                                                 prestamo.estado_mora === 'cpp' ? 'CPP' :
-                                                                 prestamo.deudaHoy > 0 ? 'Deuda' : 'OK'}
-                                                            </span>
-                                                        </>
-                                                    )
-                                                })()}
-                                            </div>
-                                        )
-                                    })()}
-                                </div>
-                            </div>
+                                                                    <span 
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            e.stopPropagation();
+                                                                            toast(getTooltipText(), {
+                                                                                description: prestamo.estado === 'refinanciado' ? 'El cliente refinanció este saldo.' : undefined
+                                                                            })
+                                                                        }}
+                                                                        className={cn(
+                                                                            "cursor-pointer text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md border",
+                                                                            prestamo.estado === 'refinanciado' ? "border-indigo-500 text-indigo-400 bg-slate-900/50" :
+                                                                            prestamo.estado === 'renovado' ? "border-slate-600 text-slate-500 bg-slate-900/50" :
+                                                                            isEffectivelyFinalized ? "border-slate-600 text-slate-500 bg-slate-900/50" :
+                                                                            prestamo.estado_mora === 'vencido' ? "border-rose-500 text-rose-500 bg-slate-900/50" :
+                                                                            prestamo.estado_mora === 'moroso' ? "border-red-600 text-red-600 bg-slate-900/50" :
+                                                                            prestamo.estado_mora === 'cpp' ? "border-orange-500 text-orange-500 bg-slate-900/50" :
+                                                                            prestamo.deudaHoy > 0 ? "border-amber-400 text-amber-400 bg-slate-900/50" : 
+                                                                            "border-emerald-500 text-emerald-500 bg-slate-900/50"
+                                                                        )}>
+                                                                        {prestamo.estado === 'refinanciado' ? 'Refin' :
+                                                                         prestamo.estado === 'renovado' ? 'Renov' :
+                                                                         isEffectivelyFinalized ? 'Final' :
+                                                                         prestamo.estado_mora === 'vencido' ? 'Venc' :
+                                                                         prestamo.estado_mora === 'moroso' ? 'Mora' :
+                                                                         prestamo.estado_mora === 'cpp' ? 'CPP' :
+                                                                         prestamo.deudaHoy > 0 ? 'Deuda' : 'OK'}
+                                                                    </span>
+                                                                    {/* Frecuencia Badge */}
+                                                                    <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500 bg-slate-800/50 border border-slate-700/50 px-1.5 py-0.5 rounded-md">
+                                                                        {prestamo.frecuencia}
+                                                                    </span>
+                                                                </>
+                                                            )
+                                                        })()}
+                                                    </div>
+                                                )
+                                            })()}
+                                        </div>
+                                    </div>
+
 
                             {/* MIDDLE ROW: Stats & Info (Full Width, Left Aligned) */}
                             <div className="grid grid-cols-12 gap-1 items-end">
@@ -1164,7 +1146,7 @@ export function PrestamosTable({
                                             }
                                         })()}
                                         {!prestamo.isFinalizado && (
-                                            <span className="text-slate-500 text-[10px] font-medium px-1">
+                                            <span className="text-slate-400 text-sm font-bold px-1">
                                                 {prestamo.cuotasPagadas}/{prestamo.totalCuotas}
                                             </span>
                                         )}
@@ -1309,17 +1291,22 @@ export function PrestamosTable({
              </div>
 
              {/* -------------------- HIGHER RES TABLE VIEW -------------------- */}
-            <div className="hidden md:block bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+            <div className={cn(
+                 "bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl",
+                 viewType === 'table' ? "block overflow-x-auto" : "hidden md:block"
+             )}>
+                <div className={cn(viewType === 'table' && "min-w-[1000px]")}>
                  {/* Table Header */}
-                 <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-400">
+                 <div className="grid grid-cols-12 gap-2 px-6 py-4 bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-400">
                     <div className="col-span-2 pl-2">Cliente / Préstamo</div>
                     <div className="col-span-1 text-center">Sector</div>
                     <div className="col-span-1 text-right">Capital</div>
                     <div className="col-span-1 text-right">Cuota</div>
                     <div className="col-span-1 text-right">Mora</div>
-                    <div className="col-span-1 text-center">Progreso</div>
+                    <div className="col-span-1 text-center">Prog.</div>
                     <div className="col-span-1 text-center">Frecuencia</div>
-                    <div className="col-span-2 text-center">Fechas</div>
+                    <div className="col-span-1 text-center">Día Pago</div>
+                    <div className="col-span-1 text-center">Fechas</div>
                     <div className="col-span-1 text-center">Estado</div>
                     <div className="col-span-1 text-right pr-4">Acción</div>
                 </div>
@@ -1341,6 +1328,26 @@ export function PrestamosTable({
                         }
                         const rangoFechas = `${formatDateShort(prestamo.fecha_inicio)} - ${formatDateShort(prestamo.fecha_fin)}`
 
+                        const getDiaPago = (p: any) => {
+                            const freq = p.frecuencia?.toLowerCase()
+                            if (freq === 'diario') return '-'
+                            if (!p.fecha_inicio) return '-'
+                            
+                            const d = new Date(p.fecha_inicio + 'T00:00:00')
+                            const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+                            
+                            if (freq === 'semanal') return diasSemana[d.getDay()]
+                            if (freq === 'quincenal') {
+                                const day1 = d.getDate()
+                                let day2 = day1 + 14
+                                if (day2 > 30) day2 = day2 - 30
+                                return `Día ${day1} y ${day2}`
+                            }
+                            if (freq === 'mensual') return `Día ${d.getDate()}`
+                            
+                            return diasSemana[d.getDay()]
+                        }
+
                         // Check if loan is fully paid (saldo = 0) but not yet marked finalizado
                         const isFullyPaid = prestamo.saldo_pendiente <= 0 || (prestamo.cuotasPagadas >= prestamo.totalCuotas && prestamo.totalCuotas > 0)
                         
@@ -1359,7 +1366,7 @@ export function PrestamosTable({
                                 key={prestamo.id} 
                                 style={{ borderLeftWidth: '6px', borderLeftStyle: 'solid', borderLeftColor: rowStyle.borderLeftColor }}
                                 className={cn(
-                                    "grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-800/40 transition-all items-center group relative",
+                                    "grid grid-cols-12 gap-2 px-6 py-4 hover:bg-slate-800/40 transition-all items-center group relative",
                                     rowStyle.className
                                 )}
                             >
@@ -1394,9 +1401,7 @@ export function PrestamosTable({
                                             {prestamo.clientes?.nombres}
                                         </p>
                                         <div className="flex items-center gap-2 mt-0.5">
-                                            <span className="text-[10px] text-slate-500 font-mono bg-slate-950/50 px-1.5 py-0.5 rounded border border-slate-800/50 truncate">
-                                                {prestamo.clientes?.dni}
-                                            </span>
+
                                             {/* Chip: Producto de Refinanciamiento */}
                                             {prestamoIdsProductoRefinanciamiento.includes(prestamo.id) && (
                                                 <span 
@@ -1461,9 +1466,9 @@ export function PrestamosTable({
                                         if (prestamo.isFinalizado || isFullyPaidHere) {
                                             return (
                                                 <div className="flex flex-col items-center">
-                                                    <span className="text-slate-400 font-bold text-xs">✅ Pagado</span>
+                                                    <span className="text-slate-400 font-bold text-[10px]">✅ Pagado</span>
                                                     <span className="text-[10px] text-slate-500">
-                                                        {cuotasPagadas}/{totalCuotas > 0 ? totalCuotas : '-'} cuotas
+                                                        {cuotasPagadas}/{totalCuotas > 0 ? totalCuotas : '-'}
                                                     </span>
                                                 </div>
                                             )
@@ -1473,13 +1478,13 @@ export function PrestamosTable({
                                         return (
                                             <div className="flex flex-col items-center">
                                                 <span className={cn(
-                                                    "font-bold text-xs mb-0.5",
+                                                    "font-bold text-[10px] mb-0.5 whitespace-nowrap",
                                                     cuotasAtrasadas > 0 ? "text-amber-400" : "text-emerald-500"
                                                 )}>
-                                                    {cuotasAtrasadas > 0 ? `⚠️ ${cuotasAtrasadas} atrasada${cuotasAtrasadas > 1 ? 's' : ''}` : '✅ Al día'}
+                                                    {cuotasAtrasadas > 0 ? `⚠️ ${cuotasAtrasadas} atr.` : '✅ Al día'}
                                                 </span>
-                                                <span className="text-[10px] text-slate-500">
-                                                    {cuotasPagadas}/{totalCuotas > 0 ? totalCuotas : '-'} cuotas
+                                                <span className="text-xs font-bold text-slate-400">
+                                                    {cuotasPagadas}/{totalCuotas > 0 ? totalCuotas : '-'}
                                                 </span>
                                             </div>
                                         )
@@ -1493,8 +1498,13 @@ export function PrestamosTable({
                                     </Badge>
                                 </div>
 
+                                {/* Día Pago */}
+                                <div className="col-span-1 text-center text-xs text-slate-400">
+                                    {getDiaPago(prestamo)}
+                                </div>
+
                                 {/* Fechas */}
-                                <div className="col-span-2 text-center text-xs text-slate-500">
+                                <div className="col-span-1 text-center text-[10px] text-slate-500">
                                     {rangoFechas}
                                 </div>
 
@@ -1694,8 +1704,9 @@ export function PrestamosTable({
                     )}
                 </div>
             </div>
-            </>
-            )}
+        </div>
+    </>
+)}
 
             {/* Modals outside the main list container but inside the main layout div */}
             <QuickPayModal 

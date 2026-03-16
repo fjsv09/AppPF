@@ -238,8 +238,8 @@ export default function NotificacionesPage() {
                 <div className="flex items-center gap-3 mb-6">
                     <BackButton />
                     <div>
-                        <h1 className="text-xl font-bold text-white leading-tight">Notificaciones</h1>
-                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Configuración e Historial</p>
+                        <h1 className="text-xl md:text-2xl font-bold text-white leading-tight">Notificaciones</h1>
+                        <p className="text-slate-500 text-xs mt-0.5 uppercase tracking-widest font-semibold">Configuración e Historial</p>
                     </div>
                     {unreadCount > 0 && (
                         <button 

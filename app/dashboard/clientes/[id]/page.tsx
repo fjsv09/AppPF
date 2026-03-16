@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Badge } from '@/components/ui/badge'
-import { User, CreditCard, Phone, MapPin, Activity, DollarSign, Calendar, FileText, TrendingUp, Wallet, CheckCircle, Plus, FileStack, MessageSquare, Users } from 'lucide-react'
+import { User, CreditCard, Phone, MapPin, Activity, DollarSign, Calendar, FileText, TrendingUp, Wallet, CheckCircle, Plus, FileStack, MessageSquare, Users, History } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { ClientGestiones } from '@/components/clientes/client-gestiones'
@@ -72,6 +72,18 @@ export default async function ClienteProfilePage({ params }: { params: Promise<{
     const pctEfectivo = totalPayments > 0 ? Math.round((countEfectivo / totalPayments) * 100) : 0
     const pctDigital = totalPayments > 0 ? Math.round((countDigital / totalPayments) * 100) : 0
 
+    // Fetch reassignment history
+    const { data: reassignmentHistory } = await supabaseAdmin
+        .from('historial_reasignaciones_clientes')
+        .select(`
+            *,
+            asesor_anterior:asesor_anterior_id(nombre_completo),
+            asesor_nuevo:asesor_nuevo_id(nombre_completo),
+            administrador:creado_por(nombre_completo)
+        `)
+        .eq('cliente_id', id)
+        .order('created_at', { ascending: false })
+
     // Get current user and role
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -129,7 +141,7 @@ export default async function ClienteProfilePage({ params }: { params: Promise<{
                                     {cliente.estado?.toUpperCase() || 'ACTIVO'}
                                 </Badge>
                             </div>
-                            <p className="text-slate-400 font-mono text-xs flex items-center justify-center md:justify-start gap-2 opacity-70">
+                            <p className="text-slate-500 text-xs mt-0.5 flex items-center justify-center md:justify-start gap-2">
                                 <span className="text-slate-600">DNI:</span> {cliente.dni}
                             </p>
                         </div>
@@ -225,6 +237,12 @@ export default async function ClienteProfilePage({ params }: { params: Promise<{
                                     {(userRole === 'admin' || userRole === 'supervisor') && (
                                         <TabsTrigger value="habitos" className="md:hidden h-7 px-0 text-[10px] data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
                                             <Wallet className="w-3 h-3 mr-1 md:mr-1.5" /> Hábitos
+                                        </TabsTrigger>
+                                    )}
+
+                                    {userRole === 'admin' && (
+                                        <TabsTrigger value="asignaciones" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
+                                            <History className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Asignaciones
                                         </TabsTrigger>
                                     )}
                                 </TabsList>
@@ -362,6 +380,61 @@ export default async function ClienteProfilePage({ params }: { params: Promise<{
                                     </CardContent>
                                 </Card>
                             </TabsContent>
+
+                            {userRole === 'admin' && (
+                                <TabsContent value="asignaciones" className="m-0 animate-in fade-in slide-in-from-right-2 duration-300">
+                                    <Card className="bg-slate-900/40 border-slate-800 backdrop-blur-sm">
+                                        <CardHeader className="py-2.5 px-4 border-b border-white/5">
+                                            <CardTitle className="text-white text-sm flex items-center gap-2">
+                                                <History className="w-4 h-4 text-blue-400" />
+                                                Historial de Asignaciones
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="p-4 space-y-4">
+                                            {reassignmentHistory && reassignmentHistory.length > 0 ? (
+                                                <div className="space-y-6 relative before:absolute before:inset-y-0 before:left-4 before:w-[1px] before:bg-slate-800">
+                                                    {reassignmentHistory.map((item: any) => (
+                                                        <div key={item.id} className="relative pl-10">
+                                                            <div className="absolute left-[13px] top-1 w-2 h-2 rounded-full bg-blue-500 ring-4 ring-slate-900 shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
+                                                            <div className="text-[10px] text-slate-500 font-mono mb-1">
+                                                                {format(new Date(item.created_at), 'PPPp', { locale: es })}
+                                                            </div>
+                                                            <div className="bg-slate-950/40 border border-slate-800/50 rounded-xl p-3 hover:border-slate-700/50 transition-colors">
+                                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                                    <div className="space-y-1">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="text-[9px] text-slate-500 uppercase tracking-wider font-bold">Transferencia</span>
+                                                                            <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-blue-500/10 text-blue-400 border-blue-500/20">Auditado</Badge>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2 text-xs">
+                                                                            <span className="text-slate-400">{item.asesor_anterior?.nombre_completo || 'Origen Desconocido'}</span>
+                                                                            <TrendingUp className="w-3 h-3 text-slate-600" />
+                                                                            <span className="text-blue-400 font-bold">{item.asesor_nuevo?.nombre_completo}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="text-right shrink-0">
+                                                                        <div className="text-[8px] text-slate-600 uppercase font-bold">Administrador</div>
+                                                                        <div className="text-[10px] text-slate-300">{item.administrador?.nombre_completo || 'Sistema'}</div>
+                                                                    </div>
+                                                                </div>
+                                                                {item.motivo && (
+                                                                    <div className="mt-2 pt-2 border-t border-slate-800/30 text-[10px] text-slate-500 italic">
+                                                                        "{item.motivo}"
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-10 text-slate-500 italic text-xs">
+                                                    No se registran cambios de asesor para este cliente.
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                </TabsContent>
+                            )}
                     </Tabs>
                  </div>
 

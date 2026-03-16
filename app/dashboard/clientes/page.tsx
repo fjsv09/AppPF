@@ -25,7 +25,11 @@ export default async function ClientesPage() {
     const userRole = perfil?.rol || 'asesor'
     
     // 0. Auto-update Mora Status (Robot)
-    await supabaseAdmin.rpc('actualizar_estados_mora')
+    try {
+        await supabaseAdmin.rpc('actualizar_estados_mora')
+    } catch (e) {
+        console.error('Error in actualizar_estados_mora:', e)
+    }
 
     // Build base query based on role
     let clientsQuery = supabaseAdmin
@@ -66,14 +70,12 @@ export default async function ClientesPage() {
             )
         `)
         .order('created_at', { ascending: false })
-        .abortSignal(AbortSignal.timeout(5000)) // Timeout safety
+        .abortSignal(AbortSignal.timeout(30000))
 
     // Apply role-based filtering
     if (userRole === 'asesor') {
-        // Asesor only sees their own clients
         clientsQuery = clientsQuery.eq('asesor_id', user?.id)
     } else if (userRole === 'supervisor') {
-        // Supervisor sees clients of their asesores
         const { data: asesores } = await supabaseAdmin
             .from('perfiles')
             .select('id')
@@ -81,11 +83,23 @@ export default async function ClientesPage() {
         const asesorIds = asesores?.map(a => a.id) || []
         if (asesorIds.length > 0) {
             clientsQuery = clientsQuery.in('asesor_id', asesorIds)
+        } else {
+            clientsQuery = clientsQuery.eq('id', '00000000-0000-0000-0000-000000000000')
         }
     }
-    // Admin sees all (no filter)
 
-    const { data: clientsRaw } = await clientsQuery
+    const { data: clientsRaw, error: clientsError } = await clientsQuery
+    
+    if (clientsError) {
+        console.error('Error fetching clients:', clientsError)
+    }
+
+    // Fetch reassignments separately to avoid join errors
+    const { data: reassignments } = await supabaseAdmin
+        .from('historial_reasignaciones_clientes')
+        .select('cliente_id')
+    const reassignedClientIds = new Set(reassignments?.map(r => r.cliente_id) || [])
+
     const todayPeru = getTodayPeru()
     
     // Process clients to add calculated stats
@@ -133,6 +147,7 @@ export default async function ClientesPage() {
             ingresos_mensuales: latestSolicitud?.ingresos_mensuales,
             motivo_prestamo: latestSolicitud?.motivo_prestamo,
             isRecaptable,
+            wasReassigned: reassignedClientIds.has(client.id),
             stats: {
                 activeLoansCount: activeLoans.length,
                 totalDebt: totalDebt,
@@ -165,9 +180,9 @@ export default async function ClientesPage() {
                 <div>
                      <div className="flex items-center gap-3">
                         <BackButton />
-                        <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight">Directorio de Clientes</h1>
+                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Directorio de Clientes</h1>
                      </div>
-                     <p className="text-slate-400 mt-2 md:mt-1">Gestión de cartera y perfiles</p>
+                     <p className="text-slate-500 text-xs mt-0.5">Gestión de cartera y perfiles</p>
                 </div>
                 {userRole === 'asesor' && (
                     <Link href="/dashboard/solicitudes/nueva">

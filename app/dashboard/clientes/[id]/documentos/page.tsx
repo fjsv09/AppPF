@@ -59,10 +59,10 @@ export default async function ClienteDocumentosPage({ params }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">
+          <h1 className="text-xl md:text-2xl font-bold text-white">
             Documentos de {cliente.nombres}
           </h1>
-          <p className="text-slate-400 mt-1">DNI: {cliente.dni}</p>
+          <p className="text-slate-500 text-xs mt-0.5">DNI: {cliente.dni}</p>
         </div>
       </div>
 

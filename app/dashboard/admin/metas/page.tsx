@@ -85,12 +85,12 @@ export default function AdminMetasPage() {
                 <div>
                     <div className="flex items-center gap-3">
                         <BackButton />
-                        <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-                            <Target className="w-8 h-8 text-blue-500" />
+                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
+
                             Gestión de Metas y Bonos
                         </h1>
                     </div>
-                    <p className="text-slate-400 mt-2 ml-11">Asigna objetivos mensuales y configura bonos de rendimiento.</p>
+                    <p className="text-slate-500 text-xs mt-0.5">Asigna objetivos mensuales y configura bonos de rendimiento.</p>
                 </div>
                 
                 <button 

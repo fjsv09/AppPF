@@ -66,7 +66,7 @@ interface ClientDirectoryProps {
     userId?: string
 }
 
-type FilterTab = 'todos' | 'activos' | 'con_deuda' | 'sin_prestamos' | 'inactivos' | 'al_dia' | 'mora' | 'recaptables'
+type FilterTab = 'todos' | 'activos' | 'con_deuda' | 'sin_prestamos' | 'inactivos' | 'al_dia' | 'mora' | 'recaptables' | 'reasignados'
 
 const ITEMS_PER_PAGE = 10
 
@@ -170,7 +170,8 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         { id: 'con_deuda' as FilterTab, label: 'Con Deuda', count: clientes.filter(c => c.stats.totalDebt > 0).length },
         { id: 'sin_prestamos' as FilterTab, label: 'Sin Préstamos', count: clientes.filter(c => c.stats.activeLoansCount === 0).length },
         { id: 'inactivos' as FilterTab, label: 'Inactivos', count: clientes.filter(c => c.estado !== 'activo').length },
-    ], [clientes])
+        ...(userRol === 'admin' ? [{ id: 'reasignados' as FilterTab, label: 'Reasignados', count: clientes.filter(c => c.wasReassigned).length }] : []),
+    ], [clientes, userRol])
 
     // Filtering logic
     const filteredClientes = useMemo(() => {
@@ -203,6 +204,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             case 'al_dia': result = result.filter(c => c.situacion === 'ok' || c.situacion === 'deuda'); break;
             case 'mora': result = result.filter(c => ['cpp', 'moroso', 'vencido'].includes(c.situacion)); break;
             case 'recaptables': result = result.filter(c => c.isRecaptable); break;
+            case 'reasignados': result = result.filter(c => c.wasReassigned); break;
         }
 
         // Search
@@ -450,7 +452,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                     )}>Cliente</div>
                     <div className="col-span-2 text-left">Sector</div>
                     {(userRol === 'admin' || userRol === 'supervisor') && (
-                        <div className="col-span-2 text-left">Asesor</div>
+                        <div className="col-span-2 text-left">{activeFilter === 'reasignados' ? 'Procedencia' : 'Asesor'}</div>
                     )}
                     <div className="col-span-1 text-right">DNI</div>
                     <div className="col-span-1 text-right">Registro</div>
@@ -623,8 +625,22 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
 
                                 {(userRol === 'admin' || userRol === 'supervisor') && (
                                     <div className="col-span-2 min-w-0 flex items-center gap-2">
-                                        <Users className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                                        <span className="text-sm text-slate-300 truncate">{asesorName || 'No asignado'}</span>
+                                        {activeFilter === 'reasignados' ? (
+                                            <div className="flex flex-col">
+                                                <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-blue-500/10 text-blue-400 border-blue-500/20 mb-0.5 w-fit">TRASLADADO</Badge>
+                                                <span className="text-xs text-slate-300 truncate font-bold">Actual: {asesorName || 'N/A'}</span>
+                                                {cliente.historial_reasignaciones_clientes?.length > 0 && (
+                                                    <span className="text-[10px] text-slate-500 italic truncate">
+                                                        De: {perfiles.find(p => p.id === cliente.historial_reasignaciones_clientes[cliente.historial_reasignaciones_clientes.length - 1].asesor_anterior_id)?.nombre_completo || 'Sistema'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <Users className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                                                <span className="text-sm text-slate-300 truncate">{asesorName || 'No asignado'}</span>
+                                            </>
+                                        )}
                                     </div>
                                 )}
 

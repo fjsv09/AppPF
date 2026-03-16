@@ -20,9 +20,7 @@ import { BackButton } from "@/components/ui/back-button";
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-export default async function LoanDetailPage(props: { params: Promise<{ id: string }>, searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
-    const params = await props.params;
-    const searchParams = await props.searchParams;
+export default async function LoanDetailPage({ params, searchParams }: { params: { id: string }, searchParams: { [key: string]: string | string[] | undefined } }) {
     const isContractTab = searchParams.tab === 'contrato';
 
     // Use admin client to bypass RLS
@@ -277,7 +275,7 @@ export default async function LoanDetailPage(props: { params: Promise<{ id: stri
                             <div className="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-white/10 rounded-lg md:rounded-xl backdrop-blur-md border border-white/10 shrink-0">
                                 <CreditCard className="w-4 h-4 md:w-5 md:h-5 text-blue-300" />
                             </div>
-                            <h1 className="text-sm md:text-2xl font-black tracking-tight text-white/95 leading-none">Préstamo Individual</h1>
+                            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white/95 leading-none">Préstamo Individual</h1>
                         </div>
 
                         {/* Row 2: Client Profile (Mobile Specific Line) */}

@@ -39,14 +39,13 @@ export default async function MetasPage() {
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-3">
             <BackButton />
-            <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-              <Award className="w-8 h-8 text-amber-500" />
+            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
               {userRole === 'admin' ? 'Metas y Bonos del Personal' : 'Mis Metas y Bonos'}
             </h1>
           </div>
-          <p className="text-slate-400 text-lg ml-11">
+          <p className="text-slate-500 text-xs mt-0.5">
             {userRole === 'admin' 
               ? 'Supervisa el rendimiento de cada miembro del equipo en tiempo real.'
               : userRole === 'supervisor'

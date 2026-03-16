@@ -163,9 +163,9 @@ export default async function TareasHistoryPage({
                 <div>
                     <div className="flex items-center gap-3">
                         <BackButton />
-                        <h1 className="text-xl md:text-3xl font-bold tracking-tight text-white/90">Historial de Tareas</h1>
+                        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">Historial de Tareas</h1>
                     </div>
-                    <p className="text-slate-400 text-sm md:text-base mt-2">Revisa y completa tus tareas pendientes.</p>
+                    <p className="text-slate-500 text-xs mt-0.5">Revisa y completa tus tareas pendientes.</p>
                 </div>
             </div>
 

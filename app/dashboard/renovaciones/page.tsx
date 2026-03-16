@@ -55,10 +55,10 @@ export default async function RenovacionesPage() {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-white/5 pb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-white tracking-tight">
+                    <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
                         Solicitud de Renovación
                     </h1>
-                    <p className="text-slate-400 mt-1">
+                    <p className="text-slate-500 text-xs mt-0.5">
                         {perfil.rol === 'asesor' && 'Tus solicitudes de renovación de préstamos'}
                         {perfil.rol === 'supervisor' && 'Solicitudes pendientes de pre-aprobación'}
                         {perfil.rol === 'admin' && 'Todas las solicitudes de renovación'}

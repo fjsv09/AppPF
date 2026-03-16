@@ -56,7 +56,10 @@ export default async function NewSolicitudPage({ searchParams }: PageProps) {
 
     return (
         <div className="space-y-6">
-            <h1 className="text-3xl font-bold text-white tracking-tight">Nueva Solicitud</h1>
+            <div className="space-y-1">
+                <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Nueva Solicitud</h1>
+                <p className="text-slate-500 text-xs mt-0.5">Complete los pasos para registrar la solicitud de crédito</p>
+            </div>
             <SolicitudForm 
                 clients={clients || []} 
                 defaultClientId={params.cliente_id}

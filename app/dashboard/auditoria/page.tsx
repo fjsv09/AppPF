@@ -78,12 +78,11 @@ export default function AuditoriaPage() {
                 <div>
                     <div className="flex items-center gap-3">
                         <BackButton />
-                        <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight flex items-center gap-2">
-                            <ShieldCheck className="hidden md:block w-8 h-8 text-emerald-500" />
+                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
                             Auditoría y Control
                         </h1>
                     </div>
-                    <p className="text-slate-400 mt-2 md:mt-1 md:pl-0">Supervisa las acciones críticas y cumplimiento del equipo.</p>
+                    <p className="text-slate-500 text-xs mt-0.5">Supervisa las acciones críticas y cumplimiento del equipo.</p>
                 </div>
 
                 {userRol === 'admin' && (

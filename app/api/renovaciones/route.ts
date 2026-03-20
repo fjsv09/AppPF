@@ -3,6 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createFullNotification } from '@/services/notification-service'
+import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
 
 export const dynamic = 'force-dynamic'
 
@@ -112,6 +113,17 @@ export async function POST(request: Request) {
                 error: `Sistema cerrado. El horario de operación es de ${configMap.horario_apertura} a ${configMap.horario_cierre}.`,
                 tipo_error: 'sistema_cerrado'
             }, { status: 403 })
+        }
+
+        // VERIFICAR BLOQUEO POR CUADRE
+        if (perfil.rol === 'asesor') {
+            const blockStatus = await checkAdvisorBlocked(supabaseAdmin, user.id);
+            if (blockStatus.isBlocked) {
+                return NextResponse.json({ 
+                    error: blockStatus.reason,
+                    tipo_error: 'bloqueado_por_cuadre'
+                }, { status: 403 });
+            }
         }
 
         const body = await request.json()

@@ -21,6 +21,34 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No se puede enviar un cuadre con monto total de 0.00' }, { status: 400 })
         }
 
+        // 2. Validación: No permitir entregar más de lo cobrado
+        // Obtenemos la cartera del usuario
+        const { data: carteras } = await supabaseAdmin
+            .from('carteras')
+            .select('id')
+            .eq('asesor_id', user.id)
+
+        if (!carteras || carteras.length === 0) {
+            return NextResponse.json({ error: 'No tienes carteras asignadas.' }, { status: 400 })
+        }
+
+        const carteraId = carteras[0].id
+
+        const { data: account } = await supabaseAdmin
+            .from('cuentas_financieras')
+            .select('saldo')
+            .eq('cartera_id', carteraId)
+            .eq('tipo', 'cobranzas')
+            .single()
+
+        const totalCobrado = parseFloat(account?.saldo || '0')
+
+        if (totalEntregar > totalCobrado) {
+             return NextResponse.json({ 
+                error: `El monto total (S/ ${totalEntregar.toFixed(2)}) no puede exceder el monto cobrado (S/ ${totalCobrado.toFixed(2)})` 
+             }, { status: 400 })
+        }
+
         // 2. Validación: No permitir múltiples cuadres pendientes
         const { data: pending, error: pendingError } = await supabaseAdmin
             .from('cuadres_diarios')

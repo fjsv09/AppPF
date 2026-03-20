@@ -180,7 +180,7 @@ export default async function ClientesPage() {
                 <div>
                      <div className="flex items-center gap-3">
                         <BackButton />
-                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Directorio de Clientes</h1>
+                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Directorio Clientes</h1>
                      </div>
                      <p className="text-slate-500 text-xs mt-0.5">Gestión de cartera y perfiles</p>
                 </div>

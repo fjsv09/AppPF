@@ -16,6 +16,7 @@ import Link from "next/link";
 import { LoanTabs } from "@/components/prestamos/loan-tabs";
 import { cn } from "@/lib/utils";
 import { BackButton } from "@/components/ui/back-button";
+import { checkAdvisorBlocked } from "@/utils/checkAdvisorBlocked";
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -190,8 +191,16 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
         prestamo.estado === 'refinanciado'
     ) && (puedeRenovar || esCandidatoRefinanciacionAdmin)
 
+    let isBlockedByCuadre = false;
+    let blockReasonCierre = '';
+
+    if (userRole === 'asesor' && user) {
+        const blockStatus = await checkAdvisorBlocked(supabaseAdmin, user.id);
+        isBlockedByCuadre = blockStatus.isBlocked;
+        blockReasonCierre = blockStatus.reason;
+    }
+
     // Obtener Pagos del Préstamo para el Historial
-    // Estrategia Robustez: 1. Obtener IDs de cuotas. 2. Obtener pagos de esas cuotas.
     const { data: cuotasIds } = await supabaseAdmin
         .from('cronograma_cuotas')
         .select('id')
@@ -199,50 +208,33 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
     
     const idsCuotas = cuotasIds?.map(c => c.id) || [];
     
-    console.log(`[DEBUG] Prestamo ID: ${params.id}`);
-    console.log(`[DEBUG] Cuotas encontradas: ${idsCuotas.length}`);
-    if (idsCuotas.length > 0) console.log(`[DEBUG] Sample ID: ${idsCuotas[0]}`);
-
     let pagos: any[] = [];
     if (idsCuotas.length > 0) {
-        // Petición simplificada para debug
         const { data, error } = await supabaseAdmin
             .from('pagos')
-            .select('*') // Simplificado: Solo datos crudos primero
+            .select('*')
             .in('cuota_id', idsCuotas)
             .order('created_at', { ascending: false });
             
-        if (error) {
-            console.error('[DEBUG] Error fetching pagos:', error);
-        } else {
-            console.log(`[DEBUG] Pagos crudos encontrados: ${data?.length}`);
+        if (!error && data && data.length > 0) {
+             const { data: fullData, error: fullError } = await supabaseAdmin
+                .from('pagos')
+                .select(`
+                    *,
+                    perfiles (nombre_completo),
+                    cronograma_cuotas (
+                        numero_cuota
+                    )
+                `)
+            .in('cuota_id', idsCuotas)
+            .order('created_at', { ascending: false });
             
-            // Si funciona, hacemos la petición completa o enriquecemos manualmente
-            if (data && data.length > 0) {
-                     const { data: fullData, error: fullError } = await supabaseAdmin
-                        .from('pagos')
-                        .select(`
-                            *,
-                            perfiles (nombre_completo),
-                            cronograma_cuotas (
-                                numero_cuota
-                            )
-                        `)
-                    .in('cuota_id', idsCuotas)
-                    .order('created_at', { ascending: false });
-                    
-                if (!fullError) {
-                    pagos = fullData || [];
-                    console.log(`[DEBUG] Pagos completos cargados: ${pagos.length}`);
-                } else {
-                     console.error('[DEBUG] Error en join:', fullError);
-                     // Fallback a datos crudos si el join falla
-                     pagos = data; 
-                }
+            if (!fullError) {
+                pagos = fullData || [];
+            } else {
+                 pagos = data; 
             }
         }
-    } else {
-        console.log('[DEBUG] No hay cuotas para buscar pagos');
     }
 
     return (
@@ -321,23 +313,27 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                                                 esRefinanciado,
                                                 isAdminDirectRefinance: esCandidatoRefinanciacionAdmin,
                                                 esProductoDeRefinanciamiento,
-                                                systemSchedule
+                                                systemSchedule,
+                                                isBlockedByCuadre,
+                                                blockReasonCierre
                                             }}
                                             trigger={
                                                 <Button 
-                                                    disabled={!canRenovateDueToTime}
+                                                    disabled={(!canRenovateDueToTime && (userRole as any) !== 'admin') || isBlockedByCuadre}
                                                     className={cn(
                                                         "h-9 text-[11px] md:text-xs bg-gradient-to-r text-white rounded-xl flex items-center justify-center gap-2 px-3 shadow-md w-full",
-                                                        canRenovateDueToTime 
+                                                        (canRenovateDueToTime && !isBlockedByCuadre)
                                                             ? "from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400" 
                                                             : "from-slate-700 to-slate-800 opacity-60 cursor-not-allowed"
                                                     )}
                                                 >
-                                                    {canRenovateDueToTime ? <Calendar className="w-3.5 h-3.5 shrink-0" /> : <Lock className="w-3.5 h-3.5 shrink-0" />}
+                                                    {canRenovateDueToTime && !isBlockedByCuadre ? <Calendar className="w-3.5 h-3.5 shrink-0" /> : <Lock className="w-3.5 h-3.5 shrink-0" />}
                                                     <span className="font-bold">
-                                                        {canRenovateDueToTime 
-                                                            ? (esCandidatoRefinanciacionAdmin ? 'Refinanciar' : 'Renovar')
-                                                            : 'Cerrado'
+                                                        {isBlockedByCuadre 
+                                                            ? 'Bloqueado'
+                                                            : canRenovateDueToTime 
+                                                                ? (esCandidatoRefinanciacionAdmin ? 'Refinanciar' : 'Renovar')
+                                                                : 'Cerrado'
                                                         }
                                                     </span>
                                                 </Button>
@@ -468,6 +464,8 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                 cliente={prestamo.clientes}
                 tareaEvidencia={tareaEvidencia}
                 systemSchedule={systemSchedule}
+                isBlockedByCuadre={isBlockedByCuadre}
+                blockReasonCierre={blockReasonCierre}
             />
         </div>
     )

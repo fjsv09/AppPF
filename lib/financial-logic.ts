@@ -185,8 +185,8 @@ export function calculateLoanMetrics(
 
   // La transición se basa en el total de cuotas exigibles (Mora Real + Hoy)
   const isCritico = (isDiario && totalAtrasadas >= cfgMoroso) || (!isDiario && totalAtrasadas >= cfgMorosoOtros);
-  const isMora = (isDiario && totalAtrasadas >= cfgCpp) || (!isDiario && totalAtrasadas >= cfgCppOtros);
-  const isAlDia = !isMora;
+  const isMora = ((isDiario && totalAtrasadas >= cfgCpp) || (!isDiario && totalAtrasadas >= cfgCppOtros)) && !isCritico;
+  const isAlDia = totalAtrasadas === 0;
 
   // 10. Renovación
   const renovacionMinPagadoDecimal = (config.renovacionMinPagado || 60) / 100;

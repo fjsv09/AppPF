@@ -197,7 +197,7 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
                 {cuentasAdmin && cuentasAdmin.length > 0 && !showRechazo && (
                     <div className="space-y-2 p-3 bg-slate-950/50 border border-slate-800 rounded-lg">
                         <label className="text-xs font-semibold text-slate-400 uppercase">
-                            Seleccionar cuenta origen (Cartera Global):
+                            Seleccionar cuenta origen (Renovaciones):
                         </label>
                         <Select value={cuentaOrigenId} onValueChange={setCuentaOrigenId}>
                             <SelectTrigger className="w-full bg-slate-900 border-slate-700 text-slate-200">

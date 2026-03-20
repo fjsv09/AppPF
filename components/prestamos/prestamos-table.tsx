@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectLa
 import { 
     AlertCircle, Wallet, Search, Users, Calendar, MoreVertical, 
     CalendarDays, CheckCircle2, AlertTriangle, MapPin, DollarSign, FileText, ChevronRight, Eye,
-    X, RotateCcw, MessageCircle, Loader2, ListFilter, LayoutGrid, TableProperties
+    X, RotateCcw, MessageCircle, Loader2, ListFilter, LayoutGrid, Table, Lock
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
@@ -58,6 +58,8 @@ interface PrestamosTableProps {
     umbralMoroso?: number
     umbralCppOtros?: number
     umbralMorosoOtros?: number
+    isBlockedByCuadre?: boolean
+    blockReasonCierre?: string
 }
 
 type FilterTab = 'ruta_hoy' | 'cobranza' | 'morosos' | 'notificar' | 'semana' | 'en_curso' | 'renovaciones' | 'finalizados' | 'todos' | 'supervisor_alertas' | 'supervisor_mora' | 'renovados' | 'refinanciados' | 'anulados' | 'pendientes'
@@ -116,7 +118,9 @@ export function PrestamosTable({
     umbralCpp = 4,
     umbralMoroso = 7,
     umbralCppOtros = 1,
-    umbralMorosoOtros = 2
+    umbralMorosoOtros = 2,
+    isBlockedByCuadre,
+    blockReasonCierre
 }: PrestamosTableProps) {
 
     // Calcular el último préstamo de cada cliente (el más reciente por fecha_inicio o created_at)
@@ -254,6 +258,11 @@ export function PrestamosTable({
 
     // --- LOGICA DE HORARIO ---
     const [canRequestDueToTime, setCanRequestDueToTime] = useState(true)
+
+    // 1. ADD INTERNAL REFRESH EFFECT (User Request: "refresque internamente al entrar")
+    useEffect(() => {
+        router.refresh()
+    }, [router])
 
     useEffect(() => {
         if (!systemSchedule) return
@@ -489,10 +498,11 @@ export function PrestamosTable({
 
             case 'morosos':
             case 'supervisor_mora':
-                // Morosos: Daily >= 4 overdue. Others >= 1 overdue.
+                // Morosos (ADVERTENCIA): 4-6 diarias o 1 otros. Es un rango escala.
                 filtered = filtered.filter(p => {
                     const isDiario = p.frecuencia?.toLowerCase() === 'diario'
-                    return p.estado === 'activo' && ((isDiario && p.atrasadas >= 4) || (!isDiario && p.atrasadas >= 1))
+                    const isCritical = (isDiario && p.atrasadas >= 7) || (!isDiario && p.atrasadas >= 2)
+                    return p.estado === 'activo' && !isCritical && ((isDiario && p.atrasadas >= 4) || (!isDiario && p.atrasadas >= 1))
                 })
                 break
 
@@ -509,7 +519,7 @@ export function PrestamosTable({
                 // Esta Semana: Has a quota due Mon-Sun of CURRENT week.
                 // We don't have full quota list here, but we can verify against 'deudaExigibleHoy' if simpler, 
                 // OR ideally page.tsx should pass a flag. 
-                // FALLBACK: Use local helper since we don't have full quotas array here (it's in contractData).
+                // FALLBACK: Use local helper since we don't have full schedule.
                 // LIMITATION: 'prestamos' prop currently has limited date info. 
                 // For now, we will filter active loans created recently or use 'deudaExigible' as proxy if urgency strictly implies due.
                 // CORRECTION: 'prestamos' prop DOES contain `cronograma_cuotas` from page.tsx fetch! But processed here it might be lost.
@@ -636,8 +646,13 @@ export function PrestamosTable({
                 
                 if (p.cuota_dia_hoy > 0.01) counts.ruta_hoy++
                 if (p.atrasadas >= 1 && p.deudaHoy > 0) counts.cobranza++
-                if ((isDiario && p.atrasadas >= 4) || (!isDiario && p.atrasadas >= 1)) counts.morosos++
-                if ((isDiario && p.atrasadas >= 7) || (!isDiario && p.atrasadas >= 2)) counts.notificar++
+                
+                const isCritical = (isDiario && p.atrasadas >= 7) || (!isDiario && p.atrasadas >= 2)
+                if (isCritical) {
+                    counts.notificar++
+                } else if ((isDiario && p.atrasadas >= 4) || (!isDiario && p.atrasadas >= 1)) {
+                    counts.morosos++
+                }
             } else if (isFinalizado) {
                 counts.finalizados++
             } else if (p.estado === 'renovado') {
@@ -721,7 +736,7 @@ export function PrestamosTable({
                             className="h-10 w-10 bg-slate-950/50 border border-slate-700 text-slate-400 hover:text-white"
                             title={viewType === 'cards' ? 'Vista Tabla' : 'Vista Tarjetas'}
                         >
-                            {viewType === 'cards' ? <TableProperties className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+                            {viewType === 'cards' ? <Table className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
                         </Button>
                     </div>
                     {/* View Filter (Auto Width) */}
@@ -1202,22 +1217,24 @@ export function PrestamosTable({
                                                                     isAdminDirectRefinance={isAdminDirectRefinance}
                                                                     esProductoDeRefinanciamiento={prestamoIdsProductoRefinanciamiento.includes(prestamo.id)}
                                                                     systemSchedule={systemSchedule}
+                                                                    isBlockedByCuadre={isBlockedByCuadre}
+                                                                    blockReasonCierre={blockReasonCierre}
                                                                     trigger={
                                                                         <Button 
                                                                             variant={isAdminDirectRefinance ? "default" : "ghost"}
                                                                             size="icon" 
-                                                                            disabled={!canRequestDueToTime}
+                                                                            disabled={!canRequestDueToTime || isBlockedByCuadre}
                                                                             className={cn(
                                                                                 "h-8 w-8 rounded-lg transition-all flex items-center justify-center shrink-0",
-                                                                                !canRequestDueToTime ? "opacity-40 grayscale pointer-events-none" :
+                                                                                (!canRequestDueToTime || isBlockedByCuadre) ? "opacity-40 grayscale pointer-events-none bg-slate-800/50" :
                                                                                 isAdminDirectRefinance 
                                                                                     ? "bg-amber-500 hover:bg-amber-600 text-white shadow-sm border border-amber-400" 
                                                                                     : "text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50"
                                                                             )}
                                                                             onClick={(e) => e.stopPropagation()}
-                                                                            title={userRol === 'supervisor' ? 'Ver Evaluación' : (isAdminDirectRefinance ? 'Refinanciar' : 'Renovar')}
+                                                                            title={isBlockedByCuadre ? 'Bloqueado por cuadre pendiente' : userRol === 'supervisor' ? 'Ver Evaluación' : (isAdminDirectRefinance ? 'Refinanciar' : 'Renovar')}
                                                                         >
-                                                                            <RotateCcw className="w-4 h-4" /> 
+                                                                            {isBlockedByCuadre ? <Lock className="w-4 h-4 text-rose-500" /> : <RotateCcw className="w-4 h-4" />} 
                                                                         </Button>
                                                                     }
                                                                 />
@@ -1230,14 +1247,21 @@ export function PrestamosTable({
                                                     <Button 
                                                         variant="ghost" 
                                                         size="icon" 
-                                                        className="h-8 w-8 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/50 hover:border-emerald-700/50 transition-all"
+                                                        disabled={isBlockedByCuadre}
+                                                        className={cn(
+                                                            "h-8 w-8 rounded-lg transition-all flex items-center justify-center shrink-0 border",
+                                                            isBlockedByCuadre 
+                                                                ? "opacity-40 grayscale pointer-events-none text-rose-500 bg-slate-800/50 border-slate-700/50" 
+                                                                : "text-slate-400 bg-slate-800/40 border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/50 hover:border-emerald-700/50"
+                                                        )}
                                                         onClick={(e) => {
                                                             e.preventDefault()
                                                             e.stopPropagation()
-                                                            handleQuickPay(prestamo, e)
+                                                            if (!isBlockedByCuadre) handleQuickPay(prestamo, e)
                                                         }}
+                                                        title={isBlockedByCuadre ? 'Bloqueado por cuadre pendiente' : 'Cobrar'}
                                                     >
-                                                        <DollarSign className="w-4 h-4" />
+                                                        {isBlockedByCuadre ? <Lock className="w-4 h-4 text-rose-500" /> : <DollarSign className="w-4 h-4" />}
                                                     </Button>
                                                 )}
 
@@ -1615,21 +1639,23 @@ export function PrestamosTable({
                                                         isAdminDirectRefinance={isAdminDirectRefinance}
                                                         esProductoDeRefinanciamiento={prestamoIdsProductoRefinanciamiento.includes(prestamo.id)}
                                                         systemSchedule={systemSchedule}
+                                                        isBlockedByCuadre={isBlockedByCuadre}
+                                                        blockReasonCierre={blockReasonCierre}
                                                         trigger={
                                                             <Button 
                                                                 variant={isAdminDirectRefinance ? "default" : "ghost"}
                                                                 size="icon" 
-                                                                disabled={!canRequestDueToTime}
+                                                                disabled={!canRequestDueToTime || isBlockedByCuadre}
                                                                 className={cn(
-                                                                    "h-8 w-8 rounded-lg transition-all flex items-center justify-center shrink-0",
-                                                                    !canRequestDueToTime ? "opacity-40 grayscale pointer-events-none" :
+                                                                    "h-8 w-8 rounded-lg transition-all flex items-center justify-center shrink-0 border",
+                                                                    (!canRequestDueToTime || isBlockedByCuadre) ? "opacity-40 grayscale pointer-events-none bg-slate-800/50 border-slate-700/50" :
                                                                     isAdminDirectRefinance 
                                                                         ? "bg-amber-500 hover:bg-amber-600 text-white shadow-sm border border-amber-400" 
                                                                         : "text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50"
                                                                 )}
-                                                                title={userRol === 'supervisor' ? 'Ver Evaluación' : (isAdminDirectRefinance ? 'Refinanciar' : 'Renovar')}
+                                                                title={isBlockedByCuadre ? 'Bloqueado por cuadre pendiente' : userRol === 'supervisor' ? 'Ver Evaluación' : (isAdminDirectRefinance ? 'Refinanciar' : 'Renovar')}
                                                             >
-                                                                <RotateCcw className="w-4 h-4" />
+                                                                {isBlockedByCuadre ? <Lock className="w-4 h-4 text-rose-500" /> : <RotateCcw className="w-4 h-4" />}
                                                             </Button>
                                                         }
                                                     />
@@ -1643,15 +1669,21 @@ export function PrestamosTable({
                                         <Button 
                                             variant="ghost" 
                                             size="icon" 
-                                            className="h-8 w-8 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/50 hover:border-emerald-700/50 transition-all"
+                                            disabled={isBlockedByCuadre}
+                                            className={cn(
+                                                "h-8 w-8 rounded-lg transition-all flex items-center justify-center shrink-0 border",
+                                                isBlockedByCuadre 
+                                                    ? "opacity-40 grayscale pointer-events-none text-rose-500 bg-slate-800/50 border-slate-700/50" 
+                                                    : "text-slate-400 bg-slate-800/40 border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/50 hover:border-emerald-700/50"
+                                            )}
                                             onClick={(e) => {
                                                 e.preventDefault()
                                                 e.stopPropagation()
-                                                handleQuickPay(prestamo, e)
+                                                if (!isBlockedByCuadre) handleQuickPay(prestamo, e)
                                             }}
-                                            title="Pago Rápido"
+                                            title={isBlockedByCuadre ? 'Bloqueado por cuadre pendiente' : 'Pago Rápido'}
                                         >
-                                            <DollarSign className="w-3.5 h-3.5" />
+                                            {isBlockedByCuadre ? <Lock className="w-4 h-4 text-rose-500" /> : <DollarSign className="w-3.5 h-3.5" />}
                                         </Button>
                                     )}
 
@@ -1719,6 +1751,8 @@ export function PrestamosTable({
                     router.refresh()
                 }}
                 systemSchedule={systemSchedule}
+                isBlockedByCuadre={isBlockedByCuadre}
+                blockReasonCierre={blockReasonCierre}
             />
 
             {selectedContractLoan && (

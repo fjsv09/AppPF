@@ -47,7 +47,7 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
         
         // --- Gestión Financiera ---
         { href: '/dashboard/admin/carteras', label: 'Gestionar Carteras', icon: Briefcase, roles: ['admin'], category: 'Finanzas' },
-        { href: '/dashboard/admin/cuadres', label: 'Aprobar Cuadres', icon: Landmark, roles: ['admin'], category: 'Finanzas' },
+
         { href: '/dashboard/cuadre', label: 'Cuadre de Caja', icon: Wallet, roles: ['asesor'], category: 'Finanzas' },
         { href: '/dashboard/gastos', label: 'Gastos Operativos', icon: Receipt, roles: ['admin', 'supervisor', 'asesor'], category: 'Finanzas' },
         { href: '/dashboard/nomina', label: 'Nómina y Bonos', icon: CreditCard, roles: ['admin', 'supervisor', 'asesor'], category: 'Finanzas' },
@@ -62,6 +62,7 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
         
         // --- Gestión y Supervisión ---
         { href: '/dashboard/supervision', label: 'Supervisión', icon: ChartBar, roles: ['admin', 'supervisor'], category: 'Gestión' },
+        { href: '/dashboard/admin/cuadres', label: 'Gestión de Cuadres', icon: Landmark, roles: ['admin', 'supervisor'], category: 'Gestión' },
         { href: '/dashboard/auditoria', label: 'Auditoría', icon: History, roles: ['admin', 'supervisor'], category: 'Gestión' },
         
         // --- Configuración y Admin ---

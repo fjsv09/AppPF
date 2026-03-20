@@ -400,48 +400,52 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
   const metaColocClientes = metas.find(m => m.meta_colocacion_clientes !== null && m.meta_colocacion_clientes !== undefined)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* === PROGRESO DE METAS (solo las asignadas) === */}
       <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm overflow-hidden">
-         <div className="absolute top-0 right-0 p-4 opacity-10">
-            <Target className="w-24 h-24 text-blue-500" />
+         <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+            <Target className="w-16 h-16 text-blue-500" />
          </div>
-         <CardHeader>
-            <div className="flex items-center gap-2 mb-2">
-               <span className="p-1.5 bg-blue-500/20 rounded-lg">
-                  <Award className="w-5 h-5 text-blue-400" />
-               </span>
-               <CardTitle className="text-xl font-bold text-white">
-                 {esSupervisorOAdmin ? 'Rendimiento del Equipo' : 'Tu Progreso de Bonos'}
-               </CardTitle>
+         <CardHeader className="py-4 px-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-blue-500/20 rounded-lg">
+                    <Award className="w-4 h-4 text-blue-400" />
+                </span>
+                <div>
+                  <CardTitle className="text-base font-bold text-white">
+                    {esSupervisorOAdmin ? 'Rendimiento del Equipo' : 'Tu Progreso de Bonos'}
+                  </CardTitle>
+                  <CardDescription className="text-[10px] text-slate-500">
+                    {esSupervisorOAdmin 
+                      ? `Resultados agregados de ${asesoresInfo.length} asesor${asesoresInfo.length !== 1 ? 'es' : ''}`
+                      : 'Objetivos en tiempo real'}
+                  </CardDescription>
+                </div>
+              </div>
             </div>
-            <CardDescription className="text-slate-400">
-              {esSupervisorOAdmin 
-                ? `Resultados agregados de ${asesoresInfo.length} asesor${asesoresInfo.length !== 1 ? 'es' : ''}`
-                : 'Objetivos en tiempo real'}
-            </CardDescription>
          </CardHeader>
-         <CardContent className="space-y-6 relative z-10">
+         <CardContent className="px-5 pb-5 pt-0 space-y-4 relative z-10">
             {/* Fila principal: solo metas asignadas */}
             {(metaCobro || metaClie || metaMora) ? (
-              <div className={`grid grid-cols-1 ${[metaCobro, metaClie, metaMora].filter(Boolean).length >= 3 ? 'md:grid-cols-3' : [metaCobro, metaClie, metaMora].filter(Boolean).length === 2 ? 'md:grid-cols-2' : ''} gap-6`}>
+              <div className={`grid grid-cols-2 ${[metaCobro, metaClie, metaMora].filter(Boolean).length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-2`}>
                 {metaCobro && (
                   <MetricBox 
-                    label={metaCobro.periodo === 'diario' ? "Cobranza del Día" : "Cobranza"} 
+                    label={metaCobro.periodo === 'diario' ? "Cobranza" : "Cobranza"} 
                     value={`${realTimeStats.porcentaje_cobro}%`} 
                     progress={realTimeStats.porcentaje_cobro} 
                     target={`${metaCobro.meta_cobro}%`} 
-                    icon={<Percent className="w-4 h-4 text-emerald-400" />}
-                    subtitle={`S/ ${realTimeStats.monto_cobrado_dia.toLocaleString()} de S/ ${realTimeStats.monto_objetivo_dia.toLocaleString()} (${realTimeStats.cuotas_cobradas_dia} de ${realTimeStats.cuotas_objetivo_dia} préstamos)`}
+                    icon={<Percent className="w-3.5 h-3.5 text-emerald-400" />}
+                    subtitle={`S/ ${realTimeStats.monto_cobrado_dia.toLocaleString()}`}
                   />
                 )}
                 {metaClie && (
                   <MetricBox 
-                    label="Nuevos Clientes" 
+                    label="Hacer Clientes" 
                     value={`${realTimeStats.nuevos_clientes}`} 
                     progress={(realTimeStats.nuevos_clientes / metaClie.meta_cantidad_clientes) * 100} 
-                    target={`${metaClie.meta_cantidad_clientes} Clientes`} 
-                    icon={<TrendingUp className="w-4 h-4 text-blue-400" />}
+                    target={`${metaClie.meta_cantidad_clientes}`} 
+                    icon={<TrendingUp className="w-3.5 h-3.5 text-blue-400" />}
                   />
                 )}
                 {metaMora && (
@@ -449,8 +453,8 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
                     label="Morosidad" 
                     value={`${realTimeStats.morosidad_actual}%`} 
                     progress={100 - (realTimeStats.morosidad_actual * (100 / (metaMora.meta_morosidad_max || 1)))} 
-                    target={`< ${metaMora.meta_morosidad_max}%`} 
-                    icon={<ShieldAlert className="w-4 h-4 text-rose-400" />}
+                    target={`<${metaMora.meta_morosidad_max}%`} 
+                    icon={<ShieldAlert className="w-3.5 h-3.5 text-rose-400" />}
                     reverse
                   />
                 )}
@@ -458,49 +462,48 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
             ) : null}
             {/* Fila adicional: Retención y Colocación (solo si asignadas) */}
             {(metaRetencion || metaColocClientes) && (
-              <div className={`grid grid-cols-1 ${metaRetencion && metaColocClientes ? 'md:grid-cols-2' : ''} gap-6`}>
+              <div className={`grid grid-cols-2 gap-2`}>
                 {metaRetencion && (
                   <MetricBox 
-                    label="Retención de Cartera" 
+                    label="Retención" 
                     value={`${realTimeStats.clientes_en_cartera}`} 
                     progress={Math.min(100, (realTimeStats.clientes_en_cartera / metaRetencion.meta_retencion_clientes) * 100)} 
-                    target={`${metaRetencion.meta_retencion_clientes} Clientes`} 
-                    icon={<Users className="w-4 h-4 text-purple-400" />}
+                    target={`${metaRetencion.meta_retencion_clientes}`} 
+                    icon={<Users className="w-3.5 h-3.5 text-purple-400" />}
                   />
                 )}
                 {metaColocClientes && (
                   <MetricBox 
-                    label="Colocación del Mes" 
-                    value={`${realTimeStats.clientes_colocados_mes} clientes`} 
+                    label="Colocación" 
+                    value={`${realTimeStats.clientes_colocados_mes}`} 
                     progress={realTimeStats.clientes_colocados_mes > 0 ? 100 : 0} 
-                    target={`S/ ${metaColocClientes.bono_por_cliente || 0}/cliente · Min S/ ${metaColocClientes.monto_minimo_prestamo || 500}`} 
-                    icon={<DollarSign className="w-4 h-4 text-emerald-400" />}
-                    subtitle={`Promedio: S/ ${realTimeStats.promedio_colocacion} ${realTimeStats.promedio_colocacion >= (metaColocClientes.monto_minimo_prestamo || 500) ? '✅' : '❌'}`}
+                    target={`S/${metaColocClientes.bono_por_cliente}`} 
+                    icon={<DollarSign className="w-3.5 h-3.5 text-emerald-400" />}
+                    subtitle={`Promedio: S/ ${realTimeStats.promedio_colocacion}`}
                   />
                 )}
               </div>
             )}
             {/* Si no hay NINGUNA meta asignada */}
             {!metaCobro && !metaClie && !metaMora && !metaRetencion && !metaColocClientes && (
-              <div className="text-center py-8">
-                <Target className="w-12 h-12 text-slate-700 mx-auto mb-3" />
-                <p className="text-slate-500 font-bold">Sin metas asignadas</p>
-                <p className="text-xs text-slate-600 mt-1">Contacta a tu supervisor para recibir tus objetivos.</p>
+              <div className="text-center py-4">
+                <Target className="w-8 h-8 text-slate-700 mx-auto mb-2" />
+                <p className="text-xs text-slate-500 font-bold">Sin metas asignadas</p>
               </div>
             )}
          </CardContent>
       </Card>
 
       {/* === BONOS: estado actual + historial === */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
          <Card className="bg-slate-900/40 border-slate-800">
-            <CardHeader>
-               <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-                  <Award className="w-5 h-5 text-amber-500" />
+            <CardHeader className="py-3 px-4">
+               <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
+                  <Award className="w-4 h-4 text-amber-500" />
                   Bonos del Periodo
                </CardTitle>
             </CardHeader>
-             <CardContent className="space-y-3">
+             <CardContent className="p-4 pt-0 space-y-2">
                 {metas.filter(m => (m.bono_monto > 0 || m.bono_por_cliente > 0)).map((m, idx) => {
                     const isPaidInPeriod = m.periodo === 'mensual' 
                       ? bonosPagadosMes.includes(m.id)
@@ -542,44 +545,42 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
                 {metas.filter(m => (m.bono_monto > 0 || m.bono_por_cliente > 0)).length === 0 && (
                     <p className="text-xs text-slate-500 text-center py-4">No hay bonos específicos asignados</p>
                 )}
-             </CardContent>
+              </CardContent>
          </Card>
 
          {/* === DESCUENTOS REALES === */}
          <Card className="bg-slate-900/40 border-slate-800">
-            <CardHeader>
-               <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-                  <AlertCircle className="w-5 h-5 text-rose-500" />
+            <CardHeader className="py-3 px-4">
+               <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-500" />
                   Descuentos Aplicados
                </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="p-4 pt-0 space-y-2">
                {historialDescuentos.length > 0 ? (
-                 historialDescuentos.slice(0, 5).map((d, idx) => (
-                   <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">
-                     <div className="flex items-center gap-3">
-                        <Clock className="w-4 h-4 text-rose-400" />
+                 historialDescuentos.slice(0, 3).map((d, idx) => (
+                   <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
+                     <div className="flex items-center gap-2">
+                        <Clock className="w-3.5 h-3.5 text-rose-400" />
                         <div>
-                           <p className="text-sm font-bold text-white capitalize">{d.tipo}</p>
-                           <p className="text-[10px] text-slate-500">
+                           <p className="text-xs font-bold text-white capitalize">{d.tipo}</p>
+                           <p className="text-[9px] text-slate-500">
                              {format(new Date(d.fecha + 'T12:00:00'), 'dd MMM yyyy', { locale: es })}
-                             {d.descripcion && ` · ${d.descripcion}`}
                            </p>
                         </div>
                      </div>
-                     <span className="text-rose-400 font-bold text-sm">- S/ {Number(d.descuento_aplicado || 0).toFixed(2)}</span>
+                     <span className="text-rose-400 font-bold text-xs">- S/ {Number(d.descuento_aplicado || 0).toFixed(2)}</span>
                    </div>
                  ))
                ) : (
-                 <div className="text-center py-6">
-                   <CheckCircle2 className="w-8 h-8 text-emerald-500/30 mx-auto mb-2" />
-                   <p className="text-xs text-slate-500">Sin descuentos registrados</p>
+                 <div className="text-center py-4">
+                   <p className="text-[10px] text-slate-500">Sin descuentos registrados</p>
                  </div>
                )}
                {historialDescuentos.length > 0 && (
-                 <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
-                   <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Total descuentos</span>
-                   <span className="text-rose-400 font-black">- S/ {historialDescuentos.reduce((acc, d) => acc + Number(d.descuento_aplicado || 0), 0).toFixed(2)}</span>
+                 <div className="pt-1.5 border-t border-slate-800 flex justify-between items-center">
+                   <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Total</span>
+                   <span className="text-rose-400 font-bold text-xs">- S/ {historialDescuentos.reduce((acc, d) => acc + Number(d.descuento_aplicado || 0), 0).toFixed(2)}</span>
                  </div>
                )}
             </CardContent>
@@ -588,43 +589,35 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
 
       {/* === HISTORIAL DE BONOS GANADOS === */}
       <Card className="bg-slate-900/40 border-slate-800">
-        <CardHeader>
-          <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-            <History className="w-5 h-5 text-emerald-500" />
-            Historial de Bonos Ganados
+        <CardHeader className="py-3 px-4">
+          <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
+            <History className="w-4 h-4 text-emerald-500" />
+            Historial de Bonos
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-0">
           {historialBonos.length > 0 ? (
             <div className="divide-y divide-slate-800">
-              {historialBonos.map((b, idx) => (
-                <div key={idx} className="flex items-center justify-between py-3 px-1">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                      <Award className="w-4 h-4 text-emerald-400" />
+              {historialBonos.slice(0, 4).map((b, idx) => (
+                <div key={idx} className="flex items-center justify-between py-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                      <Award className="w-3 h-3 text-emerald-400" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-white">Bono abonado</p>
-                      <p className="text-[10px] text-slate-500">
-                        {format(new Date(b.created_at), "dd MMM yyyy · HH:mm", { locale: es })}
+                      <p className="text-xs font-bold text-white">Bono abonado</p>
+                      <p className="text-[9px] text-slate-500">
+                        {format(new Date(b.created_at), "dd MMM yyyy", { locale: es })}
                       </p>
                     </div>
                   </div>
-                  <span className="text-emerald-400 font-black text-sm">+ S/ {Number(b.monto || 0).toFixed(2)}</span>
+                  <span className="text-emerald-400 font-bold text-xs">+ S/ {Number(b.monto || 0).toFixed(2)}</span>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-6">
-              <Award className="w-8 h-8 text-slate-700 mx-auto mb-2" />
-              <p className="text-xs text-slate-500">Aún no hay bonos ganados</p>
-              <p className="text-[10px] text-slate-600 mt-1">Los bonos se abonan automáticamente al cumplir metas.</p>
-            </div>
-          )}
-          {historialBonos.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-slate-800 flex justify-between items-center">
-              <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Total bonos ganados</span>
-              <span className="text-emerald-400 font-black">+ S/ {historialBonos.reduce((acc, b) => acc + Number(b.monto || 0), 0).toFixed(2)}</span>
+            <div className="text-center py-4">
+              <p className="text-[10px] text-slate-500">Sin bonos cobrados aún</p>
             </div>
           )}
         </CardContent>
@@ -635,26 +628,26 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
 
 function MetricBox({ label, value, progress, target, icon, reverse = false, subtitle }: any) {
   return (
-    <div className="p-4 rounded-2xl bg-slate-950/50 border border-slate-800/50 space-y-4">
-       <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-             {icon}
-             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{label}</span>
+    <div className="p-2 md:p-3 rounded-lg md:rounded-xl bg-slate-950/50 border border-slate-800/50 space-y-1.5 flex flex-col justify-between">
+       <div className="flex items-center justify-between gap-1 w-full">
+          <div className="flex items-center gap-1 min-w-0">
+             <span className="p-1 bg-slate-900/50 rounded-md shrink-0">{icon}</span>
+             <span className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase tracking-tight truncate">{label}</span>
           </div>
-          <Badge variant="outline" className="text-[10px] bg-slate-800 border-slate-700 text-slate-400">{target}</Badge>
+          <span className="text-[8px] md:text-[9px] font-bold px-1 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-400 shrink-0">{target}</span>
        </div>
-       <div className="space-y-2">
+       <div className="space-y-1">
           <div className="flex justify-between items-end">
-             <span className="text-2xl font-black text-white">{value}</span>
-             <span className="text-[10px] font-bold text-slate-500 mb-1">{Math.round(progress)}%</span>
+             <span className="text-base md:text-lg font-black text-white leading-none">{value}</span>
+             <span className="text-[8px] md:text-[9px] font-bold text-slate-500">{Math.round(progress)}%</span>
           </div>
           <Progress 
             value={progress} 
-            className="h-2 bg-slate-800" 
+            className="h-1 md:h-1.5 bg-slate-800" 
             indicatorClassName={reverse ? (progress > 50 ? 'bg-emerald-500' : 'bg-rose-500') : (progress > 80 ? 'bg-emerald-500' : 'bg-blue-500')} 
           />
           {subtitle && (
-            <p className="text-[10px] text-slate-500 mt-1">{subtitle}</p>
+            <p className="text-[8px] md:text-[9px] text-slate-600 line-clamp-1">{subtitle}</p>
           )}
        </div>
     </div>
@@ -663,29 +656,25 @@ function MetricBox({ label, value, progress, target, icon, reverse = false, subt
 
 function TierRow({ label, range, bonus, active, paid }: { label: string, range: string, bonus: string, active: boolean, paid?: boolean }) {
    return (
-      <div className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
-         paid ? 'bg-emerald-500/20 border-emerald-500/60 shadow-[0_0_15px_-5px_rgba(16,185,129,0.3)]' : 
-         active ? 'bg-amber-500/10 border-amber-500/40' : 'bg-slate-950/30 border-slate-800/50 opacity-60'
+      <div className={`flex items-center justify-between p-2 rounded-lg border transition-all ${
+         paid ? 'bg-emerald-500/20 border-emerald-500/40' : 
+         active ? 'bg-amber-500/10 border-amber-500/30' : 'bg-slate-950/30 border-slate-800/40 opacity-60'
       }`}>
-         <div className="space-y-0.5">
-            <p className={`text-sm font-bold ${paid ? 'text-emerald-400' : active ? 'text-amber-400' : 'text-slate-300'}`}>{label}</p>
-            <p className="text-[10px] text-slate-500 uppercase font-bold">{range}</p>
+         <div className="flex flex-col">
+            <p className={`text-xs font-bold leading-tight ${paid ? 'text-emerald-400' : active ? 'text-amber-400' : 'text-slate-300'}`}>{label}</p>
+            <p className="text-[9px] text-slate-600 uppercase font-medium">{range}</p>
          </div>
          <div className="text-right">
-            <p className={`text-sm font-black ${paid ? 'text-emerald-400' : active ? 'text-amber-400' : 'text-slate-400'}`}>{bonus}</p>
-            {paid ? (
-                <span className="text-[9px] font-black text-emerald-500 uppercase flex items-center gap-1 justify-end">
-                    <Wallet className="w-2.5 h-2.5" /> Abonado en Nómina
-                </span>
-            ) : active ? (
-                <span className="text-[9px] font-black text-amber-500 uppercase flex items-center gap-1 justify-end">
-                   <Target className="w-2.5 h-2.5" /> Meta Alcanzada
-                </span>
-            ) : (
-                <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1 justify-end">
-                   En Progreso
-                </span>
-            )}
+            <p className={`text-xs font-black leading-tight ${paid ? 'text-emerald-400' : active ? 'text-amber-400' : 'text-slate-400'}`}>{bonus}</p>
+            <div className="flex items-center gap-1 justify-end mt-0.5">
+                {paid ? (
+                    <span className="text-[8px] font-bold text-emerald-500/80 uppercase">Abonado</span>
+                ) : active ? (
+                    <span className="text-[8px] font-bold text-amber-500/80 uppercase">Alcanzada</span>
+                ) : (
+                    <span className="text-[8px] font-bold text-slate-600 uppercase">En progreso</span>
+                )}
+            </div>
          </div>
       </div>
    )

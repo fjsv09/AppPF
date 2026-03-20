@@ -35,7 +35,7 @@ export default async function MetasPage() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -62,37 +62,6 @@ export default async function MetasPage() {
         <MetasProgress userId={user.id} userRole={userRole} />
       )}
 
-      {/* Team Info / Tips */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-         <div className="p-6 rounded-2xl bg-blue-600/10 border border-blue-500/20">
-            <div className="flex items-center gap-3 mb-4">
-               <Target className="w-6 h-6 text-blue-400" />
-               <h3 className="font-bold text-white">Consejo del Mes</h3>
-            </div>
-            <p className="text-sm text-slate-400 leading-relaxed">
-               Mantén tu cartera por debajo del <span className="text-blue-200">7% de morosidad</span> para asegurar el bono de tramo bueno. Recuerda que la puntualidad en el cuadre también suma puntos para el bono de equipo.
-            </p>
-         </div>
-
-         <div className="p-6 rounded-2xl bg-purple-600/10 border border-purple-500/20">
-            <div className="flex items-center gap-3 mb-4">
-               <Briefcase className="w-6 h-6 text-purple-400" />
-               <h3 className="font-bold text-white">Bono de Equipo</h3>
-            </div>
-            <div className="space-y-2">
-               <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">Progreso del Equipo</span>
-                  <span className="text-purple-400 font-bold">82%</span>
-               </div>
-               <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-purple-500 w-[82%]" />
-               </div>
-               <p className="text-[10px] text-slate-500 mt-2">
-                  Si todos cumplen sus metas individuales, se activa el bono colectivo de S/ 200 adicional.
-               </p>
-            </div>
-         </div>
-      </div>
     </div>
   )
 }

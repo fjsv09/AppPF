@@ -23,6 +23,8 @@ interface LoanTabsProps {
         horario_cierre: string
         desbloqueo_hasta: string
     }
+    isBlockedByCuadre?: boolean
+    blockReasonCierre?: string
 }
 
 export function LoanTabs({ 
@@ -32,7 +34,9 @@ export function LoanTabs({
     userRole = 'asesor', 
     cliente, 
     tareaEvidencia,
-    systemSchedule 
+    systemSchedule,
+    isBlockedByCuadre,
+    blockReasonCierre
 }: LoanTabsProps) {
     const searchParams = useSearchParams()
     const tabParam = searchParams.get('tab')
@@ -71,6 +75,8 @@ export function LoanTabs({
                             cronograma={cronograma} 
                             userRol={userRole} 
                             systemSchedule={systemSchedule}
+                            isBlockedByCuadre={isBlockedByCuadre}
+                            blockReasonCierre={blockReasonCierre}
                         />
                     </CardContent>
                 </Card>

@@ -1,22 +1,25 @@
-import { createClient } from '@supabase/supabase-js';
-import * as dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' });
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { createClient } from '@supabase/supabase-js'
+import dotenv from 'dotenv'
 
-async function check() {
-    const { data, error } = await supabase
-        .from('pagos')
-        .select(`
-            id,
-            registrado_por,
-            perfiles (nombres)
-        `)
-        .limit(5);
+dotenv.config()
 
-    console.log(JSON.stringify({ data, error }, null, 2));
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+
+async function test() {
+  const { data, error } = await supabase
+    .from('carteras')
+    .select(`
+      *,
+      perfiles (nombre_completo),
+      cuentas_financieras (count)
+    `)
+  
+  if (error) {
+    console.error('Error fetching carteras:', error)
+  } else {
+    console.log('Carteras found:', data)
+  }
 }
 
-check();
+test()

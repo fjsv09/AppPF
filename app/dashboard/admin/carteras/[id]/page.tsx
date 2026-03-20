@@ -23,6 +23,7 @@ import { BackButton } from '@/components/ui/back-button'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { CarteraAdvisorAssign } from '@/components/admin/cartera-advisor-assign'
+import { CarteraTransferModal } from '@/components/admin/cartera-transfer-modal'
 
 export const dynamic = 'force-dynamic'
 
@@ -71,19 +72,39 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
   const { data: perfil } = await adminClient.from('perfiles').select('rol').eq('id', user.id).single()
   if (perfil?.rol !== 'admin') return <div className="p-10 text-red-500 font-bold text-center">No autorizado.</div>
 
-  const { data: cartera, error: cError } = await adminClient.from('carteras').select('*').eq('id', id).single()
-  if (cError || !cartera) return <div className="p-10 text-center text-red-500">Cartera no encontrada.</div>
+  // Fetch Cartera alone first to ensure it loads
+  let { data: cartera, error: cError } = await supabase
+    .from('carteras')
+    .select('*, perfiles(id, nombre_completo)')
+    .eq('id', id)
+    .maybeSingle()
+    
+  if (!cartera) {
+    // Check if it's the virtual global portfolio
+    if (id === '00000000-0000-0000-0000-000000000000') {
+      cartera = {
+        id: '00000000-0000-0000-0000-000000000000',
+        nombre: 'CARTERA GLOBAL (ADMIN)',
+        estado: 'operación',
+        asesor_id: null,
+        perfiles: null
+      } as any
+    } else {
+      return <div className="p-10 text-center text-red-500 font-mono text-xs">
+          Cartera no encontrada. 
+      </div>
+    }
+  }
 
-  // Fetch advisors in case we need to assign one
-  const { data: asesores } = await adminClient.from('perfiles').select('id, nombre_completo').eq('rol', 'asesor').eq('activo', true)
+  // Fetch advisors
+  const { data: asesores } = await adminClient.from('perfiles').select('id, nombre_completo').eq('activo', true)
 
-  const [resAsesor, resCuentas, resLoans] = await Promise.all([
-    cartera.asesor_id ? adminClient.from('perfiles').select('nombre_completo, foto_perfil').eq('id', cartera.asesor_id).single() : Promise.resolve({ data: null }),
+  const [resCuentas, resLoans] = await Promise.all([
     adminClient.from('cuentas_financieras').select('*').eq('cartera_id', id),
-    cartera.asesor_id ? adminClient.from('prestamos').select('monto, estado, id, clientes!inner(asesor_id)').eq('clientes.asesor_id', cartera.asesor_id).neq('estado', 'anulado') : Promise.resolve({ data: [] })
+    cartera?.asesor_id ? adminClient.from('prestamos').select('monto, estado, id, clientes!inner(asesor_id)').eq('clientes.asesor_id', (cartera as any).asesor_id).neq('estado', 'anulado') : Promise.resolve({ data: [] })
   ])
 
-  const responsable = resAsesor.data
+  const responsable = (cartera as any).perfiles
   const accounts = resCuentas.data || []
   const loans = resLoans.data || []
   
@@ -94,9 +115,9 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
   const totalLent = activeLoans.reduce((sum: number, l: any) => sum + (parseFloat(l.monto) || 0), 0)
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-700 pb-16 max-w-7xl mx-auto px-4">
+    <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-700 pb-12 max-w-7xl mx-auto px-2">
       {/* COMPACT HEADER AREA */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-4 border-b border-white/5">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pb-2 border-b border-white/5">
         <div className="space-y-3">
           <div className="flex items-center gap-2">
              <BackButton />
@@ -115,19 +136,19 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
                <Briefcase className="w-5 h-5 text-blue-400" />
             </div>
             <div>
-               <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight leading-none">
+               <h1 className="text-base md:text-lg font-bold text-white tracking-tight leading-none truncate">
                   {cartera.nombre}
                </h1>
-               <p className="text-slate-500 text-xs mt-0.5">
-                  ID: <span className="font-mono bg-slate-900 px-1 py-0.5 rounded border border-slate-800 text-slate-400">{id.slice(0, 12)}...</span>
+               <p className="text-slate-500 text-[10px] mt-0.5">
+                  ID: <span className="font-mono bg-slate-900 px-1 py-0.5 rounded border border-slate-800 text-slate-400">{id.slice(0, 8)}...</span>
                </p>
             </div>
           </div>
         </div>
 
         {/* Responsible Person Widget (Dynamic) */}
-        <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 backdrop-blur-xl min-w-[300px]">
-           <div className="h-10 w-10 rounded-full border border-blue-500/20 p-0.5 shrink-0">
+        <div className="flex items-center gap-3 bg-slate-900/40 p-2 md:p-3 rounded-xl border border-slate-800/60 backdrop-blur-xl min-w-full md:min-w-[300px]">
+           <div className="h-8 w-8 md:h-10 md:w-10 rounded-full border border-blue-500/20 p-0.5 shrink-0">
               {id === '00000000-0000-0000-0000-000000000000' ? (
                   <div className="h-full w-full rounded-full bg-blue-500/10 flex items-center justify-center">
                     <ShieldCheck className="w-5 h-5 text-blue-400" />
@@ -141,16 +162,20 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
               )}
            </div>
            <div className="flex-1">
-              <p className="text-[8px] text-slate-500 font-black uppercase tracking-[0.1em] leading-none mb-1">Responsable Cartera</p>
-              {id === '00000000-0000-0000-0000-000000000000' ? ( <h3 className="text-sm font-bold text-blue-400 leading-tight uppercase">Control Administrativo</h3> ) : cartera.asesor_id ? (
-                 <h3 className="text-sm font-bold text-white leading-tight capitalize">{responsable?.nombre_completo}</h3>
+              <p className="text-[7px] text-slate-500 font-black uppercase tracking-[0.1em] leading-none mb-0.5">Responsable</p>
+              {id === '00000000-0000-0000-0000-000000000000' ? (
+                  <h3 className="text-xs font-bold text-blue-400 leading-tight uppercase">Control Administrativo</h3> 
+              ) : cartera.asesor_id ? (
+                  <h3 className="text-xs font-bold text-white leading-tight capitalize">
+                    {responsable?.nombre_completo || 'Usuario Desconocido'}
+                  </h3>
               ) : (
-                 <div className="space-y-1">
+                  <div className="space-y-1">
                     <span className="text-xs font-bold text-rose-500 flex items-center gap-1">
                        <AlertCircle className="w-3 h-3" /> Sin Asesor Asignado
                     </span>
                     <CarteraAdvisorAssign carteraId={id} asesores={asesores || []} />
-                 </div>
+                  </div>
               )}
            </div>
         </div>
@@ -159,87 +184,89 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
       {/* KPI COMMAND CENTER (Compact) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Main Balanced Metrics */}
-        <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="lg:col-span-8 grid grid-cols-2 gap-3">
             {/* Balance Card */}
             <Card className="bg-slate-950 border-slate-800 relative overflow-hidden group">
-                <CardContent className="p-6 space-y-4">
-                    <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-400">
-                           <Wallet className="w-3.5 h-3.5" />
+                <CardContent className="p-2 md:p-4 space-y-1.5 md:space-y-3">
+                    <div className="flex items-center gap-1 md:gap-2">
+                        <div className="p-1 md:p-1.5 bg-blue-500/10 rounded-lg text-blue-400">
+                           <Wallet className="w-2.5 md:w-3 h-2.5 md:h-3" />
                         </div>
-                        <span className="text-[10px] text-slate-500 font-black tracking-widest uppercase">Efectivo Disponible</span>
+                        <span className="text-[7px] md:text-[9px] text-slate-500 font-black tracking-widest uppercase truncate">Balance</span>
                     </div>
                     <div>
-                        <div className="flex items-baseline gap-1.5">
-                            <span className="text-lg font-medium text-slate-600">S/</span>
-                            <h2 className="text-4xl font-black text-white tracking-tighter">
+                        <div className="flex items-baseline gap-0.5 md:gap-1">
+                            <span className="text-[10px] md:text-sm font-medium text-slate-600">S/</span>
+                            <h2 className="text-base md:text-xl font-black text-white tracking-tighter">
                                {formatMoney(totalBalance)}
                             </h2>
                         </div>
-                        <p className="text-[10px] text-slate-600 mt-1 font-medium">{accounts.length} Cuentas vinculadas</p>
+                        <p className="text-[7px] md:text-[9px] text-slate-600 mt-0.5 font-medium">{accounts.length} Cuentas</p>
                     </div>
                 </CardContent>
             </Card>
 
             {/* In The Street Card */}
             <Card className="bg-slate-950 border-slate-800 relative overflow-hidden group">
-                <CardContent className="p-6 space-y-4">
-                    <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-400">
-                           <Activity className="w-3.5 h-3.5" />
+                <CardContent className="p-2 md:p-4 space-y-1.5 md:space-y-3">
+                    <div className="flex items-center gap-1 md:gap-2">
+                        <div className="p-1 md:p-1.5 bg-emerald-500/10 rounded-lg text-emerald-400">
+                           <Activity className="w-2.5 md:w-3 h-2.5 md:h-3" />
                         </div>
-                        <span className="text-[10px] text-slate-500 font-black tracking-widest uppercase">Capital en Calle</span>
+                        <span className="text-[7px] md:text-[9px] text-slate-500 font-black tracking-widest uppercase truncate">En Calle</span>
                     </div>
                     <div>
-                        <div className="flex items-baseline gap-1.5">
-                            <span className="text-lg font-medium text-slate-600">S/</span>
-                            <h2 className="text-4xl font-black text-emerald-400 tracking-tighter">
+                        <div className="flex items-baseline gap-0.5 md:gap-1">
+                            <span className="text-[10px] md:text-sm font-medium text-slate-600">S/</span>
+                            <h2 className="text-base md:text-xl font-black text-emerald-400 tracking-tighter">
                                {formatMoney(totalLent)}
                             </h2>
                         </div>
-                        <p className="text-[10px] text-slate-600 mt-1 font-medium">
-                           {id === '00000000-0000-0000-0000-000000000000' ? 'Administración Central' : 
-                            cartera.asesor_id ? `${activeLoans.length} Préstamos activos` : 'Requiere asignar asesor'}
+                        <p className="text-[7px] md:text-[9px] text-slate-600 mt-0.5 font-medium">
+                           {activeLoans.length} Préstamos
                         </p>
                     </div>
                 </CardContent>
             </Card>
 
             {/* History Action Row */}
-            <Card className="md:col-span-2 bg-gradient-to-r from-blue-900/5 to-indigo-900/5 border-blue-500/10 p-1.5 rounded-xl overflow-hidden">
-                <div className="bg-slate-900/60 backdrop-blur-md rounded-lg p-4 flex items-center justify-between gap-4 border border-white/5">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
-                           <History className="w-4 h-4" />
+            <Card className="col-span-2 bg-gradient-to-r from-blue-900/5 to-indigo-900/5 border-blue-500/10 p-0.5 rounded-xl overflow-hidden">
+                <div className="bg-slate-900/60 backdrop-blur-md rounded-lg p-2 md:p-3 flex items-center justify-between gap-4 border border-white/5">
+                    <div className="flex items-center gap-2 md:gap-3">
+                        <div className="p-1 md:p-1.5 bg-blue-500/10 rounded-lg text-blue-400">
+                           <History className="w-3 md:w-3.5 h-3 md:h-3.5" />
                         </div>
                         <div>
-                           <h3 className="text-sm font-bold text-white leading-none">Gestión Financiera</h3>
-                           <p className="text-[10px] text-slate-500 mt-1">Auditoría completa de movimientos de caja.</p>
+                           <h3 className="text-[10px] md:text-xs font-bold text-white leading-none">Gestión Caja</h3>
+                           <p className="text-[7px] md:text-[8px] text-slate-500 mt-0.5">Auditoría completa.</p>
                         </div>
                     </div>
-                    <Button asChild size="sm" className="h-9 px-6 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-lg shadow-lg shadow-blue-900/20 group">
-                        <Link href={`/dashboard/admin/carteras/${id}/movimientos`}>
-                           HISTORIAL
-                           <ArrowRightCircle className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                        </Link>
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <CarteraTransferModal carteraId={id} accounts={accounts} />
+                        <Button asChild size="sm" className="h-7 md:h-8 px-3 md:px-5 bg-blue-600 hover:bg-blue-500 text-white text-[9px] md:text-[10px] font-black rounded-lg shadow-lg shadow-blue-900/20 group">
+                            <Link href={`/dashboard/admin/carteras/${id}/movimientos`}>
+                               HISTORIAL
+                               <ArrowRightCircle className="ml-1.5 w-3 md:w-3.5 h-3 md:h-3.5 group-hover:translate-x-1 transition-transform" />
+                            </Link>
+                        </Button>
+                    </div>
                 </div>
             </Card>
         </div>
 
         {/* Status Center */}
-        <div className="lg:col-span-4 flex flex-col gap-4">
+        <div className="lg:col-span-4 flex flex-col gap-3">
             <Card className="bg-slate-950 border-slate-800 flex-1 overflow-hidden">
-                <CardContent className="p-5 space-y-5">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Integración</h3>
-                        <Badge className="bg-blue-600/10 text-blue-400 border-none px-1.5 py-0 text-[8px] font-bold">READY</Badge>
+                <CardContent className="p-3 md:p-4 space-y-4">
+                    <div className="flex items-center justify-between mb-1">
+                        <h3 className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Estado</h3>
+                        <Badge className="bg-blue-600/10 text-blue-400 border-none px-1.5 py-0 text-[7px] font-bold">READY</Badge>
                     </div>
 
-                    <div className="space-y-3">
-                        <div className="p-3 rounded-lg bg-slate-900/30 border border-slate-800/50">
-                            <div className="flex justify-between text-[9px] font-black text-slate-600 uppercase mb-2">
-                                <span>Salud Financiera</span>
+                    <div className="space-y-2">
+                        <div className="p-2 rounded-lg bg-slate-900/30 border border-slate-800/50">
+                            <div className="flex justify-between text-[8px] font-black text-slate-600 uppercase mb-1">
+                                <span>Salud</span>
                                 <span className="text-blue-500">100%</span>
                             </div>
                             <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
@@ -248,13 +275,13 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
-                             <div className="p-3 rounded-lg bg-slate-900/20 border border-slate-800/40 text-center">
-                                 <p className="text-[8px] text-slate-600 font-black uppercase mb-0.5">Cuentas</p>
-                                 <p className="text-lg font-black text-white leading-none">{accounts.length}</p>
+                             <div className="p-2 rounded-lg bg-slate-900/20 border border-slate-800/40 text-center">
+                                 <p className="text-[7px] text-slate-600 font-black uppercase mb-0.5">Cuentas</p>
+                                 <p className="text-sm font-black text-white leading-none">{accounts.length}</p>
                              </div>
-                             <div className="p-3 rounded-lg bg-slate-900/20 border border-slate-800/40 text-center">
-                                 <p className="text-[8px] text-slate-600 font-black uppercase mb-0.5">Cartera Activa</p>
-                                 <p className="text-lg font-black text-emerald-400 leading-none">{activeLoans.length}</p>
+                             <div className="p-2 rounded-lg bg-slate-900/20 border border-slate-800/40 text-center">
+                                 <p className="text-[7px] text-slate-600 font-black uppercase mb-0.5">Activos</p>
+                                 <p className="text-sm font-black text-emerald-400 leading-none">{activeLoans.length}</p>
                              </div>
                         </div>
                     </div>
@@ -264,11 +291,11 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
       </div>
 
       {/* ACCOUNTS AREA */}
-      <div className="space-y-4 pt-4">
+      <div className="space-y-3 pt-2">
         <div className="flex items-end justify-between px-1">
             <div className="flex items-center gap-2">
-               <PiggyBank className="w-5 h-5 text-blue-400" />
-               <h2 className="text-lg font-black text-white tracking-tight leading-none uppercase">Cuentas de Cartera</h2>
+               <PiggyBank className="w-4 h-4 text-blue-400" />
+               <h2 className="text-sm font-black text-white tracking-tight leading-none uppercase">Cuentas</h2>
             </div>
             <div className="flex items-center gap-3 text-[9px] font-bold text-slate-600">
                <span className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" /> BANCO</span>
@@ -276,37 +303,37 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
             </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             {accounts.map(acc => (
                 <Link key={acc.id} href={`/dashboard/admin/carteras/${id}/movimientos?cuenta=${acc.id}`} className="group outline-none">
                     <Card className="bg-slate-950 border-slate-800/60 hover:border-blue-500/40 hover:bg-slate-900/40 transition-all duration-300 h-full">
-                        <CardContent className="p-5">
-                            <div className="flex items-center justify-between mb-4">
+                        <CardContent className="p-2 md:p-3.5">
+                            <div className="flex items-center justify-between mb-2 md:mb-3">
                                 <Badge className={cn(
-                                    "px-1.5 py-0 border-none font-black text-[7px] tracking-wider uppercase",
+                                    "px-1.5 py-0 border-none font-black text-[6px] md:text-[6.5px] tracking-wider uppercase",
                                     acc.tipo.toLowerCase() === 'banco' ? "bg-blue-500/10 text-blue-400" : "bg-emerald-500/10 text-emerald-400"
                                 )}>
                                     {acc.tipo}
                                 </Badge>
-                                <div className="p-1.5 bg-slate-900 rounded-lg border border-slate-800 group-hover:bg-blue-500/10 transition-colors">
-                                    <DollarSign className="w-3.5 h-3.5 text-slate-500 group-hover:text-blue-400" />
+                                <div className="p-0.5 md:p-1 bg-slate-900 rounded-lg border border-slate-800 group-hover:bg-blue-500/10 transition-colors">
+                                    <DollarSign className="w-2.5 md:w-3 h-2.5 md:h-3 text-slate-500 group-hover:text-blue-400" />
                                 </div>
                             </div>
                             
-                            <h3 className="text-sm font-bold text-white group-hover:text-blue-300 transition-colors uppercase truncate mb-1">
+                            <h3 className="text-[9px] md:text-[10px] font-bold text-white group-hover:text-blue-300 transition-colors uppercase truncate mb-0.5">
                                {acc.nombre}
                             </h3>
                             
-                            <div className="flex items-baseline gap-1 mt-3">
-                               <span className="text-xs font-medium text-slate-600">S/</span>
-                               <span className="text-2xl font-black text-white font-mono tracking-tighter">
+                            <div className="flex items-baseline gap-0.5 md:gap-1 mt-1.5 md:mt-2">
+                               <span className="text-[8px] md:text-[9px] font-medium text-slate-600">S/</span>
+                               <span className="text-base md:text-lg font-black text-white font-mono tracking-tighter">
                                  {formatMoney(parseFloat(acc.saldo))}
                                </span>
                             </div>
 
-                            <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
-                                <span className="text-[8px] font-black text-slate-600 group-hover:text-blue-500 uppercase tracking-widest transition-colors">Auditar</span>
-                                <ChevronRight className="w-3 h-3 text-slate-700 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" />
+                            <div className="mt-2 md:mt-3 pt-1.5 md:pt-2 border-t border-white/5 flex items-center justify-between">
+                                <span className="text-[6px] md:text-[7px] font-black text-slate-600 group-hover:text-blue-500 uppercase tracking-widest transition-colors">Auditar</span>
+                                <ChevronRight className="w-2 md:w-2.5 h-2 md:h-2.5 text-slate-700 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" />
                             </div>
                         </CardContent>
                     </Card>

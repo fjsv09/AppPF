@@ -13,13 +13,20 @@ import {
     Briefcase,
     Zap,
     ShieldCheck,
-    ChevronRight,
-    Search
+    ShieldAlert,
+    ChevronDown,
+    Search,
+    AlertCircle,
+    RefreshCw,
+    User
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { PendingTasks } from './pending-tasks'
+import { QuickActions } from './quick-actions'
+import { FinancialSummary } from './financial-summary'
 
 interface SupervisorStats {
     teamSummary: {
@@ -34,7 +41,22 @@ interface SupervisorStats {
         metaHoyPagado: number
         metaHoyPrestamosTotal: number
         metaHoyPrestamosPagados: number
+        renovacionesMes: number
+        clientesNuevosMes: number
+        clientesBloqueados: number
+        refinanciamientosMes: number
+        totalRenovables: number
+        totalInactivos: number
+        totalAlertaCritica: number
+        totalAdvertencia: number
+        totalVencidos: number
+        totalClientesConDeudaActiva: number
+        moraMontoGlobal: number
     }
+    supervisores?: Array<{
+        id: string
+        nombre: string
+    }>
     asesores: Array<{
         id: string
         nombre: string
@@ -64,23 +86,53 @@ interface SupervisorStats {
     }
 }
 
-export function SupervisorEfficiency() {
+interface SupervisorEfficiencyProps {
+    rol?: 'supervisor' | 'admin'
+    showAdvisors?: boolean
+    showActions?: boolean
+    showMetrics?: boolean
+    showFilters?: boolean
+    showFinancialSummary?: boolean
+}
+
+export function SupervisorEfficiency({ 
+    rol = 'supervisor',
+    showAdvisors = true,
+    showActions = true,
+    showMetrics = true,
+    showFilters = true,
+    showFinancialSummary = false
+}: SupervisorEfficiencyProps) {
     const [data, setData] = useState<SupervisorStats | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [selectedAsesorId, setSelectedAsesorId] = useState<string | null>(null)
+    const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | null>(null)
+    const [isAseMenuOpen, setIsAseMenuOpen] = useState(false)
+    const [isSupMenuOpen, setIsSupMenuOpen] = useState(false)
     const [searchTerm, setSearchTerm] = useState('')
+    const [activeTooltip, setActiveTooltip] = useState<string | null>(null)
 
-    useEffect(() => {
-        fetchStats()
-    }, [])
 
-    const fetchStats = async () => {
+    const fetchStats = async (asesorId?: string | null, supervisorId?: string | null) => {
         try {
             setLoading(true)
-            const res = await fetch('/api/dashboard/supervisor/stats')
-            if (!res.ok) throw new Error('Error al cargar estadísticas')
+            let url = `/api/dashboard/supervisor/stats`
+            const params = new URLSearchParams()
+            if (asesorId) params.append('asesorId', asesorId)
+            if (supervisorId) params.append('supervisorId', supervisorId)
+            
+            const queryString = params.toString()
+            if (queryString) url += `?${queryString}`
+
+            const res = await fetch(url)
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}))
+                throw new Error(errorData.details || errorData.error || 'Error al cargar estadísticas')
+            }
             const json = await res.json()
             setData(json)
+            setError(null)
         } catch (err: any) {
             setError(err.message)
         } finally {
@@ -88,415 +140,470 @@ export function SupervisorEfficiency() {
         }
     }
 
-    const formatMoney = (val: number) => {
-        return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN', maximumFractionDigits: 0 }).format(val)
+    useEffect(() => {
+        fetchStats(selectedAsesorId, selectedSupervisorId)
+    }, [selectedAsesorId, selectedSupervisorId])
+
+    const formatMoney = (value: number) => {
+        return new Intl.NumberFormat('es-PE', {
+            style: 'currency',
+            currency: 'PEN',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        }).format(value)
     }
 
-    if (loading) return <div className="grid gap-6 animate-pulse">
-        <div className="h-32 bg-slate-800/50 rounded-3xl" />
-        <div className="h-64 bg-slate-800/50 rounded-3xl" />
-    </div>
+    if (error) {
+        return (
+            <div className="p-8 bg-red-900/20 border border-red-500/50 rounded-2xl flex flex-col items-center gap-4 text-center">
+                <AlertTriangle className="w-12 h-12 text-red-500" />
+                <div>
+                    <h3 className="text-xl font-bold text-white mb-1">Error al conectar con el servidor</h3>
+                    <p className="text-slate-400 max-w-md">{error}</p>
+                </div>
+                <button 
+                    onClick={() => fetchStats(selectedAsesorId, selectedSupervisorId)}
+                    className="flex items-center gap-2 px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-colors border border-slate-700"
+                >
+                    <RefreshCw className="w-4 h-4" />
+                    Reintentar
+                </button>
+            </div>
+        )
+    }
 
-    if (error || !data) return <div className="p-8 text-center bg-red-950/20 border border-red-900/50 rounded-3xl text-red-400">{error || 'Error de datos'}</div>
+    if (loading && !data) {
+        return (
+            <div className="space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {[1,2,3,4].map(i => (
+                        <div key={i} className="h-32 bg-slate-800/50 rounded-2xl animate-pulse" />
+                    ))}
+                </div>
+                <div className="h-96 bg-slate-800/50 rounded-2xl animate-pulse" />
+            </div>
+        )
+    }
+
+    if (!data) return null
 
     const filteredAsesores = data.asesores.filter(a => 
         a.nombre.toLowerCase().includes(searchTerm.toLowerCase())
     )
 
-    // Calculate Health Index: If nothing is due today, just use (100 - mora)
-    const healthIndex = data.teamSummary.eficienciaHoy > 0 
+    const healthIndex = data.teamSummary.eficienciaMonto > 0 
         ? ((data.teamSummary.eficienciaHoy + (100 - data.teamSummary.moraGlobal)) / 2)
         : (100 - data.teamSummary.moraGlobal)
 
     return (
-        <div className="space-y-4 md:space-y-8 animate-in fade-in duration-700">
-            {/* 1. TOP METRICS - "The Pulse" */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
-                {/* 1. Portfolio Health (Ultra Compact) */}
-                <div className="bg-[#090e16] border border-slate-800/40 rounded-xl md:rounded-2xl p-3 md:p-4 shadow-xl relative flex flex-col justify-between min-h-[90px] md:min-h-[130px] group transition-all cursor-help group/tooltip">
-                    <div className="absolute top-1/2 -translate-y-1/2 -right-4 opacity-[0.02] rotate-12">
-                        <Briefcase className="w-20 md:w-24 h-20 md:h-24 text-white" />
-                    </div>
-                    
-                    <div className="relative z-10">
-                        <p className="text-blue-400 font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-0.5 md:mb-2">Salud</p>
-                        <h2 className="text-lg md:text-3xl font-black text-white tracking-tighter uppercase italic">
-                            {data.teamSummary.moraGlobal < 5 ? 'Óptima' : data.teamSummary.moraGlobal < 15 ? 'Saludable' : 'En Riesgo'}
-                        </h2>
-                    </div>
-
-                    <div className="relative z-10 mt-1 md:mt-2 space-y-1.5 md:space-y-2">
-                        <div className="flex items-center gap-1.5 md:gap-3">
-                            <div className="relative flex-1 h-1 bg-slate-800/40 rounded-full overflow-hidden">
-                                <div 
-                                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-1000"
-                                    style={{ width: `${healthIndex}%` }}
-                                />
+        <div className="space-y-4 md:space-y-8 animate-in fade-in duration-700 font-sans">
+            {/* ROW 1: FILTROS DE CARTERA (SUPERVISOR + ASESOR) */}
+            {showFilters && (
+                <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+                <div className="flex flex-row items-center gap-2 max-w-5xl">
+                {/* SELECTOR DE SUPERVISORES (SOLO ADMIN) */}
+                {rol === 'admin' && (
+                    <div className="relative w-full md:w-72">
+                        <div 
+                            onClick={() => setIsSupMenuOpen(!isSupMenuOpen)}
+                            className={cn(
+                                "h-full flex items-center gap-3 bg-slate-950/40 backdrop-blur-md border border-slate-700/50 rounded-xl px-4 py-2 cursor-pointer transition-all hover:border-slate-500 shadow-xl",
+                                isSupMenuOpen && "border-amber-500 shadow-amber-500/10 ring-1 ring-amber-500/20"
+                            )}
+                        >
+                            <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center border border-amber-500/20 shrink-0">
+                                <Briefcase className="w-4 h-4 text-amber-400" />
                             </div>
-                            <p className="text-blue-400 font-bold text-[7px] md:text-[9px]">
-                                {healthIndex.toFixed(0)}%
-                            </p>
-                        </div>
-                        <div className="flex">
-                            <span className="bg-blue-500/10 text-blue-400 text-[6px] md:text-[8px] font-black px-1 md:px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-widest">
-                                {data.teamSummary.totalClientes} Clientes
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Calculation Tooltip */}
-                    <div className="absolute left-1/2 -translate-x-1/2 bottom-[105%] w-56 bg-slate-950 border border-slate-800 p-3 rounded-lg shadow-2xl opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-[60]">
-                        <p className="text-[8px] font-black text-blue-400 uppercase mb-1.5 tracking-wider border-b border-slate-800 pb-1">Fórmula de Salud</p>
-                        <div className="space-y-2">
-                            <p className="text-[7.5px] text-slate-300 leading-relaxed">
-                                Balance entre recuperación diaria y riesgo de la cartera.
-                            </p>
-                            <div className="p-2 bg-slate-900/50 rounded text-[8px] font-mono text-blue-300 text-center border border-blue-500/10">
-                                [ EFC + (100 - %Mora) ] / 2
+                            <div className="flex-1 min-w-0 pr-0.5 sm:pr-1">
+                                <p className="text-[6px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5 whitespace-nowrap">Supervisor</p>
+                                <h3 className="text-[9px] md:text-sm font-black text-white tracking-tight truncate uppercase">
+                                    {selectedSupervisorId 
+                                        ? data.supervisores?.find(s => s.id === selectedSupervisorId)?.nombre 
+                                        : "Todos"}
+                                </h3>
                             </div>
-                            <p className="text-[6.5px] text-slate-500 italic">
-                                * EFC: Eficiencia de Cobro.
-                                <br />* %Mora: Índice de morosidad global.
-                            </p>
+                            <ChevronDown className={cn("w-3 h-3 text-slate-500 transition-transform duration-300 ml-auto", isSupMenuOpen && "rotate-180")} />
                         </div>
-                    </div>
-                </div>
 
-                {/* 2. Daily Efficiency (Ultra Compact) */}
-                <Link href="/dashboard/supervision" className="bg-[#090e16] border border-slate-800/40 rounded-xl md:rounded-2xl p-3 md:p-4 shadow-xl relative flex flex-col justify-between min-h-[90px] md:min-h-[130px] hover:bg-[#0d1421] transition-all group group/tooltip">
-                     <div className="absolute top-1/2 -translate-y-1/2 -right-4 opacity-[0.02] rotate-12">
-                        <Wallet className="w-20 md:w-24 h-20 md:h-24 text-white" />
-                     </div>
-                     
-                     <div className="relative z-10">
-                        <p className="text-[#10b981] font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-0.5 md:mb-2">Cobranza</p>
-                        <div className="flex items-baseline gap-1">
-                           <span className="text-lg md:text-3xl font-black text-white tracking-tighter">{formatMoney(data.teamSummary.metaHoyPagado)}</span>
-                           <span className="text-slate-600 text-[10px] md:text-sm font-medium">/ {formatMoney(data.teamSummary.metaHoyMonto)}</span>
-                        </div>
-                     </div>
-
-                     <div className="relative z-10 mt-1 md:mt-2 space-y-1.5 md:space-y-2">
-                        <div className="flex items-center gap-1.5 md:gap-3">
-                            <div className="relative flex-1 h-1 bg-slate-800/40 rounded-full overflow-hidden">
-                               <div 
-                                   className="h-full bg-gradient-to-r from-[#10b981] to-[#34d399] transition-all duration-1000"
-                                   style={{ width: `${data.teamSummary.eficienciaHoy}%` }}
-                               />
-                            </div>
-                            <p className="text-[#10b981] font-bold text-[7px] md:text-[9px]">
-                               {data.teamSummary.eficienciaHoy.toFixed(0)}%
-                            </p>
-                        </div>
-                        <div className="flex">
-                            <span className="bg-[#10b981]/10 text-[#10b981] text-[6px] md:text-[8px] font-black px-1 md:px-2 py-0.5 rounded border border-[#10b981]/20 uppercase tracking-widest">
-                                {data.teamSummary.metaHoyPrestamosPagados}/{data.teamSummary.metaHoyPrestamosTotal}
-                            </span>
-                        </div>
-                     </div>
-
-                     {/* Calculation Tooltip */}
-                     <div className="absolute left-1/2 -translate-x-1/2 bottom-[105%] w-60 bg-slate-950 border border-slate-800 p-3 rounded-lg shadow-2xl opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-[60]">
-                        <p className="text-[8px] font-black text-[#10b981] uppercase mb-1.5 tracking-wider border-b border-slate-800 pb-1">Fórmula de Eficiencia (EFC)</p>
-                        <div className="space-y-2">
-                            <div className="p-2 bg-slate-900/50 rounded text-[8px] font-mono text-[#10b981] text-center border border-emerald-500/10">
-                                (Cobrado_Ruta / Meta_Ruta) * 100
-                            </div>
-                            <div className="text-[7px] space-y-1 text-slate-300">
-                                <p><span className="text-white font-bold">META:</span> sum(Cuota_Hoy + Atrasos)</p>
-                                <p><span className="text-white font-bold">COBRADO:</span> sum(Pagos de hoy en ruta)</p>
-                            </div>
-                            <p className="text-[6.5px] text-slate-500 italic border-t border-slate-900 pt-1">
-                                No incluye pagos adelantados para no inflar el cumplimiento.
-                            </p>
-                        </div>
-                    </div>
-                </Link>
-
-                {/* 3. Global Efficiency (Today + Arrears) */}
-                <div className="bg-[#090e16] border border-slate-800/40 rounded-xl md:rounded-2xl p-3 md:p-4 shadow-xl relative flex flex-col justify-between min-h-[90px] md:min-h-[130px] group transition-all cursor-help group/tooltip">
-                     <div className="absolute top-1/2 -translate-y-1/2 -right-4 opacity-[0.02] rotate-12">
-                        <TrendingUp className="w-20 md:w-24 h-20 md:h-24 text-white" />
-                     </div>
-                     
-                     <div className="relative z-10">
-                        <p className="text-blue-400 font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-0.5 md:mb-2">Eficiencia Cobro</p>
-                        <div className="flex items-baseline gap-1">
-                           <span className="text-lg md:text-3xl font-black text-white tracking-tighter">{formatMoney(data.teamSummary.eficienciaPagado)}</span>
-                           <span className="text-slate-600 text-[10px] md:text-sm font-medium">/ {formatMoney(data.teamSummary.eficienciaMonto)}</span>
-                        </div>
-                     </div>
-
-                     <div className="relative z-10 mt-1 md:mt-2 space-y-1.5 md:space-y-2">
-                        <div className="flex items-center gap-1.5 md:gap-3">
-                            <div className="relative flex-1 h-1 bg-slate-800/40 rounded-full overflow-hidden">
-                               <div 
-                                   className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-1000"
-                                   style={{ width: `${data.teamSummary.eficienciaHoy}%` }}
-                               />
-                            </div>
-                            <p className="text-blue-400 font-bold text-[7px] md:text-[9px]">
-                               {data.teamSummary.eficienciaHoy.toFixed(0)}%
-                            </p>
-                        </div>
-                        <div className="flex">
-                            <span className="bg-blue-500/10 text-blue-400 text-[6px] md:text-[8px] font-black px-1 md:px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-widest">
-                                Hoy + Atrasados
-                            </span>
-                        </div>
-                     </div>
-
-                     {/* Calculation Tooltip */}
-                     <div className="absolute left-1/2 -translate-x-1/2 bottom-[105%] w-60 bg-slate-950 border border-slate-800 p-3 rounded-lg shadow-2xl opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-[60]">
-                        <p className="text-[8px] font-black text-blue-400 uppercase mb-1.5 tracking-wider border-b border-slate-800 pb-1">Fórmula de Eficiencia (EFC)</p>
-                        <div className="space-y-2">
-                            <div className="p-2 bg-slate-900/50 rounded text-[8px] font-mono text-blue-400 text-center border border-blue-500/10">
-                                (Cobrado_Ruta / Meta_Ruta) * 100
-                            </div>
-                            <div className="text-[7px] space-y-1 text-slate-300">
-                                <p><span className="text-white font-bold">META:</span> sum(Cuota_Hoy + Atrasos)</p>
-                                <p><span className="text-white font-bold">COBRADO:</span> sum(Pagos de hoy en ruta)</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* 4. Global Mora (Ultra Compact) */}
-                <div className="bg-[#090e16] border border-slate-800/40 rounded-xl md:rounded-2xl p-3 md:p-4 shadow-xl relative flex flex-col justify-between min-h-[90px] md:min-h-[130px] group transition-all cursor-help group/tooltip lg:col-span-1">
-                    <div className="absolute top-1/2 -translate-y-1/2 -right-4 opacity-[0.02] rotate-12">
-                        <AlertTriangle className="w-20 md:w-24 h-20 md:h-24 text-white" />
-                    </div>
-                    
-                    <div className="relative z-10">
-                        <p className="text-rose-500 font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-0.5 md:mb-2">Mora Global</p>
-                        <h2 className="text-lg md:text-3xl font-black text-rose-500 tracking-tighter">
-                            {data.teamSummary.moraGlobal.toFixed(2)}%
-                        </h2>
-                    </div>
-
-                    <div className="relative z-10 mt-1 md:mt-2 space-y-1.5 md:space-y-2">
-                        <div className="flex items-center gap-1.5 md:gap-3">
-                            <div className="relative flex-1 h-1 bg-slate-800/40 rounded-full overflow-hidden">
-                                <div 
-                                    className="h-full bg-gradient-to-r from-rose-500 to-red-600 transition-all duration-1000"
-                                    style={{ width: `${Math.min(data.teamSummary.moraGlobal * 5, 100)}%` }}
-                                />
-                            </div>
-                            <p className="text-rose-500 font-bold text-[7px] md:text-[9px]">
-                                Riesgo
-                            </p>
-                        </div>
-                        <div className="flex">
-                            <span className="bg-rose-500/10 text-rose-500 text-[6px] md:text-[8px] font-black px-1 md:px-2 py-0.5 rounded border border-rose-500/20 uppercase tracking-widest">
-                                Capital vencido
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Calculation Tooltip */}
-                    <div className="absolute left-1/2 -translate-x-1/2 bottom-[105%] w-56 bg-slate-950 border border-slate-800 p-3 rounded-lg shadow-2xl opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-[60]">
-                        <p className="text-[8px] font-black text-rose-500 uppercase mb-1.5 tracking-wider border-b border-slate-800 pb-1">Fórmula de Mora Global</p>
-                        <div className="space-y-2">
-                            <div className="p-2 bg-slate-900/50 rounded text-[8px] font-mono text-rose-400 text-center border border-rose-500/10">
-                                (Cap_Vencido / Cap_Original) * 100
-                            </div>
-                            <p className="text-[7.5px] text-slate-300 leading-relaxed">
-                                Mide qué porcentaje del dinero prestado está actualmente en mora.
-                            </p>
-                            <p className="text-[6.5px] text-slate-500 italic">
-                                * Cap_Vencido: Capital de cuotas impagas.
-                                <br />* Cap_Original: Capital total desembolsado.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* 2. TEAM PERFORMANCE BOARD */}
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                                <Users className="w-5 h-5 text-purple-400" />
-                                Gestión de Asesores
-                            </h3>
-                            <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20">
-                                {data.asesores.length} Activos
-                            </Badge>
-                        </div>
-                        
-                        <div className="relative w-full sm:w-64">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                            <input 
-                                type="text"
-                                placeholder="Buscar asesor..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full bg-slate-900/50 border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-sm text-white focus:outline-none focus:border-purple-500/50 transition-colors"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid gap-4">
-                        {filteredAsesores.length === 0 ? (
-                            <div className="p-8 text-center bg-slate-900/20 border border-dashed border-slate-800 rounded-2xl">
-                                <Users className="w-8 h-8 text-slate-700 mx-auto mb-3" />
-                                <p className="text-slate-500 text-xs">No se encontraron asesores.</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-3">
-                                {filteredAsesores.map(asesor => (
-                                    <div key={asesor.id} className="group bg-slate-900/30 backdrop-blur-md border border-slate-800 rounded-xl p-3 hover:bg-slate-900/50 transition-all">
-                                        <div className="flex items-center gap-3">
-                                            {/* Minimal Avatar */}
-                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center text-blue-400 font-bold border border-blue-500/20 shrink-0">
-                                                {asesor.foto ? <img src={asesor.foto} alt="" className="w-full h-full object-cover" /> : asesor.nombre.charAt(0)}
-                                            </div>
-
-                                            {/* Name and Quick Info */}
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center justify-between gap-2 mb-1">
-                                                    <h4 className="font-bold text-white text-sm truncate group-hover:text-blue-400 transition-colors uppercase tracking-tight">{asesor.nombre}</h4>
-                                                    
-                                                    {/* Interactive Efficiency Badge */}
-                                                    <div className="relative group/efc">
-                                                        <span className={cn(
-                                                            "text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter cursor-help",
-                                                            asesor.eficienciaHoy > 80 ? "bg-emerald-500/10 text-emerald-400" : 
-                                                            asesor.eficienciaHoy > 40 ? "bg-amber-500/10 text-amber-400" : "bg-rose-500/10 text-rose-500"
-                                                        )}>
-                                                            {asesor.eficienciaHoy.toFixed(1)}% EFC
-                                                        </span>
-                                                        
-                                                        {/* Tooltip Content (Show on hover/PC and potentially click/Mobile via group-hover or sibling) */}
-                                                        <div className="absolute right-0 bottom-full mb-2 w-32 bg-slate-950 border border-slate-800 p-2 rounded-lg shadow-2xl opacity-0 group-hover/efc:opacity-100 pointer-events-none transition-opacity z-50">
-                                                            <div className="space-y-1">
-                                                                <div className="flex justify-between text-[8px] font-bold">
-                                                                    <span className="text-slate-500">META:</span>
-                                                                    <span className="text-white">{formatMoney(asesor.cuotasHoyTotal)}</span>
-                                                                </div>
-                                                                <div className="flex justify-between text-[8px] font-bold">
-                                                                    <span className="text-slate-500">COBRADO:</span>
-                                                                    <span className="text-emerald-400">{formatMoney(asesor.cuotasHoyPagado)}</span>
-                                                                </div>
-                                                            </div>
-                                                            <div className="mt-1.5 pt-1.5 border-t border-slate-800 text-[7px] text-slate-500 italic text-center">
-                                                                Solo pagos de ruta
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="mb-2">
-                                                    <div className="flex items-center gap-2 text-[9px] font-bold text-slate-500 uppercase">
-                                                        <span>Clientes Activos:</span>
-                                                        <span className="text-white">{asesor.clientesActivos}</span>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-center gap-3">
-                                                    <div className="flex-1 h-1 bg-slate-800 rounded-full overflow-hidden">
-                                                        <div 
-                                                            className={cn(
-                                                                "h-full transition-all duration-700",
-                                                                asesor.eficienciaHoy > 80 ? "bg-emerald-500" : 
-                                                                asesor.eficienciaHoy > 40 ? "bg-amber-500" : "bg-rose-500"
-                                                            )}
-                                                            style={{ width: `${asesor.eficienciaHoy}%` }}
-                                                        />
-                                                    </div>
-                                                    <Link href={`/dashboard/supervision?asesor=${asesor.id}`} className="shrink-0 bg-slate-800/50 hover:bg-white/10 p-1 rounded transition-colors">
-                                                        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                                                    </Link>
-                                                </div>
-                                            </div>
-                                        </div>
+                        {isSupMenuOpen && (
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={() => setIsSupMenuOpen(false)} />
+                                <div className="absolute top-[calc(100%+8px)] left-0 w-full min-w-[280px] bg-[#0d121c] border border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top">
+                                    <div className="px-5 py-3 bg-slate-900/40 border-b border-slate-800/50 flex items-center gap-3">
+                                        <Users className="w-4 h-4 text-slate-500" />
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Equipos ({data.supervisores?.length || 0})</span>
                                     </div>
-                                ))}
-                            </div>
+                                    <div className="p-2 max-h-[300px] overflow-y-auto no-scrollbar">
+                                        <div 
+                                            onClick={() => { setSelectedSupervisorId(null); setSelectedAsesorId(null); setIsSupMenuOpen(false); }}
+                                            className={cn(
+                                                "w-full px-4 py-2 rounded-xl flex items-center gap-3 transition-all cursor-pointer group",
+                                                !selectedSupervisorId ? "bg-amber-600/10 border border-amber-500/20" : "hover:bg-white/5 border border-transparent"
+                                            )}
+                                        >
+                                            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 text-slate-400 group-hover:text-white transition-colors">T</div>
+                                            <span className={cn("font-bold text-xs uppercase", !selectedSupervisorId ? "text-amber-400" : "text-white")}>Todos los Equipos</span>
+                                        </div>
+
+                                        {data.supervisores?.map(sup => (
+                                            <div 
+                                                key={sup.id} 
+                                                onClick={() => { setSelectedSupervisorId(sup.id); setSelectedAsesorId(null); setIsSupMenuOpen(false); }}
+                                                className={cn(
+                                                    "w-full px-4 py-2 rounded-xl flex items-center gap-3 transition-all cursor-pointer group",
+                                                    selectedSupervisorId === sup.id ? "bg-amber-600/10 border border-amber-500/20" : "hover:bg-white/5 border border-transparent"
+                                                )}
+                                            >
+                                                <div className="w-8 h-8 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 font-bold">{sup.nombre.charAt(0)}</div>
+                                                <span className={cn("font-bold text-xs uppercase", selectedSupervisorId === sup.id ? "text-amber-400" : "text-white")}>{sup.nombre}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
                         )}
                     </div>
+                )}
+
+                {/* SELECTOR DE ASESORES */}
+                {showAdvisors && (
+                    <div className="relative w-full md:w-72">
+                        <div 
+                            onClick={() => setIsAseMenuOpen(!isAseMenuOpen)}
+                            className={cn(
+                                "h-full flex items-center gap-3 bg-slate-950/40 backdrop-blur-md border border-slate-700/50 rounded-xl px-4 py-2 cursor-pointer transition-all hover:border-slate-500 shadow-xl",
+                                isAseMenuOpen && "border-blue-500 shadow-blue-500/10 ring-1 ring-blue-500/20"
+                            )}
+                        >
+                            <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20 shrink-0">
+                                <User className="w-4 h-4 text-blue-400" />
+                            </div>
+                            <div className="flex-1 min-w-0 pr-0.5 sm:pr-1">
+                                <p className="text-[6px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5 whitespace-nowrap">Cartera</p>
+                                <h3 className="text-[9px] md:text-sm font-black text-white tracking-tight truncate uppercase">
+                                    {selectedAsesorId 
+                                        ? data.asesores.find(a => a.id === selectedAsesorId)?.nombre 
+                                        : "General"}
+                                </h3>
+                            </div>
+                            <ChevronDown className={cn("w-3 h-3 text-slate-500 transition-transform duration-300 ml-auto", isAseMenuOpen && "rotate-180")} />
+                        </div>
+
+                        {isAseMenuOpen && (
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={() => setIsAseMenuOpen(false)} />
+                                <div className="absolute top-[calc(100%+8px)] right-0 w-full min-w-[280px] bg-[#0d121c] border border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top">
+                                    <div className="px-5 py-3 bg-slate-900/40 border-b border-slate-800/50 flex items-center gap-3">
+                                        <Search className="w-3 h-3 text-slate-500" />
+                                        <input 
+                                            autoFocus
+                                            placeholder="Buscar asesor..."
+                                            className="bg-transparent border-none text-[10px] font-black text-white placeholder:text-slate-600 focus:outline-none w-full uppercase"
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                    </div>
+                                    <div className="p-2 max-h-[300px] overflow-y-auto no-scrollbar">
+                                        <div 
+                                            onClick={() => { setSelectedAsesorId(null); setIsAseMenuOpen(false); }}
+                                            className={cn(
+                                                "w-full px-4 py-2 rounded-xl flex items-center gap-3 transition-all cursor-pointer group",
+                                                !selectedAsesorId ? "bg-blue-600/10 border border-blue-500/20" : "hover:bg-white/5 border border-transparent"
+                                            )}
+                                        >
+                                            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 text-slate-400 group-hover:text-white transition-colors">G</div>
+                                            <span className={cn("font-bold text-xs uppercase", !selectedAsesorId ? "text-blue-400" : "text-white")}>Cartera General</span>
+                                        </div>
+
+                                        {filteredAsesores.map(ase => (
+                                            <div 
+                                                key={ase.id} 
+                                                onClick={() => { setSelectedAsesorId(ase.id); setIsAseMenuOpen(false); }}
+                                                className={cn(
+                                                    "w-full px-4 py-2 rounded-xl flex items-center gap-3 transition-all cursor-pointer group",
+                                                    selectedAsesorId === ase.id ? "bg-blue-600/10 border border-blue-500/20" : "hover:bg-white/5 border border-transparent"
+                                                )}
+                                            >
+                                                <div className="w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold overflow-hidden">
+                                                    {ase.foto ? <img src={ase.foto} alt="" className="w-full h-full object-cover" /> : ase.nombre.charAt(0)}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className={cn("font-bold text-xs truncate uppercase", selectedAsesorId === ase.id ? "text-blue-400" : "text-white")}>{ase.nombre}</h4>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
                 </div>
 
-                {/* 3. CRITICAL ACTIONS PANEL */}
-                <div className="space-y-6">
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                        <Zap className="w-5 h-5 text-amber-400" />
-                        Acciones Rápidas
-                    </h3>
+                <button 
+                    onClick={() => fetchStats(selectedAsesorId, selectedSupervisorId)} 
+                    className="w-10 h-10 flex items-center justify-center bg-slate-950/40 border border-slate-700/50 rounded-xl text-slate-400 hover:text-white hover:border-slate-500 transition-all shadow-lg shrink-0 group"
+                >
+                    <RefreshCw className={cn("w-4 h-4 group-hover:rotate-180 transition-transform duration-500", loading && "animate-spin")} />
+                </button>
+            </div>
+            )}
 
-                    <div className="bg-slate-950/50 border border-slate-800 rounded-2xl overflow-hidden divide-y divide-slate-800">
-                        {/* Solicitudes Header */}
-                        <div className="px-5 py-3 bg-slate-900/50 flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Solicitudes por Validar</span>
-                            {data.pendientes.solicitudes.length > 0 && (
-                                <span className="bg-amber-500 w-2 h-2 rounded-full animate-pulse" />
-                            )}
+            {/* FINANCIAL SUMMARY (NEW) */}
+            {showFinancialSummary && (
+                <FinancialSummary asesorId={selectedAsesorId} supervisorId={selectedSupervisorId} />
+            )}
+
+            
+            {/* ROW 2: RESUMEN DE EFICIENCIA (KPIs DE PULSO) */}
+            {showMetrics && (
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between px-1">
+                        <div className="flex items-center gap-2">
+                            <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-emerald-400" />
+                            <h2 className="text-sm md:text-lg font-bold text-white tracking-tight">Resumen de Eficiencia</h2>
+                        </div>
+                        <Badge variant="outline" className="text-[8px] md:text-[10px] border-slate-700/50 text-slate-500 uppercase font-black px-1.5 py-0">
+                            Equipos
+                        </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
+                        {/* 1. Portfolio Health */}
+                        <div 
+                            className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800/80 rounded-xl md:rounded-2xl p-3 md:p-4 hover:border-blue-500/30 transition-all group cursor-help relative overflow-hidden"
+                            onClick={() => setActiveTooltip(activeTooltip === 'salud' ? null : 'salud')}
+                        >
+                            <div className="flex justify-between items-start mb-1 md:mb-2 text-slate-400">
+                                <p className="font-medium text-[8px] md:text-[9px] uppercase tracking-widest text-blue-400">Salud</p>
+                                <Zap className="w-3 h-3 md:w-3.5 md:h-3.5 text-blue-400 opacity-70 group-hover:opacity-100" />
+                            </div>
+                            <h3 className="text-lg md:text-3xl font-black text-white tracking-tighter uppercase italic truncate">
+                                {data.teamSummary.moraGlobal < 5 ? 'Óptima' : data.teamSummary.moraGlobal < 15 ? 'Saludable' : 'Riesgo'}
+                            </h3>
+                            <div className="mt-2 space-y-1.5 md:space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="flex-1 h-1 bg-slate-800/40 rounded-full overflow-hidden">
+                                        <div className="h-full bg-blue-500 transition-all duration-1000" style={{ width: `${healthIndex}%` }} />
+                                    </div>
+                                    <p className="text-blue-400 font-bold text-[9px]">{healthIndex.toFixed(0)}%</p>
+                                </div>
+                                <div className="flex">
+                                    <span className="bg-blue-500/10 text-blue-400 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-blue-500/10 uppercase tracking-widest">{data.teamSummary.totalClientes} Clientes</span>
+                                </div>
+                            </div>
                         </div>
 
-                        {data.pendientes.solicitudes.length === 0 ? (
-                            <div className="px-5 py-6 text-center text-slate-600 text-sm italic">
-                                No hay solicitudes pendientes
+                        {/* 2. Collection Efficiency */}
+                        <div 
+                            className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800/80 rounded-xl md:rounded-2xl p-3 md:p-4 hover:border-emerald-500/30 transition-all group cursor-help relative overflow-hidden"
+                            onClick={() => setActiveTooltip(activeTooltip === 'cobranza' ? null : 'cobranza')}
+                        >
+                            <div className="flex justify-between items-start mb-1 md:mb-2 text-slate-400">
+                                <p className="font-medium text-[8px] md:text-[9px] uppercase tracking-widest text-[#10b981]">Cobranza Hoy</p>
+                                <Wallet className="w-3 h-3 md:w-3.5 md:h-3.5 text-[#10b981] opacity-70 group-hover:opacity-100" />
                             </div>
-                        ) : data.pendientes.solicitudes.map(sol => (
-                            <div key={sol.id} className="p-4 hover:bg-slate-900/40 transition-colors group">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div>
-                                        <p className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">{sol.cliente.nombres}</p>
-                                        <p className="text-[10px] text-slate-500">Asesor: {sol.asesor.nombre_completo}</p>
+                            <div className="flex flex-col">
+                                <span className="text-sm md:text-2xl font-black text-white tracking-tighter truncate">
+                                    {formatMoney(data.teamSummary.metaHoyPagado)}
+                                </span>
+                                <span className="text-[9px] md:text-[11px] font-bold text-slate-500 tracking-tight">
+                                    Meta: {formatMoney(data.teamSummary.metaHoyMonto)}
+                                </span>
+                            </div>
+                            <div className="mt-2 space-y-1.5 md:space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="flex-1 h-1 bg-slate-800/40 rounded-full overflow-hidden">
+                                        <div className="h-full bg-[#10b981] transition-all duration-1000" style={{ width: `${data.teamSummary.eficienciaHoy}%` }} />
                                     </div>
-                                    <span className="text-xs font-bold text-emerald-400">{formatMoney(sol.monto_solicitado)}</span>
+                                    <p className="text-[#10b981] font-bold text-[9px]">{data.teamSummary.eficienciaHoy.toFixed(0)}%</p>
                                 </div>
-                                <div className="flex gap-2">
-                                    <Link href={`/dashboard/solicitudes/${sol.id}`} className="flex-1">
-                                        <button className="w-full py-2 bg-slate-800 hover:bg-blue-600/20 text-blue-400 text-[10px] font-bold uppercase rounded-lg border border-slate-700 hover:border-blue-500/50 transition-all">
-                                            Evaluar
-                                        </button>
-                                    </Link>
+                                <div className="flex items-center justify-between">
+                                    <span className="bg-[#10b981]/10 text-[#10b981] text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-[#10b981]/10 uppercase tracking-widest">{data.teamSummary.metaHoyPrestamosPagados}/{data.teamSummary.metaHoyPrestamosTotal} Créd.</span>
                                 </div>
                             </div>
-                        ))}
-
-                        {/* Renovaciones Section */}
-                        <div className="px-5 py-3 bg-slate-900/50 flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Renovaciones</span>
                         </div>
 
-                        {data.pendientes.renovaciones.length === 0 ? (
-                            <div className="px-5 py-6 text-center text-slate-600 text-sm italic">
-                                Todo al día
+                        {/* 3. Global Efficiency */}
+                        <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800/80 rounded-xl md:rounded-2xl p-3 md:p-4 hover:border-blue-500/30 transition-all group relative overflow-hidden">
+                            <div className="flex justify-between items-start mb-1 md:mb-2 text-slate-400">
+                                <p className="font-medium text-[8px] md:text-[9px] uppercase tracking-widest text-blue-400">Efc. Cobro</p>
+                                <TrendingUp className="w-3 h-3 md:w-3.5 md:h-3.5 text-blue-400 opacity-70 group-hover:opacity-100" />
                             </div>
-                        ) : data.pendientes.renovaciones.map(ren => (
-                            <div key={ren.id} className="p-4 hover:bg-slate-900/40 transition-colors group">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div>
-                                        <p className="text-sm font-bold text-white group-hover:text-purple-400 transition-colors">{ren.cliente.nombres}</p>
-                                        <p className="text-[10px] text-slate-500">Asesor: {ren.asesor.nombre_completo}</p>
+                            <div className="flex flex-col">
+                                <span className="text-sm md:text-2xl font-black text-white tracking-tighter truncate">
+                                    {formatMoney(data.teamSummary.eficienciaPagado)}
+                                </span>
+                                <span className="text-[9px] md:text-[11px] font-bold text-slate-500 tracking-tight">
+                                    Meta: {formatMoney(data.teamSummary.eficienciaMonto)}
+                                </span>
+                            </div>
+                            <div className="mt-2 space-y-1.5 md:space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="flex-1 h-1 bg-slate-800/40 rounded-full overflow-hidden">
+                                        <div className="h-full bg-blue-500 transition-all duration-1000" style={{ width: `${(data.teamSummary.eficienciaPagado / (data.teamSummary.eficienciaMonto || 1)) * 100}%` }} />
                                     </div>
-                                    <span className="text-xs font-bold text-purple-400">{formatMoney(ren.monto_nuevo)}</span>
+                                    <p className="text-blue-400 font-bold text-[9px]">
+                                        {((data.teamSummary.eficienciaPagado / (data.teamSummary.eficienciaMonto || 1)) * 100).toFixed(0)}%
+                                    </p>
                                 </div>
-                                <div className="flex gap-2">
-                                    <Link href={`/dashboard/renovaciones/${ren.id}`} className="flex-1">
-                                        <button className="w-full py-2 bg-slate-800 hover:bg-purple-600/20 text-purple-400 text-[10px] font-bold uppercase rounded-lg border border-slate-700 hover:border-purple-500/50 transition-all">
-                                            Validar
-                                        </button>
-                                    </Link>
-                                </div>
+                                <span className="bg-blue-500/10 text-blue-400 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-blue-500/10 uppercase tracking-widest">Hoy + Atrasados</span>
                             </div>
-                        ))}
+                        </div>
 
-                        <div className="p-3">
-                            <Link href="/dashboard/supervision" className="block">
-                                <button className="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold uppercase tracking-widest shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2 group/btn">
-                                    Panel de Control Completo
-                                    <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-1 transition-transform" />
-                                </button>
-                            </Link>
+                        {/* 4. Global Mora */}
+                        <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800/80 rounded-xl md:rounded-2xl p-3 md:p-4 hover:border-rose-500/30 transition-all group relative overflow-hidden">
+                            <div className="flex justify-between items-start mb-1 md:mb-2 text-slate-400">
+                                <p className="font-medium text-[8px] md:text-[9px] uppercase tracking-widest text-rose-500">Mora Global</p>
+                                <AlertTriangle className="w-3 h-3 md:w-3.5 md:h-3.5 text-rose-500 opacity-70 group-hover:opacity-100" />
+                            </div>
+                            <h2 className="text-lg md:text-3xl font-black text-rose-500 tracking-tighter inline-flex items-baseline gap-2">
+                                {data.teamSummary.moraGlobal.toFixed(2)}%
+                                <span className="text-[10px] md:text-sm font-bold opacity-60">
+                                    ({formatMoney(data.teamSummary.moraMontoGlobal)})
+                                </span>
+                            </h2>
+                            <div className="mt-2 space-y-1.5 md:space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="flex-1 h-1 bg-slate-800/40 rounded-full overflow-hidden">
+                                        <div className="h-full bg-rose-500 transition-all duration-1000" style={{ width: `${Math.min(data.teamSummary.moraGlobal * 5, 100)}%` }} />
+                                    </div>
+                                    <p className="text-rose-500 font-bold text-[8px] md:text-[9px]">Riesgo</p>
+                                </div>
+                                <span className="bg-rose-500/10 text-rose-500 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-rose-500/10 uppercase tracking-widest">Cap. Vencido</span>
+                            </div>
                         </div>
                     </div>
                 </div>
+            )  }
+
+            {/* ROW 3: RESUMEN OPERATIVO Y ACCIONES RÁPIDAS */}
+            <div className={cn(
+                "grid grid-cols-1 gap-6",
+                showMetrics && showActions ? "lg:grid-cols-3" : "grid-cols-1"
+            )}>
+                {/* Operational Summary */}
+                {showMetrics && (
+                    <div className={cn("space-y-6", showActions ? "lg:col-span-2" : "lg:col-span-3")}>
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between px-1">
+                                <div className="flex items-center gap-2">
+                                    <ShieldCheck className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
+                                    <h2 className="text-sm md:text-lg font-bold text-white tracking-tight">Resumen Operativo</h2>
+                                </div>
+                                <Badge className="bg-blue-500/10 text-blue-400 border-none px-2 py-0 text-[8px] md:text-[10px] font-black uppercase tracking-widest shrink-0">
+                                    Mes Actual
+                                </Badge>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-3">
+                                {/* METRICAS DE CRECIMIENTO */}
+                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group">
+                                    <p className="text-[8px] md:text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                        <Users className="w-2.5 h-2.5" /> Cartera
+                                    </p>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-lg md:text-xl font-black text-white">{data.teamSummary.totalClientes}</span>
+                                        <span className="text-[7px] md:text-[8px] font-bold text-slate-500 uppercase">tit.</span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group">
+                                    <p className="text-[8px] md:text-[9px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                        <UserCheck className="w-2.5 h-2.5" /> Nuevos
+                                    </p>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-lg md:text-xl font-black text-white">{data.teamSummary.clientesNuevosMes}</span>
+                                        <span className="text-[7px] md:text-[8px] font-bold text-slate-500 uppercase">ing.</span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group">
+                                    <p className="text-[8px] md:text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                        <TrendingUp className="w-2.5 h-2.5" /> Activos
+                                    </p>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-lg md:text-xl font-black text-white">{data.teamSummary.totalClientesConDeudaActiva}</span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group">
+                                    <p className="text-[8px] md:text-[9px] font-black text-purple-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                        <RefreshCw className="w-2.5 h-2.5" /> Renov.
+                                    </p>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-lg md:text-xl font-black text-white">{data.teamSummary.renovacionesMes}</span>
+                                    </div>
+                                </div>
+                                
+                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group">
+                                    <p className="text-[8px] md:text-[9px] font-black text-purple-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                        <Zap className="w-2.5 h-2.5" /> Potenc.
+                                    </p>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-lg md:text-xl font-black text-purple-400">{data.teamSummary.totalRenovables}</span>
+                                    </div>
+                                </div>
+
+                                {/* RIESGO Y CONTROL */}
+                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group">
+                                    <p className="text-[8px] md:text-[9px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                        <Clock className="w-2.5 h-2.5" /> Refinan.
+                                    </p>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-lg md:text-xl font-black text-white">{data.teamSummary.refinanciamientosMes}</span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group">
+                                    <p className="text-[8px] md:text-[9px] font-black text-rose-500 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                        <AlertTriangle className="w-2.5 h-2.5" /> Restrin.
+                                    </p>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-lg md:text-xl font-black text-rose-500">{data.teamSummary.clientesBloqueados}</span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 border-rose-500/20 hover:bg-rose-500/5 transition-all group">
+                                    <p className="text-[8px] md:text-[9px] font-black text-rose-600 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                        <ShieldAlert className="w-2.5 h-2.5" /> Crítica
+                                    </p>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-lg md:text-xl font-black text-rose-600">{data.teamSummary.totalAlertaCritica}</span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 border-amber-500/20 hover:bg-amber-500/5 transition-all group">
+                                    <p className="text-[8px] md:text-[9px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                        <AlertTriangle className="w-2.5 h-2.5" /> Advert.
+                                    </p>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-lg md:text-xl font-black text-amber-500">{data.teamSummary.totalAdvertencia}</span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 border-orange-500/20 hover:bg-orange-500/5 transition-all group">
+                                    <p className="text-[8px] md:text-[9px] font-black text-orange-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                        <Clock className="w-2.5 h-2.5" /> Vencidos
+                                    </p>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-lg md:text-xl font-black text-orange-400">{data.teamSummary.totalVencidos}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Quick Actions */}
+                <div className="lg:col-span-1">
+                    {showActions && <QuickActions />}
+                </div>
             </div>
+
+            {/* Final spacer */}
+            <div className="h-4" />
         </div>
     )
 }

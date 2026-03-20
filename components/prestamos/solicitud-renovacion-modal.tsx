@@ -31,6 +31,8 @@ interface SolicitudRenovacionModalProps {
         horario_cierre: string
         desbloqueo_hasta: string
     }
+    isBlockedByCuadre?: boolean
+    blockReasonCierre?: string
     trigger?: React.ReactNode
 }
 
@@ -80,6 +82,8 @@ export function SolicitudRenovacionModal({
     isAdminDirectRefinance = false,
     esProductoDeRefinanciamiento = false,
     systemSchedule,
+    isBlockedByCuadre,
+    blockReasonCierre,
     trigger
 }: SolicitudRenovacionModalProps) {
     const [open, setOpen] = useState(false)
@@ -143,7 +147,7 @@ export function SolicitudRenovacionModal({
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
-        if (!elegibilidad?.elegible || !canRequestDueToTime) return
+        if (!elegibilidad?.elegible || !canRequestDueToTime || isBlockedByCuadre) return
 
         setLoading(true)
         const formData = new FormData(e.currentTarget)
@@ -487,13 +491,26 @@ export function SolicitudRenovacionModal({
                                 />
                             </div>
 
+                            {isBlockedByCuadre && (
+                                <div className="p-3 bg-red-900/40 border border-red-500/50 rounded-lg flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                                    <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="text-red-400 font-bold text-sm">Registro de Renovaciones Bloqueado</p>
+                                        <p className="text-red-200/70 text-xs mt-1 leading-snug">
+                                            {blockReasonCierre}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                             {userRole !== 'supervisor' && (
                                 <DialogFooter>
                                     <Button 
                                         type="submit" 
-                                        disabled={loading}
+                                        disabled={loading || !canRequestDueToTime || isBlockedByCuadre}
                                         className={cn(
                                             "w-full text-white shadow-lg",
+                                            isBlockedByCuadre ? "bg-slate-800 cursor-not-allowed grayscale" :
                                             elegibilidad.requiere_excepcion 
                                                 ? "bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400"
                                                 : "bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400"
@@ -501,6 +518,8 @@ export function SolicitudRenovacionModal({
                                     >
                                         {loading ? (
                                             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando...</>
+                                        ) : isBlockedByCuadre ? (
+                                            <><Lock className="mr-2 h-4 w-4" /> Bloqueado por Cuadre</>
                                         ) : !canRequestDueToTime ? (
                                             <><Lock className="mr-2 h-4 w-4" /> Sistema Cerrado ({systemSchedule?.horario_apertura} - {systemSchedule?.horario_cierre})</>
                                         ) : (

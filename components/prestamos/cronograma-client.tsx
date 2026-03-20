@@ -28,9 +28,11 @@ type Props = {
         horario_cierre: string
         desbloqueo_hasta: string
     }
+    isBlockedByCuadre?: boolean
+    blockReasonCierre?: string
 }
 
-export function CronogramaClient({ prestamo, cronograma, userRol = 'asesor', systemSchedule }: Props) {
+export function CronogramaClient({ prestamo, cronograma, userRol = 'asesor', systemSchedule, isBlockedByCuadre, blockReasonCierre }: Props) {
     // Solo el asesor puede realizar pagos
     const puedePagar = userRol === 'asesor'
     const router = useRouter()
@@ -361,8 +363,23 @@ export function CronogramaClient({ prestamo, cronograma, userRol = 'asesor', sys
 
     return (
         <div className="flex flex-col gap-4">
+            {/* Action Blocked by Cuadre */}
+            {isBlockedByCuadre && userRol === 'asesor' && (
+                <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="w-10 h-10 bg-rose-500/20 rounded-full flex items-center justify-center shrink-0">
+                        <Lock className="w-5 h-5 text-rose-500" />
+                    </div>
+                    <div>
+                        <p className="text-rose-400 font-bold text-sm">Registro de Pagos Bloqueado</p>
+                        <p className="text-slate-400 text-xs mt-0.5">
+                            {blockReasonCierre}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Actions for Loan State */}
-            {!canPayDueToTime && userRol === 'asesor' && (
+            {!canPayDueToTime && userRol === 'asesor' && !isBlockedByCuadre && (
                 <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
                     <div className="w-10 h-10 bg-rose-500/20 rounded-full flex items-center justify-center shrink-0">
                         <Lock className="w-5 h-5 text-rose-500" />
@@ -440,11 +457,11 @@ export function CronogramaClient({ prestamo, cronograma, userRol = 'asesor', sys
                                     isOverdue 
                                     ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-900/20' 
                                     : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'
-                                } ${!canPayDueToTime ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
-                                disabled={!canPayDueToTime}
+                                } ${(!canPayDueToTime || isBlockedByCuadre) ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+                                disabled={!canPayDueToTime || isBlockedByCuadre}
                             >
                                 <DollarSign className="w-5 h-5 mr-2" />
-                                {!canPayDueToTime ? 'Sistema Cerrado' : isOverdue ? 'Pagar Cuota Vencida' : 'Registrar Pago'}
+                                {isBlockedByCuadre ? 'Operación Bloqueada' : !canPayDueToTime ? 'Sistema Cerrado' : isOverdue ? 'Pagar Cuota Vencida' : 'Registrar Pago'}
                             </Button>
                         </div>
                     )
@@ -555,10 +572,10 @@ export function CronogramaClient({ prestamo, cronograma, userRol = 'asesor', sys
                                                                         ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-900/20'
                                                                         : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'
                                                                     : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700 hover:bg-slate-800'}
-                                                                ${(!canPayDueToTime && cuota.isActive) ? 'opacity-40 grayscale-0 pointer-events-none' : ''}
+                                                                ${((!canPayDueToTime || isBlockedByCuadre) && cuota.isActive) ? 'opacity-40 grayscale-0 pointer-events-none' : ''}
                                                             `}
                                                         >
-                                                            {cuota.isLocked ? <Lock className="w-3 h-3" /> : !canPayDueToTime && cuota.isActive ? '🚫' : 'Pagar'}
+                                                            {cuota.isLocked ? <Lock className="w-3 h-3" /> : (!canPayDueToTime || isBlockedByCuadre) && cuota.isActive ? '🚫' : 'Pagar'}
                                                         </Button>
                                                     )}
                                                 </td>

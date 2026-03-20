@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
+import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
 
 export async function POST(request: Request) {
     const supabase = await createClient()
@@ -72,6 +73,19 @@ export async function POST(request: Request) {
             }, { status: 403 })
         }
         // --- FIN VERIFICACIÓN DE HORARIO ---
+
+        // --- VERIFICACIÓN DE BLOQUEO POR CUADRE (Solo Asesores) ---
+        if (perfil.rol === 'asesor') {
+            const blockStatus = await checkAdvisorBlocked(supabaseAdmin, user.id);
+            if (blockStatus.isBlocked) {
+                console.warn(`[CUADRE BLOQUEO] Intento de pago bloqueado para asesor: ${user.id}. Motivo: ${blockStatus.reason}`);
+                return NextResponse.json({ 
+                    error: blockStatus.reason,
+                    bloqueado_por_cuadre: true 
+                }, { status: 403 });
+            }
+        }
+        // --- FIN VERIFICACIÓN DE BLOQUEO POR CUADRE ---
 
         const body = await request.json()
         const { cuota_id, monto, metodo_pago = 'Efectivo' } = body

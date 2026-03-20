@@ -165,7 +165,7 @@ export default async function SolicitudDetailPage({ params }: { params: Promise<
                             <div className="mt-4 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 flex gap-3 items-center">
                                 <div className="text-xl">✨</div>
                                 <p className="text-[11px] leading-tight text-purple-300">
-                                    El cliente se registrará automáticamente en el directorio al <strong>aprobar</strong> esta solicitud.
+                                    El cliente se registrará automáticamente en Solicitudes al <strong>aprobar</strong> esta solicitud.
                                 </p>
                             </div>
                         )}

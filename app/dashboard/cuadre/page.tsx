@@ -7,6 +7,8 @@ import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
+import { AlertTriangle, Lock } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,8 +42,35 @@ export default async function CuadrePage() {
     .order('created_at', { ascending: false })
     .limit(5)
 
+  // Check Block Status
+  let isBlocked = false
+  let blockReason = ''
+  
+  const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single()
+  if (perfil?.rol === 'asesor') {
+    const blockStatus = await checkAdvisorBlocked(supabase, user.id)
+    isBlocked = blockStatus.isBlocked
+    blockReason = blockStatus.reason
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {isBlocked && (
+        <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 flex items-start gap-4 shadow-lg shadow-rose-500/5 mx-0.5">
+          <div className="bg-rose-500/20 p-2.5 rounded-full shrink-0">
+            <Lock className="h-6 w-6 text-rose-500" />
+          </div>
+          <div>
+            <h4 className="text-rose-400 font-bold text-base tracking-tight leading-tight">Operaciones Bloqueadas por Diferencia</h4>
+            <p className="text-rose-200/80 text-xs mt-1 leading-snug">
+              {blockReason} 
+              <br className="sm:hidden" />
+              <strong className="text-rose-300"> Todos tus cobros y renovaciones están desactivados hasta que aprueben el saneamiento de este saldo.</strong>
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

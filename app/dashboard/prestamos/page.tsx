@@ -7,6 +7,7 @@ import { PrestamosTable } from "@/components/prestamos/prestamos-table";
 import { BackButton } from "@/components/ui/back-button";
 import { getTodayPeru, calculateLoanMetrics } from "@/lib/financial-logic";
 import { cn } from "@/lib/utils";
+import { checkAdvisorBlocked } from "@/utils/checkAdvisorBlocked";
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -30,6 +31,16 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         .single()
 
     const userRole = perfil?.rol || 'asesor'
+
+    // Check Block Status
+    let isBlockedByCuadre = false
+    let blockReasonCierre = ''
+    
+    if (userRole === 'asesor' && user) {
+        const blockStatus = await checkAdvisorBlocked(supabaseAdmin, user.id)
+        isBlockedByCuadre = blockStatus.isBlocked
+        blockReasonCierre = blockStatus.reason
+    }
 
     // Build query based on role - USING DIRECT TABLES (Fallback mechanism)
     
@@ -492,13 +503,13 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                         <div className="flex items-start gap-2">
                             <AlertCircle className="w-4 h-4 text-rose-500 mt-0.5 shrink-0" />
                             <div>
-                                <span className="text-rose-400 font-bold">MOROSO:</span> Diario ≥{umbralMoroso} atr. Otros ≥{umbralMorosoOtros} atr.
+                                <span className="text-rose-400 font-bold uppercase italic">Moroso:</span> Diario ≥{umbralMoroso} atr. Otros ≥{umbralMorosoOtros} atr.
                             </div>
                         </div>
                         <div className="flex items-start gap-2">
                             <TrendingUp className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
                             <div>
-                                <span className="text-amber-400 font-bold">CPP:</span> Diario ≥{umbralCpp} atr. Otros ≥{umbralCppOtros} atr.
+                                <span className="text-amber-400 font-bold uppercase italic">Advertencia:</span> Diario {umbralCpp}-{umbralMoroso - 1} atr. Otros {umbralCppOtros}-{umbralMorosoOtros - 1} atr.
                             </div>
                         </div>
                     </div>
@@ -521,6 +532,8 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                     umbralMoroso={umbralMoroso}
                     umbralCppOtros={umbralCppOtros}
                     umbralMorosoOtros={umbralMorosoOtros}
+                    isBlockedByCuadre={isBlockedByCuadre}
+                    blockReasonCierre={blockReasonCierre}
                 />
             </div>
         </div>

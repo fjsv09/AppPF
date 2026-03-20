@@ -22,9 +22,11 @@ interface QuickPayModalProps {
         horario_cierre: string
         desbloqueo_hasta: string
     }
+    isBlockedByCuadre?: boolean
+    blockReasonCierre?: string
 }
 
-export function QuickPayModal({ open, onOpenChange, prestamo, today, userRol = 'asesor', onSuccess, systemSchedule }: QuickPayModalProps) {
+export function QuickPayModal({ open, onOpenChange, prestamo, today, userRol = 'asesor', onSuccess, systemSchedule, isBlockedByCuadre, blockReasonCierre }: QuickPayModalProps) {
     const [loading, setLoading] = useState(false)
     const [amount, setAmount] = useState('')
     const [metodoPago, setMetodoPago] = useState('Efectivo')
@@ -318,6 +320,18 @@ export function QuickPayModal({ open, onOpenChange, prestamo, today, userRol = '
                                </div>
                            </div>
                         )}
+
+                        {isBlockedByCuadre && (
+                            <div className="mx-6 mt-4 p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                                <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <h4 className="text-rose-400 font-bold text-sm">Registro de Pagos Bloqueado</h4>
+                                    <p className="text-rose-200/80 text-xs mt-1 leading-tight">
+                                        {blockReasonCierre}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                         
                         <DialogFooter className="sm:justify-between gap-2 mt-4 p-6 pt-0">
                             <Button variant="ghost" onClick={handleClose} disabled={loading} className="text-slate-400 hover:text-white">
@@ -325,12 +339,12 @@ export function QuickPayModal({ open, onOpenChange, prestamo, today, userRol = '
                             </Button>
                             <Button 
                                 onClick={handlePayment} 
-                                disabled={loading || !amount || !canPayDueToTime}
+                                disabled={loading || !amount || !canPayDueToTime || isBlockedByCuadre}
                                 className={`bg-emerald-600 hover:bg-emerald-500 text-white font-bold w-full sm:w-auto shadow-lg shadow-emerald-900/20 ${
-                                    !canPayDueToTime ? 'opacity-50 grayscale cursor-not-allowed' : ''
+                                    (!canPayDueToTime || isBlockedByCuadre) ? 'opacity-50 grayscale cursor-not-allowed' : ''
                                 }`}
                             >
-                                {loading ? 'Procesando...' : !canPayDueToTime ? 'Sistema Cerrado' : 'Confirmar Cobro'}
+                                {loading ? 'Procesando...' : !canPayDueToTime ? 'Sistema Cerrado' : isBlockedByCuadre ? 'Bloqueado' : 'Confirmar Cobro'}
                             </Button>
                         </DialogFooter>
                     </div>

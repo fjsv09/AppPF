@@ -74,12 +74,12 @@ export default async function DashboardPage() {
             {(isAdmin || isSupervisor) && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in slide-in-from-bottom-4 duration-700">
                     <div className="lg:col-span-2 space-y-8">
-                        <OperationsHub />
+                        <OperationsHub role={perfil?.rol} />
                         {/* We could add more admin/supervisor-specific main content here */}
                     </div>
                     
                     <div className="lg:col-span-1">
-                        <QuickActions />
+                        <QuickActions rol={perfil?.rol} />
                     </div>
                 </div>
             )}
@@ -92,7 +92,7 @@ export default async function DashboardPage() {
                     </div>
                     
                     <div className="lg:col-span-1">
-                        <QuickActions />
+                        <QuickActions rol={perfil?.rol} />
                     </div>
                 </div>
             )}

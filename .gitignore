@@ -67,3 +67,4 @@ next-env.d.ts
 !public/*.svg
 /tmp/
 .agent/
+/scripts/

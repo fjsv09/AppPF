@@ -1,1 +1,0 @@
-import { createAdminClient } from '../utils/supabase/admin'; async function seed() { const supabase = createAdminClient(); await supabase.from('configuracion_sistema').upsert({ clave: 'refinanciacion_min_mora', valor: '50', descripcion: 'Porcentaje minimo de mora para refinanciacion administrativa' }, { onConflict: 'clave' }); console.log('Done'); }; seed();

@@ -23,10 +23,9 @@ export default async function AdminCuadresPage() {
     .eq('id', user.id)
     .single()
 
-  const isSupervisor = perfil?.rol === 'supervisor'
   const isAdmin = perfil?.rol === 'admin'
-
-  if (!isAdmin && !isSupervisor) {
+  
+  if (!isAdmin) {
     redirect('/dashboard')
   }
 
@@ -79,22 +78,20 @@ export default async function AdminCuadresPage() {
         </div>
       </div>
 
-      <Tabs defaultValue={isAdmin ? "pendientes" : "historial"} className="w-full">
+      <Tabs defaultValue="pendientes" className="w-full">
         <TabsList className="bg-slate-900 border border-slate-800 p-1 mb-6">
-          {isAdmin && (
-            <TabsTrigger 
-              value="pendientes" 
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400 gap-2 px-6"
-            >
-              <Clock className="w-4 h-4" />
-              Pendientes
-              {pendingCount > 0 && (
-                <span className="ml-1 bg-white text-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                  {pendingCount}
-                </span>
-              )}
-            </TabsTrigger>
-          )}
+          <TabsTrigger 
+            value="pendientes" 
+            className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400 gap-2 px-6"
+          >
+            <Clock className="w-4 h-4" />
+            Pendientes
+            {pendingCount > 0 && (
+              <span className="ml-1 bg-white text-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {pendingCount}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger 
             value="historial" 
             className="data-[state=active]:bg-slate-700 data-[state=active]:text-white text-slate-400 gap-2 px-6"
@@ -104,15 +101,13 @@ export default async function AdminCuadresPage() {
           </TabsTrigger>
         </TabsList>
 
-        {isAdmin && (
-          <TabsContent value="pendientes" className="space-y-4 outline-none">
-            <CuadreApproval 
-              pendingCuadres={pendingCuadres || []} 
-              adminId={user.id} 
-              globalAccounts={accounts || []} 
-            />
-          </TabsContent>
-        )}
+        <TabsContent value="pendientes" className="space-y-4 outline-none">
+          <CuadreApproval 
+            pendingCuadres={pendingCuadres || []} 
+            adminId={user.id} 
+            globalAccounts={accounts || []} 
+          />
+        </TabsContent>
 
         <TabsContent value="historial" className="space-y-4 outline-none">
           <CuadreHistoryTable history={history || []} />

@@ -1,4 +1,4 @@
-import { Receipt, Clock, Award, FileText, RefreshCw } from 'lucide-react'
+import { Receipt, Clock, Award, CreditCard, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 
 export function AdvisorHub() {
@@ -20,12 +20,12 @@ export function AdvisorHub() {
                 <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mt-1">Cierre diario</p>
             </Link>
 
-            <Link href="/dashboard/solicitudes" className="group p-5 bg-slate-950/40 backdrop-blur-md border border-slate-800 rounded-2xl hover:border-cyan-500/50 hover:bg-slate-900/60 transition-all shadow-xl">
-                <div className="w-12 h-12 bg-cyan-500/10 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform border border-cyan-500/20">
-                    <FileText className="w-6 h-6 text-cyan-400" />
+            <Link href="/dashboard/nomina" className="group p-5 bg-slate-950/40 backdrop-blur-md border border-slate-800 rounded-2xl hover:border-indigo-500/50 hover:bg-slate-900/60 transition-all shadow-xl">
+                <div className="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform border border-indigo-500/20">
+                    <CreditCard className="w-6 h-6 text-indigo-400" />
                 </div>
-                <h3 className="text-base font-bold text-white tracking-tight">Solicitudes</h3>
-                <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mt-1">Prospectos</p>
+                <h3 className="text-base font-bold text-white tracking-tight">Nómina y Bonos</h3>
+                <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mt-1">Mis Pagos</p>
             </Link>
 
             <Link href="/dashboard/metas" className="group p-5 bg-slate-950/40 backdrop-blur-md border border-slate-800 rounded-2xl hover:border-amber-500/50 hover:bg-slate-900/60 transition-all shadow-xl">

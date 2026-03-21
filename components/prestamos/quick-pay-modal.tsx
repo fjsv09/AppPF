@@ -13,10 +13,11 @@ import { toBlob } from 'html-to-image'
 interface QuickPayModalProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    prestamo: any
-    today: string // YYYY-MM-DD
+    prestamoId?: string // Optional if prestamo object is passed
+    prestamo?: any // Optional if prestamoId is passed
+    today?: string // Optional, will calculate if missing
     userRol?: 'admin' | 'supervisor' | 'asesor'
-    onSuccess: () => void
+    onSuccess?: (result?: any) => void
     systemSchedule?: {
         horario_apertura: string
         horario_cierre: string
@@ -26,14 +27,26 @@ interface QuickPayModalProps {
     blockReasonCierre?: string
 }
 
-export function QuickPayModal({ open, onOpenChange, prestamo, today, userRol = 'asesor', onSuccess, systemSchedule, isBlockedByCuadre, blockReasonCierre }: QuickPayModalProps) {
+export function QuickPayModal({ 
+    open, 
+    onOpenChange, 
+    prestamoId,
+    prestamo: initialPrestamo, 
+    today: initialToday, 
+    userRol = 'asesor', 
+    onSuccess, 
+    systemSchedule, 
+    isBlockedByCuadre, 
+    blockReasonCierre 
+}: QuickPayModalProps) {
     const [loading, setLoading] = useState(false)
     const [amount, setAmount] = useState('')
     const [metodoPago, setMetodoPago] = useState('Efectivo')
     const [quota, setQuota] = useState<any>(null)
     const [fetching, setFetching] = useState(false)
     const [result, setResult] = useState<any>(null)
-    const [fullCronograma, setFullCronograma] = useState<any[]>([]) // Store full schedule for stats
+    const [fullCronograma, setFullCronograma] = useState<any[]>([])
+    const [prestamo, setPrestamo] = useState<any>(initialPrestamo)
 
     // Sharing State
     const receiptRef = useRef<HTMLDivElement>(null)
@@ -41,6 +54,9 @@ export function QuickPayModal({ open, onOpenChange, prestamo, today, userRol = '
     const [lastPayment, setLastPayment] = useState<any>(null)
 
     const supabase = createClient()
+
+    // Calculate Today Peru if not provided
+    const today = initialToday || new Date().toLocaleString("en-CA", { timeZone: "America/Lima" }).split(',')[0]
 
     // --- LOGICA DE HORARIO ---
     const now = new Date()
@@ -53,37 +69,66 @@ export function QuickPayModal({ open, onOpenChange, prestamo, today, userRol = '
     const currentHourString = formatter.format(now)
 
     const apertura = systemSchedule?.horario_apertura || '07:00'
-    const cierre = systemSchedule?.horario_cierre || '20:00'
+    const cierre = systemSchedule?.horario_cierre || '22:00' // Default higher for flexibility
     const desbloqueoHasta = systemSchedule?.desbloqueo_hasta ? new Date(systemSchedule.desbloqueo_hasta) : null
     
     const isWithinHours = currentHourString >= apertura && currentHourString < cierre
     const isTemporaryUnlocked = desbloqueoHasta && now < desbloqueoHasta
     
-    // Solo admin se salta el bloqueo de horario
     const canPayDueToTime = isWithinHours || isTemporaryUnlocked || userRol === 'admin'
     // --- FIN LOGICA DE HORARIO ---
 
     useEffect(() => {
-        if (open && prestamo) {
-            fetchSmartQuota()
+        if (open && !result) {
+            if (initialPrestamo) {
+                setPrestamo(initialPrestamo)
+                fetchSmartQuota(initialPrestamo.id)
+            } else if (prestamoId) {
+                fetchPrestamoData(prestamoId)
+            }
+            setLastPayment(null)
+        }
+    }, [open, prestamoId, initialPrestamo, result])
+
+    useEffect(() => {
+        if (!open) {
             setResult(null)
             setLastPayment(null)
         }
-    }, [open, prestamo])
+    }, [open])
 
-    const fetchSmartQuota = async () => {
+    const fetchPrestamoData = async (id: string) => {
+        setFetching(true)
+        try {
+            const { data, error } = await supabase
+                .from('prestamos')
+                .select('*, clientes(id, nombres, dni, telefono)')
+                .eq('id', id)
+                .single()
+            
+            if (data) {
+                setPrestamo(data)
+                fetchSmartQuota(id)
+            }
+        } catch (error) {
+            console.error('Error fetching loan', error)
+            toast.error('Error al cargar datos del préstamo')
+        }
+    }
+
+    const fetchSmartQuota = async (id: string) => {
         setFetching(true)
         try {
             const { data: cronograma } = await supabase
                 .from('cronograma_cuotas')
                 .select('*')
-                .eq('prestamo_id', prestamo.id)
-                .order('fecha_vencimiento', { ascending: true }) // FIFO: Oldest first
+                .eq('prestamo_id', id)
+                .order('fecha_vencimiento', { ascending: true })
 
             if (cronograma) {
-                setFullCronograma(cronograma) // Save detailed schedule
+                setFullCronograma(cronograma)
                 
-                // Lógica "Ruta del Día": Priorizar la cuota de HOY.
+                // Prioritize Today's quota, then Oldest Pending
                 const todayQuota = cronograma.find((c: any) => c.fecha_vencimiento === today && c.estado !== 'pagado')
                 const oldestPending = cronograma.find((c: any) => c.estado !== 'pagado')
                 
@@ -99,6 +144,7 @@ export function QuickPayModal({ open, onOpenChange, prestamo, today, userRol = '
             console.error('Error fetching quota', error)
             toast.error('Error al cargar cuota')
         } finally {
+            setLoading(false)
             setFetching(false)
         }
     }
@@ -107,29 +153,27 @@ export function QuickPayModal({ open, onOpenChange, prestamo, today, userRol = '
         if (!receiptRef.current) return
         setSharing(true)
         try {
-            const blob = await toBlob(receiptRef.current, { cacheBust: true })
-            if (!blob) throw new Error('Error al generar imagen')
+            const canvas = await toBlob(receiptRef.current, { cacheBust: true, pixelRatio: 2 })
+            if (!canvas) throw new Error('Error al generar imagen')
 
-            const file = new File([blob], `comprobante-${lastPayment?.operacion}.png`, { type: 'image/png' })
+            const file = new File([canvas], `comprobante-${lastPayment?.operacion}.png`, { type: 'image/png' })
 
             if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
                 await navigator.share({
                     files: [file],
                     title: 'Comprobante de Pago',
-                    text: `Pago registrado de ${prestamo.clientes?.nombres}`
+                    text: `Pago registrado de ${prestamo?.clientes?.nombres}`
                 })
             } else {
-                // Fallback for desktop: Download
                 const link = document.createElement('a')
                 link.download = `comprobante-${lastPayment?.operacion}.png`
-                link.href = URL.createObjectURL(blob)
+                link.href = URL.createObjectURL(canvas)
                 link.click()
                 toast.success('Comprobante descargado')
             }
             if (lastPayment?.pago_id && userRol === 'asesor') {
                 api.pagos.compartirVoucher(lastPayment.pago_id).catch(() => {})
             }
-
         } catch (e) {
             console.error(e)
             toast.error('No se pudo compartir la imagen')
@@ -139,7 +183,7 @@ export function QuickPayModal({ open, onOpenChange, prestamo, today, userRol = '
     }
 
     const handlePayment = async () => {
-        if (!quota || !amount) return
+        if (!quota || !amount || parseFloat(amount) <= 0) return
         setLoading(true)
         try {
             const payAmount = parseFloat(amount)
@@ -150,64 +194,37 @@ export function QuickPayModal({ open, onOpenChange, prestamo, today, userRol = '
             })
             setResult(res)
             
-            // --- CALCULATE RECEIPTS STATS (Borrowed logic from cronograma-client) ---
-            // 1. Obtener la suma de TODO lo que se había pagado antes en el préstamo
-            const totalPagadoHistorico = fullCronograma.reduce((acc, c) => acc + parseFloat(c.monto_pagado || 0), 0)
+            // Re-fetch cronograma to ensure stats are 100% accurate AFTER the payment
+            const { data: updatedCronograma } = await supabase
+                .from('cronograma_cuotas')
+                .select('*')
+                .eq('prestamo_id', prestamo.id)
+                .order('fecha_vencimiento', { ascending: true })
             
-            // 2. Sumarle el monto que estamos pagando justo AHORA
-            let remainingToDistribute = totalPagadoHistorico + payAmount
-            
-            // 3. Simular la distribución en cascada a través de todas las cuotas
-            const simCronograma = [...fullCronograma].sort((a, b) => a.numero_cuota - b.numero_cuota).map(c => {
-                const cuotaAmount = parseFloat(c.monto_cuota)
-                let pagadoEnEstaCuota = 0
-                
-                if (remainingToDistribute >= cuotaAmount) {
-                    pagadoEnEstaCuota = cuotaAmount
-                    remainingToDistribute -= cuotaAmount
-                } else if (remainingToDistribute > 0) {
-                    pagadoEnEstaCuota = remainingToDistribute
-                    remainingToDistribute = 0
-                }
-                
-                return {
-                    ...c,
-                    pagado: pagadoEnEstaCuota,
-                    cuota: cuotaAmount
-                }
-            })
+            const freshCronograma = updatedCronograma || fullCronograma
+            if (updatedCronograma) setFullCronograma(updatedCronograma)
 
-            let cuotasPendientesCount = simCronograma.filter(c => c.cuota - c.pagado > 0.01).length
-            let saldoPendienteTotal = simCronograma.reduce((acc, c) => acc + (c.cuota - c.pagado), 0)
-            
-            // 4. Calcular Atrasadas basándonos en la fecha actual
-            const hoy = new Date().toISOString().split('T')[0]
-            const atrasadasCount = simCronograma.filter(c => {
-                const pending = c.cuota - c.pagado > 0.01
-                const isOverdue = c.fecha_vencimiento < hoy;
-                return pending && isOverdue
-            }).length
+            const totalCuotas = freshCronograma.length
+            const totalPagadas = freshCronograma.filter(c => c.estado === 'pagado').length
+            const atrasadasAfter = freshCronograma.filter(c => c.fecha_vencimiento < today && c.estado !== 'pagado').length
+            const saldoTotal = freshCronograma.reduce((acc, c) => acc + (parseFloat(c.monto_cuota) - parseFloat(c.monto_pagado || 0)), 0)
 
-            const totalCuotas = fullCronograma.length
-            
             setLastPayment({
                 monto: payAmount,
                 cuota: quota.numero_cuota,
                 fecha: new Date().toLocaleDateString('es-PE'),
                 hora: new Date().toLocaleTimeString('es-PE'),
                 operacion: res?.pago_id?.slice?.(-10)?.toUpperCase() || Math.random().toString(36).substr(2, 9).toUpperCase(),
-                cliente: prestamo.clientes?.nombres,
-                // Stats
-                pagadas: totalCuotas - cuotasPendientesCount,
-                cuotaActual: quota.numero_cuota, // Fijado al numero de la cuota objetivo
+                cliente: prestamo?.clientes?.nombres || 'Cliente',
+                pagadas: totalPagadas,
                 totalCuotas: totalCuotas,
-                cuotasAtrasadas: atrasadasCount,
-                saldoPendiente: saldoPendienteTotal,
+                cuotasAtrasadas: atrasadasAfter,
+                saldoPendiente: saldoTotal,
                 pago_id: res?.pago_id
             })
 
             toast.success('Pago registrado correctamente')
-            onSuccess() 
+            if (onSuccess) onSuccess(res)
         } catch (error: any) {
             toast.error('Error al registrar pago', { description: error.message })
         } finally {
@@ -247,10 +264,23 @@ export function QuickPayModal({ open, onOpenChange, prestamo, today, userRol = '
                             </div>
                         ) : (
                             <div className="grid gap-6 py-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="amount" className="text-slate-300">Monto a Cobrar</Label>
+                                <div className="grid grid-cols-2 gap-4 p-4 bg-slate-950 rounded-xl border border-slate-800">
+                                    <div>
+                                        <p className="text-[10px] text-slate-500 mb-1 font-bold uppercase tracking-wider">Total de la Cuota</p>
+                                        <p className="text-lg font-semibold text-slate-300">${quota?.monto_cuota?.toFixed(2)}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[10px] text-slate-500 mb-1 font-bold uppercase tracking-wider">Monto Pendiente</p>
+                                        <p className="text-lg font-bold text-rose-400">
+                                            ${(quota?.monto_cuota - (quota?.monto_pagado||0)).toFixed(2)}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3 mt-2">
+                                    <Label htmlFor="amount" className="text-sm font-medium text-slate-300">¿Cuánto va a cobrar?</Label>
                                     <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-lg">$</span>
+                                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                                         <Input
                                             id="amount"
                                             type="number"
@@ -258,42 +288,33 @@ export function QuickPayModal({ open, onOpenChange, prestamo, today, userRol = '
                                             onChange={(e) => {
                                                 const val = e.target.value
                                                 const numericVal = parseFloat(val)
-                                                
-                                                // Calculate max possible payment (Total Debt)
                                                 const maxAmount = fullCronograma.reduce((acc, c) => acc + (parseFloat(c.monto_cuota) - parseFloat(c.monto_pagado || 0)), 0)
                                                 
-                                                // Allow empty string or valid number <= maxAmount
-                                                if (val === '' || (numericVal >= 0 && numericVal <= maxAmount + 0.01)) { // Added small buffer for float precision
+                                                if (val === '' || (numericVal >= 0 && numericVal <= maxAmount + 0.01)) {
                                                     setAmount(val)
                                                 } else if (numericVal > maxAmount) {
-                                                    // Clamp to max
                                                     setAmount(maxAmount.toFixed(2))
                                                     toast.warning(`El monto no puede exceder la deuda total ($${maxAmount.toFixed(2)})`)
                                                 }
                                             }}
-                                            min="0"
-                                            max={fullCronograma.reduce((acc, c) => acc + (parseFloat(c.monto_cuota) - parseFloat(c.monto_pagado || 0)), 0)}
-                                            className="pl-8 text-2xl font-bold bg-slate-950 border-slate-700 h-14 focus-visible:ring-emerald-500/50"
-                                            autoFocus
+                                            className="pl-10 h-12 text-xl font-bold bg-slate-950 border-slate-700 text-white rounded-xl focus-visible:ring-emerald-500/50"
+                                            placeholder="0.00"
                                         />
-                                    </div>
-                                    <p className="text-xs text-slate-500 mb-2">
-                                        Saldo Pendiente Cuota #{quota?.numero_cuota}: <b>${(quota?.monto_cuota - (quota?.monto_pagado||0)).toFixed(2)}</b>
-                                    </p>
-                                    
-                                    <div className="space-y-2 mt-4">
-                                        <Label className="text-slate-300">Método de Pago</Label>
-                                        <select 
-                                            value={metodoPago}
-                                            onChange={(e) => setMetodoPago(e.target.value)}
-                                            className="w-full h-12 px-4 bg-slate-950 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500/50 appearance-none text-sm"
-                                        >
-                                            <option value="Efectivo">💵 Efectivo</option>
-                                            <option value="Yape">📱 Yape</option>
-                                        </select>
                                     </div>
                                 </div>
                                 
+                                <div className="space-y-2 mt-2">
+                                    <Label className="text-slate-300">Método de Pago</Label>
+                                    <select 
+                                        value={metodoPago}
+                                        onChange={(e) => setMetodoPago(e.target.value)}
+                                        className="w-full h-12 px-4 bg-slate-950 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500/50 appearance-none text-sm"
+                                    >
+                                        <option value="Efectivo">💵 Efectivo</option>
+                                        <option value="Yape">📱 Yape</option>
+                                    </select>
+                                </div>
+
                                 {fullCronograma.filter(c => c.fecha_vencimiento < new Date().toISOString().split('T')[0] && c.estado !== 'pagado').length > 0 && quota?.fecha_vencimiento === today && (
                                     <div className="bg-blue-950/30 border border-blue-900/50 rounded-lg p-3 flex gap-3">
                                         <AlertCircle className="w-5 h-5 text-blue-500 shrink-0" />
@@ -372,8 +393,8 @@ export function QuickPayModal({ open, onOpenChange, prestamo, today, userRol = '
                                         <div className="bg-slate-800/80 rounded-lg p-3 border border-white/10">
                                             <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-2">Estado Actual</p>
                                             <div className="flex justify-between text-sm mb-1">
-                                                <span className="text-slate-300">Cuota Actual</span>
-                                                <span className="text-emerald-400 font-bold">{lastPayment.cuotaActual || lastPayment.pagadas} de {lastPayment.totalCuotas} cuotas</span>
+                                                <span className="text-slate-300">Progreso</span>
+                                                <span className="text-emerald-400 font-bold">{lastPayment.pagadas} de {lastPayment.totalCuotas} cuotas</span>
                                             </div>
                                             <div className="flex justify-between text-sm">
                                                 <span className="text-slate-300">Atrasadas</span>

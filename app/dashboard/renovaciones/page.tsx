@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { RenovacionesSolicitudes } from '@/components/renovaciones/renovaciones-solicitudes'
 
 import { Clock, Eye, AlertCircle, CheckCircle } from 'lucide-react'
+import { BackButton } from '@/components/ui/back-button'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,68 +52,71 @@ export default async function RenovacionesPage() {
     const { data: solicitudes } = await query
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="page-container">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-white/5 pb-6">
+            <div className="page-header">
                 <div>
-                    <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
-                        Solicitud de Renovación
-                    </h1>
-                    <p className="text-slate-500 text-xs mt-0.5">
-                        {perfil.rol === 'asesor' && 'Tus solicitudes de renovación de préstamos'}
-                        {perfil.rol === 'supervisor' && 'Solicitudes pendientes de pre-aprobación'}
-                        {perfil.rol === 'admin' && 'Todas las solicitudes de renovación'}
-                    </p>
+                    <div className="flex items-center gap-3">
+                        <BackButton />
+                        <div>
+                            <h1 className="page-title">Solicitud de Renovación</h1>
+                            <p className="page-subtitle">
+                                {perfil.rol === 'asesor' && 'Tus solicitudes de renovación de préstamos'}
+                                {perfil.rol === 'supervisor' && 'Solicitudes pendientes de pre-aprobación'}
+                                {perfil.rol === 'admin' && 'Todas las solicitudes de renovación'}
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             {/* Hero Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
+            <div className="kpi-grid md:grid-cols-4">
                 {/* Card 1: Pendientes */}
-                <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-yellow-500/30 transition-all">
-                    <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                <div className="kpi-card group hover:border-yellow-500/30">
+                    <div className="kpi-card-icon">
                         <Clock className="w-16 h-16 text-yellow-500" />
                     </div>
-                    <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Pendientes</p>
-                    <h2 className="text-xl md:text-3xl font-bold text-white">{solicitudes?.filter(s => s.estado_solicitud === 'pendiente_supervision').length || 0}</h2>
+                    <p className="kpi-label">Pendientes</p>
+                    <h2 className="kpi-value">{solicitudes?.filter(s => s.estado_solicitud === 'pendiente_supervision').length || 0}</h2>
                     <div className="mt-2 text-yellow-400 flex items-center gap-1">
-                        <span className="bg-yellow-950/50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-yellow-900/50">REVISIÓN</span>
+                        <span className="kpi-badge bg-yellow-950/50 text-yellow-400 border border-yellow-900/50">REVISIÓN</span>
                     </div>
                 </div>
 
                 {/* Card 2: Pre-Aprobadas */}
-                <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-blue-500/30 transition-all">
-                    <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                <div className="kpi-card group hover:border-blue-500/30">
+                    <div className="kpi-card-icon">
                         <Eye className="w-16 h-16 text-blue-500" />
                     </div>
-                    <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Pre-Aprobadas</p>
-                    <h2 className="text-xl md:text-3xl font-bold text-white">{solicitudes?.filter(s => s.estado_solicitud === 'pre_aprobado').length || 0}</h2>
+                    <p className="kpi-label">Pre-Aprobadas</p>
+                    <h2 className="kpi-value">{solicitudes?.filter(s => s.estado_solicitud === 'pre_aprobado').length || 0}</h2>
                     <div className="mt-2 text-blue-400 flex items-center gap-1">
-                        <span className="bg-blue-950/50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-blue-900/50">POR APROBAR</span>
+                        <span className="kpi-badge bg-blue-950/50 text-blue-400 border border-blue-900/50">POR APROBAR</span>
                     </div>
                 </div>
 
                 {/* Card 3: En Corrección */}
-                <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-orange-500/30 transition-all">
-                    <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                <div className="kpi-card group hover:border-orange-500/30">
+                    <div className="kpi-card-icon">
                         <AlertCircle className="w-16 h-16 text-orange-500" />
                     </div>
-                    <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">En Corrección</p>
-                    <h2 className="text-xl md:text-3xl font-bold text-white">{solicitudes?.filter(s => s.estado_solicitud === 'en_correccion').length || 0}</h2>
+                    <p className="kpi-label">En Corrección</p>
+                    <h2 className="kpi-value">{solicitudes?.filter(s => s.estado_solicitud === 'en_correccion').length || 0}</h2>
                     <div className="mt-2 text-orange-400 flex items-center gap-1">
-                        <span className="bg-orange-950/50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-orange-900/50">ATENCIÓN</span>
+                        <span className="kpi-badge bg-orange-950/50 text-orange-400 border border-orange-900/50">ATENCIÓN</span>
                     </div>
                 </div>
 
                 {/* Card 4: Finalizadas */}
-                <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-slate-500/30 transition-all">
-                    <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                <div className="kpi-card group hover:border-slate-500/30">
+                    <div className="kpi-card-icon">
                         <CheckCircle className="w-16 h-16 text-slate-500" />
                     </div>
-                    <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Finalizadas</p>
-                    <h2 className="text-xl md:text-3xl font-bold text-white">{solicitudes?.filter(s => s.estado_solicitud === 'aprobado' || s.estado_solicitud === 'rechazado').length || 0}</h2>
+                    <p className="kpi-label">Finalizadas</p>
+                    <h2 className="kpi-value">{solicitudes?.filter(s => s.estado_solicitud === 'aprobado' || s.estado_solicitud === 'rechazado').length || 0}</h2>
                     <div className="mt-2 text-slate-400 flex items-center gap-1">
-                        <span className="bg-slate-800 px-1.5 py-0.5 rounded text-[10px] border border-slate-700">COMPLETADO</span>
+                        <span className="kpi-badge bg-slate-800 text-slate-400 border border-slate-700">COMPLETADO</span>
                     </div>
                 </div>
             </div>

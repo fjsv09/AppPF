@@ -45,18 +45,18 @@ export default async function NominaPage() {
 
   // Para admin, mostrar con selector
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="page-container">
+      <div className="page-header">
         <div>
           <div className="flex items-center gap-3">
             <BackButton />
-            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
-              Nómina y Sueldos
-            </h1>
+            <div>
+              <h1 className="page-title">Nómina y Sueldos</h1>
+              <p className="page-subtitle uppercase tracking-widest font-semibold">
+                 {format(new Date(), 'MMMM yyyy', { locale: es })}
+              </p>
+            </div>
           </div>
-          <p className="text-slate-500 text-xs mt-0.5 font-bold uppercase tracking-widest">
-             {format(new Date(), 'MMMM yyyy', { locale: es })}
-          </p>
         </div>
       </div>
 
@@ -100,16 +100,16 @@ async function NominaDirecta({ userId }: { userId: string }) {
                           (currentPayroll?.adelantos || 0)
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="page-container">
+      <div className="page-header">
         <div>
           <div className="flex items-center gap-3">
             <BackButton />
-            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
+            <h1 className="page-title">
               Mi Nómina y Sueldo
             </h1>
           </div>
-          <p className="text-slate-500 text-xs mt-0.5 font-bold uppercase tracking-widest">
+          <p className="page-subtitle">
              {format(today, 'MMMM yyyy', { locale: es })}
           </p>
         </div>

@@ -62,19 +62,19 @@ export default async function AdminCuadresPage() {
   const pendingCount = pendingCuadres?.length || 0
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="page-container">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="page-header">
         <div>
           <div className="flex items-center gap-3">
             <BackButton />
-            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
-              Gestión de Cuadres
-            </h1>
+            <div>
+              <h1 className="page-title">Gestión de Cuadres</h1>
+              <p className="page-subtitle">
+                Administra las solicitudes de cierre y consulta el historial histórico.
+              </p>
+            </div>
           </div>
-          <p className="text-slate-500 text-xs mt-0.5">
-            Administra las solicitudes de cierre y consulta el historial histórico.
-          </p>
         </div>
       </div>
 

@@ -44,18 +44,20 @@ export default async function SupervisionPage() {
     }
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="page-container">
             {/* Header */}
-            <div className="border-b border-white/5 pb-6">
-                <div className="flex items-center gap-3">
-                    <BackButton />
-                    <div>
-                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
-                            {userRole === 'admin' ? 'Supervisión Central' : 'Panel de Supervisión'}
-                        </h1>
-                        <p className="text-slate-500 text-xs mt-0.5">
-                            {userRole === 'admin' ? 'Métricas globales de rendimiento y equipos' : 'Rendimiento de tu equipo de asesores'}
-                        </p>
+            <div className="page-header">
+                <div>
+                    <div className="flex items-center gap-3">
+                        <BackButton />
+                        <div>
+                            <h1 className="page-title">
+                                {userRole === 'admin' ? 'Supervisión Central' : 'Panel de Supervisión'}
+                            </h1>
+                            <p className="page-subtitle">
+                                {userRole === 'admin' ? 'Métricas globales de rendimiento y equipos' : 'Rendimiento de tu equipo de asesores'}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>

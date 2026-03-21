@@ -150,20 +150,22 @@ export default function AdminSectoresPage() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex items-center gap-3">
-          <BackButton />
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Sectores de Clientes</h1>
-            <p className="text-slate-500 text-xs mt-0.5">
-              Administra los sectores o rutas de cobranza para asignar y agrupar a los clientes.
-            </p>
+    <div className="page-container">
+      <div className="page-header">
+        <div>
+          <div className="flex items-center gap-3">
+            <BackButton />
+            <div>
+              <h1 className="page-title">Sectores de Clientes</h1>
+              <p className="page-subtitle">
+                Administra los sectores o rutas de cobranza para asignar y agrupar a los clientes.
+              </p>
+            </div>
           </div>
         </div>
         
         {!isAddMode && !editingId && (
-            <Button onClick={handleAdd} className="bg-purple-600 hover:bg-purple-500 text-white rounded-xl">
+            <Button onClick={handleAdd} className="btn-action bg-purple-600 hover:bg-purple-500">
                 <Plus className="w-4 h-4 mr-2" /> Añadir Sector
             </Button>
         )}

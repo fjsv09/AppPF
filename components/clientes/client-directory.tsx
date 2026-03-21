@@ -14,7 +14,9 @@ import { cn } from "@/lib/utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import dynamic from 'next/dynamic'
 import { ClientEditModal } from './client-edit-modal'
-import { Edit } from 'lucide-react'
+import { RegistrarGestionModal } from '../gestiones/registrar-gestion-modal'
+import { Edit, MessageSquare, DollarSign } from 'lucide-react'
+import { QuickPayModal } from '../prestamos/quick-pay-modal'
 
 const ClientesMapa = dynamic(() => import('./clientes-mapa'), { 
     ssr: false,
@@ -98,9 +100,36 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     const [isReasignModalOpen, setIsReasignModalOpen] = useState(false)
     const [selectedNewAsesor, setSelectedNewAsesor] = useState<string>('')
     const [isReassigning, setIsReassigning] = useState(false)
+    
+    // Quick Pay
+    const [quickPayOpen, setQuickPayOpen] = useState(false)
+    const [selectedLoanIdForPay, setSelectedLoanIdForPay] = useState<string | null>(null)
 
     // Edit Modal State
     const [editingCliente, setEditingCliente] = useState<any>(null)
+
+    // Registrar Gestión State
+    const [gestionOpen, setGestionOpen] = useState(false)
+    const [selectedClientForGestion, setSelectedClientForGestion] = useState<any>(null)
+
+    const handleOpenGestion = (cliente: any, e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault()
+            e.stopPropagation()
+        }
+        setSelectedClientForGestion(cliente)
+        setGestionOpen(true)
+    }
+
+    const handleOpenQuickPay = (cliente: any, e: React.MouseEvent) => {
+        e.stopPropagation()
+        if (cliente.latestLoanId) {
+            setSelectedLoanIdForPay(cliente.latestLoanId)
+            setQuickPayOpen(true)
+        } else {
+            toast.error('Este cliente no tiene un préstamo activo para pagar.')
+        }
+    }
 
     // 3. Helper to update URL
     const updateParams = (updates: Record<string, string | null>) => {
@@ -503,7 +532,6 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                         <div>
                                             <div className="flex items-center gap-2">
                                                 <h3 className="text-slate-100 font-bold text-sm truncate max-w-[150px]">{cliente.nombres}</h3>
-                                                <span className="text-[9px] text-slate-500 font-medium">Reg: {new Date(cliente.created_at).toLocaleDateString('es-PE')}</span>
                                             </div>
                                             <div className="flex items-center gap-2 mt-0.5">
                                                 <Badge variant="outline" className={cn("px-1.5 py-0 text-[10px] h-5 rounded-sm border-0 font-bold", 
@@ -539,20 +567,23 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                     </div>
                                 </div>
                                 <div className="flex gap-2 mt-3 pt-3 border-t border-slate-800/50">
-                                    <Button size="sm" variant="outline" className="flex-1 bg-slate-900 border-slate-700 text-slate-300 h-8 text-[11px] hover:text-white px-0" onClick={() => window.open(`tel:${cliente.telefono}`)}>
-                                        <Phone className="w-3.5 h-3.5 mr-1" /> Llamar
+                                    <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 text-[11px] hover:text-white px-0" onClick={() => window.open(`tel:${cliente.telefono}`)}>
+                                        <Phone className="w-3.5 h-3.5 mr-1 text-slate-500" /> Llamar
                                     </Button>
-                                    <Button size="sm" variant="outline" className="flex-1 bg-green-900/20 border-green-900/50 text-green-400 h-8 text-[11px] hover:bg-green-900/40 px-0" onClick={() => window.open(`https://wa.me/${cliente.telefono}`, '_blank')}>
-                                        <MessageCircle className="w-3.5 h-3.5 mr-1" /> WhatsApp
+                                    <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 text-[11px] hover:text-white px-0" onClick={() => window.open(`https://wa.me/${cliente.telefono}`, '_blank')}>
+                                        <MessageCircle className="w-3.5 h-3.5 mr-1 text-slate-500" /> WhatsApp
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 text-[11px] hover:text-white px-0" onClick={() => handleOpenGestion(cliente)}>
+                                        <MessageSquare className="w-3.5 h-3.5 mr-1 text-slate-500" /> Gestión
                                     </Button>
                                     {(cliente.gps_coordenadas || cliente.direccion) && (
-                                        <Button size="sm" variant="outline" className="flex-1 bg-blue-900/20 border-blue-900/50 text-blue-400 h-8 text-[11px] hover:bg-blue-900/40 px-0" onClick={() => {
+                                        <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 text-[11px] hover:text-white px-0" onClick={() => {
                                             const query = cliente.gps_coordenadas || cliente.direccion;
                                             if (query) {
                                                 window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank')
                                             }
                                         }}>
-                                            <MapPin className="w-3.5 h-3.5 mr-1" /> GPS
+                                            <MapPin className="w-3.5 h-3.5 mr-1 text-slate-500" /> GPS
                                         </Button>
                                     )}
                                     <DropdownMenu>
@@ -699,6 +730,30 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                             <Edit className="w-4 h-4" />
                                         </Button>
                                     )}
+
+                                    <Button 
+                                        size="sm" 
+                                        variant="ghost" 
+                                        className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 transition-all font-bold"
+                                        onClick={(e) => handleOpenGestion(cliente, e)}
+                                        title="Registrar Gestión"
+                                    >
+                                        <MessageSquare className="w-4 h-4" />
+                                    </Button>
+
+                                    {/* Quick Pay Button */}
+                                    {cliente.latestLoanId && (
+                                        <Button 
+                                            size="sm" 
+                                            variant="ghost" 
+                                            className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 transition-all font-bold"
+                                            onClick={(e) => handleOpenQuickPay(cliente, e)}
+                                            title="Pagar Cuota"
+                                        >
+                                            <DollarSign className="w-4 h-4" />
+                                        </Button>
+                                    )}
+
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
                                             <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-white hover:bg-slate-700 transition-all data-[state=open]:bg-slate-700">
@@ -834,6 +889,27 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                     }}
                 />
             )}
+
+            <RegistrarGestionModal 
+                open={gestionOpen}
+                onOpenChange={setGestionOpen}
+                prestamoId={selectedClientForGestion?.latestLoanId}
+                clienteNombre={selectedClientForGestion?.nombres}
+                clienteTelefono={selectedClientForGestion?.telefono}
+                onSuccess={() => {
+                    // router.refresh()
+                }}
+            />
+
+            <QuickPayModal 
+                open={quickPayOpen}
+                onOpenChange={setQuickPayOpen}
+                prestamoId={selectedLoanIdForPay || undefined}
+                userRol={userRol}
+                onSuccess={() => {
+                    router.refresh()
+                }}
+            />
         </div>
     )
 }

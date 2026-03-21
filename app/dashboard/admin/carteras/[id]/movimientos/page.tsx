@@ -24,11 +24,13 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
+import { MovementsFilterBar } from '@/components/admin/movements-filter-bar'
+
 export const dynamic = 'force-dynamic'
 
 interface PageProps {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ cuenta?: string }>
+  searchParams: Promise<{ cuenta?: string, q?: string, tipo?: string }>
 }
 
 export default async function CarteraMovimientosPage({ params, searchParams }: PageProps) {
@@ -36,6 +38,8 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
   const id = p.id
   const sp = await searchParams
   const cuentaFilter = sp.cuenta
+  const qFilter = sp.q
+  const tipoFilter = sp.tipo
 
   const supabase = await createClient()
   const adminClient = createAdminClient()
@@ -50,12 +54,8 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
   const { data: cartera } = await adminClient.from('carteras').select('nombre').eq('id', id).single()
   const { data: accounts } = await adminClient.from('cuentas_financieras').select('*').eq('cartera_id', id)
   
-  const accIds = accounts?.map(a => a.id) || []
-  const selectedAccountName = accounts?.find(a => a.id === cuentaFilter)?.nombre
-
-  // 2. Fetch Movements
-  // Temporarily simplified to debug "fecha" error
-  const { data: movements, error: mError } = await adminClient
+  // 2. Fetch Movements with Filters
+  let query = adminClient
     .from('movimientos_financieros')
     .select(`
        *,
@@ -63,86 +63,56 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
        destino:cuentas_financieras!movimientos_financieros_cuenta_destino_id_fkey(id, nombre, tipo)
     `)
     .eq('cartera_id', id)
-    .order('created_at', { ascending: false })
+
+  if (cuentaFilter) {
+    query = query.or(`cuenta_origen_id.eq.${cuentaFilter},cuenta_destino_id.eq.${cuentaFilter}`)
+  }
+
+  if (tipoFilter && tipoFilter !== 'todos') {
+    query = query.eq('tipo', tipoFilter)
+  }
+
+  if (qFilter) {
+    query = query.ilike('descripcion', `%${qFilter}%`)
+  }
+
+  const { data: movements, error: mError } = await query.order('created_at', { ascending: false })
 
   const formatMoney = (val: number) => val.toLocaleString('en-US', { minimumFractionDigits: 2 })
 
   return (
-    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-700 pb-20">
+    <div className="page-container pb-20">
       {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/5 pb-6">
-        <div className="space-y-4">
+      <div className="page-header">
+        <div>
           <div className="flex items-center gap-3">
-             <BackButton />
-             <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[9px] font-black uppercase tracking-widest py-0.5">
-                Financial Audit
-             </Badge>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center shadow-lg">
-               <History className="w-5 h-5 text-blue-500" />
-            </div>
+            <BackButton />
             <div>
-               <h1 className="text-xl md:text-2xl font-black text-white tracking-tight leading-none uppercase">
-                  Movimientos
-               </h1>
-               <div className="flex items-center gap-2 mt-2">
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-900 rounded border border-slate-800">
-                     <Briefcase className="w-3 h-3 text-slate-500" />
-                     <span className="text-[10px] text-slate-400 font-bold uppercase">{cartera?.nombre || 'Cartera'}</span>
-                  </div>
-                  {(cartera as any)?.perfiles?.nombre_completo && (
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-500/10 rounded border border-blue-500/20">
-                       <User className="w-3 h-3 text-blue-400" />
-                       <span className="text-[10px] text-blue-400 font-bold uppercase">{(cartera as any).perfiles.nombre_completo}</span>
-                    </div>
-                  )}
-                  {selectedAccountName && (
-                     <Badge variant="outline" className="text-[10px] bg-emerald-500/5 text-emerald-400 border-emerald-500/10">
-                        FILTRADO: {selectedAccountName}
-                     </Badge>
-                  )}
-               </div>
+              <h1 className="page-title">Movimientos</h1>
+              <p className="page-subtitle">
+                {cartera?.nombre || 'Cartera'}
+              </p>
             </div>
           </div>
         </div>
-
-        <div className="flex items-center gap-2">
-           <Button variant="outline" className="bg-slate-900 border-slate-800 text-slate-400 hover:text-white h-9 px-4 rounded-xl font-bold text-xs">
-              <Download className="w-3 h-3 mr-2" />
-              EXPORTAR
-           </Button>
-        </div>
       </div>
 
-      {/* FILTER BAR - QUICK CHIPS */}
-      <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-none -mx-2 px-2">
-         <Link href={`/dashboard/admin/carteras/${id}/movimientos`}>
-            <Badge className={cn(
-               "h-7 px-3 rounded-lg cursor-pointer font-bold transition-all border text-[9px]",
-               !cuentaFilter ? "bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/20" : "bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700"
-            )}>
-               TODOS
-            </Badge>
-         </Link>
-         {accounts?.map(acc => (
-            <Link key={acc.id} href={`/dashboard/admin/carteras/${id}/movimientos?cuenta=${acc.id}`}>
-               <Badge className={cn(
-                  "h-7 px-3 rounded-lg cursor-pointer font-bold transition-all border whitespace-nowrap text-[9px]",
-                  cuentaFilter === acc.id ? "bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/20" : "bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700"
-               )}>
-                  {acc.nombre.toUpperCase()}
-               </Badge>
-            </Link>
-         ))}
-      </div>
+      {/* NEW FILTER BAR STYLE */}
+      <MovementsFilterBar 
+        accounts={accounts || []} 
+        portfolioId={id}
+        initialSearch={qFilter}
+        initialType={tipoFilter}
+        initialAccount={cuentaFilter}
+      />
+
 
       {/* AUDIT TABLE CARD */}
       <Card className="bg-slate-950 border-slate-800 shadow-2xl overflow-hidden rounded-3xl">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-left">                <thead className="bg-slate-900/50 border-b border-white/5">
+            <table className="w-full text-left">
+                <thead className="bg-slate-900/50 border-b border-white/5">
                   <tr>
                      <th className="px-4 py-3 text-[9px] uppercase font-black text-slate-500 tracking-wider">Fecha</th>
                      <th className="px-3 py-3 text-[9px] uppercase font-black text-slate-500 tracking-wider">Origen</th>

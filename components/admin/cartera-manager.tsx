@@ -2,8 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,7 +15,7 @@ import {
 } from '@/components/ui/select'
 import { createClient } from '@/utils/supabase/client'
 import { toast } from 'sonner'
-import { Briefcase, Plus, User, Building2, Edit2 } from 'lucide-react'
+import { Briefcase, Plus, User, Building2, Edit2, ChevronRight } from 'lucide-react'
 
 import {
   Dialog,
@@ -24,7 +23,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 
 interface CarteraManagerProps {
@@ -35,49 +33,10 @@ interface CarteraManagerProps {
 export function CarteraManager({ asesores, initialCarteras }: CarteraManagerProps) {
   const [carteras, setCarteras] = useState(initialCarteras)
   const [loading, setLoading] = useState(false)
-  const [isModalOpen, setIsModalOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
-  const [newCartera, setNewCartera] = useState({ nombre: '', asesor_id: '' })
   const [editingCartera, setEditingCartera] = useState<any>(null)
   const supabase = createClient()
   const router = useRouter()
-
-  async function createCartera() {
-    if (!newCartera.nombre || !newCartera.asesor_id) {
-       toast.error('Complete todos los campos')
-       return
-    }
-
-    setLoading(true)
-    try {
-      const { data: cartera, error: cError } = await supabase
-        .from('carteras')
-        .insert({ nombre: newCartera.nombre, asesor_id: newCartera.asesor_id })
-        .select()
-        .single()
-
-      if (cError) throw cError
-
-      const accounts = [
-        { cartera_id: cartera.id, tipo: 'cobranzas', nombre: `Cobranzas - ${cartera.nombre}`, saldo: 0 },
-        { cartera_id: cartera.id, tipo: 'caja', nombre: `Efectivo Caja - ${cartera.nombre}`, saldo: 0 },
-        { cartera_id: cartera.id, tipo: 'digital', nombre: `Yape/Digital - ${cartera.nombre}`, saldo: 0 }
-      ]
-
-      const { error: aError } = await supabase.from('cuentas_financieras').insert(accounts)
-      if (aError) throw aError
-
-      toast.success('Cartera y cuentas creadas correctamente')
-      setNewCartera({ nombre: '', asesor_id: '' })
-      setCarteras([...carteras, { ...cartera, perfiles: asesores.find(a => a.id === newCartera.asesor_id) }])
-      setIsModalOpen(false)
-      router.refresh()
-    } catch (error: any) {
-      toast.error('Error: ' + error.message)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   async function updateCartera() {
     if (!editingCartera.nombre || !editingCartera.asesor_id) {
@@ -113,105 +72,16 @@ export function CarteraManager({ asesores, initialCarteras }: CarteraManagerProp
   }
 
   return (
-    <div className="space-y-8 pb-10">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+    <div className="space-y-6 pb-10">
+      <div className="flex items-center gap-2 px-1">
+        <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
           Carteras Activas
-          <span className="bg-blue-500/10 text-blue-400 text-[10px] px-2 py-0.5 rounded-full border border-blue-500/20">
-            {carteras.length} TOTAL
-          </span>
         </h2>
+        <div className="h-px flex-1 bg-slate-800/50" />
+      </div>
 
-        {/* Modal Creation Trigger */}
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold shadow-lg shadow-blue-900/20 px-6">
-              <Plus className="w-4 h-4 mr-2" />
-              Nueva Cartera
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-slate-900/95 border-slate-800 backdrop-blur-xl text-white sm:max-w-[450px]">
-            <DialogHeader>
-              <div className="flex items-center gap-3 mb-1">
-                <div className="p-2 bg-blue-600/20 rounded-lg">
-                  <Plus className="w-5 h-5 text-blue-400" />
-                </div>
-                <DialogTitle className="text-2xl font-bold tracking-tight">Nueva Cartera</DialogTitle>
-              </div>
-              <DialogDescription className="text-slate-400">
-                Configura un nuevo portafolio de inversión y sus cuentas operativas.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-6 py-6">
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Nombre de la Cartera</Label>
-                <div className="relative">
-                  <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <Input 
-                    placeholder="Ej: Cartera Norte" 
-                    className="bg-slate-950/50 border-slate-800 focus:border-blue-500/50 focus:ring-blue-500/20 text-white pl-10 h-12 transition-all"
-                    value={newCartera.nombre}
-                    onChange={(e) => setNewCartera({ ...newCartera, nombre: e.target.value })}
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Responsable de la Cartera</Label>
-                <Select 
-                    onValueChange={(val) => setNewCartera({ ...newCartera, asesor_id: val })}
-                    value={newCartera.asesor_id}
-                >
-                  <SelectTrigger className="bg-slate-950/50 border-slate-800 focus:border-blue-500/50 text-white h-12 transition-all">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-slate-500" />
-                      <SelectValue placeholder="Seleccione un responsable" />
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-800 text-white backdrop-blur-xl">
-                    {asesores.map((a) => (
-                      <SelectItem key={a.id} value={a.id} className="focus:bg-blue-600 focus:text-white cursor-pointer">
-                        <div className="flex items-center justify-between w-full gap-4">
-                          <span>{a.nombre_completo}</span>
-                          <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded uppercase font-bold">
-                            {a.rol}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <Button 
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold h-12 shadow-lg shadow-blue-900/20 group transition-all duration-300" 
-                onClick={createCartera}
-                disabled={loading}
-              >
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                    Creando Cartera...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    Crear Cartera
-                    <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
-                  </span>
-                )}
-              </Button>
-              <p className="text-[10px] text-center text-slate-600 italic">
-                * Se crearán automáticamente las cuentas de Caja, Yape y Cobranzas.
-              </p>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Modal Edition */}
-        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+      {/* Modal Edition */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogContent className="bg-slate-900/95 border-slate-800 backdrop-blur-xl text-white sm:max-w-[450px]">
             <DialogHeader>
               <div className="flex items-center gap-3 mb-1">
@@ -288,7 +158,6 @@ export function CarteraManager({ asesores, initialCarteras }: CarteraManagerProp
             </div>
           </DialogContent>
         </Dialog>
-      </div>
 
       {/* Main Grid List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -298,28 +167,25 @@ export function CarteraManager({ asesores, initialCarteras }: CarteraManagerProp
                 className="bg-slate-900/30 border-slate-800/50 hover:border-blue-500/40 hover:bg-slate-900/50 transition-all duration-500 group overflow-hidden relative backdrop-blur-xl shadow-xl border-t-blue-500/5"
                 style={{ animationDelay: `${idx * 80}ms` }}
               >
-                  {/* Hover Glow Effect - Fixed: Added pointer-events-none to avoid blocking clicks */}
                   <div className="absolute -inset-1 bg-gradient-to-r from-blue-600/0 via-blue-600/5 to-indigo-600/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
                   
                   <CardContent className="p-0">
-                      {/* Top Bar with Icon & Status */}
                       <div className="p-3.5 pb-2.5 flex items-start justify-between">
                           <div className="flex gap-3">
                             <div className="p-2 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-xl group-hover:scale-110 transition-transform duration-500 border border-blue-500/10 shadow-lg shadow-blue-900/20">
                                 <Briefcase className="w-4 h-4 text-blue-400" />
                             </div>
                             <div>
-                              <h3 className="text-sm font-bold text-white group-hover:text-blue-200 transition-colors line-clamp-1 tracking-tight">{c.nombre}</h3>
-                              <div className="flex items-center gap-1.5 mt-1">
-                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                                <span className="text-[10px] text-emerald-400 font-bold tracking-widest uppercase">
-                                  En operación
-                                </span>
-                              </div>
+                               <h3 className="text-sm font-bold text-white group-hover:text-blue-200 transition-colors line-clamp-1 tracking-tight">{c.nombre}</h3>
+                               <div className="flex items-center gap-1.5 mt-1">
+                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                                 <span className="text-[9px] text-emerald-400 font-bold tracking-widest uppercase">
+                                   En operación
+                                 </span>
+                               </div>
                             </div>
                           </div>
                           
-                          {/* EDIT BUTTON */}
                           <Button 
                             variant="ghost" 
                             size="icon" 
@@ -334,7 +200,6 @@ export function CarteraManager({ asesores, initialCarteras }: CarteraManagerProp
                           </Button>
                       </div>
 
-                      {/* Middle Info */}
                       <div className="px-3.5 pb-3.5 space-y-3">
                           <div className="flex items-center justify-between p-2 bg-slate-950/40 rounded-xl border border-slate-800/50 shadow-inner group-hover:bg-slate-950/60 transition-colors">
                              <div className="flex items-center gap-2">
@@ -342,16 +207,14 @@ export function CarteraManager({ asesores, initialCarteras }: CarteraManagerProp
                                   <User className="w-3 h-3 text-slate-400" />
                                 </div>
                                 <div className="flex flex-col">
-                                  <span className="text-[8px] text-slate-500 uppercase font-semibold tracking-tighter">Responsable</span>
+                                  <span className="text-[7px] text-slate-500 uppercase font-semibold tracking-tighter">Responsable</span>
                                   <span className="text-xs font-medium text-slate-300">{c.perfiles?.nombre_completo || 'Sin asesor'}</span>
                                 </div>
                              </div>
                              <Building2 className="w-3 h-3 text-slate-700 group-hover:text-slate-600 transition-colors" />
                           </div>
-
                       </div>
 
-                      {/* Footer Action */}
                       <div className="p-3 bg-slate-950/30 border-t border-slate-800/50 flex justify-center">
                           <Button 
                             variant="default" 
@@ -361,8 +224,8 @@ export function CarteraManager({ asesores, initialCarteras }: CarteraManagerProp
                               router.push(`/dashboard/admin/carteras/${c.id}`);
                             }}
                           >
-                            Gestionar
-                            <Plus className="w-3 h-3 opacity-70 group-hover/btn:opacity-100 group-hover/btn:translate-x-1 transition-all" />
+                             Gestionar
+                             <Plus className="w-3 h-3 opacity-70 group-hover/btn:opacity-100 group-hover/btn:translate-x-1 transition-all" />
                           </Button>
                       </div>
                   </CardContent>

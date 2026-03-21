@@ -37,19 +37,19 @@ export default async function AdminEmployeesPage() {
   })
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
+    <div className="page-container">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="page-header">
         <div>
           <div className="flex items-center gap-3">
             <BackButton />
-            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
-              Directorio de Empleados
-            </h1>
+            <div>
+              <h1 className="page-title">Directorio de Empleados</h1>
+              <p className="page-subtitle">
+                Administra el equipo, sus accesos y su información base.
+              </p>
+            </div>
           </div>
-          <p className="text-slate-500 text-xs mt-0.5">
-            Administra el equipo, sus accesos y su información base.
-          </p>
         </div>
       </div>
 

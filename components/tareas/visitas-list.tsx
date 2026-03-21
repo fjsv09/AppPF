@@ -7,8 +7,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
     MapPin, Navigation, Navigation2, User, AlertTriangle,
     CheckCircle2, Loader2, Send, X, ClipboardList, ExternalLink,
-    Phone, MessageSquare
+    Phone, MessageSquare, DollarSign
 } from "lucide-react"
+import { QuickPayModal } from "../prestamos/quick-pay-modal"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { cn } from "@/lib/utils"
@@ -51,6 +52,10 @@ export function VisitasList({ visitas, userId }: VisitasListProps) {
     const [isPending, startTransition] = useTransition()
 
     const [visitasState, setVisitasState] = useState<Visita[]>(visitas)
+
+    // Quick Pay
+    const [quickPayOpen, setQuickPayOpen] = useState(false)
+    const [selectedLoanIdForPay, setSelectedLoanIdForPay] = useState<string | null>(null)
 
     function handleAbrirCompletar(visita: Visita) {
         setVisitaActiva(visita)
@@ -209,13 +214,25 @@ export function VisitasList({ visitas, userId }: VisitasListProps) {
                                 ) : null
                             })()}
                                      {userId === visita.asesor_id && (
-                                        <Button
-                                            onClick={() => handleAbrirCompletar(visita)}
-                                            className="flex-1 bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold gap-1.5"
-                                        >
-                                            <Send className="w-3.5 h-3.5" />
-                                            Registrar Gestión
-                                        </Button>
+                                        <div className="flex-1 flex gap-2">
+                                            <Button
+                                                onClick={() => handleAbrirCompletar(visita)}
+                                                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold gap-1.5"
+                                            >
+                                                <Send className="w-3.5 h-3.5" />
+                                                Gestión
+                                            </Button>
+                                            <Button
+                                                onClick={() => {
+                                                    setSelectedLoanIdForPay(visita.prestamo_id)
+                                                    setQuickPayOpen(true)
+                                                }}
+                                                className="bg-emerald-600 hover:bg-emerald-500 text-white h-9 px-3 text-xs font-semibold gap-1.5"
+                                            >
+                                                <DollarSign className="w-3.5 h-3.5" />
+                                                Pagar
+                                            </Button>
+                                        </div>
                                     )}
                                 </div>
 
@@ -451,6 +468,16 @@ export function VisitasList({ visitas, userId }: VisitasListProps) {
 
                 </DialogContent>
             </Dialog>
+            {/* Quick Pay Modal */}
+            <QuickPayModal 
+                open={quickPayOpen}
+                onOpenChange={setQuickPayOpen}
+                prestamoId={selectedLoanIdForPay || undefined}
+                userRol="asesor"
+                onSuccess={() => {
+                   // router.refresh() if needed
+                }}
+            />
         </>
     )
 }

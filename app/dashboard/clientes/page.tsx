@@ -91,14 +91,22 @@ export default async function ClientesPage() {
     const { data: clientsRaw, error: clientsError } = await clientsQuery
     
     if (clientsError) {
-        console.error('Error fetching clients:', clientsError)
+        console.error('Error cargando clientes:', clientsError)
+        return <div className="p-10 text-slate-500 text-center">
+            No se pudieron cargar los datos de clientes. Intente nuevamente.
+        </div>
     }
 
-    // Fetch reassignments separately to avoid join errors
-    const { data: reassignments } = await supabaseAdmin
+    // NEW: Robust fetch of reassignments (DEBUG: Fetching all to be sure)
+    const clientIdsParsed = (clientsRaw || []).map(c => c.id)
+    let reassignedClientIds = new Set<string>()
+    const { data: reassignments, error: reassignError } = await supabaseAdmin
         .from('historial_reasignaciones_clientes')
-        .select('cliente_id')
-    const reassignedClientIds = new Set(reassignments?.map(r => r.cliente_id) || [])
+        .select('*')
+    
+    if (reassignments) {
+        reassignments.forEach(r => reassignedClientIds.add(r.cliente_id))
+    }
 
     const todayPeru = getTodayPeru()
     
@@ -138,10 +146,10 @@ export default async function ClientesPage() {
 
         return {
             ...client,
-            situacion, // Nueva situación financiera calculada
-            gps_coordenadas, // Attach to root
-            documentos, // Attach to root
-            prestamo_activo_id: activeLoans[0]?.id || latestLoanId, // Usar activo o el más reciente
+            situacion,
+            gps_coordenadas,
+            documentos,
+            prestamo_activo_id: activeLoans[0]?.id || latestLoanId,
             giro_negocio: latestSolicitud?.giro_negocio,
             fuentes_ingresos: latestSolicitud?.fuentes_ingresos,
             ingresos_mensuales: latestSolicitud?.ingresos_mensuales,
@@ -174,19 +182,21 @@ export default async function ClientesPage() {
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="page-container">
              {/* Header with Action */}
-             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-6">
+             <div className="page-header">
                 <div>
-                     <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3">
                         <BackButton />
-                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Directorio Clientes</h1>
-                     </div>
-                     <p className="text-slate-500 text-xs mt-0.5">Gestión de cartera y perfiles</p>
+                        <div>
+                            <h1 className="page-title">Directorio Clientes</h1>
+                            <p className="page-subtitle">Gestión de cartera y perfiles</p>
+                        </div>
+                    </div>
                 </div>
                 {userRole === 'asesor' && (
                     <Link href="/dashboard/solicitudes/nueva">
-                        <Button size="lg" className="bg-purple-600 hover:bg-purple-500 shadow-lg shadow-purple-900/20 text-white font-semibold px-6 py-6 h-auto text-lg hover:scale-105 transition-transform rounded-xl">
+                        <Button className="btn-action bg-purple-600 hover:bg-purple-500 shadow-purple-900/20 hover:scale-105">
                             <Plus className="mr-2 h-5 w-5" />
                             Nueva Solicitud
                         </Button>
@@ -195,63 +205,63 @@ export default async function ClientesPage() {
             </div>
 
              {/* Hero Stats */}
-             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+             <div className="kpi-grid lg:grid-cols-4">
                  {/* Card 1: Total */}
                  <Link href="?tab=todos" className="block h-full">
-                     <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-blue-500/30 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
-                        <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                     <div className="kpi-card group hover:border-blue-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                        <div className="kpi-card-icon">
                             <Users className="w-16 h-16 text-blue-500" />
                         </div>
-                        <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Total Clientes</p>
-                        <h2 className="text-xl md:text-3xl font-bold text-white">{totalClients}</h2>
+                        <p className="kpi-label">Total Clientes</p>
+                        <h2 className="kpi-value">{totalClients}</h2>
                         <div className="mt-2 flex items-center text-blue-400">
-                             <span className="bg-blue-950/50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-blue-900/50">REGISTRADOS</span>
+                             <span className="kpi-badge bg-blue-950/50 text-blue-400 border border-blue-900/50">REGISTRADOS</span>
                         </div>
                      </div>
                  </Link>
 
                  {/* Card 2: Al Día */}
                  <Link href="?tab=al_dia" className="block h-full">
-                     <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-emerald-500/30 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
-                        <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                     <div className="kpi-card group hover:border-emerald-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                        <div className="kpi-card-icon">
                             <CheckCircle2 className="w-16 h-16 text-emerald-500" />
                         </div>
-                        <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Clientes al Día</p>
-                        <h2 className="text-xl md:text-3xl font-bold text-white">{clientsAlDia}</h2>
+                        <p className="kpi-label">Clientes al Día</p>
+                        <h2 className="kpi-value">{clientsAlDia}</h2>
                         <div className="mt-2 text-emerald-400 flex items-center gap-1">
                             <span className="relative flex h-2 w-2">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                             </span>
-                            <span className="text-[10px] font-bold">AL CORRIENTE</span>
+                            <span className="kpi-badge bg-transparent p-0 mt-0">AL CORRIENTE</span>
                         </div>
                      </div>
                  </Link>
 
                  {/* Card 3: En Mora */}
                  <Link href="?tab=mora" className="block h-full">
-                     <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-rose-500/30 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
-                        <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                     <div className="kpi-card group hover:border-rose-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                        <div className="kpi-card-icon">
                             <AlertTriangle className="w-16 h-16 text-rose-500" />
                         </div>
-                        <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">En Mora / Riesgo</p>
-                        <h2 className="text-xl md:text-3xl font-bold text-white">{clientsMora}</h2>
+                        <p className="kpi-label">En Mora / Riesgo</p>
+                        <h2 className="kpi-value">{clientsMora}</h2>
                         <div className="mt-2 text-rose-400 flex items-center gap-1">
-                            <span className="bg-rose-950/50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-rose-900/50">POR GESTIONAR</span>
+                            <span className="kpi-badge bg-rose-950/50 text-rose-400 border border-rose-900/50">POR GESTIONAR</span>
                         </div>
                      </div>
                  </Link>
 
                  {/* Card 4: Recaptables */}
                  <Link href="?tab=recaptables" className="block h-full">
-                     <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-purple-500/30 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
-                        <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                     <div className="kpi-card group hover:border-purple-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                        <div className="kpi-card-icon">
                             <Zap className="w-16 h-16 text-purple-500" />
                         </div>
-                        <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Clientes Recaptables</p>
-                        <h2 className="text-xl md:text-3xl font-bold text-white">{recaptablesCount}</h2>
+                        <p className="kpi-label">Clientes Recaptables</p>
+                        <h2 className="kpi-value">{recaptablesCount}</h2>
                         <div className="mt-2 text-purple-400 flex items-center gap-1">
-                             <span className="bg-purple-950/50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-purple-900/50">APTOS RENOVACIÓN</span>
+                             <span className="kpi-badge bg-purple-950/50 text-purple-400 border border-purple-900/50">APTOS RENOVACIÓN</span>
                         </div>
                      </div>
                  </Link>

@@ -46,8 +46,8 @@ const estadoConfig: Record<string, { label: string; color: string; bg: string }>
     }
 }
 
-export default async function RenovacionDetailPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params
+export default async function RenovacionDetailPage({ params }: { params: { id: string } }) {
+    const { id } = params
     const supabase = await createClient()
     const supabaseAdmin = createAdminClient()
 
@@ -117,22 +117,23 @@ export default async function RenovacionDetailPage({ params }: { params: Promise
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 md:p-6">
-            <div className="max-w-4xl mx-auto space-y-6">
+        <div className="page-container max-w-4xl mx-auto">
                 {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
-                    <div className="flex items-center gap-4">
-                        <BackButton />
-                        <div>
-                            <h1 className="text-xl md:text-2xl font-bold text-white flex items-center gap-3">
-                                Solicitud de Renovación
-                                <Badge className={`${estado.bg} ${estado.color} text-sm`}>
-                                    {estado.label}
-                                </Badge>
-                            </h1>
-                            <p className="text-slate-500 text-xs mt-0.5">
-                                #{id.split('-')[0]} • {formatDate(solicitud.created_at)}
-                            </p>
+                <div className="page-header">
+                    <div>
+                        <div className="flex items-center gap-3">
+                            <BackButton />
+                            <div>
+                                <h1 className="page-title flex items-center gap-3">
+                                    Solicitud de Renovación
+                                    <Badge className={`${estado.bg} ${estado.color} text-sm`}>
+                                        {estado.label}
+                                    </Badge>
+                                </h1>
+                                <p className="page-subtitle">
+                                    #{id.split('-')[0]} • {formatDate(solicitud.created_at)}
+                                </p>
+                            </div>
                         </div>
                     </div>
 
@@ -354,7 +355,6 @@ export default async function RenovacionDetailPage({ params }: { params: Promise
                         />
                     </div>
                 )}
-            </div>
         </div>
     )
 }

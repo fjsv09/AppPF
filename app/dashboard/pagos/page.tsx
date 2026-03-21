@@ -207,58 +207,60 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
     const totalMostrado = pagos?.reduce((acc: number, curr: any) => acc + (curr.monto_pagado || 0), 0) || 0
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="page-container">
             {/* ... (Header & Stats Code Omitted for Brevity - No changes needed there) ... */}
             {/* Header & Actions */}
             {/* Header & Actions */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="page-header">
                 <div>
-                     <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3">
                         <BackButton />
-                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Transacciones</h1>
-                     </div>
-                    <p className="text-slate-500 text-xs mt-0.5">Gestión de cobros y pagos</p>
+                        <div>
+                             <h1 className="page-title">Transacciones</h1>
+                             <p className="page-subtitle">Gestión de cobros y pagos</p>
+                        </div>
+                    </div>
                 </div>
                 <Link href="/dashboard/pagos/registrar" className="w-full md:w-auto">
-                    <Button className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20 px-6 py-6 rounded-xl text-lg font-bold transition-all hover:scale-105 active:scale-95">
-                        <Plus className="mr-2 h-6 w-6" />
+                    <Button className="w-full md:w-auto btn-action bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20 hover:scale-105 active:scale-95">
+                        <Plus className="mr-2 h-5 w-5" />
                         Registrar Nuevo Pago
                     </Button>
                 </Link>
             </div>
 
             {/* Daily Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="kpi-grid md:grid-cols-3">
                 {/* Stat 1: Collected Today */}
-                <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl relative overflow-hidden flex items-center gap-4 group hover:border-emerald-500/30 transition-all">
+                <div className="kpi-card group hover:border-emerald-500/30 flex items-center gap-4">
                    <div className="p-3 bg-emerald-500/10 rounded-xl group-hover:bg-emerald-500/20 transition-colors">
-                        <DollarSign className="w-8 h-8 text-emerald-500" />
+                        <DollarSign className="w-7 h-7 text-emerald-500" />
                    </div>
                    <div>
-                        <p className="text-slate-500 text-xs uppercase font-bold tracking-wider mb-1">Cobrado Hoy</p>
-                        <h3 className="text-2xl font-bold text-white">${totalCobradoHoy.toLocaleString()}</h3>
+                        <p className="kpi-label">Cobrado Hoy</p>
+                        <h3 className="kpi-value">${totalCobradoHoy.toLocaleString()}</h3>
                    </div>
                 </div>
 
                  {/* Stat 2: Pending Today */}
-                 <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl relative overflow-hidden flex items-center gap-4 group hover:border-blue-500/30 transition-all">
+                 <div className="kpi-card group hover:border-blue-500/30 flex items-center gap-4">
                    <div className="p-3 bg-blue-500/10 rounded-xl group-hover:bg-blue-500/20 transition-colors">
-                        <Calendar className="w-8 h-8 text-blue-500" />
+                        <Calendar className="w-7 h-7 text-blue-500" />
                    </div>
                    <div>
-                        <p className="text-slate-500 text-xs uppercase font-bold tracking-wider mb-1">Pendiente Vencido</p>
-                        <h3 className="text-2xl font-bold text-white">${totalPendienteHoy.toLocaleString()}</h3>
+                        <p className="kpi-label">Pendiente Vencido</p>
+                        <h3 className="kpi-value">${totalPendienteHoy.toLocaleString()}</h3>
                    </div>
                 </div>
 
                 {/* Stat 3: Total Recent */}
-                <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl relative overflow-hidden flex items-center gap-4 group hover:border-purple-500/30 transition-all">
+                <div className="kpi-card group hover:border-purple-500/30 flex items-center gap-4">
                    <div className="p-3 bg-purple-500/10 rounded-xl group-hover:bg-purple-500/20 transition-colors">
-                        <TrendingUp className="w-8 h-8 text-purple-500" />
+                        <TrendingUp className="w-7 h-7 text-purple-500" />
                    </div>
                    <div>
-                        <p className="text-slate-500 text-xs uppercase font-bold tracking-wider mb-1">Flujo Reciente</p>
-                        <h3 className="text-2xl font-bold text-white">${totalMostrado.toLocaleString()}</h3>
+                        <p className="kpi-label">Flujo Reciente</p>
+                        <h3 className="kpi-value">${totalMostrado.toLocaleString()}</h3>
                    </div>
                 </div>
             </div>
@@ -267,10 +269,10 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
             <div className="grid lg:grid-cols-5 gap-8">
                 {/* Left Column: Pending Collections Table (Larger) */}
                 <div className="lg:col-span-3 space-y-4">
-                    <div className="flex items-center gap-2">
+                     <h2 className="section-title">
                         <div className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.6)]" />
-                        <h2 className="text-xl font-bold text-white">Préstamos con Cuotas Vencidas</h2>
-                    </div>
+                        Préstamos con Cuotas Vencidas
+                     </h2>
                     
                     <TablaCuotasVencidas
                         cuotasVencidas={cuotasFiltradas as any}
@@ -283,12 +285,12 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
 
                 {/* Right Column: Recent Payments (Smaller) */}
                 <div className="lg:col-span-2 space-y-4">
-                     <div className="flex items-center gap-2">
+                     <h2 className="section-title">
                         <TrendingUp className="h-5 w-5 text-emerald-500" />
-                        <h2 className="text-xl font-bold text-white">Pagos Recientes</h2>
-                    </div>
+                        Pagos Recientes
+                     </h2>
 
-                    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden backdrop-blur-sm">
+                    <div className="content-card">
                         <div className="divide-y divide-slate-800/50 max-h-[500px] overflow-y-auto">
                             {pagos?.map((pago: any) => (
                                 <div key={pago.id} className="p-4 hover:bg-white/5 transition-colors flex items-center justify-between gap-4 group cursor-default">

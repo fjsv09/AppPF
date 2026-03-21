@@ -44,8 +44,13 @@ export function CarteraTransferModal({ carteraId, accounts }: CarteraTransferMod
 
   async function executeTransfer() {
     const monto = parseFloat(transfer.monto)
-    if (!transfer.origen_id || !transfer.destino_id || isNaN(monto) || monto <= 0) {
-      toast.error('Complete todos los campos correctamente')
+    if (!transfer.origen_id || !transfer.destino_id) {
+      toast.error('Seleccione las cuentas de origen y destino')
+      return
+    }
+
+    if (isNaN(monto) || monto <= 0) {
+      toast.error('El monto a transferir debe ser mayor a 0')
       return
     }
 
@@ -165,6 +170,8 @@ export function CarteraTransferModal({ carteraId, accounts }: CarteraTransferMod
               <Input 
                 type="number"
                 step="0.01"
+                min="0.01"
+                required
                 placeholder="0.00" 
                 className="bg-slate-950/50 border-slate-800 focus:border-blue-500/50 text-white pl-8 h-12 text-lg font-black"
                 value={transfer.monto}

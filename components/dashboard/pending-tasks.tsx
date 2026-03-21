@@ -115,7 +115,10 @@ export function PendingTasks({ variant = 'full', asesorId }: PendingTasksProps) 
     }
 
     if (tareas.length === 0) {
-        return null // No don't show anything if there are no tasks
+        if (variant === 'compact') {
+            return <div className="px-5 py-4 text-center text-slate-600 text-[10px] italic">Sin pendientes</div>
+        }
+        return null
     }
 
     if (variant === 'compact') {

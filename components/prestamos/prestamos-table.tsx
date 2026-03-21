@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectLa
 import { 
     AlertCircle, Wallet, Search, Users, Calendar, MoreVertical, 
     CalendarDays, CheckCircle2, AlertTriangle, MapPin, DollarSign, FileText, ChevronRight, Eye,
-    X, RotateCcw, MessageCircle, Loader2, ListFilter, LayoutGrid, Table, Lock
+    X, RotateCcw, MessageCircle, MessageSquare, Loader2, ListFilter, LayoutGrid, Table, Lock
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
@@ -24,6 +24,7 @@ import { createClient } from '@/utils/supabase/client'
 import { ContratoGenerator } from './contrato-generator'
 import { QuickPayModal } from './quick-pay-modal'
 import { SolicitudRenovacionModal } from './solicitud-renovacion-modal'
+import { RegistrarGestionModal } from '../gestiones/registrar-gestion-modal'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -366,6 +367,19 @@ export function PrestamosTable({
     // Quick Pay State
     const [quickPayOpen, setQuickPayOpen] = useState(false)
     const [selectedLoanForPay, setSelectedLoanForPay] = useState<any>(null)
+
+    // Gestión State
+    const [gestionOpen, setGestionOpen] = useState(false)
+    const [selectedLoanForGestion, setSelectedLoanForGestion] = useState<any>(null)
+
+    const handleOpenGestion = (prestamo: any, e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault()
+            e.stopPropagation()
+        }
+        setSelectedLoanForGestion(prestamo)
+        setGestionOpen(true)
+    }
 
     // Sectores Logic
     const sectoresList = useMemo(() => {
@@ -1265,6 +1279,21 @@ export function PrestamosTable({
                                                     </Button>
                                                 )}
 
+                                                {/* Registrar Gestión Button - Para todos */}
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-8 w-8 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50 transition-all"
+                                                    onClick={(e) => {
+                                                        e.preventDefault()
+                                                        e.stopPropagation()
+                                                        handleOpenGestion(prestamo)
+                                                    }}
+                                                    title="Registrar Gestión"
+                                                >
+                                                    <MessageSquare className="w-3.5 h-3.5" />
+                                                </Button>
+
                                                 {/* Dropdown Menu para opciones extra */}
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
@@ -1687,6 +1716,21 @@ export function PrestamosTable({
                                         </Button>
                                     )}
 
+                                    {/* Registrar Gestión Button - Para todos */}
+                                    <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-8 w-8 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50 transition-all"
+                                        onClick={(e) => {
+                                            e.preventDefault()
+                                            e.stopPropagation()
+                                            handleOpenGestion(prestamo)
+                                        }}
+                                        title="Registrar Gestión"
+                                    >
+                                        <MessageSquare className="w-3.5 h-3.5" />
+                                    </Button>
+
                                     {/* Dropdown Menu */}
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
@@ -1763,6 +1807,18 @@ export function PrestamosTable({
                     cronograma={selectedContractCronograma}
                 />
             )}
+
+            <RegistrarGestionModal 
+                open={gestionOpen}
+                onOpenChange={setGestionOpen}
+                prestamoId={selectedLoanForGestion?.id}
+                clienteNombre={selectedLoanForGestion?.clientes?.nombres}
+                clienteTelefono={selectedLoanForGestion?.clientes?.telefono}
+                onSuccess={() => {
+                    // Refresh if needed, but gestiones are usually in a separate view
+                    // router.refresh() 
+                }}
+            />
         </div>
     )
 }

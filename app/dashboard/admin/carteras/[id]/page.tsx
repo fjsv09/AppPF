@@ -10,7 +10,6 @@ import {
     Wallet,
     Activity,
     ShieldCheck,
-    Terminal,
     ArrowRightCircle,
     PiggyBank,
     History,
@@ -34,8 +33,8 @@ interface PageProps {
 
 export default async function CarteraDetailPage({ params, searchParams }: PageProps) {
   const p = await params
-  const id = p.id
   const sp = await searchParams
+  const id = p.id
   const mode = sp.mode
   
   const supabase = await createClient()
@@ -44,29 +43,6 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
 
   if (!user) return <div className="p-10 text-red-500 font-bold text-center">Sesión expirada.</div>
 
-  // Diagnostic View
-  if (mode === 'tech') {
-    return (
-      <div className="p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BackButton />
-            <h1 className="text-xl font-bold text-white flex items-center gap-2">
-              <Terminal className="w-4 h-4 text-emerald-400" />
-              Diagnóstico
-            </h1>
-          </div>
-          <Button asChild variant="outline" size="sm" className="border-blue-500/20 text-blue-400 hover:bg-blue-500/10 h-8">
-            <Link href={`/dashboard/admin/carteras/${id}`}>VOLVER</Link>
-          </Button>
-        </div>
-        <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 space-y-2 font-mono text-xs">
-           <p className="text-blue-400">--- SYSTEM ROUTING ---</p>
-           <p className="text-slate-300">CARTERA: {id}</p>
-        </div>
-      </div>
-    )
-  }
 
   // Premium View Logic
   const { data: perfil } = await adminClient.from('perfiles').select('rol').eq('id', user.id).single()
@@ -115,69 +91,53 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
   const totalLent = activeLoans.reduce((sum: number, l: any) => sum + (parseFloat(l.monto) || 0), 0)
 
   return (
-    <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-700 pb-12 max-w-7xl mx-auto px-2">
-      {/* COMPACT HEADER AREA */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pb-2 border-b border-white/5">
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-             <BackButton />
-             <div className="flex items-center gap-2">
-                <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[8px] font-black uppercase tracking-wider py-0">
-                   ADMIN
-                </Badge>
-                <Link href={`/dashboard/admin/carteras/${id}?mode=tech`} className="text-[9px] text-slate-600 hover:text-white transition-colors flex items-center gap-1">
-                   <Terminal className="w-2.5 h-2.5" /> Logs
-                </Link>
-             </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-600/20 to-indigo-600/20 border border-blue-500/30 flex items-center justify-center">
-               <Briefcase className="w-5 h-5 text-blue-400" />
-            </div>
-            <div>
-               <h1 className="text-base md:text-lg font-bold text-white tracking-tight leading-none truncate">
-                  {cartera.nombre}
-               </h1>
-               <p className="text-slate-500 text-[10px] mt-0.5">
-                  ID: <span className="font-mono bg-slate-900 px-1 py-0.5 rounded border border-slate-800 text-slate-400">{id.slice(0, 8)}...</span>
-               </p>
-            </div>
+    <div className="page-container">
+      {/* Header */}
+      <div className="page-header">
+        <div className="flex items-center gap-3">
+          <BackButton />
+          <div>
+            <h1 className="page-title">
+              Detalle de Cartera
+            </h1>
+            <p className="page-subtitle">
+              {cartera.nombre}
+            </p>
           </div>
         </div>
 
-        {/* Responsible Person Widget (Dynamic) */}
-        <div className="flex items-center gap-3 bg-slate-900/40 p-2 md:p-3 rounded-xl border border-slate-800/60 backdrop-blur-xl min-w-full md:min-w-[300px]">
-           <div className="h-8 w-8 md:h-10 md:w-10 rounded-full border border-blue-500/20 p-0.5 shrink-0">
-              {id === '00000000-0000-0000-0000-000000000000' ? (
-                  <div className="h-full w-full rounded-full bg-blue-500/10 flex items-center justify-center">
-                    <ShieldCheck className="w-5 h-5 text-blue-400" />
-                  </div>
-              ) : responsable?.foto_perfil ? (
-                  <img src={responsable.foto_perfil} className="w-full h-full rounded-full object-cover" />
-              ) : (
-                  <div className="h-full w-full rounded-full bg-slate-800 flex items-center justify-center">
-                    <Users className="w-5 h-5 text-slate-500" />
-                  </div>
-              )}
-           </div>
-           <div className="flex-1">
-              <p className="text-[7px] text-slate-500 font-black uppercase tracking-[0.1em] leading-none mb-0.5">Responsable</p>
-              {id === '00000000-0000-0000-0000-000000000000' ? (
-                  <h3 className="text-xs font-bold text-blue-400 leading-tight uppercase">Control Administrativo</h3> 
-              ) : cartera.asesor_id ? (
-                  <h3 className="text-xs font-bold text-white leading-tight capitalize">
-                    {responsable?.nombre_completo || 'Usuario Desconocido'}
-                  </h3>
-              ) : (
-                  <div className="space-y-1">
-                    <span className="text-xs font-bold text-rose-500 flex items-center gap-1">
-                       <AlertCircle className="w-3 h-3" /> Sin Asesor Asignado
-                    </span>
-                    <CarteraAdvisorAssign carteraId={id} asesores={asesores || []} />
-                  </div>
-              )}
-           </div>
+        {/* Responsible Person Widget (Dynamic) - Adjusted Padding for Header Unity */}
+        <div className="flex items-center gap-2.5 bg-slate-900/40 p-1.5 md:p-2 rounded-xl border border-slate-800/60 backdrop-blur-xl min-w-[180px] md:min-w-[220px]">
+            <div className="h-7 w-7 md:h-8 md:w-8 rounded-full border border-blue-500/20 p-0.5 shrink-0">
+               {id === '00000000-0000-0000-0000-000000000000' ? (
+                   <div className="h-full w-full rounded-full bg-blue-500/10 flex items-center justify-center">
+                     <ShieldCheck className="w-4 h-4 text-blue-400" />
+                   </div>
+               ) : responsable?.foto_perfil ? (
+                   <img src={responsable.foto_perfil} className="w-full h-full rounded-full object-cover" />
+               ) : (
+                   <div className="h-full w-full rounded-full bg-slate-800 flex items-center justify-center">
+                     <Users className="w-4 h-4 text-slate-500" />
+                   </div>
+               )}
+            </div>
+            <div className="flex-1">
+               <p className="text-[6px] text-slate-500 font-black uppercase tracking-[0.1em] leading-none mb-0.5">Responsable</p>
+               {id === '00000000-0000-0000-0000-000000000000' ? (
+                   <h3 className="text-[9px] md:text-[10px] font-bold text-blue-400 leading-tight uppercase">Control Administrativo</h3> 
+               ) : cartera.asesor_id ? (
+                   <h3 className="text-[9px] md:text-[10px] font-bold text-white leading-tight capitalize">
+                     {responsable?.nombre_completo || 'Usuario Desconocido'}
+                   </h3>
+               ) : (
+                   <div className="space-y-1">
+                     <span className="text-[8px] font-bold text-rose-500 flex items-center gap-1">
+                        <AlertCircle className="w-2.5 h-2.5" /> Sin Asesor
+                     </span>
+                     <CarteraAdvisorAssign carteraId={id} asesores={asesores || []} />
+                   </div>
+               )}
+            </div>
         </div>
       </div>
 

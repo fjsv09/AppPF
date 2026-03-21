@@ -158,46 +158,48 @@ export default async function TareasHistoryPage({
 
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-6">
+        <div className="page-container">
+            <div className="page-header">
                 <div>
                     <div className="flex items-center gap-3">
                         <BackButton />
-                        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">Historial de Tareas</h1>
+                        <div>
+                            <h1 className="page-title">Historial de Tareas</h1>
+                            <p className="page-subtitle">Revisa y completa tus tareas pendientes.</p>
+                        </div>
                     </div>
-                    <p className="text-slate-500 text-xs mt-0.5">Revisa y completa tus tareas pendientes.</p>
                 </div>
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
-                <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-amber-500/30 transition-all">
-                    <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+            <div className="kpi-grid lg:grid-cols-4">
+                <div className="kpi-card group hover:border-amber-500/30">
+                    <div className="kpi-card-icon">
                         <Camera className="w-16 h-16 text-amber-500" />
                     </div>
-                    <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Fotos Pendientes</p>
-                    <h2 className="text-xl md:text-3xl font-bold text-white">{pendientesEvidencia.length}</h2>
+                    <p className="kpi-label">Fotos Pendientes</p>
+                    <h2 className="kpi-value">{pendientesEvidencia.length}</h2>
                 </div>
-                <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-blue-500/30 transition-all">
-                    <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                <div className="kpi-card group hover:border-blue-500/30">
+                    <div className="kpi-card-icon">
                         <CheckCircle className="w-16 h-16 text-blue-500" />
                     </div>
-                    <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Fotos Completadas</p>
-                    <h2 className="text-xl md:text-3xl font-bold text-white">{completadasEvidencia.length}</h2>
+                    <p className="kpi-label">Fotos Completadas</p>
+                    <h2 className="kpi-value">{completadasEvidencia.length}</h2>
                 </div>
-                <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-emerald-900/30 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-emerald-500/30 transition-all">
-                    <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                <div className="kpi-card group hover:border-emerald-500/30">
+                    <div className="kpi-card-icon">
                         <ShieldCheck className="w-16 h-16 text-emerald-500" />
                     </div>
-                    <p className="text-emerald-500/50 font-bold text-[10px] uppercase tracking-wider mb-1">Por Auditar</p>
-                    <h2 className="text-xl md:text-3xl font-bold text-emerald-50">{pendientesAuditoria.length}</h2>
+                    <p className="kpi-label">Por Auditar</p>
+                    <h2 className="kpi-value">{pendientesAuditoria.length}</h2>
                 </div>
-                <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-blue-900/30 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-blue-500/30 transition-all">
-                    <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                <div className="kpi-card group hover:border-blue-500/30">
+                    <div className="kpi-card-icon">
                         <ClipboardList className="w-16 h-16 text-blue-500" />
                     </div>
-                    <p className="text-blue-500/50 font-bold text-[10px] uppercase tracking-wider mb-1">Gestiones Pendientes</p>
-                    <h2 className="text-xl md:text-3xl font-bold text-blue-100">{pendientesVisita.length}</h2>
+                    <p className="kpi-label">Gestiones Pendientes</p>
+                    <h2 className="kpi-value">{pendientesVisita.length}</h2>
                 </div>
             </div>
 

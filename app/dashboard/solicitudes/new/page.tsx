@@ -2,14 +2,12 @@ import { createClient } from '@/utils/supabase/server'
 import { SolicitudForm } from '@/components/forms/solicitud-form'
 import { createAdminClient } from '@/utils/supabase/admin'
 
+import { BackButton } from '@/components/ui/back-button'
+
 export const dynamic = 'force-dynamic'
 
-interface PageProps {
-    searchParams: Promise<{ cliente_id?: string }>
-}
-
-export default async function NewSolicitudPage({ searchParams }: PageProps) {
-    const params = await searchParams
+export default async function NewSolicitudPage({ searchParams }: { searchParams: { cliente_id?: string } }) {
+    const params = searchParams
     const supabase = await createClient()
     const supabaseAdmin = createAdminClient()
 
@@ -23,7 +21,7 @@ export default async function NewSolicitudPage({ searchParams }: PageProps) {
     
     if (perfil?.rol !== 'asesor') {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4">
+            <div className="page-container flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4">
                 <div className="p-4 rounded-full bg-red-500/10 text-red-500 mb-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
                 </div>
@@ -40,7 +38,6 @@ export default async function NewSolicitudPage({ searchParams }: PageProps) {
         .eq('estado', 'activo')
         .order('nombres')
 
-    // Fetch feriados (próximos 6 meses)
     // Fetch feriados (Año actual completo para cubrir simulaciones pass/future)
     const currentYear = new Date().getFullYear()
     const startOfYear = `${currentYear}-01-01`
@@ -55,10 +52,17 @@ export default async function NewSolicitudPage({ searchParams }: PageProps) {
     const feriados = feriadosData?.map(f => f.fecha) || []
 
     return (
-        <div className="space-y-6">
-            <div className="space-y-1">
-                <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Nueva Solicitud</h1>
-                <p className="text-slate-500 text-xs mt-0.5">Complete los pasos para registrar la solicitud de crédito</p>
+        <div className="page-container">
+            <div className="page-header">
+                <div>
+                    <div className="flex items-center gap-3">
+                        <BackButton />
+                        <div>
+                             <h1 className="page-title">Nueva Solicitud</h1>
+                             <p className="page-subtitle">Complete los pasos para registrar la solicitud de crédito</p>
+                        </div>
+                    </div>
+                </div>
             </div>
             <SolicitudForm 
                 clients={clients || []} 

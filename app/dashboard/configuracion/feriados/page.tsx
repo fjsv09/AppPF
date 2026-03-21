@@ -75,13 +75,17 @@ export default function FeriadosPage() {
     }
 
     return (
-        <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
+        <div className="page-container max-w-5xl mx-auto">
             {/* Header */}
-            <div className="flex items-center gap-3">
-                <BackButton />
+            <div className="page-header">
                 <div>
-                    <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Configuración de Feriados</h1>
-                    <p className="text-slate-500 text-xs mt-0.5">Define los días no laborables para el cálculo de cronogramas.</p>
+                    <div className="flex items-center gap-3">
+                        <BackButton />
+                        <div>
+                            <h1 className="page-title">Configuración de Feriados</h1>
+                            <p className="page-subtitle">Define los días no laborables para el cálculo de cronogramas.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 

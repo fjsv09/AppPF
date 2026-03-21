@@ -2,44 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   🎨 DESIGN SYSTEM — Sistema de Préstamos y Cobranzas
+   ============================================================
+   Todas las interfaces DEBEN usar estas variables.
+   NO se permiten valores "sueltos" (ej. p-7, text-[13px]).
+   Usar siempre var(--nombre) o las clases utilitarias.
+   ============================================================ */
+
 :root {
+  /* ── Shadcn/UI Component Tokens (light — not used, kept for compat) ── */
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
-
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
-
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
-
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
-
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: 210 40% 98%;
-
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-
   --radius: 0.625rem;
-
   --background: oklch(1 0 0);
-
   --foreground: oklch(0.145 0 0);
-
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -48,19 +45,108 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* ── 📐 SPACING SCALE (múltiplos de 4px) ── */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ── 🔤 TYPOGRAPHY SCALE ── */
+  --font-family:      'Inter', system-ui, -apple-system, sans-serif;
+  --text-2xs:         0.625rem;   /* 10px – labels, badges */
+  --text-xs:          0.75rem;    /* 12px – sub-labels */
+  --text-sm:          0.875rem;   /* 14px – body small */
+  --text-base:        1rem;       /* 16px – body */
+  --text-lg:          1.125rem;   /* 18px – card titles */
+  --text-xl:          1.25rem;    /* 20px – page title mobile */
+  --text-2xl:         1.5rem;     /* 24px – page title desktop */
+  --text-3xl:         1.875rem;   /* 30px – hero numbers */
+  --text-4xl:         2.25rem;    /* 36px – big hero */
+
+  /* ── 🧱 PAGE LAYOUT ── */
+  --page-gap:         var(--space-6);            /* gap between sections */
+  --page-animate:     fade-in duration-500;
+
+  /* ── 📌 PAGE HEADER ── */
+  --header-title-size:       var(--text-xl);
+  --header-title-size-md:    var(--text-2xl);
+  --header-title-weight:     700;
+  --header-title-color:      #ffffff;
+  --header-title-tracking:   -0.025em;
+  --header-subtitle-size:    var(--text-xs);
+  --header-subtitle-color:   rgb(100 116 139);       /* slate-500 */
+  --header-subtitle-mt:      2px;
+  --header-border:           1px solid rgba(255,255,255,0.05);
+  --header-pb:               var(--space-6);
+
+  /* ── 📊 KPI / STAT CARDS ── */
+  --kpi-bg:               linear-gradient(to bottom right, rgb(15 23 42 / 1), rgb(2 6 23 / 1));
+  --kpi-border:           rgb(30 41 59 / 1);         /* slate-800 */
+  --kpi-radius:           0.75rem;                    /* rounded-xl */
+  --kpi-padding:          var(--space-4);
+  --kpi-shadow:           0 10px 15px -3px rgb(0 0 0 / 0.1);
+  --kpi-label-size:       var(--text-2xs);
+  --kpi-label-weight:     700;
+  --kpi-label-color:      rgb(100 116 139);           /* slate-500 */
+  --kpi-label-tracking:   0.05em;
+  --kpi-label-transform:  uppercase;
+  --kpi-label-mb:         var(--space-1);
+  --kpi-value-size:       var(--text-xl);
+  --kpi-value-size-md:    var(--text-3xl);
+  --kpi-value-weight:     700;
+  --kpi-value-color:      #ffffff;
+  --kpi-icon-size:        4rem;                       /* w-16 h-16 */
+  --kpi-icon-opacity:     0.05;
+  --kpi-badge-size:       var(--text-2xs);
+  --kpi-badge-weight:     700;
+  --kpi-badge-radius:     0.25rem;
+  --kpi-badge-px:         6px;
+  --kpi-badge-py:         2px;
+  --kpi-grid-gap:         var(--space-3);
+  --kpi-grid-gap-md:      var(--space-6);
+  --kpi-hover-border:     rgba(255,255,255,0.1);
+
+  /* ── 🟦 ACTION BUTTON (sticky/mobile) ── */
+  --btn-action-radius:    0.75rem;                    /* rounded-xl */
+  --btn-action-font:      var(--text-sm);
+  --btn-action-weight:    700;
+  --btn-action-py:        var(--space-3);
+  --btn-action-px:        var(--space-5);
+
+  /* ── 📋 CONTENT CARDS ── */
+  --content-card-bg:          rgba(15 23 42 / 0.5);   /* slate-900/50 */
+  --content-card-border:      rgb(30 41 59);           /* slate-800 */
+  --content-card-radius:      1rem;                    /* rounded-2xl */
+  --content-card-padding:     var(--space-6);
+
+  /* ── 🏷️ STATUS BADGES (unified) ── */
+  --badge-font-size:     var(--text-2xs);
+  --badge-font-weight:   700;
+  --badge-tracking:      0.05em;
+  --badge-text-transform:uppercase;
+  --badge-px:            6px;
+  --badge-py:            2px;
+  --badge-radius:        0.25rem;
 }
 
-/* Premium Gradient Background - DARK THEME */
+/* ── Premium Gradient Background — DARK THEME ── */
 body {
-    background-color: #0a0a0f;
-    color: #e2e8f0;
-    background-image: 
-        radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
-        radial-gradient(at 50% 0%, hsla(225,39%,30%,0.3) 0, transparent 50%), 
-        radial-gradient(at 100% 0%, hsla(339,49%,30%,0.3) 0, transparent 50%);
-    min-height: 100vh;
+  background-color: #0a0a0f;
+  color: #e2e8f0;
+  background-image:
+    radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%),
+    radial-gradient(at 50% 0%, hsla(225,39%,30%,0.3) 0, transparent 50%),
+    radial-gradient(at 100% 0%, hsla(339,49%,30%,0.3) 0, transparent 50%);
+  min-height: 100vh;
 }
 
+/* ── Animations ── */
 @keyframes bounce-subtle {
   0%, 100% { transform: translateY(-10%); animation-timing-function: cubic-bezier(0.8, 0, 1, 1); }
   50% { transform: translateY(0); animation-timing-function: cubic-bezier(0, 0, 0.2, 1); }
@@ -69,22 +155,23 @@ body {
   animation: bounce-subtle 2s infinite;
 }
 
-/* Custom Scrollbar */
+/* ── Custom Scrollbar ── */
 .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+  width: 6px;
+  height: 6px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
+  background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.2);
 }
 
+/* ── Shadcn/UI Dark Overrides ── */
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -117,6 +204,92 @@ body {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* ============================================================
+   🧩 REUSABLE UTILITY CLASSES (Design System Enforced)
+   ============================================================ */
+@layer components {
+  /* ── Page Container ── */
+  .page-container {
+    @apply space-y-6 animate-in fade-in;
+    animation-duration: 500ms;
+  }
+
+  /* ── Page Header ── */
+  .page-header {
+    @apply flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-6;
+    border-bottom: var(--header-border);
+  }
+
+  .page-title {
+    @apply text-xl md:text-2xl font-bold text-white tracking-tight;
+  }
+
+  .page-subtitle {
+    @apply text-slate-500 text-xs mt-0.5;
+  }
+
+  /* ── KPI Cards Grid ── */
+  .kpi-grid {
+    @apply grid grid-cols-2 gap-3 md:gap-6;
+  }
+
+  .kpi-card {
+    @apply rounded-xl p-4 shadow-lg relative overflow-hidden transition-all;
+    background: var(--kpi-bg);
+    border: 1px solid var(--kpi-border);
+  }
+
+  .kpi-card:hover {
+    border-color: var(--kpi-hover-border);
+  }
+
+  .kpi-card-icon {
+    @apply absolute right-0 top-0 p-2 transition-opacity;
+    opacity: var(--kpi-icon-opacity);
+  }
+
+  .kpi-card:hover .kpi-card-icon {
+    opacity: 0.1;
+  }
+
+  .kpi-label {
+    @apply font-bold uppercase tracking-wider mb-1;
+    font-size: var(--kpi-label-size);
+    color: var(--kpi-label-color);
+  }
+
+  .kpi-value {
+    @apply text-xl md:text-3xl font-bold text-white;
+  }
+
+  .kpi-badge {
+    @apply font-bold uppercase tracking-wider mt-2 inline-flex;
+    font-size: var(--kpi-badge-size);
+    padding: var(--kpi-badge-py) var(--kpi-badge-px);
+    border-radius: var(--kpi-badge-radius);
+  }
+
+  /* ── Content Card (panels, lists) ── */
+  .content-card {
+    @apply rounded-2xl backdrop-blur-sm overflow-hidden;
+    background: var(--content-card-bg);
+    border: 1px solid var(--content-card-border);
+  }
+
+  /* ── Section Title (h2 inside content) ── */
+  .section-title {
+    @apply text-lg font-bold text-white flex items-center gap-2;
+  }
+
+  /* ── Action Button (primary CTA) ── */
+  .btn-action {
+    @apply font-bold text-white transition-all shadow-lg;
+    border-radius: var(--btn-action-radius);
+    font-size: var(--btn-action-font);
+    padding: var(--btn-action-py) var(--btn-action-px);
+  }
 }
 
 @layer base {

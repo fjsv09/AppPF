@@ -47,16 +47,18 @@ export default async function AdminFinanzasPage() {
   })
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
+    <div className="page-container">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-6">
-        <div className="flex items-center gap-3">
-          <BackButton />
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
-              Consolidado Financiero
-            </h1>
-            <p className="text-slate-500 text-xs mt-0.5">Vista global de todas las carteras y flujos de efectivo.</p>
+      <div className="page-header">
+        <div>
+          <div className="flex items-center gap-3">
+            <BackButton />
+            <div>
+              <h1 className="page-title">
+                Consolidado Financiero
+              </h1>
+              <p className="page-subtitle">Vista global de todas las carteras y flujos de efectivo.</p>
+            </div>
           </div>
         </div>
         <div className="flex gap-2">

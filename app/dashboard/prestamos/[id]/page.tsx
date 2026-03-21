@@ -238,7 +238,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
     }
 
     return (
-        <div className="space-y-6 md:space-y-8 animate-in slide-in-from-bottom-4 duration-500 max-w-full overflow-x-hidden">
+        <div className="page-container max-w-full overflow-x-hidden">
             {/* Alerta de Producto Refinanciado */}
             {esProductoDeRefinanciamiento && (
                 <div className="bg-amber-900/30 border border-amber-500/30 rounded-xl p-3 md:p-4 flex items-center gap-3 md:gap-4 shadow-lg mx-0.5">

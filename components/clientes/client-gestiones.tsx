@@ -14,14 +14,7 @@ import { es } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { AsignarVisitaModal } from "@/components/gestiones/asignar-visita-modal"
-
-const TIPO_GESTION_OPCIONES = ['Llamada', 'WhatsApp', 'Visita']
-const RESULTADO_OPCIONES: Record<string, string[]> = {
-    Llamada: ['Promesa de Pago', 'No Contesta', 'Mensaje Dejado', 'Pagó', 'Negativa de Pago'],
-    Visita: ['Contacto Exitoso', 'No Ubicado', 'Promesa de Pago', 'Negativa de Pago'],
-    WhatsApp: ['Mensaje Enviado', 'Visto sin Respuesta', 'Promesa de Pago', 'No Entregado'],
-}
-
+import { RegistrarGestionModal } from "@/components/gestiones/registrar-gestion-modal"
 const TIPO_ICON: Record<string, any> = {
     Llamada: Phone,
     Visita: MapPin,
@@ -73,17 +66,6 @@ export function ClientGestiones({ prestamoId, clienteNombre = 'Cliente', userRol
     const [loading, setLoading] = useState(true)
     const [modalOpen, setModalOpen] = useState(false)
     const [asignarOpen, setAsignarOpen] = useState(false)
-    const [isPending, startTransition] = useTransition()
-
-    // Form state
-    const [tipoGestion, setTipoGestion] = useState('Llamada')
-    const [resultado, setResultado] = useState('Promesa de Pago')
-    const [notas, setNotas] = useState('')
-
-    // GPS state
-    const [coordenadas, setCoordenadas] = useState<string | null>(null)
-    const [gpsLoading, setGpsLoading] = useState(false)
-    const [gpsError, setGpsError] = useState<string | null>(null)
 
     const canCreate = userRol !== 'admin'
     const isAdmin = userRol === 'admin'
@@ -104,80 +86,6 @@ export function ClientGestiones({ prestamoId, clienteNombre = 'Cliente', userRol
             setGestiones(data)
         }
         setLoading(false)
-    }
-
-    function handleChangeTipo(tipo: string) {
-        setTipoGestion(tipo)
-        setResultado(RESULTADO_OPCIONES[tipo][0])
-        // Limpiar GPS si cambia de Visita
-        if (tipo !== 'Visita') {
-            setCoordenadas(null)
-            setGpsError(null)
-        }
-    }
-
-    function handleCloseModal() {
-        setModalOpen(false)
-        setNotas('')
-        setTipoGestion('Llamada')
-        setResultado(RESULTADO_OPCIONES['Llamada'][0])
-        setCoordenadas(null)
-        setGpsError(null)
-    }
-
-    async function captureGPS() {
-        if (!navigator.geolocation) {
-            setGpsError('Tu dispositivo no soporta geolocalización')
-            return
-        }
-        setGpsLoading(true)
-        setGpsError(null)
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                const coords = `${pos.coords.latitude.toFixed(6)},${pos.coords.longitude.toFixed(6)}`
-                setCoordenadas(coords)
-                setGpsLoading(false)
-                toast.success('Ubicación capturada correctamente')
-            },
-            (err) => {
-                setGpsError('No se pudo obtener la ubicación. Verifica los permisos de tu dispositivo.')
-                setGpsLoading(false)
-            },
-            { enableHighAccuracy: true, timeout: 15000 }
-        )
-    }
-
-    async function handleGuardar() {
-        if (!resultado) return
-        // Visita requiere coordenadas
-        if (tipoGestion === 'Visita' && !coordenadas) {
-            toast.error('Debes capturar tu ubicación GPS antes de registrar una visita')
-            return
-        }
-
-        startTransition(async () => {
-            const res = await fetch('/api/gestiones', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    prestamo_id: prestamoId,
-                    tipo_gestion: tipoGestion,
-                    resultado,
-                    notas,
-                    coordenadas
-                })
-            })
-
-            if (res.ok) {
-                const nueva = await res.json()
-                setGestiones(prev => [nueva, ...prev])
-                handleCloseModal()
-                toast.success('Gestión registrada correctamente')
-            } else {
-                const err = await res.json()
-                toast.error(err.error || 'Error al guardar la gestión')
-            }
-        })
     }
 
     return (
@@ -330,195 +238,6 @@ export function ClientGestiones({ prestamoId, clienteNombre = 'Cliente', userRol
                 )}
             </div>
 
-            {/* ── Modal Nueva Gestión ── */}
-            <Dialog open={modalOpen} onOpenChange={(open) => !open && handleCloseModal()}>
-                <DialogContent className="bg-slate-950 border border-slate-800 text-white max-w-md p-0 gap-0 overflow-hidden">
-                    <DialogHeader className="px-6 py-5 border-b border-slate-800 bg-slate-900/50">
-                        <DialogTitle className="flex items-center gap-2 text-white">
-                            <div className="w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center">
-                                <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
-                            </div>
-                            Registrar Gestión
-                        </DialogTitle>
-                    </DialogHeader>
-
-                    <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
-                        {/* Tipo */}
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Vía de Contacto</label>
-                            <div className="grid grid-cols-3 gap-2">
-                                {TIPO_GESTION_OPCIONES.map((tipo) => {
-                                    const TIcon = TIPO_ICON[tipo]
-                                    const isActive = tipoGestion === tipo
-                                    return (
-                                        <button
-                                            key={tipo}
-                                            onClick={() => handleChangeTipo(tipo)}
-                                            className={cn(
-                                                "flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border transition-all",
-                                                isActive
-                                                    ? "bg-blue-600/20 border-blue-500/50 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.1)]"
-                                                    : "bg-slate-900/60 border-slate-800 text-slate-500 hover:border-slate-600 hover:text-slate-400"
-                                            )}
-                                        >
-                                            <TIcon className="w-4 h-4" />
-                                            <span className="text-[11px] font-bold uppercase tracking-tight">{tipo}</span>
-                                        </button>
-                                    )
-                                })}
-                            </div>
-                        </div>
-
-                        {/* Acciones Directas — Solo para Llamada o WhatsApp */}
-                        {(tipoGestion === 'Llamada' || tipoGestion === 'WhatsApp') && prestamoId && (
-                            <div className="space-y-2 animate-in slide-in-from-top duration-300">
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                                    {tipoGestion === 'Llamada' ? <Phone className="w-3 h-3 text-blue-400" /> : <MessageSquare className="w-3 h-3 text-emerald-400" />}
-                                    Acción Directa
-                                </label>
-                                
-                                {tipoGestion === 'Llamada' ? (
-                                    <Button
-                                        asChild
-                                        className="w-full bg-blue-600 hover:bg-blue-500 text-white h-11 gap-2 text-sm font-semibold shadow-lg shadow-blue-900/40"
-                                    >
-                                        <a href={`tel:${gestiones?.[0]?.usuario?.nombre_completo === 'tel' ? '' : (prestamoId as any).telefono || ''}`}>
-                                            <Phone className="w-4 h-4" />
-                                            Llamar al Cliente
-                                        </a>
-                                    </Button>
-                                ) : (
-                                    <Button
-                                        asChild
-                                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white h-11 gap-2 text-sm font-semibold shadow-lg shadow-emerald-900/40"
-                                    >
-                                        <a 
-                                            href={`https://wa.me/${(prestamoId as any).telefono?.replace(/\D/g, '') || ''}`} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                        >
-                                            <MessageSquare className="w-4 h-4" />
-                                            Enviar WhatsApp
-                                        </a>
-                                    </Button>
-                                )}
-                                <p className="text-[10px] text-slate-600 text-center">
-                                    {tipoGestion === 'Llamada' ? 'Al terminar la llamada, registra el resultado abajo' : 'Al enviar el mensaje, registra el resultado abajo'}
-                                </p>
-                            </div>
-                        )}
-
-                        {/* GPS — solo si es Visita */}
-                        {tipoGestion === 'Visita' && (
-                            <div className="space-y-2 animate-in slide-in-from-top duration-300">
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                                    <Navigation className="w-3 h-3 text-blue-400" />
-                                    Verificación GPS
-                                    <span className="text-red-400 text-xs">* Obligatorio</span>
-                                </label>
-                                {coordenadas ? (
-                                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-950/30 border border-emerald-700/40">
-                                        <Navigation2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                                        <div className="flex-1">
-                                            <p className="text-xs font-semibold text-emerald-400">Ubicación capturada ✓</p>
-                                            <p className="text-[10px] font-mono text-emerald-600 mt-0.5">{coordenadas}</p>
-                                        </div>
-                                        <button onClick={() => setCoordenadas(null)} className="text-slate-500 hover:text-slate-300">
-                                            <X className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        <Button
-                                            onClick={captureGPS}
-                                            disabled={gpsLoading}
-                                            className="w-full bg-blue-600 hover:bg-blue-500 text-white h-11 gap-2 text-sm font-semibold"
-                                        >
-                                            {gpsLoading ? (
-                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                            ) : (
-                                                <Navigation className="w-4 h-4" />
-                                            )}
-                                            {gpsLoading ? 'Obteniendo ubicación...' : '📍 Capturar mi Ubicación GPS'}
-                                        </Button>
-                                        {gpsError && (
-                                            <p className="text-xs text-red-400 flex items-start gap-1.5 p-2 bg-red-950/20 rounded-lg border border-red-900/30">
-                                                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                                                {gpsError}
-                                            </p>
-                                        )}
-                                        <p className="text-[10px] text-slate-600 text-center">
-                                            Debes estar en la ubicación del cliente para capturar la ubicación
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Resultado */}
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Resultado de la Gestión</label>
-                            <div className="grid grid-cols-1 gap-1.5">
-                                {(RESULTADO_OPCIONES[tipoGestion] || []).map((res) => {
-                                    const isActive = resultado === res
-                                    return (
-                                        <button
-                                            key={res}
-                                            onClick={() => setResultado(res)}
-                                            className={cn(
-                                                "w-full text-left px-3 py-2.5 rounded-lg border text-sm transition-all",
-                                                isActive
-                                                    ? "bg-blue-600/20 border-blue-500/40 text-blue-200 font-medium"
-                                                    : "bg-slate-900/40 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300"
-                                            )}
-                                        >
-                                            {res}
-                                        </button>
-                                    )
-                                })}
-                            </div>
-                        </div>
-
-                        {/* Notas */}
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                                Notas de Seguimiento <span className="text-slate-600 normal-case font-normal">(opcional)</span>
-                            </label>
-                            <textarea
-                                value={notas}
-                                onChange={e => setNotas(e.target.value)}
-                                rows={3}
-                                className="w-full bg-slate-900 border border-slate-800 text-slate-300 text-sm rounded-xl p-3 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500/50 placeholder:text-slate-600"
-                                placeholder="Ej: Hablé con el titular, prometió pagar mañana..."
-                            />
-                        </div>
-                    </div>
-
-                    <div className="px-6 pb-6 pt-2 flex gap-3 border-t border-slate-900">
-                        <Button
-                            variant="outline"
-                            onClick={handleCloseModal}
-                            className="flex-1 bg-transparent border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800"
-                        >
-                            <X className="w-3.5 h-3.5 mr-2" />
-                            Cancelar
-                        </Button>
-                        <Button
-                            onClick={handleGuardar}
-                            disabled={isPending || !resultado || (tipoGestion === 'Visita' && !coordenadas)}
-                            className="flex-1 bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/30"
-                        >
-                            {isPending ? (
-                                <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
-                            ) : (
-                                <Send className="w-3.5 h-3.5 mr-2" />
-                            )}
-                            Guardar Gestión
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
-
             {/* ── Modal Asignar Visita (Admin) ── */}
             <AsignarVisitaModal
                 prestamoId={prestamoId}
@@ -528,6 +247,14 @@ export function ClientGestiones({ prestamoId, clienteNombre = 'Cliente', userRol
                 onAsignada={(tarea) => {
                     toast.success(`Tarea asignada a ${tarea.asesor?.nombre_completo || 'asesor'}`)
                 }}
+            />
+
+            <RegistrarGestionModal 
+                open={modalOpen}
+                onOpenChange={setModalOpen}
+                prestamoId={prestamoId}
+                clienteNombre={clienteNombre}
+                onSuccess={(nueva) => setGestiones(prev => [nueva, ...prev])}
             />
         </div>
     )

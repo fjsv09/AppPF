@@ -20,8 +20,8 @@ import { Edit } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
-export default async function ClienteProfilePage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params
+export default async function ClienteProfilePage({ params }: { params: { id: string } }) {
+    const { id } = params
     
     // Use admin client to bypass RLS
     const supabaseAdmin = createAdminClient()
@@ -96,7 +96,7 @@ export default async function ClienteProfilePage({ params }: { params: Promise<{
     const userRole = perfil?.rol || 'asesor'
 
     return (
-        <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
+        <div className="page-container">
             {/* Premium Profile Header */}
             <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/20 border border-slate-800 shadow-xl">
                     <div className="relative p-3 md:p-5 flex flex-col md:flex-row gap-4 md:gap-5 items-center md:items-start text-center md:text-left">

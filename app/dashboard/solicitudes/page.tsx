@@ -89,23 +89,24 @@ export default async function SolicitudesPage() {
     const finalizados = solicitudes?.filter(s => ['aprobado', 'rechazado'].includes(s.estado_solicitud)) || []
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="page-container">
             {/* Header with Action */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-6">
+            <div className="page-header">
                 <div>
                     <div className="flex items-center gap-3">
                         <BackButton />
-                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Solicitud de Prospectos y Préstamos</h1>
+                        <div>
+                            <h1 className="page-title">Solicitud de Prospectos y Préstamos</h1>
+                            <p className="page-subtitle">Gestiona las solicitudes de préstamos y nuevos prospectos</p>
+                        </div>
                     </div>
-                    <p className="text-slate-500 text-xs mt-0.5">Gestiona las solicitudes de préstamos y nuevos prospectos</p>
                 </div>
                 {perfil?.rol === 'asesor' && (
                     <Link href={canCreateDueToTime ? "/dashboard/solicitudes/nueva" : "#"}>
                         <Button 
                             disabled={!canCreateDueToTime}
-                            size="lg" 
                             className={cn(
-                                "shadow-lg text-white font-semibold px-6 py-6 h-auto text-lg transition-all rounded-xl",
+                                "btn-action",
                                 canCreateDueToTime 
                                     ? "bg-purple-600 hover:bg-purple-500 shadow-purple-900/20 hover:scale-105" 
                                     : "bg-slate-700 opacity-60 cursor-not-allowed"
@@ -119,52 +120,52 @@ export default async function SolicitudesPage() {
             </div>
 
             {/* Hero Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
+            <div className="kpi-grid md:grid-cols-4">
                 {/* Card 1: Pendientes */}
-                <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-yellow-500/30 transition-all">
-                    <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                <div className="kpi-card group hover:border-yellow-500/30">
+                    <div className="kpi-card-icon">
                         <Clock className="w-16 h-16 text-yellow-500" />
                     </div>
-                    <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Pendientes</p>
-                    <h2 className="text-xl md:text-3xl font-bold text-white">{pendientes.length}</h2>
+                    <p className="kpi-label">Pendientes</p>
+                    <h2 className="kpi-value">{pendientes.length}</h2>
                     <div className="mt-2 text-yellow-400 flex items-center gap-1">
-                        <span className="bg-yellow-950/50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-yellow-900/50">REVISIÓN</span>
+                        <span className="kpi-badge bg-yellow-950/50 text-yellow-400 border border-yellow-900/50">REVISIÓN</span>
                     </div>
                 </div>
 
                 {/* Card 2: Pre-Aprobadas */}
-                <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-blue-500/30 transition-all">
-                    <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                <div className="kpi-card group hover:border-blue-500/30">
+                    <div className="kpi-card-icon">
                         <Eye className="w-16 h-16 text-blue-500" />
                     </div>
-                    <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Pre-Aprobadas</p>
-                    <h2 className="text-xl md:text-3xl font-bold text-white">{preAprobados.length}</h2>
+                    <p className="kpi-label">Pre-Aprobadas</p>
+                    <h2 className="kpi-value">{preAprobados.length}</h2>
                     <div className="mt-2 text-blue-400 flex items-center gap-1">
-                        <span className="bg-blue-950/50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-blue-900/50">POR APROBAR</span>
+                        <span className="kpi-badge bg-blue-950/50 text-blue-400 border border-blue-900/50">POR APROBAR</span>
                     </div>
                 </div>
 
                 {/* Card 3: En Corrección */}
-                <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-orange-500/30 transition-all">
-                    <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                <div className="kpi-card group hover:border-orange-500/30">
+                    <div className="kpi-card-icon">
                         <AlertCircle className="w-16 h-16 text-orange-500" />
                     </div>
-                    <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">En Corrección</p>
-                    <h2 className="text-xl md:text-3xl font-bold text-white">{enCorreccion.length}</h2>
+                    <p className="kpi-label">En Corrección</p>
+                    <h2 className="kpi-value">{enCorreccion.length}</h2>
                     <div className="mt-2 text-orange-400 flex items-center gap-1">
-                        <span className="bg-orange-950/50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-orange-900/50">ATENCIÓN</span>
+                        <span className="kpi-badge bg-orange-950/50 text-orange-400 border border-orange-900/50">ATENCIÓN</span>
                     </div>
                 </div>
 
                 {/* Card 4: Finalizadas */}
-                <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden group hover:border-slate-500/30 transition-all">
-                    <div className="absolute right-0 top-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                <div className="kpi-card group hover:border-slate-500/30">
+                    <div className="kpi-card-icon">
                         <CheckCircle className="w-16 h-16 text-slate-500" />
                     </div>
-                    <p className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mb-1">Finalizadas</p>
-                    <h2 className="text-xl md:text-3xl font-bold text-white">{finalizados.length}</h2>
+                    <p className="kpi-label">Finalizadas</p>
+                    <h2 className="kpi-value">{finalizados.length}</h2>
                     <div className="mt-2 text-slate-400 flex items-center gap-1">
-                        <span className="bg-slate-800 px-1.5 py-0.5 rounded text-[10px] border border-slate-700">COMPLETADO</span>
+                        <span className="kpi-badge bg-slate-800 text-slate-400 border border-slate-700">COMPLETADO</span>
                     </div>
                 </div>
             </div>

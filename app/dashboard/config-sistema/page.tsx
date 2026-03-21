@@ -56,16 +56,16 @@ export default async function ConfiguracionPage() {
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-6 border-b border-white/5">
+        <div className="page-container">
+            <div className="page-header">
                 <div>
-                    <div className="flex items-center gap-3">
+                     <div className="flex items-center gap-3">
                         <BackButton />
-                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
-                            Configuración del Sistema
-                        </h1>
-                    </div>
-                    <p className="text-slate-500 text-xs mt-0.5">Administra los parámetros globales y operativos de la plataforma.</p>
+                        <div>
+                             <h1 className="page-title">Configuración del Sistema</h1>
+                             <p className="page-subtitle">Administra los parámetros globales y operativos de la plataforma.</p>
+                        </div>
+                     </div>
                 </div>
             </div>
 

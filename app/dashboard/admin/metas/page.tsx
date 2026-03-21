@@ -79,18 +79,17 @@ export default function AdminMetasPage() {
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="page-container">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-6">
+            <div className="page-header">
                 <div>
                     <div className="flex items-center gap-3">
                         <BackButton />
-                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
-
-                            Gestión de Metas y Bonos
-                        </h1>
+                        <div>
+                            <h1 className="page-title">Gestión de Metas y Bonos</h1>
+                            <p className="page-subtitle">Asigna objetivos mensuales y configura bonos de rendimiento.</p>
+                        </div>
                     </div>
-                    <p className="text-slate-500 text-xs mt-0.5">Asigna objetivos mensuales y configura bonos de rendimiento.</p>
                 </div>
                 
                 <button 
@@ -98,7 +97,7 @@ export default function AdminMetasPage() {
                         setMetaToEdit(null)
                         setShowCreate(true)
                     }}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95 whitespace-nowrap"
+                    className="btn-action bg-blue-600 hover:bg-blue-700 shadow-blue-500/20 active:scale-95 whitespace-nowrap flex items-center gap-2"
                 >
                     <Plus className="w-5 h-5" />
                     Nueva Meta
@@ -172,34 +171,34 @@ export default function AdminMetasPage() {
             </Dialog>
 
             {/* Resumen de Cumplimiento (Simulado basado en metas cargadas) */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-2xl relative overflow-hidden group">
-                    <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:opacity-10 transition-opacity">
+            <div className="kpi-grid md:grid-cols-4">
+                <div className="kpi-card group">
+                    <div className="kpi-card-icon">
                         <Target className="w-16 h-16 text-white" />
                     </div>
-                    <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Metas Activas</p>
-                    <h3 className="text-2xl font-bold text-white">{metas.length}</h3>
+                    <p className="kpi-label">Metas Activas</p>
+                    <h3 className="kpi-value">{metas.length}</h3>
                 </div>
-                <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-2xl relative overflow-hidden group">
-                    <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                <div className="kpi-card group hover:border-emerald-500/30">
+                    <div className="kpi-card-icon">
                         <Percent className="w-16 h-16 text-emerald-500" />
                     </div>
-                    <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Promedio Cobranza</p>
-                    <h3 className="text-2xl font-bold text-emerald-400">92.4%</h3>
+                    <p className="kpi-label">Promedio Cobranza</p>
+                    <h3 className="kpi-value text-emerald-400">92.4%</h3>
                 </div>
-                <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-2xl relative overflow-hidden group">
-                    <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                <div className="kpi-card group hover:border-amber-500/30">
+                    <div className="kpi-card-icon">
                         <Award className="w-16 h-16 text-amber-500" />
                     </div>
-                    <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Total Bonos Proyectados</p>
-                    <h3 className="text-2xl font-bold text-amber-500">S/ 4,500</h3>
+                    <p className="kpi-label">Total Bonos Proyectados</p>
+                    <h3 className="kpi-value text-amber-500">S/ 4,500</h3>
                 </div>
-                <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-2xl relative overflow-hidden group">
-                    <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                <div className="kpi-card group hover:border-rose-500/30">
+                    <div className="kpi-card-icon">
                         <ShieldAlert className="w-16 h-16 text-rose-500" />
                     </div>
-                    <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Mora Promedio</p>
-                    <h3 className="text-2xl font-bold text-rose-400">6.8%</h3>
+                    <p className="kpi-label">Mora Promedio</p>
+                    <h3 className="kpi-value text-rose-400">6.8%</h3>
                 </div>
             </div>
 

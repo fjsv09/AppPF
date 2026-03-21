@@ -331,19 +331,21 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     // 5. Configuración del Sistema (movido arriba para aplicar a las verificaciones del map)
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="page-container">
             {/* Header with Title and Action Button */}
             {/* Header with Title and Subtitle */}
-            <div className="border-b border-white/5 pb-6 mb-6">
-                <div className="flex items-center gap-4">
-                    <BackButton />
-                    <div>
-                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Panel de Préstamos</h1>
-                        <p className="text-slate-500 text-xs mt-0.5">
-                            {userRole === 'admin' ? 'Visión Global y Rentabilidad' : 
-                             userRole === 'supervisor' ? 'Supervisión de Riesgo y Alertas' : 
-                             'Gestión Diaria de Cobranza'}
-                        </p>
+            <div className="page-header">
+                <div>
+                    <div className="flex items-center gap-4">
+                        <BackButton />
+                        <div>
+                            <h1 className="page-title">Panel de Préstamos</h1>
+                            <p className="page-subtitle">
+                                {userRole === 'admin' ? 'Visión Global y Rentabilidad' : 
+                                 userRole === 'supervisor' ? 'Supervisión de Riesgo y Alertas' : 
+                                 'Gestión Diaria de Cobranza'}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>

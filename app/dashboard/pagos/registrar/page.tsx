@@ -30,12 +30,19 @@ export default async function NewPagoPage() {
     }
 
     return (
-        <div className="space-y-6 max-w-lg mx-auto">
-            <div className="flex items-center gap-3 justify-center">
-                <BackButton />
-                <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Registrar Nuevo Pago</h1>
+        <div className="page-container max-w-lg mx-auto">
+        <div className="page-header">
+            <div>
+                <div className="flex items-center gap-3">
+                    <BackButton />
+                    <div>
+                        <h1 className="page-title">Registrar Nuevo Pago</h1>
+                        <p className="page-subtitle">Procesar abono, cuota o liquidación</p>
+                    </div>
+                </div>
             </div>
-            <PaymentWizard userRol={userRole as any} systemSchedule={systemSchedule} />
         </div>
+        <PaymentWizard userRol={userRole as any} systemSchedule={systemSchedule} />
+    </div>
     )
 }

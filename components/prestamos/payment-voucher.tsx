@@ -36,47 +36,43 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
     if (cronograma && cronograma.length > 0) {
         const paymentDateStr = new Date(payment.created_at).toISOString().split('T')[0]
         
-        // Sumar pagos estrictamente hasta este índice en la historia
+        // 1. Obtener todos los pagos hasta esta fecha inclusive
         const sortedPayments = [...(allPayments || [])].sort((a, b) => 
             new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         )
         const paymentIndex = sortedPayments.findIndex(p => p.id === payment.id)
-        const previousPayments = paymentIndex >= 0 ? sortedPayments.slice(0, paymentIndex + 1) : [payment]
-        const totalPaidToDate = previousPayments.reduce((acc, p) => acc + parseFloat(p.monto_pagado || 0), 0)
+        const paymentsAtThatTime = paymentIndex >= 0 ? sortedPayments.slice(0, paymentIndex + 1) : [payment]
         
-        // Distribuir el total pagado históricamente en formato "cascada" a través de las cuotas
-        let remainingToDistribute = totalPaidToDate
-        const cronogramaOrdenado = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota)
-        
-        let virtualCronograma = cronogramaOrdenado.map(c => {
-            const cuotaAmount = parseFloat(c.monto_cuota)
-            let pagadoEnEstaCuota = 0
-            
-            if (remainingToDistribute >= cuotaAmount) {
-                pagadoEnEstaCuota = cuotaAmount
-                remainingToDistribute -= cuotaAmount
-            } else if (remainingToDistribute > 0) {
-                pagadoEnEstaCuota = remainingToDistribute
-                remainingToDistribute = 0
-            }
-            
-            return {
-                ...c,
-                monto_pagado_virtual: pagadoEnEstaCuota
+        // 2. Agrupar montos pagados por cuota_id hasta ese momento
+        const paidByCuotaAtThatTime: Record<string, number> = {}
+        paymentsAtThatTime.forEach(p => {
+            if (p.cuota_id) {
+                paidByCuotaAtThatTime[p.cuota_id] = (paidByCuotaAtThatTime[p.cuota_id] || 0) + parseFloat(p.monto_pagado || 0)
             }
         })
         
-        pagadas = virtualCronograma.filter(c => c.monto_pagado_virtual >= parseFloat(c.monto_cuota) - 0.01).length
+        // 3. Reconstruir estado virtual del cronograma
+        const virtualCronograma = cronograma.map(c => {
+            const montoPagado = paidByCuotaAtThatTime[c.id] || 0
+            const montoCuota = parseFloat(c.monto_cuota)
+            return {
+                ...c,
+                monto_pagado_virtual: montoPagado,
+                isPagadaVirtual: montoPagado >= (montoCuota - 0.01)
+            }
+        })
+        
+        pagadas = virtualCronograma.filter(c => c.isPagadaVirtual).length
         saldoPendiente = virtualCronograma.reduce((acc, c) => acc + (parseFloat(c.monto_cuota) - c.monto_pagado_virtual), 0)
         
-        // La cuota actual debe ser la cuota hacia la que iba dirigida la operacion (si esta disponible)
-        const primeraPendiente = virtualCronograma.find(c => (parseFloat(c.monto_cuota) - c.monto_pagado_virtual) > 0.01)
-        cuotaActual = payment.cronograma_cuotas?.numero_cuota || (primeraPendiente ? Math.max(1, primeraPendiente.numero_cuota) : totalCuotas)
+        // La cuota actual relativa a ESTE pago
+        cuotaActual = payment.cronograma_cuotas?.numero_cuota || (virtualCronograma.find(c => !c.isPagadaVirtual)?.numero_cuota || totalCuotas)
 
+        // Cuotas atrasadas A ESA FECHA
         cuotasAtrasadas = virtualCronograma.filter(c => {
-            const pending = (parseFloat(c.monto_cuota) - c.monto_pagado_virtual) > 0.01;
-            const isOverdue = c.fecha_vencimiento < paymentDateStr;
-            return pending && isOverdue;
+            const isPending = !c.isPagadaVirtual
+            const isOverdueAtThatTime = c.fecha_vencimiento < paymentDateStr;
+            return isPending && isOverdueAtThatTime;
         }).length
     }
 
@@ -140,8 +136,8 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                             <div className="bg-slate-800/80 rounded-lg p-3 border border-white/10">
                                 <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-2">Estado Actual</p>
                                 <div className="flex justify-between text-sm mb-1">
-                                    <span className="text-slate-300">Cuota Actual</span>
-                                    <span className="text-emerald-400 font-bold">{cuotaActual} de {totalCuotas} cuotas</span>
+                                    <span className="text-slate-300">Progreso</span>
+                                    <span className="text-emerald-400 font-bold">{pagadas} de {totalCuotas} cuotas</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-300">Atrasadas</span>

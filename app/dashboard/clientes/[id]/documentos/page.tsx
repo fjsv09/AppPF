@@ -10,61 +10,62 @@ import ImageUpload from '@/components/image-upload'
 import { ImageGallery } from '@/components/image-gallery'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileText, Upload } from 'lucide-react'
+import { BackButton } from '@/components/ui/back-button'
 
 export const dynamic = 'force-dynamic'
 
-interface Props {
-  params: Promise<{ id: string }>
-}
+export default async function ClienteProfilePage({ params }: { params: { id: string } }) {
+    const { id } = params
 
-export default async function ClienteDocumentosPage({ params }: Props) {
-  const { id } = await params
+    // Use admin client to bypass RLS
+    const supabaseAdmin = createAdminClient()
+    const { data: cliente } = await supabaseAdmin
+        .from('clientes')
+        .select('*, perfiles:asesor_id(nombre_completo), carteras:cartera_id(nombre), archivos_clientes(*)')
+        .eq('id', id)
+        .single()
 
-  // Verificar que el cliente existe
-  const supabaseAdmin = createAdminClient()
-  const { data: cliente } = await supabaseAdmin
-    .from('clientes')
-    .select('id, nombres, dni, archivos_clientes(*)')
-    .eq('id', id)
-    .single()
+    if (!cliente) return notFound()
 
-  if (!cliente) return notFound()
+    // Formatear archivos del cliente al formato Documento
+    const documentos = (cliente.archivos_clientes || []).filter((a: any) => !a.eliminado).map((archivo: any) => ({
+        nombre: archivo.id, 
+        url: archivo.storage_path,
+        tipo: archivo.mime_type,
+        tamaño: archivo.tamaño_bytes,
+        creado_el: archivo.subido_en,
+        metadatos: {
+           tipo_documento: archivo.tipo_documento
+        }
+    }))
 
-  // Formatear archivos del cliente al formato Documento
-  const documentos = (cliente.archivos_clientes || []).filter((a: any) => !a.eliminado).map((archivo: any) => ({
-      nombre: archivo.id, 
-      url: archivo.storage_path,
-      tipo: archivo.mime_type,
-      tamaño: archivo.tamaño_bytes,
-      creado_el: archivo.subido_en,
-      metadatos: {
-         tipo_documento: archivo.tipo_documento
-      }
-  }))
+    // Obtener rol del usuario actual
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: perfil } = await supabaseAdmin
+        .from('perfiles')
+        .select('rol')
+        .eq('id', user?.id)
+        .single()
 
-  // Obtener rol del usuario actual
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: perfil } = await supabaseAdmin
-    .from('perfiles')
-    .select('rol')
-    .eq('id', user?.id)
-    .single()
+    const userRole = perfil?.rol || 'asesor'
+    const canEdit = ['admin', 'supervisor', 'asesor'].includes(userRole)
 
-  const userRole = perfil?.rol || 'asesor'
-  const canEdit = ['admin', 'supervisor', 'asesor'].includes(userRole)
-
-  return (
-    <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-white">
-            Documentos de {cliente.nombres}
-          </h1>
-          <p className="text-slate-500 text-xs mt-0.5">DNI: {cliente.dni}</p>
-        </div>
-      </div>
+    return (
+        <div className="page-container">
+            <div className="page-header">
+                <div>
+                    <div className="flex items-center gap-3">
+                        <BackButton />
+                        <div>
+                            <h1 className="page-title text-xl md:text-2xl font-bold text-white">
+                                Documentos de {cliente.nombres}
+                            </h1>
+                            <p className="page-subtitle">DNI: {cliente.dni}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
       {/* Sección de Upload (Solo para staff) */}
       {canEdit && (

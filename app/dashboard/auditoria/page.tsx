@@ -73,23 +73,23 @@ export default function AuditoriaPage() {
     const userRol = perfil?.rol || 'asesor'
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-6 border-b border-white/5">
+        <div className="page-container">
+            <div className="page-header">
                 <div>
                     <div className="flex items-center gap-3">
                         <BackButton />
-                        <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
-                            Auditoría y Control
-                        </h1>
+                        <div>
+                            <h1 className="page-title">Auditoría y Control</h1>
+                            <p className="page-subtitle">Supervisa las acciones críticas y cumplimiento del equipo.</p>
+                        </div>
                     </div>
-                    <p className="text-slate-500 text-xs mt-0.5">Supervisa las acciones críticas y cumplimiento del equipo.</p>
                 </div>
 
                 {userRol === 'admin' && (
                     <Button 
                         onClick={handleGenerarTareas}
                         disabled={generating}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 gap-2 h-10 px-4"
+                        className="btn-action bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/20 gap-2"
                     >
                         {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                         Generar Tareas Dirigidas

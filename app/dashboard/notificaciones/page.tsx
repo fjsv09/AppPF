@@ -232,19 +232,22 @@ export default function NotificacionesPage() {
     }
 
     return (
-        <div className="min-h-screen p-3 md:p-6">
-            <div className="max-w-2xl mx-auto">
+        <div className="page-container max-w-2xl mx-auto">
                 {/* Header Compacto */}
-                <div className="flex items-center gap-3 mb-6">
-                    <BackButton />
+                <div className="page-header">
                     <div>
-                        <h1 className="text-xl md:text-2xl font-bold text-white leading-tight">Notificaciones</h1>
-                        <p className="text-slate-500 text-xs mt-0.5 uppercase tracking-widest font-semibold">Configuración e Historial</p>
+                        <div className="flex items-center gap-3">
+                            <BackButton />
+                            <div>
+                                <h1 className="page-title">Notificaciones</h1>
+                                <p className="page-subtitle">Configuración e Historial</p>
+                            </div>
+                        </div>
                     </div>
                     {unreadCount > 0 && (
                         <button 
                             onClick={markAllAsRead}
-                            className="ml-auto text-[10px] font-bold text-slate-500 hover:text-purple-400 uppercase tracking-tighter"
+                            className="text-[10px] font-bold text-slate-500 hover:text-purple-400 uppercase tracking-tighter"
                         >
                             Marcar todo leído
                         </button>
@@ -357,7 +360,6 @@ export default function NotificacionesPage() {
                         ))
                     )}
                 </div>
-            </div>
         </div>
     )
 }

@@ -56,7 +56,7 @@ export default async function DashboardPage() {
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="page-container">
             {/* Welcome Hero - Ultra Compact */}
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-blue-950/30 border border-white/5 shadow-xl p-4 md:p-6 mb-4">
                 <div className="relative z-10">

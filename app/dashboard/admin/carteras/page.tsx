@@ -1,9 +1,15 @@
+import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { CarteraManager } from '@/components/admin/cartera-manager'
 import { CarteraHeader } from '@/components/admin/cartera-header'
 import { BackButton } from '@/components/ui/back-button'
 import { redirect } from 'next/navigation'
+
+export const metadata: Metadata = {
+  title: 'Gestión de Carteras'
+}
+
 
 export const dynamic = 'force-dynamic'
 

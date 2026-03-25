@@ -1,9 +1,14 @@
+import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { ConfiguracionForm } from '@/components/admin/configuracion-form'
 import { BackButton } from '@/components/ui/back-button'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+    title: 'Configuración Sistema'
+}
 
 export default async function ConfiguracionPage() {
     const supabase = await createClient()
@@ -47,7 +52,9 @@ export default async function ConfiguracionPage() {
             'horario_apertura',
             'horario_cierre',
             'horario_fin_turno_1',
-            'desbloqueo_hasta'
+            'desbloqueo_hasta',
+            'nombre_sistema',
+            'logo_sistema_url'
         ])
         .order('clave')
     

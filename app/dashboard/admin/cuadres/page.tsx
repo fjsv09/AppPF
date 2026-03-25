@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { CuadreApproval } from '@/components/admin/cuadre-approval'
@@ -9,6 +10,10 @@ import { TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CuadreTabs } from "@/components/admin/cuadre-tabs"
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+  title: 'Gestión de Cuadres'
+}
 
 export default async function AdminCuadresPage() {
   const supabase = await createClient()

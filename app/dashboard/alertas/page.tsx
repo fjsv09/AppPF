@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { Card, CardContent } from '@/components/ui/card'
 import { format } from 'date-fns'
@@ -5,6 +6,10 @@ import { es } from 'date-fns/locale'
 import { AlertTriangle, CheckCircle, ShieldAlert, Clock, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { BackButton } from '@/components/ui/back-button'
+
+export const metadata: Metadata = {
+    title: 'Centro de Alertas'
+}
 
 export default async function AlertasPage() {
     const supabase = await createClient()

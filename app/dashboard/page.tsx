@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { Users, Banknote, ArrowRight, TrendingUp, Receipt, Clock, Wallet, Award } from 'lucide-react'
@@ -8,6 +9,10 @@ import { OperationsHub } from '@/components/dashboard/operations-hub'
 import { AdvisorHub } from '@/components/dashboard/advisor-hub'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+    title: 'Inicio'
+}
 
 export default async function DashboardPage() {
     const supabase = await createClient()

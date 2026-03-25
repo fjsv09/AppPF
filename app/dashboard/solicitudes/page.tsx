@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { SolicitudesList } from '@/components/solicitudes/solicitudes-list'
@@ -12,6 +13,10 @@ import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+
+export const metadata: Metadata = {
+    title: 'Solicitudes'
+}
 
 const estadoConfig: Record<string, { label: string, color: string, icon: any }> = {
     'pendiente_supervision': { label: 'Pendiente Supervisión', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: Clock },

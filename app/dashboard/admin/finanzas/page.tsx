@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { Landmark, Smartphone, TrendingUp, PieChart, Briefcase, Wallet, ArrowUpRight, ArrowDownRight, Users } from 'lucide-react'
@@ -7,6 +8,10 @@ import Link from 'next/link'
 import { BackButton } from '@/components/ui/back-button'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+  title: 'Consolidado Financiero'
+}
 
 export default async function AdminFinanzasPage() {
   const supabase = await createClient()

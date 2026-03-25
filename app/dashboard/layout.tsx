@@ -40,10 +40,26 @@ export default async function DashboardLayout({
   const userRole = perfil?.rol || 'asesor'
   const userName = perfil?.nombre_completo || 'Usuario'
 
+  // Fetch System Config
+  const { data: systemConfig } = await supabaseAdmin
+    .from('configuracion_sistema')
+    .select('clave, valor')
+    .in('clave', ['nombre_sistema', 'logo_sistema_url'])
+
+  const configMap = systemConfig?.reduce((acc: any, item) => {
+    acc[item.clave] = item.valor
+    return acc
+  }, {})
+
   return (
     <SidebarProvider>
       <div className="min-h-screen text-slate-200">
-        <DashboardNav role={userRole} userName={userName} />
+        <DashboardNav 
+          role={userRole} 
+          userName={userName} 
+          systemName={configMap?.nombre_sistema || 'Sistema PF'} 
+          systemLogo={configMap?.logo_sistema_url}
+        />
         <DashboardMain>
           {userRole === 'admin' && <AdminTaskSync />}
           {children}

@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
@@ -7,6 +8,10 @@ import { Clock, Eye, AlertCircle, CheckCircle } from 'lucide-react'
 import { BackButton } from '@/components/ui/back-button'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+    title: 'Solicitudes de Renovación'
+}
 
 export default async function RenovacionesPage() {
     const supabase = await createClient()

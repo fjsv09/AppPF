@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { redirect } from "next/navigation";
@@ -7,6 +8,10 @@ import { SupervisorEfficiency } from "@/components/dashboard/supervisor-efficien
 import { FinancialSummary } from "@/components/dashboard/financial-summary";
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+    title: 'Panel de Supervisión'
+}
 
 export default async function SupervisionPage() {
     const supabase = await createClient();

@@ -16,6 +16,12 @@ import { BackButton } from '@/components/ui/back-button'
 
 export const dynamic = 'force-dynamic'
 
+export async function generateMetadata({ params }: { params: { id: string } }) {
+    return {
+        title: `Solicitud #${params.id.slice(0, 8)}`
+    }
+}
+
 const estadoConfig: Record<string, { label: string, color: string, icon: any }> = {
     'pendiente_supervision': { label: 'Pendiente Supervisión', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: Clock },
     'en_correccion': { label: 'En Corrección', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', icon: AlertCircle },

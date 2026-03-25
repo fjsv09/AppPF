@@ -21,6 +21,18 @@ import { Edit } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
+export async function generateMetadata({ params }: { params: { id: string } }) {
+    const supabaseAdmin = createAdminClient()
+    const { data: cliente } = await supabaseAdmin
+        .from('clientes')
+        .select('nombres')
+        .eq('id', params.id)
+        .single()
+    return {
+        title: cliente?.nombres || 'Detalle Cliente'
+    }
+}
+
 export default async function ClienteProfilePage({ params }: { params: { id: string } }) {
     const { id } = params
     

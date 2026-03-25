@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { CuadreForm } from '@/components/finanzas/cuadre-form'
 import { Clock, History } from 'lucide-react'
@@ -11,6 +12,10 @@ import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
 import { AlertTriangle, Lock } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+    title: 'Cuadre de Caja'
+}
 
 export default async function CuadrePage() {
   const supabase = await createClient()

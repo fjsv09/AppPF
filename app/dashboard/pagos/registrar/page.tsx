@@ -1,7 +1,13 @@
+import { Metadata } from 'next'
 import { PaymentWizard } from '@/components/pagos/payment-wizard'
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { BackButton } from '@/components/ui/back-button'
+
+export const metadata: Metadata = {
+    title: 'Registrar Pago'
+}
+
 
 export default async function NewPagoPage() {
     const supabase = await createClient();

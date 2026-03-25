@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
@@ -10,6 +11,10 @@ import { cn } from '@/lib/utils'
 import { BackButton } from '@/components/ui/back-button'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+    title: 'Historial de Tareas'
+}
 
 export default async function TareasHistoryPage({ 
     searchParams 

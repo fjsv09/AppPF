@@ -1,4 +1,5 @@
 
+import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { Card, CardContent } from '@/components/ui/card'
@@ -12,6 +13,10 @@ import { BackButton } from '@/components/ui/back-button'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+
+export const metadata: Metadata = {
+    title: 'Transacciones y Cobros'
+}
 
 export default async function PagosPage(props: { searchParams: Promise<{ fecha?: string }> }) {
     const searchParams = await props.searchParams;

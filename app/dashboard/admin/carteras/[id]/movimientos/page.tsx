@@ -28,6 +28,19 @@ import { MovementsFilterBar } from '@/components/admin/movements-filter-bar'
 
 export const dynamic = 'force-dynamic'
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+    const p = await params
+    const supabaseAdmin = createAdminClient()
+    const { data: cartera } = await supabaseAdmin
+        .from('carteras')
+        .select('nombre')
+        .eq('id', p.id)
+        .single()
+    return {
+        title: `Movimientos: ${cartera?.nombre || 'Cartera'}`
+    }
+}
+
 interface PageProps {
   params: Promise<{ id: string }>
   searchParams: Promise<{ cuenta?: string, q?: string, tipo?: string }>

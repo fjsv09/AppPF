@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -11,6 +12,10 @@ import { es } from 'date-fns/locale'
 import { NominaPageClient } from '@/components/nomina/nomina-page-client'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+    title: 'Nómina y Sueldos'
+}
 
 export default async function NominaPage() {
   const supabase = await createClient()

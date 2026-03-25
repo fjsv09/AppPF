@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Settings, Save, AlertCircle, CheckCircle2, Loader2, Lock } from 'lucide-react'
+import { Settings, Save, AlertCircle, CheckCircle2, Loader2, Lock, Upload, Image as ImageIcon, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
@@ -73,6 +73,14 @@ const CONFIG_LABELS: Record<string, { nombre: string; descripcion: string; min?:
     'desbloqueo_hasta': {
         nombre: 'Desbloqueo Temporal',
         descripcion: 'Fecha y hora hasta la cual el sistema está desbloqueado por excepción (ISO)',
+    },
+    'nombre_sistema': {
+        nombre: 'Nombre del Sistema',
+        descripcion: 'Nombre principal de la plataforma (Título y Navegación)',
+    },
+    'logo_sistema_url': {
+        nombre: 'Logo del Sistema',
+        descripcion: 'URL de la imagen del logo principal del sistema',
     }
 }
 
@@ -91,6 +99,8 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
     const [saving, setSaving] = useState(false)
     const [unlocking, setUnlocking] = useState(false)
     const [editingKey, setEditingKey] = useState<string | null>(null)
+    const [uploadingLogo, setUploadingLogo] = useState(false)
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     const handleUnlock = async () => {
         setUnlocking(true)
@@ -110,6 +120,58 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         }
     }
 
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        setUploadingLogo(true)
+        const supabase = createClient()
+
+        try {
+            // Obtener el usuario actual para el path (RLS)
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) throw new Error('Usuario no autenticado')
+
+            // Validar tipo de archivo
+            if (!file.type.startsWith('image/')) {
+                throw new Error('El archivo debe ser una imagen')
+            }
+
+            // Validar tamaño (2MB)
+            if (file.size > 2 * 1024 * 1024) {
+                throw new Error('La imagen es demasiado grande (máx 2MB)')
+            }
+
+            const fileName = `logo_${Date.now()}.${file.name.split('.').pop()}`
+            const filePath = `${user.id}/${fileName}`
+
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('avatares')
+                .upload(filePath, file, {
+                    cacheControl: '3600',
+                    upsert: true
+                })
+
+            if (uploadError) throw uploadError
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('avatares')
+                .getPublicUrl(filePath)
+
+            setConfig(prev => ({ ...prev, logo_sistema_url: publicUrl }))
+            
+            toast.success('Logo subido', {
+                description: 'La imagen ha sido procesada correctamente. No olvides guardar los cambios.'
+            })
+        } catch (error: any) {
+            toast.error('Error al subir logo', {
+                description: error.message
+            })
+        } finally {
+            setUploadingLogo(false)
+        }
+    }
+
     const handleSave = async (clave: string) => {
         setSaving(true)
         try {
@@ -126,7 +188,7 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
             }
 
             // Validación (Solo para números)
-            if (!clave.includes('horario') && !clave.includes('desbloqueo')) {
+            if (!clave.includes('horario') && !clave.includes('desbloqueo') && !clave.includes('nombre') && !clave.includes('logo')) {
                 const numValor = parseInt(valor)
                 if (isNaN(numValor)) {
                     throw new Error('El valor debe ser un número')
@@ -170,6 +232,8 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         if (clave.includes('moroso')) return '⚠️'
         if (clave.includes('horario')) return '🕒'
         if (clave.includes('desbloqueo')) return '🔓'
+        if (clave.includes('nombre')) return '🏷️'
+        if (clave.includes('logo')) return '🖼️'
         return '⚙️'
     }
 
@@ -184,7 +248,9 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         'horario_apertura',
         'horario_cierre',
         'horario_fin_turno_1',
-        'desbloqueo_hasta'
+        'desbloqueo_hasta',
+        'nombre_sistema',
+        'logo_sistema_url'
     ]
 
     const displayConfig = [...initialConfig]
@@ -259,8 +325,14 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
                                     </div>
                                     <Input
                                         id={item.clave}
-                                        type={(item.clave.includes('horario') || item.clave.includes('cuadre')) ? 'text' : item.clave.includes('desbloqueo') ? 'text' : 'number'}
-                                        placeholder={item.clave.includes('horario') ? 'HH:MM' : ''}
+                                        type={
+                                            (item.clave.includes('horario') || item.clave.includes('cuadre') || item.clave.includes('nombre') || item.clave.includes('logo')) 
+                                                ? 'text' 
+                                                : item.clave.includes('desbloqueo') 
+                                                    ? 'text' 
+                                                    : 'number'
+                                        }
+                                        placeholder={item.clave.includes('horario') ? 'HH:MM' : item.clave.includes('nombre') ? 'Ej: Sistema PF' : ''}
                                         value={
                                             (isEditing) 
                                                 ? currentValue 
@@ -272,9 +344,46 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
                                         disabled={!isEditing}
                                         className={cn(
                                             "h-9 bg-slate-950/40 border-slate-800 text-white text-sm font-mono transition-all",
-                                            isEditing ? "border-blue-500/40 bg-slate-950" : "opacity-60 cursor-default"
+                                            isEditing ? "border-blue-500/40 bg-slate-950" : "opacity-60 cursor-default",
+                                            item.clave === 'logo_sistema_url' && "pr-10"
                                         )}
                                     />
+                                    {item.clave === 'logo_sistema_url' && isEditing && (
+                                        <div className="mt-2 flex items-center gap-2">
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                ref={fileInputRef}
+                                                onChange={handleLogoUpload}
+                                            />
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={uploadingLogo}
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className="w-full bg-slate-800 text-xs text-slate-300 border-slate-700 hover:bg-slate-700"
+                                            >
+                                                {uploadingLogo ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <Upload className="h-3 w-3 mr-2" />}
+                                                {uploadingLogo ? 'Subiendo...' : 'Subir Imagen'}
+                                            </Button>
+                                        </div>
+                                    )}
+                                    {item.clave === 'logo_sistema_url' && currentValue && (
+                                        <div className="mt-2 relative group/logo">
+                                            <div className="flex justify-center p-2 bg-slate-800/20 rounded-lg border border-slate-700/30">
+                                                <img src={currentValue} alt="Logo Preview" className="h-16 object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                                                {isEditing && (
+                                                    <button 
+                                                        onClick={() => setConfig({ ...config, [item.clave]: '' })}
+                                                        className="absolute -top-1 -right-1 bg-red-600 rounded-full p-0.5 text-white shadow-lg opacity-0 group-hover/logo:opacity-100 transition-opacity"
+                                                    >
+                                                        <X className="h-3 w-3" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Compact Info Blocks */}

@@ -27,9 +27,16 @@ type Role = 'admin' | 'supervisor' | 'asesor'
 interface DashboardNavProps {
     role: Role
     userName?: string
+    systemName?: string
+    systemLogo?: string
 }
 
-export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) {
+export function DashboardNav({ 
+    role, 
+    userName = 'Usuario', 
+    systemName = 'Sistema PF', 
+    systemLogo 
+}: DashboardNavProps) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
@@ -93,13 +100,19 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
                     isCollapsed ? "flex-col gap-4 px-0" : "justify-between"
                 )}>
                     <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex-shrink-0 flex items-center justify-center shadow-lg shadow-blue-900/20">
-                            <Banknote className="w-6 h-6 text-white" />
-                        </div>
+                        {systemLogo ? (
+                            <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 shadow-lg shadow-blue-900/20 border border-white/10">
+                                <img src={systemLogo} alt="Logo" className="w-full h-full object-cover" />
+                            </div>
+                        ) : (
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex-shrink-0 flex items-center justify-center shadow-lg shadow-blue-900/20">
+                                <Banknote className="w-6 h-6 text-white" />
+                            </div>
+                        )}
                         {!isCollapsed && (
                             <div className="animate-in fade-in slide-in-from-left-2 duration-300">
-                                <h1 className="text-xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent truncate w-32" title="Sistema PF">
-                                    Sistema PF
+                                <h1 className="text-xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent truncate w-32" title={systemName}>
+                                    {systemName}
                                 </h1>
                                 <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold border-t border-slate-800/50 pt-0.5 mt-0.5 block">
                                     Professional

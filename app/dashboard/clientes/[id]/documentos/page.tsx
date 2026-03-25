@@ -14,6 +14,18 @@ import { BackButton } from '@/components/ui/back-button'
 
 export const dynamic = 'force-dynamic'
 
+export async function generateMetadata({ params }: { params: { id: string } }) {
+    const supabaseAdmin = createAdminClient()
+    const { data: cliente } = await supabaseAdmin
+        .from('clientes')
+        .select('nombres')
+        .eq('id', params.id)
+        .single()
+    return {
+        title: `Documentos: ${cliente?.nombres || 'Cliente'}`
+    }
+}
+
 export default async function ClienteProfilePage({ params }: { params: { id: string } }) {
     const { id } = params
 

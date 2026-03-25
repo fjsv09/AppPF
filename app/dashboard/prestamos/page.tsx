@@ -1,3 +1,4 @@
+import { Metadata } from "next";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import Link from "next/link";
@@ -9,6 +10,11 @@ import { AdminLoanActions } from "@/components/prestamos/admin-loan-actions";
 import { BackButton } from "@/components/ui/back-button";
 import { getTodayPeru, calculateLoanMetrics } from "@/lib/financial-logic";
 import { cn } from "@/lib/utils";
+
+export const metadata: Metadata = {
+    title: 'Panel de Préstamos'
+}
+
 export default async function PrestamosPage({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
     const sParams = searchParams;
     const filtroSupervisor = sParams.supervisor as string || 'todos';

@@ -11,10 +11,45 @@ const inter = Inter({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: "Sistema de Préstamos y Cobranzas",
-  description: "Gestión eficiente de préstamos y clientes",
-};
+import { createAdminClient } from "@/utils/supabase/admin";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const supabase = createAdminClient();
+  const { data: config } = await supabase
+    .from('configuracion_sistema')
+    .select('clave, valor')
+    .in('clave', ['nombre_sistema', 'logo_sistema_url']);
+
+  const configMap = config?.reduce((acc: any, item) => {
+    acc[item.clave] = item.valor;
+    return acc;
+  }, {});
+
+  const systemName = configMap?.nombre_sistema || "ProFinanzas";
+  const systemLogo = configMap?.logo_sistema_url;
+
+  // Add a timestamp to the logo URL to bust browser cache
+  const logoWithTimestamp = systemLogo ? `${systemLogo}${systemLogo.includes('?') ? '&' : '?'}v=${Date.now()}` : undefined;
+
+  return {
+    title: {
+      default: systemName,
+      template: `%s | ${systemName}`,
+    },
+    description: "Gestión eficiente de préstamos y clientes",
+    icons: logoWithTimestamp ? {
+      icon: [
+        { url: logoWithTimestamp, rel: 'icon', type: 'image/png' },
+        { url: logoWithTimestamp, rel: 'shortcut icon' },
+      ],
+      apple: [
+        { url: logoWithTimestamp, rel: 'apple-touch-icon' },
+      ],
+    } : {
+      icon: '/favicon.ico', // Fallback to local if no logo is configured
+    }
+  };
+}
 
 export default function RootLayout({
   children,

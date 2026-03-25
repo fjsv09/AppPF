@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { redirect } from "next/navigation";
@@ -7,6 +8,10 @@ import { UserPlus, Users, ShieldAlert, Cake, CalendarDays, Shield, AlertTriangle
 import { isSameDay, isSameMonth } from 'date-fns';
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+    title: 'Gestión de Equipo'
+}
 
 export default async function UsuariosPage() {
     const supabase = await createClient();

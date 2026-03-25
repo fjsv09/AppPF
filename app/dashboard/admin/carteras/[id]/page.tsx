@@ -26,6 +26,19 @@ import { CarteraTransferModal } from '@/components/admin/cartera-transfer-modal'
 
 export const dynamic = 'force-dynamic'
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+    const p = await params
+    const supabaseAdmin = createAdminClient()
+    const { data: cartera } = await supabaseAdmin
+        .from('carteras')
+        .select('nombre')
+        .eq('id', p.id)
+        .single()
+    return {
+        title: `Cartera: ${cartera?.nombre || 'Detalle'}`
+    }
+}
+
 interface PageProps {
   params: Promise<{ id: string }>
   searchParams: Promise<{ mode?: string }>

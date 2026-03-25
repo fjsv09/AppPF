@@ -20,6 +20,12 @@ import { BackButton } from "@/components/ui/back-button";
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
+export async function generateMetadata({ params }: { params: { id: string } }) {
+    return {
+        title: `Detalle Préstamo #${params.id.slice(0, 8)}`
+    }
+}
+
 export default async function LoanDetailPage({ params, searchParams }: { params: { id: string }, searchParams: { [key: string]: string | string[] | undefined } }) {
     const isContractTab = searchParams.tab === 'contrato';
 

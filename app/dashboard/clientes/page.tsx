@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
@@ -10,6 +11,10 @@ import { getTodayPeru, calculateClientSituation, calculateLoanMetrics } from '@/
 import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+    title: 'Directorio Clientes'
+}
 
 export default async function ClientesPage() {
     const supabase = await createClient()

@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { EmployeeManager } from '@/components/admin/employee-manager'
@@ -9,6 +10,10 @@ import { format, isSameDay, isSameMonth } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+  title: 'Directorio de Empleados'
+}
 
 export default async function AdminEmployeesPage() {
   const supabase = await createClient()

@@ -18,6 +18,12 @@ import { RenovacionesActions } from '@/components/renovaciones/renovaciones-acti
 
 export const dynamic = 'force-dynamic'
 
+export async function generateMetadata({ params }: { params: { id: string } }) {
+    return {
+        title: `Renovación #${params.id.slice(0, 8)}`
+    }
+}
+
 const estadoConfig: Record<string, { label: string; color: string; bg: string }> = {
     'pendiente_supervision': { 
         label: 'Pendiente Supervisión', 

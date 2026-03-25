@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { Suspense } from 'react'
 import { createClient } from '@/utils/supabase/server'
 import { ExpenseForm } from '@/components/finanzas/expense-form'
@@ -17,6 +18,10 @@ import { ExpenseFilters } from '@/components/finanzas/expense-filters'
 import { redirect } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+    title: 'Gestión de Gastos'
+}
 
 interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>

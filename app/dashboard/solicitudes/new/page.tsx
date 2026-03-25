@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { SolicitudForm } from '@/components/forms/solicitud-form'
 import { createAdminClient } from '@/utils/supabase/admin'
@@ -5,6 +6,10 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { BackButton } from '@/components/ui/back-button'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+    title: 'Nueva Solicitud'
+}
 
 export default async function NewSolicitudPage({ searchParams }: { searchParams: { cliente_id?: string } }) {
     const params = searchParams

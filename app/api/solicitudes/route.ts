@@ -200,22 +200,19 @@ export async function POST(request: Request) {
             documentos_evaluacion: documentos_evaluacion || null
         }
 
-        // Agregar cliente_id o datos de prospecto
-        if (cliente_id) {
-            solicitudData.cliente_id = cliente_id
-        } else {
-            solicitudData.prospecto_nombres = prospecto_nombres
-            solicitudData.prospecto_dni = prospecto_dni
-            solicitudData.prospecto_telefono = prospecto_telefono
-            solicitudData.prospecto_direccion = prospecto_direccion
-            solicitudData.prospecto_referencia = prospecto_referencia
-            
-            // Store prospecto_sector_id inside documentos_evaluacion to bypass DB schema constraint
-            if (prospecto_sector_id) {
-                solicitudData.documentos_evaluacion = {
-                    ...(solicitudData.documentos_evaluacion || {}),
-                    prospecto_sector_id: prospecto_sector_id
-                }
+        // Agregar cliente_id y datos descriptivos (snapshot)
+        solicitudData.cliente_id = cliente_id || null
+        solicitudData.prospecto_nombres = prospecto_nombres || null
+        solicitudData.prospecto_dni = prospecto_dni || null
+        solicitudData.prospecto_telefono = prospecto_telefono || null
+        solicitudData.prospecto_direccion = prospecto_direccion || null
+        solicitudData.prospecto_referencia = prospecto_referencia || null
+
+        // Store prospecto_sector_id inside documentos_evaluacion if provided
+        if (prospecto_sector_id) {
+            solicitudData.documentos_evaluacion = {
+                ...(solicitudData.documentos_evaluacion || {}),
+                prospecto_sector_id: prospecto_sector_id
             }
         }
 

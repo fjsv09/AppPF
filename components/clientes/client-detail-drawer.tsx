@@ -155,8 +155,14 @@ export function ClientDetailDrawer({ cliente, isOpen, onClose, userRol = "asesor
                         )}
                         <div className="mt-3">
                              <Button variant="link" className="p-0 h-auto text-blue-400 text-xs" onClick={() => {
-                                 const query = cliente.gps_coordenadas || cliente.direccion
-                                 window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank')
+                                 const coords = cliente.gps_coordenadas && cliente.gps_coordenadas !== "null" ? cliente.gps_coordenadas : null;
+                                 const query = coords || cliente.direccion;
+                                 if (query) {
+                                     const url = coords 
+                                         ? `https://www.google.com/maps?q=${encodeURIComponent(coords)}`
+                                         : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+                                     window.open(url, '_blank')
+                                 }
                              }}>
                                  Ver en Mapa Google
                              </Button>

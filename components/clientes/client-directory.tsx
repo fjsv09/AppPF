@@ -628,11 +628,15 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                     <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 hover:text-white px-0" onClick={() => handleOpenGestion(cliente)}>
                                         <MessageSquare className="w-4 h-4 text-slate-500" />
                                     </Button>
-                                    {(cliente.gps_coordenadas || cliente.direccion) && (
+                                    {(cliente.gps_coordenadas && cliente.gps_coordenadas !== "null" || cliente.direccion) && (
                                         <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 hover:text-white px-0" onClick={() => {
-                                            const query = cliente.gps_coordenadas || cliente.direccion;
+                                            const coords = cliente.gps_coordenadas && cliente.gps_coordenadas !== "null" ? cliente.gps_coordenadas : null;
+                                            const query = coords || cliente.direccion;
                                             if (query) {
-                                                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank')
+                                                const url = coords 
+                                                    ? `https://www.google.com/maps?q=${encodeURIComponent(coords)}`
+                                                    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+                                                window.open(url, '_blank')
                                             }
                                         }}>
                                             <MapPin className="w-4 h-4 text-slate-500" />

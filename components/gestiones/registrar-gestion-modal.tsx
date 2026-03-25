@@ -90,15 +90,18 @@ export function RegistrarGestionModal({
             (pos) => {
                 const coords = `${pos.coords.latitude.toFixed(6)},${pos.coords.longitude.toFixed(6)}`
                 setCoordenadas(coords)
-                setGpsLoading(true) // Actually we reset it later? In ClientGestiones it was setGpsLoading(false)
                 setGpsLoading(false)
-                toast.success('Ubicación capturada correctly')
+                toast.success('Ubicación capturada correctamente')
             },
             (err) => {
                 setGpsError('No se pudo obtener la ubicación. Verifica los permisos.')
                 setGpsLoading(false)
             },
-            { enableHighAccuracy: true, timeout: 15000 }
+            { 
+                enableHighAccuracy: true, 
+                timeout: 15000,
+                maximumAge: 0 
+            }
         )
     }
 

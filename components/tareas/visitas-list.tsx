@@ -90,7 +90,11 @@ export function VisitasList({ visitas, userId }: VisitasListProps) {
                 setGpsError('No se pudo obtener la ubicación. Verifica los permisos del navegador.')
                 setGpsLoading(false)
             },
-            { enableHighAccuracy: true, timeout: 15000 }
+            { 
+                enableHighAccuracy: true, 
+                timeout: 15000,
+                maximumAge: 0 
+            }
         )
     }
 

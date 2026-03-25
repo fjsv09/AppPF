@@ -40,6 +40,10 @@ interface Cliente {
     id: string
     nombres: string
     dni: string
+    telefono?: string
+    direccion?: string
+    referencia?: string
+    ocupacion?: string
 }
 
 interface Cuenta {
@@ -95,7 +99,7 @@ export function AdminNuevoPrestamoModal({ isOpen, onClose, cuentas, feriados }: 
             try {
                 const { data, error } = await supabase
                     .from('clientes')
-                    .select('id, nombres, dni')
+                    .select('id, nombres, dni, telefono, direccion, referencia, ocupacion')
                     .or(`nombres.ilike.%${searchTerm}%,dni.ilike.%${searchTerm}%`)
                     .limit(20)
 
@@ -162,37 +166,26 @@ export function AdminNuevoPrestamoModal({ isOpen, onClose, cuentas, feriados }: 
 
         setLoading(true)
         try {
-            // Pasos secuenciales con manejo de errores explícito
-            
-            // 1. Crear Solicitud
-            const solRes = await fetch('/api/solicitudes', {
+            // CREACIÓN DIRECTA EN UN SOLO PASO (Bypass de solicitudes)
+            const response = await fetch('/api/prestamos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     cliente_id: selectedClient.id,
-                    monto_solicitado: monto,
+                    monto: monto,
                     interes: calcInteres.interes,
                     cuotas: parseInt(formData.cuotas),
-                    modalidad: formData.modalidad,
-                    fecha_inicio_propuesta: formData.fecha_inicio,
-                    giro_negocio: 'Creación Directa (Admin)',
-                    motivo_prestamo: 'Directo Admin',
-                    gps_coordenadas: '0,0'
+                    frecuencia: formData.modalidad,
+                    fecha_inicio: formData.fecha_inicio,
+                    cuenta_id: formData.cuenta_id
                 })
             })
 
-            const solResult = await solRes.json()
-            if (!solRes.ok) throw new Error(solResult.error || 'Fallo en paso 1 (Creación)')
-
-            // 2. Aprobar inmediatamente
-            const aprRes = await fetch(`/api/solicitudes/${solResult.id}/aprobar`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cuentaOrigenId: formData.cuenta_id })
-            })
-
-            const aprResult = await aprRes.json()
-            if (!aprRes.ok) throw new Error(aprResult.error || 'Fallo en paso 2 (Aprobación)')
+            const result = await response.json()
+            
+            if (!response.ok) {
+                throw new Error(result.error || 'Fallo en la creación del préstamo')
+            }
 
             // ÉXITO TOTAL
             toast.success('¡Préstamo Desembolsado!', {
@@ -204,8 +197,8 @@ export function AdminNuevoPrestamoModal({ isOpen, onClose, cuentas, feriados }: 
             
             // Navegación rápida
             router.refresh()
-            if (aprResult.prestamo?.id) {
-                router.push(`/dashboard/prestamos/${aprResult.prestamo.id}`)
+            if (result.id) {
+                router.push(`/dashboard/prestamos/${result.id}`)
             }
 
         } catch (error: any) {

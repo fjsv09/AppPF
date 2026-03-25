@@ -937,6 +937,22 @@ export function PrestamosTable({
                         </SelectContent>
                     </Select>
 
+                    {/* Map Toggle (Global) */}
+                    <Button
+                        variant={showMap ? "default" : "outline"}
+                        onClick={() => setShowMap(!showMap)}
+                        className={cn(
+                            "h-10 px-3 w-auto shrink-0 transition-colors",
+                            showMap 
+                                ? "bg-emerald-600/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-600/30 hover:text-emerald-300" 
+                                : "bg-slate-950/50 border-slate-700 text-slate-300 hover:bg-slate-900"
+                        )}
+                        disabled={isPending}
+                    >
+                        <MapPin className={cn("w-4 h-4 mr-2", showMap ? "text-emerald-300 animate-bounce" : "text-emerald-400")} />
+                        {showMap ? "Ver Lista" : "Ver Mapa"}
+                    </Button>
+
                     {/* Frequency Filter (Auto Width) */}
                     <Select value={filtroFrecuencia} onValueChange={handleFrequencyFilter} disabled={isPending}>
                         <SelectTrigger className={cn("h-10 w-auto min-w-[140px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
@@ -1000,32 +1016,14 @@ export function PrestamosTable({
                             </SelectContent>
                         </Select>
                     )}
-                    
-                    {/* Map Toggle (Only for Ruta Hoy) */}
-                    {activeFilter === 'ruta_hoy' && (
-                        <Button
-                            variant={showMap ? "default" : "outline"}
-                            onClick={() => setShowMap(!showMap)}
-                            className={cn(
-                                "h-10 px-3 w-auto shrink-0 transition-colors",
-                                showMap 
-                                    ? "bg-emerald-600 hover:bg-emerald-700 text-white border-transparent" 
-                                    : "bg-slate-950/50 border-slate-700 text-slate-300 hover:bg-slate-900"
-                            )}
-                            disabled={isPending}
-                        >
-                            <MapPin className={cn("w-4 h-4 mr-2", showMap ? "text-white" : "text-emerald-400")} />
-                            {showMap ? "Ver Lista" : "Ver Mapa"}
-                        </Button>
-                    )}
                 </div>
-             </div>
+            </div>
 
-             {/* -------------------- CONTENT -------------------- */}
+            {/* -------------------- CONTENT -------------------- */}
             {isPending || isFiltering ? (
                 <TableSkeleton />
-            ) : showMap && activeFilter === 'ruta_hoy' ? (
-                <div className="w-full animate-in fade-in duration-300">
+            ) : showMap ? (
+                <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500 mb-6">
                     <RutaMapa 
                         prestamos={filteredPrestamos} 
                         onQuickPay={handleQuickPay} 

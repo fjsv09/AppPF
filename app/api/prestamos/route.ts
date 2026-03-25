@@ -20,18 +20,16 @@ function formatUTCDate(date: Date): string {
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
-
-    // 1. Verify Auth
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    // Initialize Admin Client for Writes
     const supabaseAdmin = createAdminClient()
 
-    // 2. Verify Role & Access
+    // 1. Verificar Autenticación
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+    // 2. Verificar Perfil y Rol
     const { data: perfil } = await supabaseAdmin
         .from('perfiles')
-        .select('rol')
+        .select('rol, nombre_completo')
         .eq('id', user.id)
         .single()
     
@@ -39,6 +37,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 403 })
     }
 
+    // 3. Verificación de Acceso Centralizada
     const access = await checkSystemAccess(supabaseAdmin, user.id, perfil.rol, 'prestamo')
     if (!access.allowed) {
         return NextResponse.json({ 
@@ -49,168 +48,171 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { cliente_id, monto, interes, fecha_inicio, frecuencia, cuotas } = body
+    const { cliente_id, monto, interes, fecha_inicio, frecuencia, cuotas, cuenta_id } = body
 
     if (!cliente_id || !monto || !interes || !fecha_inicio || !frecuencia || !cuotas) {
-      return NextResponse.json({ error: 'Faltan campos requeridos (frecuencia, cuotas, etc)' }, { status: 400 })
+      return NextResponse.json({ error: 'Faltan campos obligatorios' }, { status: 400 })
     }
 
-    // [NUEVA LÓGICA] Detectar automáticamente si es un préstamo paralelo
+    const principal = parseFloat(monto)
+    const rate = parseFloat(interes)
+    const numCuotas = parseInt(cuotas)
+    const freqNormal = frecuencia.toLowerCase().trim()
+
+    // 4. Validar Cuenta y Saldo si es creación directa con desembolso
+    let cuentaSeleccionada = null
+    if (cuenta_id) {
+        const { data: cuenta } = await supabaseAdmin
+            .from('cuentas_financieras')
+            .select('*')
+            .eq('id', cuenta_id)
+            .single()
+        
+        if (!cuenta) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 })
+        if (cuenta.saldo < principal) {
+            return NextResponse.json({ error: `Saldo insuficiente en la cuenta ${cuenta.nombre}` }, { status: 400 })
+        }
+        cuentaSeleccionada = cuenta
+    }
+
+    // 5. Detectar si es un préstamo paralelo
     const { data: prestamoActivo } = await supabaseAdmin
         .from('prestamos')
         .select('id')
         .eq('cliente_id', cliente_id)
         .eq('estado', 'activo')
-        .limit(1)
         .maybeSingle()
     
     const esParalelo = !!prestamoActivo;
 
+    // 6. Generar Cronograma en memoria para validación y cálculo de fecha fin
+    const { data: holidaysData } = await supabaseAdmin.from('feriados').select('fecha')
+    const holidaysSet = new Set(holidaysData?.map((h: any) => h.fecha) || [])
 
-    const numCuotas = parseInt(cuotas)
-    const principal = parseFloat(monto)
-    const rate = parseFloat(interes)
-    // Normalize frequency
-    const freqNormal = frecuencia.toLowerCase().trim()
-    
-    // 3. Generate Schedule FIRST
-    try {
-        // Fetch Holidays
-        const { data: holidaysData } = await supabaseAdmin
-            .from('feriados')
-            .select('fecha')
-        
-        const holidaysSet = new Set(holidaysData?.map((h: any) => h.fecha) || [])
+    const schedule = []
+    let currentDate = parseUTCDate(fecha_inicio)
+    const totalToPay = principal * (1 + (rate / 100))
+    const quotaAmount = Math.round((totalToPay / numCuotas) * 100) / 100
 
-        const schedule = []
-        
-        // Start from parsed UTC date
-        let currentDate = parseUTCDate(fecha_inicio)
-        
-        // Sim Interest logic
-        const totalToPay = principal * (1 + (rate / 100))
-        const quotaAmount = Math.round((totalToPay / numCuotas) * 100) / 100
-
-        // Grace Period Rule for Daily: Skip the first day completely ("Day Off")
-        // If Start = 28. Grace means "28 is not payment, 29 is not payment (free day?), 30 is payment".
-        // Wait, user said "Start 28... Day 29 should be 30".
-        // This implies: 28 (Creation), 29 (Free), 30 (Payment).
-        
-        // Loop logic:
-        // We start loop with `currentDate` = 28.
-        // Loop 1: nextDate = currentDate + step.
-        // If step is 1 day. nextDate = 29.
-        // User wants 30.
-        // So we need to shift `currentDate` forward by 1 day BEFORE the loop.
-        
-        if (freqNormal === 'diario') {
-             currentDate.setUTCDate(currentDate.getUTCDate() + 1)
-        }
-
-        let quotasCount = 0
-        let safetyCounter = 0
-        const MAX_ITERATIONS = numCuotas * 10 
-
-        while (quotasCount < numCuotas && safetyCounter < MAX_ITERATIONS) {
-            safetyCounter++
-            
-            // Move to next potential date based on frequency
-            let nextDate = new Date(currentDate)
-            
-            if (freqNormal === 'diario') {
-                nextDate.setUTCDate(nextDate.getUTCDate() + 1)
-            } else if (freqNormal === 'semanal') {
-                nextDate.setUTCDate(nextDate.getUTCDate() + 7)
-            } else if (freqNormal === 'quincenal') {
-                nextDate.setUTCDate(nextDate.getUTCDate() + 14)
-            } else if (freqNormal === 'mensual') {
-                nextDate.setUTCMonth(nextDate.getUTCMonth() + 1)
-            }
-
-            // Validation Logic (Skip Sundays/Holidays)
-            let isValidDay = false
-            let checkDate = new Date(nextDate)
-            
-            // Safety break 2
-            let daySafety = 0
-            while (!isValidDay && daySafety < 30) {
-                daySafety++
-                const dayOfWeek = checkDate.getUTCDay() // 0 = Sunday
-                const dateStr = formatUTCDate(checkDate)
-                const isHoliday = holidaysSet.has(dateStr)
-
-                // Skip Sundays OR Holidays
-                if (dayOfWeek === 0 || isHoliday) {
-                    // For Daily: Add 1 day
-                    // For others: usually move to next business day
-                    checkDate.setUTCDate(checkDate.getUTCDate() + 1)
-                } else {
-                    isValidDay = true
-                }
-            }
-            
-            schedule.push({
-                numero_cuota: quotasCount + 1,
-                fecha_vencimiento: formatUTCDate(checkDate),
-                monto_cuota: quotaAmount,
-                estado: 'pendiente'
-            })
-
-            quotasCount++
-            currentDate = checkDate // Update cursor to the actual payment date so next step is relative to this
-        }
-
-        const calculatedEndDate = currentDate
-        const formattedEndDate = formatUTCDate(calculatedEndDate)
-
-        // 4. Create Loan
-        const { data: prestamo, error: loanError } = await supabaseAdmin
-            .from('prestamos')
-            .insert({
-                cliente_id,
-                monto,
-                interes,
-                fecha_inicio,
-                fecha_fin: formattedEndDate, 
-                estado: 'activo',
-                created_by: user.id,
-                es_paralelo: esParalelo
-            })
-            .select()
-            .single()
-
-        if (loanError) {
-            return NextResponse.json({ error: loanError.message }, { status: 500 })
-        }
-
-        // 5. Insert Schedule
-        const scheduleWithId = schedule.map(s => ({ ...s, prestamo_id: prestamo.id }))
-        
-        const { error: scheduleError } = await supabaseAdmin
-            .from('cronograma_cuotas')
-            .insert(scheduleWithId)
-
-        if (scheduleError) throw scheduleError
-
-        // 6. Audit
-        await supabaseAdmin.from('auditoria').insert({
-            usuario_id: user.id,
-            accion: 'crear_prestamo',
-            tabla_afectada: 'prestamos',
-            registro_id: prestamo.id,
-            detalle: { monto, rate, frequency: frecuencia, quotas: numCuotas, generated_end: formattedEndDate }
-        })
-
-        return NextResponse.json(prestamo)
-
-    } catch (calcError: any) {
-        console.error(calcError)
-        return NextResponse.json({ error: 'Calculation error: ' + calcError.message }, { status: 500 })
+    // Regla de día libre para cobro diario
+    if (freqNormal === 'diario') {
+         currentDate.setUTCDate(currentDate.getUTCDate() + 1)
     }
 
+    let quotasCount = 0
+    let safetyCounter = 0
+    while (quotasCount < numCuotas && safetyCounter < 1000) {
+        safetyCounter++
+        let nextDate = new Date(currentDate)
+        
+        if (freqNormal === 'diario') nextDate.setUTCDate(nextDate.getUTCDate() + 1)
+        else if (freqNormal === 'semanal') nextDate.setUTCDate(nextDate.getUTCDate() + 7)
+        else if (freqNormal === 'quincenal') nextDate.setUTCDate(nextDate.getUTCDate() + 14)
+        else if (freqNormal === 'mensual') nextDate.setUTCMonth(nextDate.getUTCMonth() + 1)
+
+        let isValidDay = false
+        let checkDate = new Date(nextDate)
+        let daySafety = 0
+        while (!isValidDay && daySafety < 30) {
+            daySafety++
+            const dayOfWeek = checkDate.getUTCDay()
+            const dateStr = formatUTCDate(checkDate)
+            if (dayOfWeek === 0 || holidaysSet.has(dateStr)) {
+                checkDate.setUTCDate(checkDate.getUTCDate() + 1)
+            } else {
+                isValidDay = true
+            }
+        }
+        
+        schedule.push({
+            numero_cuota: quotasCount + 1,
+            fecha_vencimiento: formatUTCDate(checkDate),
+            monto_cuota: quotaAmount,
+            estado: 'pendiente'
+        })
+        quotasCount++
+        currentDate = checkDate
+    }
+
+    const formattedEndDate = formatUTCDate(currentDate)
+
+    // 7. CREACIÓN DEL PRÉSTAMO (Sin solicitud_id si es directo)
+    const { data: prestamo, error: loanError } = await supabaseAdmin
+        .from('prestamos')
+        .insert({
+            cliente_id,
+            monto: principal,
+            interes: rate,
+            fecha_inicio,
+            fecha_fin: formattedEndDate, 
+            frecuencia: freqNormal,
+            cuotas: numCuotas,
+            estado: 'activo',
+            created_by: user.id,
+            es_paralelo: esParalelo
+        })
+        .select()
+        .single()
+
+    if (loanError) return NextResponse.json({ error: loanError.message }, { status: 500 })
+
+    // 8. Insertar Cronograma
+    const scheduleWithId = schedule.map(s => ({ ...s, prestamo_id: prestamo.id }))
+    const { error: scheduleError } = await supabaseAdmin.from('cronograma_cuotas').insert(scheduleWithId)
+    if (scheduleError) throw scheduleError
+
+    // 9. PROCESAMIENTO CONTABLE (Si se especificó cuenta)
+    if (cuentaSeleccionada) {
+        // Descontar saldo
+        await supabaseAdmin
+            .from('cuentas_financieras')
+            .update({ saldo: cuentaSeleccionada.saldo - principal })
+            .eq('id', cuentaSeleccionada.id)
+        
+        // Registrar movimiento
+        const { data: clientObj } = await supabaseAdmin.from('clientes').select('nombres').eq('id', cliente_id).single()
+        await supabaseAdmin
+            .from('movimientos_financieros')
+            .insert({
+                cartera_id: cuentaSeleccionada.cartera_id,
+                cuenta_origen_id: cuentaSeleccionada.id,
+                monto: principal,
+                tipo: 'egreso',
+                descripcion: `Desembolso Directo Administrador #${prestamo.id.split('-')[0]} - Cliente: ${clientObj?.nombres || 'Cliente'}`,
+                registrado_por: user.id
+            })
+    }
+
+    // 10. Registrar Historial y Tarea de Evidencia
+    await supabaseAdmin.rpc('registrar_cambio_estado', {
+        p_prestamo_id: prestamo.id,
+        p_estado_anterior: 'nuevo',
+        p_estado_nuevo: 'activo',
+        p_dias_atraso: 0,
+        p_motivo: 'Préstamo creado directamente por Administrador',
+        p_responsable: user.id
+    })
+
+    await supabaseAdmin.from('tareas_evidencia').insert({
+        asesor_id: user.id, // En creación directa el admin es el responsable inicial de la tarea o se delega
+        prestamo_id: prestamo.id,
+        tipo: 'nuevo_prestamo'
+    })
+
+    // 11. Auditoría
+    await supabaseAdmin.from('auditoria').insert({
+        usuario_id: user.id,
+        accion: 'crear_prestamo_directo',
+        tabla_afectada: 'prestamos',
+        registro_id: prestamo.id,
+        detalle: { monto: principal, interes: rate, frecuente: freqNormal, paralelo: esParalelo, cuenta_id }
+    })
+
+    return NextResponse.json(prestamo)
+
   } catch (error: any) {
-    console.error(error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    console.error('CRITICAL ERROR IN LOAN CREATION:', error)
+    return NextResponse.json({ error: error.message || 'Error interno del servidor' }, { status: 500 })
   }
 }
 

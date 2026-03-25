@@ -48,8 +48,8 @@ export function GpsInput({ value, onChange, disabled = false, error }: GpsInputP
   }
 
   const openInMaps = () => {
-    if (!value) return
-    const url = `https://www.google.com/maps?q=${value}`
+    if (!value || value === "null") return
+    const url = `https://www.google.com/maps?q=${encodeURIComponent(value)}`
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 

@@ -5,7 +5,8 @@ import { CuadreHistoryTable } from '@/components/admin/cuadre-history-table'
 import { Clock, History, ShieldCheck, Landmark, ListChecks } from 'lucide-react'
 import { BackButton } from '@/components/ui/back-button'
 import { redirect } from 'next/navigation'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { CuadreTabs } from "@/components/admin/cuadre-tabs"
 
 export const dynamic = 'force-dynamic'
 
@@ -78,7 +79,7 @@ export default async function AdminCuadresPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="pendientes" className="w-full">
+      <CuadreTabs defaultTab="pendientes" className="w-full">
         <TabsList className="bg-slate-900 border border-slate-800 p-1 mb-6">
           <TabsTrigger 
             value="pendientes" 
@@ -112,7 +113,7 @@ export default async function AdminCuadresPage() {
         <TabsContent value="historial" className="space-y-4 outline-none">
           <CuadreHistoryTable history={history || []} />
         </TabsContent>
-      </Tabs>
+      </CuadreTabs>
     </div>
   )
 }

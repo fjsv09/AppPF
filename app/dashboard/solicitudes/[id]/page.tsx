@@ -382,8 +382,12 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
                                     <div className="font-bold text-slate-200 text-sm">Solicitud Creada</div>
                                     <div className="text-[10px] font-mono text-slate-500">{format(new Date(solicitud.created_at), "HH:mm", { locale: es })}</div>
                                 </div>
-                                <div className="text-xs text-slate-400 leading-relaxed">
-                                    Generada el {format(new Date(solicitud.created_at), "d MMM yyyy", { locale: es })} por <span className="font-medium text-slate-300">{solicitud.asesor?.nombre_completo}</span>
+                                 <div className="text-xs text-slate-400 leading-relaxed">
+                                    Generada el {format(new Date(solicitud.created_at), "d MMM yyyy", { locale: es })} por <span className="font-medium text-slate-300">
+                                        {(solicitud.observacion_supervisor?.includes('Administración') && solicitud.admin) 
+                                            ? solicitud.admin.nombre_completo 
+                                            : solicitud.asesor?.nombre_completo}
+                                    </span>
                                 </div>
                             </div>
                         </div>

@@ -236,10 +236,10 @@ export function RenovacionesActions({ solicitud, userRole, userId, cuentasAdmin 
                                 </p>
                             </div>
 
-                            {cuentasAdmin && cuentasAdmin.length > 0 && (
+                            {cuentasAdmin && cuentasAdmin.length > 0 ? (
                                 <div className="space-y-2 p-3 bg-slate-950/50 border border-slate-800 rounded-lg text-left">
                                     <label className="text-xs font-semibold text-slate-400 uppercase">
-                                        Seleccionar cuenta origen (Renovaciones):
+                                        Seleccionar cuenta origen (Renovaciones): <span className="text-rose-500">*</span>
                                     </label>
                                     <Select value={cuentaOrigenId} onValueChange={setCuentaOrigenId}>
                                         <SelectTrigger className="w-full bg-slate-900 border-slate-700 text-slate-200">
@@ -250,12 +250,19 @@ export function RenovacionesActions({ solicitud, userRole, userId, cuentasAdmin 
                                                 <SelectItem key={cuenta.id} value={cuenta.id} className="focus:bg-slate-800 focus:text-white cursor-pointer">
                                                     <div className="flex justify-between items-center w-full min-w-[200px] gap-4">
                                                         <span>{cuenta.nombre}</span>
-                                                        <span className="text-emerald-400 font-mono text-xs">${cuenta.saldo}</span>
+                                                        <span className="text-emerald-400 font-mono text-xs">${formatMoney(cuenta.saldo)}</span>
                                                     </div>
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
+                                </div>
+                            ) : (
+                                <div className="bg-rose-900/20 border border-rose-500/30 rounded-lg p-3 flex flex-col items-center gap-2">
+                                    <AlertTriangle className="h-5 w-5 text-rose-500" />
+                                    <p className="text-rose-400 text-sm font-medium text-center">
+                                        No se encontraron cuentas financieras disponibles. Contacte a soporte o cree una cuenta primero.
+                                    </p>
                                 </div>
                             )}
                         </div>

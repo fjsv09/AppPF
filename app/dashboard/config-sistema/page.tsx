@@ -46,6 +46,7 @@ export default async function ConfiguracionPage() {
             'refinanciacion_min_mora',
             'horario_apertura',
             'horario_cierre',
+            'horario_fin_turno_1',
             'desbloqueo_hasta'
         ])
         .order('clave')

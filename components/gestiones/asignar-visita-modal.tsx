@@ -14,14 +14,15 @@ interface Perfil {
 }
 
 interface AsignarVisitaModalProps {
-    prestamoId: string
+    prestamoId?: string
+    clienteId?: string
     clienteNombre: string
     open: boolean
     onClose: () => void
     onAsignada: (tarea: any) => void
 }
 
-export function AsignarVisitaModal({ prestamoId, clienteNombre, open, onClose, onAsignada }: AsignarVisitaModalProps) {
+export function AsignarVisitaModal({ prestamoId, clienteId, clienteNombre, open, onClose, onAsignada }: AsignarVisitaModalProps) {
     const [perfiles, setPerfiles] = useState<Perfil[]>([])
     const [asignadoA, setAsignadoA] = useState('')
     const [instrucciones, setInstrucciones] = useState('')
@@ -32,7 +33,11 @@ export function AsignarVisitaModal({ prestamoId, clienteNombre, open, onClose, o
         if (!open) return
         async function fetchPerfiles() {
             setLoadingPerfiles(true)
-            const res = await fetch(`/api/gestiones/asignables?prestamo_id=${prestamoId}`)
+            const params = new URLSearchParams()
+            if (prestamoId) params.append('prestamo_id', prestamoId)
+            if (clienteId) params.append('cliente_id', clienteId)
+            
+            const res = await fetch(`/api/gestiones/asignables?${params.toString()}`)
             if (res.ok) {
                 const data = await res.json()
                 setPerfiles(data)

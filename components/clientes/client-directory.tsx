@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ClientDetailDrawer } from '@/components/clientes/client-detail-drawer'
-import { Users, Search, Phone, ChevronLeft, ChevronRight, Calendar, Loader2, Link as LinkIcon, Eye, Download, CheckSquare, Square, ChevronDown, Trash2, CalendarHeart, HandCoins, ExternalLink, ListFilter, MoreVertical, MessageCircle, MapPin, X, Map } from 'lucide-react'
+import { Users, Search, Phone, ChevronLeft, ChevronRight, Calendar, Loader2, Link as LinkIcon, Eye, Download, CheckSquare, Square, ChevronDown, Trash2, CalendarHeart, HandCoins, ExternalLink, ListFilter, MoreVertical, MessageCircle, MapPin, X, Map, ShieldCheck, Receipt } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import dynamic from 'next/dynamic'
@@ -23,6 +23,17 @@ const ClientesMapa = dynamic(() => import('./clientes-mapa'), {
     loading: () => <div className="h-[500px] w-full rounded-2xl bg-slate-900 border border-slate-800 animate-pulse flex items-center justify-center text-slate-500">Cargando mapa interactivo...</div>
 })
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { ShieldAlert, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/utils/supabase/client'
 
@@ -68,7 +79,7 @@ interface ClientDirectoryProps {
     userId?: string
 }
 
-type FilterTab = 'todos' | 'activos' | 'con_deuda' | 'sin_prestamos' | 'inactivos' | 'al_dia' | 'mora' | 'recaptables' | 'reasignados'
+type FilterTab = 'todos' | 'activos' | 'con_deuda' | 'sin_prestamos' | 'inactivos' | 'al_dia' | 'mora' | 'recaptables' | 'reasignados' | 'recibos'
 
 const ITEMS_PER_PAGE = 10
 
@@ -102,8 +113,15 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     const [isReassigning, setIsReassigning] = useState(false)
     
     // Quick Pay
-    const [quickPayOpen, setQuickPayOpen] = useState(false)
-    const [selectedLoanIdForPay, setSelectedLoanIdForPay] = useState<string | null>(null)
+
+
+    // Exception Toggle Confirmation State
+    const [confirmExcepcionOpen, setConfirmExcepcionOpen] = useState(false)
+    const [pendingExcepcionClient, setPendingExcepcionClient] = useState<any>(null)
+
+    // Edit Confirmation State
+    const [confirmEditOpen, setConfirmEditOpen] = useState(false)
+    const [pendingEditClient, setPendingEditClient] = useState<any>(null)
 
     // Edit Modal State
     const [editingCliente, setEditingCliente] = useState<any>(null)
@@ -121,13 +139,40 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         setGestionOpen(true)
     }
 
-    const handleOpenQuickPay = (cliente: any, e: React.MouseEvent) => {
+
+
+    const handleToggleExcepcion = (cliente: any, e: React.MouseEvent) => {
         e.stopPropagation()
-        if (cliente.latestLoanId) {
-            setSelectedLoanIdForPay(cliente.latestLoanId)
-            setQuickPayOpen(true)
-        } else {
-            toast.error('Este cliente no tiene un préstamo activo para pagar.')
+        if (userRol !== 'admin') return
+        setPendingExcepcionClient(cliente)
+        setConfirmExcepcionOpen(true)
+    }
+
+    const processToggleExcepcion = async () => {
+        if (!pendingExcepcionClient) return
+
+        const currentStatus = !!pendingExcepcionClient.excepcion_voucher
+        const newStatus = !currentStatus
+        
+        try {
+            const response = await fetch('/api/clientes/toggle-excepcion', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cliente_id: pendingExcepcionClient.id,
+                    excepcion_voucher: newStatus
+                })
+            })
+
+            if (!response.ok) throw new Error('Error al actualizar')
+            
+            toast.success(newStatus ? 'Cliente exonerado de recibos' : 'Cliente ahora requiere recibos')
+            router.refresh()
+        } catch (error) {
+            toast.error('No se pudo actualizar el estado de excepción')
+        } finally {
+            setConfirmExcepcionOpen(false)
+            setPendingExcepcionClient(null)
         }
     }
 
@@ -200,6 +245,9 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         { id: 'sin_prestamos' as FilterTab, label: 'Sin Préstamos', count: clientes.filter(c => c.stats.activeLoansCount === 0).length },
         { id: 'inactivos' as FilterTab, label: 'Inactivos', count: clientes.filter(c => c.estado !== 'activo').length },
         ...(userRol === 'admin' ? [{ id: 'reasignados' as FilterTab, label: 'Reasignados', count: clientes.filter(c => c.wasReassigned).length }] : []),
+        ...((userRol === 'admin' || userRol === 'supervisor') ? [
+            { id: 'recibos' as FilterTab, label: 'Control de Recibos', count: clientes.filter(c => c.stats.activeLoansCount > 0).length }
+        ] : []),
     ], [clientes, userRol])
 
     // Filtering logic
@@ -234,6 +282,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             case 'mora': result = result.filter(c => ['cpp', 'moroso', 'vencido'].includes(c.situacion)); break;
             case 'recaptables': result = result.filter(c => c.isRecaptable); break;
             case 'reasignados': result = result.filter(c => c.wasReassigned); break;
+            case 'recibos': result = result.filter(c => c.stats.activeLoansCount > 0); break;
         }
 
         // Search
@@ -466,7 +515,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                 {/* Desktop Header */}
                 <div 
                     className="hidden md:grid gap-4 px-6 py-3 bg-slate-950/50 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500 items-center"
-                    style={{ gridTemplateColumns: 'repeat(15, minmax(0, 1fr))' }}
+                    style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}
                 >
                     {(userRol === 'admin') && (
                         <div className="col-span-1 flex justify-center">
@@ -489,7 +538,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                     <div className="col-span-1 text-right">Deuda Total</div>
                     <div className="col-span-1 text-center">Préstamos</div>
                     <div className={cn("col-span-1 text-center", userRol === 'asesor' && "col-span-2")}>Estado</div>
-                    <div className="col-span-1 text-right">Acciones</div>
+                    <div className="col-span-2 text-right">Acciones</div>
                 </div>
 
                 {/* Content */}
@@ -532,6 +581,9 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                         <div>
                                             <div className="flex items-center gap-2">
                                                 <h3 className="text-slate-100 font-bold text-sm truncate max-w-[150px]">{cliente.nombres}</h3>
+                                                {cliente.excepcion_voucher && (userRol === 'admin' || userRol === 'supervisor') && (
+                                                    <Badge className="bg-purple-500/20 text-purple-400 text-[8px] h-4 px-1 border-purple-500/30">EXENTO</Badge>
+                                                )}
                                             </div>
                                             <div className="flex items-center gap-2 mt-0.5">
                                                 <Badge variant="outline" className={cn("px-1.5 py-0 text-[10px] h-5 rounded-sm border-0 font-bold", 
@@ -567,23 +619,39 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                     </div>
                                 </div>
                                 <div className="flex gap-2 mt-3 pt-3 border-t border-slate-800/50">
-                                    <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 text-[11px] hover:text-white px-0" onClick={() => window.open(`tel:${cliente.telefono}`)}>
-                                        <Phone className="w-3.5 h-3.5 mr-1 text-slate-500" /> Llamar
+                                    <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 hover:text-white px-0" onClick={() => window.open(`tel:${cliente.telefono}`)}>
+                                        <Phone className="w-4 h-4 text-slate-500" />
                                     </Button>
-                                    <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 text-[11px] hover:text-white px-0" onClick={() => window.open(`https://wa.me/${cliente.telefono}`, '_blank')}>
-                                        <MessageCircle className="w-3.5 h-3.5 mr-1 text-slate-500" /> WhatsApp
+                                    <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 hover:text-white px-0" onClick={() => window.open(`https://wa.me/${cliente.telefono}`, '_blank')}>
+                                        <MessageCircle className="w-4 h-4 text-slate-500" />
                                     </Button>
-                                    <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 text-[11px] hover:text-white px-0" onClick={() => handleOpenGestion(cliente)}>
-                                        <MessageSquare className="w-3.5 h-3.5 mr-1 text-slate-500" /> Gestión
+                                    <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 hover:text-white px-0" onClick={() => handleOpenGestion(cliente)}>
+                                        <MessageSquare className="w-4 h-4 text-slate-500" />
                                     </Button>
                                     {(cliente.gps_coordenadas || cliente.direccion) && (
-                                        <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 text-[11px] hover:text-white px-0" onClick={() => {
+                                        <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 hover:text-white px-0" onClick={() => {
                                             const query = cliente.gps_coordenadas || cliente.direccion;
                                             if (query) {
                                                 window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank')
                                             }
                                         }}>
-                                            <MapPin className="w-3.5 h-3.5 mr-1 text-slate-500" /> GPS
+                                            <MapPin className="w-4 h-4 text-slate-500" />
+                                        </Button>
+                                    )}
+                                    {userRol === 'admin' && (
+                                        <Button 
+                                            size="sm" 
+                                            variant="outline" 
+                                            className={cn(
+                                                "flex-1 h-8 transition-all px-0 rounded-lg",
+                                                cliente.excepcion_voucher 
+                                                    ? "bg-purple-900/40 border-purple-700/50 text-purple-400" 
+                                                    : "bg-slate-900/40 border-slate-800 text-slate-400"
+                                            )}
+                                            onClick={(e) => handleToggleExcepcion(cliente, e)}
+                                            title={cliente.excepcion_voucher ? "Omitir requerimiento de recibo (Activo)" : "Exonerar de recibo"}
+                                        >
+                                            {cliente.excepcion_voucher ? <ShieldCheck className="w-4 h-4" /> : <Receipt className="w-4 h-4" />}
                                         </Button>
                                     )}
                                     <DropdownMenu>
@@ -596,7 +664,13 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                             <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                                             <DropdownMenuSeparator className="bg-slate-800" />
                                             {userRol === 'admin' && (
-                                                <DropdownMenuItem onClick={() => setEditingCliente(cliente)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400">
+                                                <DropdownMenuItem 
+                                                    onClick={() => {
+                                                        setPendingEditClient(cliente)
+                                                        setConfirmEditOpen(true)
+                                                    }} 
+                                                    className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400"
+                                                >
                                                     <Edit className="w-4 h-4 mr-2" /> Editar Datos
                                                 </DropdownMenuItem>
                                             )}
@@ -618,7 +692,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                     cliente.stats.totalDebt > 0 ? "border-l-amber-500" : "border-l-slate-700",
                                     isSelected && "bg-blue-900/10 border-l-blue-500"
                                 )}
-                                style={{ gridTemplateColumns: 'repeat(15, minmax(0, 1fr))' }}
+                                style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}
                             >
                                 {(userRol === 'admin') && (
                                     <div className="col-span-1 flex justify-center">
@@ -640,7 +714,12 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                         )}
                                     </div>
                                     <div className="min-w-0 flex flex-col justify-center">
-                                        <div className="text-sm font-medium text-slate-200 truncate leading-tight">{cliente.nombres}</div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="text-sm font-medium text-slate-200 truncate leading-tight">{cliente.nombres}</div>
+                                            {cliente.excepcion_voucher && (userRol === 'admin' || userRol === 'supervisor') && (
+                                                <Badge className="bg-purple-500/20 text-purple-400 text-[8px] h-4 px-1 border-purple-500/30 shrink-0">EXENTO</Badge>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 
@@ -716,7 +795,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                     </Badge>
                                 </div>
 
-                                <div className="col-span-1 flex justify-end gap-2 text-right">
+                                <div className="col-span-2 flex justify-end gap-1.5 text-right">
                                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all" onClick={() => window.open(`https://wa.me/${cliente.telefono}`, '_blank')}>
                                         <MessageCircle className="w-4 h-4" />
                                     </Button>
@@ -725,7 +804,10 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                             size="sm" 
                                             variant="ghost" 
                                             className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50 transition-all"
-                                            onClick={() => setEditingCliente(cliente)}
+                                            onClick={() => {
+                                                setPendingEditClient(cliente)
+                                                setConfirmEditOpen(true)
+                                            }}
                                         >
                                             <Edit className="w-4 h-4" />
                                         </Button>
@@ -741,18 +823,24 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                         <MessageSquare className="w-4 h-4" />
                                     </Button>
 
-                                    {/* Quick Pay Button */}
-                                    {cliente.latestLoanId && (
+                                    {/* Excepcion Recibo Toggle - Only Admin */}
+                                    {userRol === 'admin' && (
                                         <Button 
                                             size="sm" 
                                             variant="ghost" 
-                                            className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 transition-all font-bold"
-                                            onClick={(e) => handleOpenQuickPay(cliente, e)}
-                                            title="Pagar Cuota"
+                                            className={cn(
+                                                "h-8 w-8 p-0 rounded-lg border transition-all font-bold",
+                                                cliente.excepcion_voucher 
+                                                    ? "text-purple-400 bg-purple-900/40 border-purple-700/50 hover:bg-purple-800/60" 
+                                                    : "text-slate-400 bg-slate-800/40 border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40"
+                                            )}
+                                            onClick={(e) => handleToggleExcepcion(cliente, e)}
+                                            title={cliente.excepcion_voucher ? "Omitir requerimiento de recibo (Activo)" : "Exonerar de recibo"}
                                         >
-                                            <DollarSign className="w-4 h-4" />
+                                            {cliente.excepcion_voucher ? <ShieldCheck className="w-4 h-4" /> : <Receipt className="w-4 h-4" />}
                                         </Button>
                                     )}
+
 
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
@@ -893,7 +981,8 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             <RegistrarGestionModal 
                 open={gestionOpen}
                 onOpenChange={setGestionOpen}
-                prestamoId={selectedClientForGestion?.latestLoanId}
+                prestamoId={selectedClientForGestion?.prestamo_activo_id}
+                prestamos={selectedClientForGestion?.prestamos || []}
                 clienteNombre={selectedClientForGestion?.nombres}
                 clienteTelefono={selectedClientForGestion?.telefono}
                 onSuccess={() => {
@@ -901,15 +990,79 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                 }}
             />
 
-            <QuickPayModal 
-                open={quickPayOpen}
-                onOpenChange={setQuickPayOpen}
-                prestamoId={selectedLoanIdForPay || undefined}
-                userRol={userRol}
-                onSuccess={() => {
-                    router.refresh()
-                }}
-            />
+            <AlertDialog open={confirmExcepcionOpen} onOpenChange={setConfirmExcepcionOpen}>
+                <AlertDialogContent className="bg-slate-900 border-slate-800 border-l-4 border-l-purple-500 max-w-[400px] p-0 overflow-hidden shadow-2xl shadow-purple-900/10">
+                    <div className="p-6">
+                        <AlertDialogHeader>
+                            <div className="mx-auto p-3 bg-purple-500/10 rounded-full w-fit mb-3 border border-purple-500/20">
+                                <ShieldAlert className="w-6 h-6 text-purple-500" />
+                            </div>
+                            <AlertDialogTitle className="text-white text-center text-lg font-bold">
+                                {pendingExcepcionClient?.excepcion_voucher 
+                                    ? 'Reactivar Requisito de Recibos' 
+                                    : 'Exonerar de Recibos'}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-slate-400 text-center text-[10px] leading-relaxed mt-2 px-2">
+                                {pendingExcepcionClient?.excepcion_voucher 
+                                    ? `¿Confirmas que "${pendingExcepcionClient?.nombres}" vuelva a REQUERIR recibos obligatorios para todos sus pagos?`
+                                    : `¿Estás seguro de EXONERAR a "${pendingExcepcionClient?.nombres}" de presentar recibos? Esto permitirá que sus pagos se aprueben automáticamente sin adjuntar imagen.`
+                                }
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter className="sm:justify-center gap-3 mt-6">
+                            <AlertDialogCancel className="bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white h-9 px-4 text-[10px] font-bold uppercase tracking-tight transition-all">
+                                Cancelar
+                            </AlertDialogCancel>
+                            <AlertDialogAction 
+                                onClick={processToggleExcepcion}
+                                className={cn(
+                                    "h-9 px-4 text-[10px] font-black uppercase tracking-tight text-white shadow-lg transition-all",
+                                    pendingExcepcionClient?.excepcion_voucher
+                                        ? "bg-slate-700 hover:bg-slate-600"
+                                        : "bg-purple-600 hover:bg-purple-500 shadow-purple-900/20"
+                                )}
+                            >
+                                {pendingExcepcionClient?.excepcion_voucher ? 'Restablecer' : 'Confirmar Exoneración'}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </div>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={confirmEditOpen} onOpenChange={setConfirmEditOpen}>
+                <AlertDialogContent className="bg-slate-900 border-slate-800 border-l-4 border-l-blue-500 max-w-[400px] p-0 overflow-hidden shadow-2xl shadow-blue-900/10">
+                    <div className="p-6">
+                        <AlertDialogHeader>
+                            <div className="mx-auto p-3 bg-blue-500/10 rounded-full w-fit mb-3 border border-blue-500/20">
+                                <Edit className="w-6 h-6 text-blue-500" />
+                            </div>
+                            <AlertDialogTitle className="text-white text-center text-lg font-bold">
+                                Editar Perfil de Cliente
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-slate-400 text-center text-[11px] leading-relaxed mt-2 px-2">
+                                ¿Estás seguro de que deseas MODIFICAR los datos de "{pendingEditClient?.nombres}"?
+                                <br/><br/>
+                                <span className="text-blue-400/80">Recuerda que todos los cambios quedan registrados en la auditoría del sistema.</span>
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter className="sm:justify-center gap-3 mt-6">
+                            <AlertDialogCancel className="bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white h-9 px-4 text-[10px] font-bold uppercase tracking-tight transition-all">
+                                Cancelar
+                            </AlertDialogCancel>
+                            <AlertDialogAction 
+                                onClick={() => {
+                                    setEditingCliente(pendingEditClient)
+                                    setConfirmEditOpen(false)
+                                    setPendingEditClient(null)
+                                }}
+                                className="h-9 px-4 text-[10px] font-black uppercase tracking-tight text-white bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-900/20 transition-all"
+                            >
+                                Sí, editar
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </div>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

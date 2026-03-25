@@ -4,19 +4,23 @@ import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Wallet, MapPin, CheckCircle2, AlertTriangle, User } from 'lucide-react'
+import { Wallet, MapPin, CheckCircle2, AlertTriangle, User, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 // Fix Leaflet's default icon path issues in Next.js
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+if (typeof window !== 'undefined') {
+    delete (L.Icon.Default.prototype as any)._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+      iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+    });
+}
 
 // Create custom icons for different statuses
 const createCustomIcon = (color: string) => {
+    if (typeof window === 'undefined') return {} as any;
     return L.divIcon({
         className: 'custom-icon',
         html: `
@@ -47,6 +51,7 @@ interface RutaMapaProps {
     prestamos: any[]
     onQuickPay: (prestamo: any, e: React.MouseEvent) => void
     today: string
+    isBlocked?: boolean
 }
 
 // Helper component to auto-fit the map bounds to the markers
@@ -61,7 +66,7 @@ function BoundsAutoFitter({ markers }: { markers: [number, number][] }) {
     return null;
 }
 
-export default function RutaMapa({ prestamos, onQuickPay, today }: RutaMapaProps) {
+export default function RutaMapa({ prestamos, onQuickPay, today, isBlocked = false }: RutaMapaProps) {
     const [isMounted, setIsMounted] = useState(false)
 
     useEffect(() => {
@@ -84,7 +89,7 @@ export default function RutaMapa({ prestamos, onQuickPay, today }: RutaMapaProps
         if (isNaN(lat) || isNaN(lng)) return null;
 
         // Determine status logic
-        const cuotasPagadas = p.total_pagado_acumulado ? Math.floor(p.total_pagado_acumulado / p.valorCuota) : 0
+        const cuotasPagadas = p.total_pagado_acumulado ? Math.floor(p.total_pagado_acumulado / (p.valorCuota || 0)) : 0
         const totalCuotas = p.numero_cuotas || p.totalCuotas || 0
         const deudaHoy = p.deudaHoy || 0
         const isFullyPaid = p.saldo_pendiente <= 0 || (cuotasPagadas >= totalCuotas && totalCuotas > 0)
@@ -183,14 +188,18 @@ export default function RutaMapa({ prestamos, onQuickPay, today }: RutaMapaProps
                                 {item.deudaHoy > 0 && (
                                     <Button 
                                         onClick={(e) => {
-                                            // Call the quick pay
-                                            item.onClickAction = true;
-                                            onQuickPay(item, e);
+                                             if (!isBlocked) onQuickPay(item, e);
                                         }}
-                                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center justify-center gap-2 h-8"
+                                        disabled={isBlocked}
+                                        className={cn(
+                                            "w-full shadow-sm flex items-center justify-center gap-2 h-8",
+                                            isBlocked 
+                                                ? "bg-slate-300 text-slate-500 cursor-not-allowed" 
+                                                : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                        )}
                                     >
-                                        <Wallet className="w-3.5 h-3.5" />
-                                        Cobrar
+                                        {isBlocked ? <Lock className="w-3.5 h-3.5" /> : <Wallet className="w-3.5 h-3.5" />}
+                                        {isBlocked ? 'Bloqueado' : 'Cobrar'}
                                     </Button>
                                 )}
                             </div>

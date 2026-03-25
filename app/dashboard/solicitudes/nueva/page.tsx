@@ -9,6 +9,8 @@ import { StepPrestamo } from '@/components/wizard/step-prestamo'
 import { WizardState, WizardStep, ProspectoData, EvaluacionData, PrestamoData, WIZARD_STEPS } from '@/types/wizard'
 import { createClient } from '@/utils/supabase/client'
 import { BackButton } from '@/components/ui/back-button'
+import { Button } from '@/components/ui/button'
+import { Lock } from 'lucide-react'
 
 export default function NuevaSolicitudPage() {
   const router = useRouter()
@@ -32,13 +34,41 @@ export default function NuevaSolicitudPage() {
   const [sectores, setSectores] = useState<any[]>([])
   const [systemSchedule, setSystemSchedule] = useState<any>(null)
 
+  const [accessResult, setAccessResult] = useState<any>(null)
+
   // Cargar datos iniciales (Cliente o Solicitud existente)
   useEffect(() => {
     const loadInitialData = async () => {
       const supabase = createClient()
 
       try {
-        // Cargar sectores activos primero
+        // 0. VERIFICAR ACCESO AL SISTEMA (Centralizado)
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          router.push('/login')
+          return
+        }
+
+        // Obtener rol del perfil
+        const { data: perfil } = await supabase
+          .from('perfiles')
+          .select('rol')
+          .eq('id', user.id)
+          .single()
+        
+        const userRole = perfil?.rol || 'asesor'
+
+        // Verificar acceso
+        const { checkSystemAccess } = await import('@/utils/systemRestrictions')
+        const access = await checkSystemAccess(supabase, user.id, userRole, 'solicitud')
+        setAccessResult(access)
+
+        if (!access.allowed && userRole !== 'admin') {
+          setIsLoading(false)
+          return
+        }
+
+        // 1. Cargar sectores activos
         const { data: sectoresData, error: sectoresError } = await supabase
           .from('sectores')
           .select('id, nombre')
@@ -49,7 +79,7 @@ export default function NuevaSolicitudPage() {
             setSectores(sectoresData)
         }
 
-        // Cargar configuración de horario
+        // Cargar configuración de horario (redundante pero mantenemos para compatibilidad con StepPrestamo por ahora)
         const { data: scheduleConfigs } = await supabase
           .from('configuracion_sistema')
           .select('clave, valor')
@@ -136,7 +166,7 @@ export default function NuevaSolicitudPage() {
     }
 
     loadInitialData()
-  }, [clienteId, isEditMode, solicitudId])
+  }, [clienteId, isEditMode, solicitudId, router])
 
   const handleProspectoNext = (data: ProspectoData) => {
     setWizardState((prev) => ({
@@ -249,10 +279,46 @@ export default function NuevaSolicitudPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="text-white text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p>Cargando datos...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-slate-400 font-medium">Verificando acceso al sistema...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // PANTALLA DE BLOQUEO (Si no se permite acceso)
+  if (accessResult && !accessResult.allowed) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center shadow-2xl animate-in zoom-in-95 duration-300">
+          <div className="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-amber-500/20">
+            <Lock className="w-10 h-10 text-amber-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-4">Acceso Restringido</h2>
+          <div className="p-4 bg-slate-950/50 rounded-2xl border border-slate-800 mb-6">
+            <p className="text-slate-300 text-sm leading-relaxed">
+              {accessResult.reason || "El sistema se encuentra temporalmente cerrado o requiere un cuadre previo."}
+            </p>
+          </div>
+          <div className="space-y-3">
+            <Button 
+                onClick={() => router.push('/dashboard/solicitudes')}
+                className="w-full bg-slate-800 hover:bg-slate-700 text-white rounded-xl h-12"
+            >
+              Volver a Solicitudes
+            </Button>
+            {accessResult.code === 'MISSING_MORNING_CUADRE' && (
+                <Button 
+                    variant="outline"
+                    onClick={() => router.push('/dashboard/cuadre')}
+                    className="w-full border-blue-500/30 bg-blue-500/5 text-blue-400 hover:bg-blue-500/10 rounded-xl h-12"
+                >
+                    Ir a Cuadre de Caja
+                </Button>
+            )}
+          </div>
         </div>
       </div>
     )

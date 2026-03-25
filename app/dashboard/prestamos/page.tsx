@@ -1,23 +1,21 @@
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Plus, Wallet, TrendingUp, AlertCircle, Users, Trophy, CheckCircle2, ArrowUpRight, RotateCcw } from "lucide-react";
 import { PrestamosTable } from "@/components/prestamos/prestamos-table";
+import { AdminLoanActions } from "@/components/prestamos/admin-loan-actions";
 import { BackButton } from "@/components/ui/back-button";
 import { getTodayPeru, calculateLoanMetrics } from "@/lib/financial-logic";
 import { cn } from "@/lib/utils";
-import { checkAdvisorBlocked } from "@/utils/checkAdvisorBlocked";
-
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
 export default async function PrestamosPage({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
     const sParams = searchParams;
     const filtroSupervisor = sParams.supervisor as string || 'todos';
     const filtroAsesor = sParams.asesor as string || 'todos';
     const filtroSector = sParams.sector as string || 'todos';
     const filtroFrecuencia = sParams.frecuencia as string || 'todos';
+    const activeTab = sParams.tab as string;
 
     const supabase = await createClient();
     const supabaseAdmin = createAdminClient();
@@ -32,15 +30,19 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
 
     const userRole = perfil?.rol || 'asesor'
 
-    // Check Block Status
-    let isBlockedByCuadre = false
-    let blockReasonCierre = ''
-    
-    if (userRole === 'asesor' && user) {
-        const blockStatus = await checkAdvisorBlocked(supabaseAdmin, user.id)
-        isBlockedByCuadre = blockStatus.isBlocked
-        blockReasonCierre = blockStatus.reason
+    // RESTRICCIÓN POR URL: Solo admin puede ver historial (se mantiene)
+    const restrictedTabs = ['finalizados', 'renovados', 'refinanciados', 'anulados', 'pendientes', 'todos'];
+    if (userRole !== 'admin' && activeTab && restrictedTabs.includes(activeTab)) {
+        redirect('/dashboard/prestamos?tab=ruta_hoy');
     }
+
+    // [REFORZADO] Lógica de Acceso al Sistema (Centralizada)
+    const { checkSystemAccess } = await import('@/utils/systemRestrictions')
+    const accessResult = await checkSystemAccess(supabaseAdmin, user?.id || '', userRole || 'asesor', 'prestamo')
+
+    const isBlockedByCuadre = !accessResult.allowed && userRole !== 'admin'
+    const blockReasonCierre = accessResult.reason || ''
+    const systemAccess = accessResult // Pasa el objeto completo para saber el 'code'
 
     // Build query based on role - USING DIRECT TABLES (Fallback mechanism)
     
@@ -101,13 +103,30 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     const { data: configHorario } = await supabaseAdmin
         .from('configuracion_sistema')
         .select('clave, valor')
-        .in('clave', ['horario_apertura', 'horario_cierre', 'desbloqueo_hasta'])
+        .in('clave', ['horario_apertura', 'horario_cierre', 'horario_fin_turno_1', 'desbloqueo_hasta'])
     
     const systemSchedule = {
         horario_apertura: configHorario?.find(c => c.clave === 'horario_apertura')?.valor || '07:00',
         horario_cierre: configHorario?.find(c => c.clave === 'horario_cierre')?.valor || '20:00',
+        horario_fin_turno_1: configHorario?.find(c => c.clave === 'horario_fin_turno_1')?.valor || '13:30',
         desbloqueo_hasta: configHorario?.find(c => c.clave === 'desbloqueo_hasta')?.valor || ''
     }
+
+    // --- DATA PARA CREACIÓN DIRECTA (Admin Only) ---
+    let cuentasAdmin: any[] = []
+    if (userRole === 'admin') {
+        const { data: qAdmin } = await supabaseAdmin
+            .from('cuentas_financieras')
+            .select('id, nombre, saldo')
+            .order('nombre')
+        cuentasAdmin = qAdmin || []
+    }
+
+    // Fetch Feriados
+    const { data: feriadosRaw } = await supabaseAdmin
+        .from('feriados')
+        .select('fecha')
+    const feriados = (feriadosRaw || []).map(f => f.fecha)
 
     // Filter and Process Data in Memory (Robustness)
     let filteredList = prestamosRaw || []
@@ -348,6 +367,14 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                         </div>
                     </div>
                 </div>
+
+                {/* Acciones de Admin (Creación Directa) */}
+                {userRole === 'admin' && (
+                    <AdminLoanActions 
+                        cuentas={cuentasAdmin}
+                        feriados={feriados}
+                    />
+                )}
             </div>
 
             {/* ---------------- KPI GRID (REORGANIZED COMPACT) ---------------- */}
@@ -453,7 +480,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                     </div>
                     <div className="relative z-10 flex">
                         <span className="bg-rose-500/10 text-rose-500 text-[6px] md:text-[8px] font-black px-1.5 py-0.5 rounded border border-rose-500/20 uppercase tracking-wider">
-                            Riesgo
+                            {userRole === 'admin' ? `$${capitalEnRiesgo.toLocaleString()}` : "Riesgo"}
                         </span>
                     </div>
                 </div>
@@ -536,6 +563,8 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                     umbralMorosoOtros={umbralMorosoOtros}
                     isBlockedByCuadre={isBlockedByCuadre}
                     blockReasonCierre={blockReasonCierre}
+                    systemAccess={systemAccess}
+                    cuentas={cuentasAdmin || []}
                 />
             </div>
         </div>

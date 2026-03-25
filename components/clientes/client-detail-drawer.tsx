@@ -189,7 +189,9 @@ export function ClientDetailDrawer({ cliente, isOpen, onClose, userRol = "asesor
               <TabsContent value="gestiones" className="p-0 m-0 h-full animate-in fade-in slide-in-from-right-4 duration-300">
                   <ClientGestiones 
                       userRol={userRol} 
-                      prestamoId={cliente.prestamo_activo_id || cliente.activeLoanId || ''} 
+                      loans={cliente.prestamos || []} 
+                      clienteId={cliente.id}
+                      clienteNombre={cliente.nombres}
                   />
               </TabsContent>
 

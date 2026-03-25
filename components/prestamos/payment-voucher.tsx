@@ -34,31 +34,49 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
     let cuotaActual = 0
     
     if (cronograma && cronograma.length > 0) {
-        const paymentDateStr = new Date(payment.created_at).toISOString().split('T')[0]
+        // Usar formato Peru (Lima) para comparar fechas y evitar desfase por UTC
+        const formatter = new Intl.DateTimeFormat('en-CA', { 
+            timeZone: 'America/Lima',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        const paymentDateStr = formatter.format(new Date(payment.created_at))
         
-        // 1. Obtener todos los pagos hasta esta fecha inclusive
-        const sortedPayments = [...(allPayments || [])].sort((a, b) => 
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        )
+        // 1. Obtener todos los pagos hasta esta fecha inclusive (Orden estable por fecha e ID)
+        const sortedPayments = [...(allPayments || [])].sort((a, b) => {
+            const timeA = new Date(a.created_at).getTime()
+            const timeB = new Date(b.created_at).getTime()
+            if (timeA !== timeB) return timeA - timeB
+            return a.id.localeCompare(b.id) // Tie-breaker estable
+        })
         const paymentIndex = sortedPayments.findIndex(p => p.id === payment.id)
         const paymentsAtThatTime = paymentIndex >= 0 ? sortedPayments.slice(0, paymentIndex + 1) : [payment]
         
-        // 2. Agrupar montos pagados por cuota_id hasta ese momento
-        const paidByCuotaAtThatTime: Record<string, number> = {}
-        paymentsAtThatTime.forEach(p => {
-            if (p.cuota_id) {
-                paidByCuotaAtThatTime[p.cuota_id] = (paidByCuotaAtThatTime[p.cuota_id] || 0) + parseFloat(p.monto_pagado || 0)
-            }
-        })
+        // 2. Sumar el volumen total de todos los pagos hasta ese momento
+        const totalPaidAtThatTime = paymentsAtThatTime.reduce((acc, p) => acc + parseFloat(p.monto_pagado || 0), 0)
         
-        // 3. Reconstruir estado virtual del cronograma
-        const virtualCronograma = cronograma.map(c => {
-            const montoPagado = paidByCuotaAtThatTime[c.id] || 0
+        // 3. Distribuir el volumen total en cascada (FIFO) sobre el cronograma
+        // Esto garantiza que el "Progreso" (X de 24) coincida con el volumen de dinero pagado
+        let remainingToDistribute = totalPaidAtThatTime
+        const cronogramaOrdenado = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota)
+        
+        const virtualCronograma = cronogramaOrdenado.map(c => {
             const montoCuota = parseFloat(c.monto_cuota)
+            let pagadoEnEstaCuota = 0
+            
+            if (remainingToDistribute >= montoCuota - 0.01) {
+                pagadoEnEstaCuota = montoCuota
+                remainingToDistribute -= montoCuota
+            } else if (remainingToDistribute > 0) {
+                pagadoEnEstaCuota = remainingToDistribute
+                remainingToDistribute = 0
+            }
+            
             return {
                 ...c,
-                monto_pagado_virtual: montoPagado,
-                isPagadaVirtual: montoPagado >= (montoCuota - 0.01)
+                monto_pagado_virtual: pagadoEnEstaCuota,
+                isPagadaVirtual: pagadoEnEstaCuota >= (montoCuota - 0.01)
             }
         })
         
@@ -68,10 +86,10 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
         // La cuota actual relativa a ESTE pago
         cuotaActual = payment.cronograma_cuotas?.numero_cuota || (virtualCronograma.find(c => !c.isPagadaVirtual)?.numero_cuota || totalCuotas)
 
-        // Cuotas atrasadas A ESA FECHA
+        // Cuotas atrasadas A ESA FECHA (incluyendo la del día actual por ser cierre de ruta)
         cuotasAtrasadas = virtualCronograma.filter(c => {
             const isPending = !c.isPagadaVirtual
-            const isOverdueAtThatTime = c.fecha_vencimiento < paymentDateStr;
+            const isOverdueAtThatTime = c.fecha_vencimiento <= paymentDateStr;
             return isPending && isOverdueAtThatTime;
         }).length
     }
@@ -160,7 +178,7 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                             <div className="space-y-3 pt-2">
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-500">ID Operación</span>
-                                    <span className="font-mono text-slate-300 text-xs">{payment.id.split('-')[0].toUpperCase()}</span>
+                                    <span className="font-mono text-slate-300 text-xs">{payment.id.slice(-10).toUpperCase()}</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-500">Cliente</span>

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createFullNotification } from '@/services/notification-service'
+import { checkSystemAccess } from '@/utils/systemRestrictions'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +35,8 @@ export async function GET() {
                 *,
                 clientes:cliente_id(id, nombres, dni),
                 asesor:asesor_id(id, nombre_completo),
-                supervisor:supervisor_id(id, nombre_completo)
+                supervisor:supervisor_id(id, nombre_completo),
+                admin:admin_id(nombre_completo)
             `)
             .order('created_at', { ascending: false })
 
@@ -81,7 +83,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
         }
 
-        // Verificar que es asesor
+        // Verificar que es asesor o admin
         const { data: perfil } = await supabaseAdmin
             .from('perfiles')
             .select('id, rol, supervisor_id')
@@ -92,36 +94,23 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 403 })
         }
 
-        // Estricto: Solo asesores pueden crear solicitudes
-        if (perfil.rol !== 'asesor') {
+        // Permitir a asesores y administradores
+        if (perfil.rol !== 'asesor' && perfil.rol !== 'admin') {
             return NextResponse.json({ 
-                error: 'Acceso denegado. Solo los asesores pueden ingresar nuevas solicitudes o registrar prospectos.' 
+                error: 'Acceso denegado. Solo asesores y administradores pueden ingresar nuevas solicitudes.' 
             }, { status: 403 })
         }
 
         const body = await request.json()
 
-        // VERIFICAR HORARIO DEL SISTEMA
-        const { data: configs } = await supabaseAdmin
-            .from('configuracion_sistema')
-            .select('clave, valor')
-            .in('clave', ['horario_apertura', 'horario_cierre', 'desbloqueo_hasta'])
-        
-        const configMap = (configs || []).reduce((acc: any, curr) => {
-            acc[curr.clave] = curr.valor
-            return acc
-        }, { horario_apertura: '07:00', horario_cierre: '20:00', desbloqueo_hasta: '1970-01-01' })
-
-        const now = new Date()
-        const peruTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }))
-        const currentTime = peruTime.getHours().toString().padStart(2, '0') + ':' + peruTime.getMinutes().toString().padStart(2, '0')
-        const isUnlocked = new Date(configMap.desbloqueo_hasta) > now
-
-        if (!isUnlocked && (currentTime < configMap.horario_apertura || currentTime > configMap.horario_cierre)) {
+        // VERIFICACIÓN CENTRALIZADA DE ACCESO Y HORARIO
+        const access = await checkSystemAccess(supabaseAdmin, user.id, perfil.rol, 'solicitud');
+        if (!access.allowed) {
             return NextResponse.json({ 
-                error: `Sistema cerrado. El horario de operación es de ${configMap.horario_apertura} a ${configMap.horario_cierre}.`,
-                tipo_error: 'sistema_cerrado'
-            }, { status: 403 })
+                error: access.reason,
+                tipo_error: access.code,
+                config: access.config
+            }, { status: 403 });
         }
         const { 
             cliente_id, 
@@ -130,6 +119,8 @@ export async function POST(request: Request) {
             cuotas, 
             modalidad, 
             fecha_inicio_propuesta,
+            frecuencia,
+            destino_prestamo,
             // Datos del prospecto (nuevo cliente)
             prospecto_nombres,
             prospecto_dni,
@@ -171,15 +162,35 @@ export async function POST(request: Request) {
             }
         }
 
+        // Obtener el asesor del cliente si es admin el que crea
+        let asesorFinalId = user.id
+        if (perfil.rol === 'admin' && cliente_id) {
+            const { data: clientInfo } = await supabaseAdmin
+                .from('clientes')
+                .select('asesor_id')
+                .eq('id', cliente_id)
+                .single()
+            
+            if (clientInfo?.asesor_id) {
+                asesorFinalId = clientInfo.asesor_id
+            }
+        }
+
         // Crear solicitud
         const solicitudData: any = {
-            asesor_id: user.id,
+            asesor_id: asesorFinalId,
             monto_solicitado,
             interes,
             cuotas,
             modalidad,
             fecha_inicio_propuesta,
-            estado_solicitud: 'pendiente_supervision',
+            // Si es admin, lo ponemos como pre-aprobado/aprobado directamente
+            estado_solicitud: perfil.rol === 'admin' ? 'aprobado' : 'pendiente_supervision',
+            supervisor_id: perfil.rol === 'admin' ? user.id : null,
+            admin_id: perfil.rol === 'admin' ? user.id : null,
+            fecha_preaprobacion: perfil.rol === 'admin' ? new Date().toISOString() : null,
+            fecha_aprobacion: perfil.rol === 'admin' ? new Date().toISOString() : null,
+            observacion_supervisor: perfil.rol === 'admin' ? 'Desembolso directo por Administración' : null,
             // Datos de evaluación financiera
             giro_negocio: giro_negocio || null,
             fuentes_ingresos: fuentes_ingresos || null,

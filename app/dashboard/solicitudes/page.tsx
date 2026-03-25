@@ -61,14 +61,15 @@ export default async function SolicitudesPage() {
     const { data: scheduleConfigs } = await supabaseAdmin
         .from('configuracion_sistema')
         .select('clave, valor')
-        .in('clave', ['horario_apertura', 'horario_cierre', 'desbloqueo_hasta'])
+        .in('clave', ['horario_apertura', 'horario_cierre', 'desbloqueo_hasta', 'horario_fin_turno_1'])
     
     const systemSchedule = (scheduleConfigs || []).reduce((acc: any, curr) => {
         acc[curr.clave] = curr.valor
         return acc
     }, {
-        horario_apertura: '07:00',
-        horario_cierre: '20:00',
+        horario_apertura: '10:00',
+        horario_cierre: '19:00',
+        horario_fin_turno_1: '13:30',
         desbloqueo_hasta: '2000-01-01T00:00:00Z'
     })
 
@@ -80,7 +81,29 @@ export default async function SolicitudesPage() {
         hour12: false
     })
     const currentHourString = formatter.format(now)
-    const canCreateDueToTime = (currentHourString >= (systemSchedule.horario_apertura || '07:00') && currentHourString < (systemSchedule.horario_cierre || '20:00')) || (new Date(systemSchedule.desbloqueo_hasta) > now) || perfil?.rol === 'admin'
+    
+    // 1. Time restriction
+    const isWithinHours = currentHourString >= systemSchedule.horario_apertura && currentHourString < systemSchedule.horario_cierre
+    const isTemporaryUnlocked = new Date(systemSchedule.desbloqueo_hasta) > now
+    
+    let canCreateDueToTime = isWithinHours || isTemporaryUnlocked || perfil?.rol === 'admin'
+
+    // 2. Cuadre restriction (Only for Asesor after Shift 1)
+    if (canCreateDueToTime && perfil?.rol === 'asesor' && currentHourString >= systemSchedule.horario_fin_turno_1 && !isTemporaryUnlocked) {
+        const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+        const { data: morningCuadre } = await supabaseAdmin
+            .from('cuadres_diarios')
+            .select('id')
+            .eq('asesor_id', user?.id)
+            .eq('fecha', todayStr)
+            .eq('tipo_cuadre', 'parcial')
+            .in('estado', ['pendiente', 'aprobado'])
+            .maybeSingle();
+        
+        if (!morningCuadre) {
+            canCreateDueToTime = false
+        }
+    }
 
     // Agrupar por estado para mostrar tabs
     const pendientes = solicitudes?.filter(s => s.estado_solicitud === 'pendiente_supervision') || []

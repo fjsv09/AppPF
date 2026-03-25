@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { DashboardNav } from '@/components/dashboard-nav'
 import { SidebarProvider } from '@/components/providers/sidebar-provider'
 import { DashboardMain } from '@/components/dashboard-main'
+import { AdminTaskSync } from '@/components/dashboard/admin-task-sync'
 
 export default async function DashboardLayout({
   children,
@@ -44,6 +45,7 @@ export default async function DashboardLayout({
       <div className="min-h-screen text-slate-200">
         <DashboardNav role={userRole} userName={userName} />
         <DashboardMain>
+          {userRole === 'admin' && <AdminTaskSync />}
           {children}
         </DashboardMain>
       </div>

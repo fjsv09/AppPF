@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { createFullNotification } from '@/services/notification-service'
+import { checkSystemAccess } from '@/utils/systemRestrictions'
 
 export async function POST(request: Request) {
     const supabase = await createClient()
@@ -10,6 +11,15 @@ export async function POST(request: Request) {
     try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+        // 0. VERIFICACIÓN DE ACCESO Y HORARIO (Solo para saber si el sistema está abierto)
+        const { data: perfil } = await supabaseAdmin.from('perfiles').select('rol').eq('id', user.id).single()
+        if (!perfil) return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 403 })
+
+        const access = await checkSystemAccess(supabaseAdmin, user.id, perfil.rol, 'cuadre');
+        if (!access.allowed) {
+            return NextResponse.json({ error: access.reason, tipo_error: access.code }, { status: 403 })
+        }
 
         const body = await request.json()
         const { p_monto_efectivo, p_monto_digital, p_total_gastos, p_tipo_cuadre } = body

@@ -3,7 +3,6 @@
 import { useState, useEffect, useTransition } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
     Plus, Users, Phone, MapPin, MessageSquare, ShieldAlert,
     Loader2, AlertTriangle, CheckCircle2, Lock, X, Send,
@@ -15,6 +14,7 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { AsignarVisitaModal } from "@/components/gestiones/asignar-visita-modal"
 import { RegistrarGestionModal } from "@/components/gestiones/registrar-gestion-modal"
+
 const TIPO_ICON: Record<string, any> = {
     Llamada: Phone,
     Visita: MapPin,
@@ -56,12 +56,33 @@ interface Gestion {
 }
 
 interface ClientGestionesProps {
-    prestamoId: string
+    loans: any[]
+    clienteId?: string
     clienteNombre?: string
     userRol: "admin" | "supervisor" | "asesor"
 }
 
-export function ClientGestiones({ prestamoId, clienteNombre = 'Cliente', userRol }: ClientGestionesProps) {
+export function ClientGestiones({ loans = [], clienteId, clienteNombre = 'Cliente', userRol }: ClientGestionesProps) {
+    const activeLoans = (loans || []).filter(l => l.estado === 'activo')
+    
+    const riskLevels: Record<string, number> = {
+        'vencido': 5,
+        'moroso': 4,
+        'cpp': 3,
+        'deuda': 2,
+        'ok': 1
+    }
+
+    const sortedActive = [...activeLoans].sort((a, b) => {
+        const riskA = riskLevels[a.estado_mora?.toLowerCase() || 'ok'] || 0
+        const riskB = riskLevels[b.estado_mora?.toLowerCase() || 'ok'] || 0
+        if (riskA !== riskB) return riskB - riskA
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+
+    const initialPrestamoId = sortedActive[0]?.id || loans?.[0]?.id || ''
+    
+    const [selectedPrestamoId, setSelectedPrestamoId] = useState(initialPrestamoId)
     const [gestiones, setGestiones] = useState<Gestion[]>([])
     const [loading, setLoading] = useState(true)
     const [modalOpen, setModalOpen] = useState(false)
@@ -71,16 +92,16 @@ export function ClientGestiones({ prestamoId, clienteNombre = 'Cliente', userRol
     const isAdmin = userRol === 'admin'
 
     useEffect(() => {
-        if (!prestamoId) {
+        if (!selectedPrestamoId) {
             setLoading(false)
             return
         }
         fetchGestiones()
-    }, [prestamoId])
+    }, [selectedPrestamoId])
 
     async function fetchGestiones() {
         setLoading(true)
-        const res = await fetch(`/api/gestiones?prestamo_id=${prestamoId}`)
+        const res = await fetch(`/api/gestiones?prestamo_id=${selectedPrestamoId}`)
         if (res.ok) {
             const data = await res.json()
             setGestiones(data)
@@ -90,7 +111,6 @@ export function ClientGestiones({ prestamoId, clienteNombre = 'Cliente', userRol
 
     return (
         <div className="flex flex-col">
-            {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-900/20">
                 <div>
                     <p className="text-xs md:text-sm font-bold text-white uppercase tracking-wider">Historial de Gestiones</p>
@@ -99,7 +119,6 @@ export function ClientGestiones({ prestamoId, clienteNombre = 'Cliente', userRol
                     </p>
                 </div>
                 <div className="flex gap-1.5">
-                    {/* Admin: asignar visita */}
                     {isAdmin && (
                         <Button
                             onClick={() => setAsignarOpen(true)}
@@ -109,7 +128,6 @@ export function ClientGestiones({ prestamoId, clienteNombre = 'Cliente', userRol
                             <span className="hidden sm:inline">Asignar</span>
                         </Button>
                     )}
-                    {/* Todos los roles pueden registrar una gestión manual */}
                     <Button
                         onClick={() => setModalOpen(true)}
                         className="bg-blue-600 hover:bg-blue-500 text-white h-7 px-2.5 gap-1.5 text-[10px] font-bold uppercase tracking-tight"
@@ -120,7 +138,36 @@ export function ClientGestiones({ prestamoId, clienteNombre = 'Cliente', userRol
                 </div>
             </div>
 
-            {/* Timeline */}
+            {(() => {
+                const relevantLoans = loans.filter(l => 
+                    l.estado === 'activo' || 
+                    (['vencido', 'moroso', 'cpp'].includes(l.estado_mora?.toLowerCase()) && 
+                     l.estado !== 'refinanciado' && 
+                     l.estado !== 'finalizado')
+                )
+                if (relevantLoans.length <= 1) return null
+                
+                return (
+                    <div className="px-4 py-2 bg-slate-800/20 border-b border-slate-800 flex items-center gap-2 overflow-x-auto scrollbar-none">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase shrink-0 tracking-tighter">Préstamo:</span>
+                        {relevantLoans.map(loan => (
+                            <button
+                                key={loan.id}
+                                onClick={() => setSelectedPrestamoId(loan.id)}
+                                className={cn(
+                                    "h-6 px-2.5 rounded-full text-[10px] font-bold transition-all border whitespace-nowrap",
+                                    selectedPrestamoId === loan.id
+                                        ? "bg-blue-600/20 text-blue-400 border-blue-500/50"
+                                        : "bg-slate-900/60 text-slate-500 border-slate-800 hover:text-slate-400"
+                                )}
+                            >
+                                ${loan.monto} ({loan.estado})
+                            </button>
+                        ))}
+                    </div>
+                )
+            })()}
+
             <div className="flex-1 p-4 space-y-3">
                 {loading ? (
                     <div className="flex items-center justify-center py-10">
@@ -128,13 +175,12 @@ export function ClientGestiones({ prestamoId, clienteNombre = 'Cliente', userRol
                     </div>
                 ) : gestiones.length === 0 ? (
                     <div className="text-center py-12 px-6">
-                        <div className="w-14 h-14 rounded-full bg-slate-900/80 border border-slate-800 flex items-center justify-center mx-auto mb-4 overflow-hidden relative">
-                            <div className="absolute inset-0 bg-blue-500/5 animate-pulse" />
-                            <MessageSquare className="w-7 h-7 text-slate-600 relative z-10" />
+                        <div className="w-14 h-14 rounded-full bg-slate-900/80 border border-slate-800 flex items-center justify-center mx-auto mb-4 relative overflow-hidden">
+                            <MessageSquare className="w-7 h-7 text-slate-600" />
                         </div>
                         <h4 className="text-slate-300 font-bold text-sm mb-1 uppercase tracking-wide">Sin historial de gestión</h4>
                         <p className="text-slate-500 text-xs leading-relaxed max-w-[220px] mx-auto">
-                            {!prestamoId 
+                            {!selectedPrestamoId 
                                 ? 'Este cliente no registra préstamos activos o históricos para mostrar gestiones.' 
                                 : 'Aún no se han registrado interacciones para este préstamo actual.'}
                         </p>
@@ -149,85 +195,43 @@ export function ClientGestiones({ prestamoId, clienteNombre = 'Cliente', userRol
                         
                         const resultColor = RESULTADO_COLOR[gestion.resultado] || 'bg-slate-500/20 text-slate-400 border-slate-500/30'
                         const tipoColor = TIPO_COLOR[gestion.tipo_gestion] || 'bg-slate-500/10 text-slate-400 border-slate-500/20'
-
-                        // Parse coordenadas para link de Google Maps
-                        const mapsUrl = gestion.coordenadas
-                            ? `https://www.google.com/maps?q=${gestion.coordenadas}`
-                            : null
+                        const mapsUrl = gestion.coordenadas ? `https://www.google.com/maps?q=${gestion.coordenadas}` : null
 
                         return (
-                            <div
-                                key={gestion.id}
-                                className={cn(
-                                    "relative pl-6 pb-3 border-l last:border-0 last:pb-0",
-                                    isAuditoria ? "border-amber-900/40" : "border-slate-800/40"
-                                )}
-                            >
-                                {/* Dot con ícono - Direct check instead of dynamic variable */}
+                            <div key={gestion.id} className={cn("relative pl-6 pb-3 border-l last:border-0 last:pb-0", isAuditoria ? "border-amber-900/40" : "border-slate-800/40")}>
                                 <div className={cn(
                                     "absolute -left-[11px] top-0 w-5 h-5 rounded-full border border-slate-950 flex items-center justify-center shadow-lg",
-                                    isAuditoria
-                                        ? isOK ? "bg-emerald-900/60 border-emerald-700/40" : "bg-red-900/60 border-red-700/40"
-                                        : isVisita ? "bg-purple-900/60 border-purple-700/40"
-                                        : "bg-slate-800 border-slate-700"
+                                    isAuditoria ? (isOK ? "bg-emerald-900/60 border-emerald-700/40" : "bg-red-900/60 border-red-700/40")
+                                    : isVisita ? "bg-purple-900/60 border-purple-700/40" : "bg-slate-800 border-slate-700"
                                 )}>
-                                    {isLlamada && <Phone className={cn("w-2.5 h-2.5", "text-blue-400")} />}
-                                    {isWhatsApp && <MessageSquare className={cn("w-2.5 h-2.5", "text-emerald-400")} />}
-                                    {isVisita && <MapPin className={cn("w-2.5 h-2.5", "text-purple-400")} />}
+                                    {isLlamada && <Phone className="w-2.5 h-2.5 text-blue-400" />}
+                                    {isWhatsApp && <MessageSquare className="w-2.5 h-2.5 text-emerald-400" />}
+                                    {isVisita && <MapPin className="w-2.5 h-2.5 text-purple-400" />}
                                     {isAuditoria && <ShieldAlert className={cn("w-2.5 h-2.5", isOK ? "text-emerald-400" : "text-red-400")} />}
-                                    {!isLlamada && !isWhatsApp && !isVisita && !isAuditoria && <Users className="w-2.5 h-2.5 text-slate-400" />}
                                 </div>
-
-                                {/* Card */}
-                                <div className={cn(
-                                    "rounded-lg border p-2.5",
-                                    isAuditoria ? "bg-amber-950/5 border-amber-900/20"
-                                    : isVisita ? "bg-purple-950/5 border-purple-900/20"
-                                    : "bg-slate-900/30 border-slate-800/40"
-                                )}>
-                                    {/* Top row */}
+                                <div className={cn("rounded-lg border p-2.5", isAuditoria ? "bg-amber-950/5 border-amber-900/20" : isVisita ? "bg-purple-950/5 border-purple-900/20" : "bg-slate-900/30 border-slate-800/40")}>
                                     <div className="flex items-center justify-between gap-2 mb-1.5">
                                         <div className="flex items-center gap-1.5 flex-wrap">
-                                            <Badge variant="outline" className={cn("text-[9px] border px-1 h-4 font-bold uppercase tracking-tight", tipoColor)}>
-                                                {gestion.tipo_gestion}
-                                            </Badge>
+                                            <Badge variant="outline" className={cn("text-[9px] border px-1 h-4 font-bold uppercase tracking-tight", tipoColor)}>{gestion.tipo_gestion}</Badge>
                                             <Badge variant="outline" className={cn("text-[9px] border px-1 h-4 font-bold uppercase tracking-tight", resultColor)}>
                                                 {isOK && <CheckCircle2 className="w-2 h-2 mr-1" />}
                                                 {gestion.resultado}
                                             </Badge>
                                         </div>
-                                        <span className="text-[9px] font-medium text-slate-500 whitespace-nowrap">
-                                            {format(new Date(gestion.created_at), "dd MMM · HH:mm", { locale: es })}
-                                        </span>
+                                        <span className="text-[9px] font-medium text-slate-500">{format(new Date(gestion.created_at), "dd MMM · HH:mm", { locale: es })}</span>
                                     </div>
-
-                                    {/* Notas */}
-                                    {gestion.notas && (
-                                        <p className="text-[11px] text-slate-400 leading-snug italic mb-1.5 line-clamp-2 hover:line-clamp-none transition-all cursor-default">
-                                            "{gestion.notas}"
-                                        </p>
-                                    )}
-
-                                    {/* Footer Info */}
-                                    <div className="flex items-center justify-between mt-auto">
+                                    {gestion.notas && <p className="text-[11px] text-slate-400 leading-snug italic mb-1.5 line-clamp-2">"{gestion.notas}"</p>}
+                                    <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <div className="text-[9px] text-slate-600 font-medium flex items-center gap-1">
                                                 <Users className="w-2.5 h-2.5" />
                                                 <span>{gestion.usuario?.nombre_completo || 'Sistema'}</span>
-                                                <span className="text-slate-700">· {gestion.usuario?.rol || 'asesor'}</span>
                                             </div>
                                             {isAuditoria && <Lock className="w-2.5 h-2.5 text-amber-900/40" />}
                                         </div>
-
                                         {mapsUrl && (
-                                            <a
-                                                href={mapsUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-[9px] text-purple-500 hover:text-purple-400 font-bold uppercase tracking-tighter flex items-center gap-0.5"
-                                            >
-                                                <Navigation2 className="w-2.5 h-2.5" />
-                                                Maps
+                                            <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-purple-500 font-bold flex items-center gap-0.5">
+                                                <Navigation2 className="w-2.5 h-2.5" /> Maps
                                             </a>
                                         )}
                                     </div>
@@ -238,23 +242,22 @@ export function ClientGestiones({ prestamoId, clienteNombre = 'Cliente', userRol
                 )}
             </div>
 
-            {/* ── Modal Asignar Visita (Admin) ── */}
             <AsignarVisitaModal
-                prestamoId={prestamoId}
+                prestamoId={selectedPrestamoId}
+                clienteId={clienteId}
                 clienteNombre={clienteNombre}
                 open={asignarOpen}
                 onClose={() => setAsignarOpen(false)}
-                onAsignada={(tarea) => {
-                    toast.success(`Tarea asignada a ${tarea.asesor?.nombre_completo || 'asesor'}`)
-                }}
+                onAsignada={() => fetchGestiones()}
             />
 
             <RegistrarGestionModal 
                 open={modalOpen}
                 onOpenChange={setModalOpen}
-                prestamoId={prestamoId}
+                prestamoId={selectedPrestamoId}
+                prestamos={loans}
                 clienteNombre={clienteNombre}
-                onSuccess={(nueva) => setGestiones(prev => [nueva, ...prev])}
+                onSuccess={() => fetchGestiones()}
             />
         </div>
     )

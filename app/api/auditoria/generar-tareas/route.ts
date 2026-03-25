@@ -6,15 +6,35 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
     const supabase = createAdminClient()
+    const { searchParams } = new URL(request.url)
+    const mode = searchParams.get('mode') // 'background' o 'manual'
 
     try {
-        // 1. Obtener préstamos activos con info de cliente y asesor
+        console.log(`[AUDITORIA] Iniciando generación de tareas (${mode || 'manual'})...`)
+
+        // --- LÓGICA DE FONDO (AUTO-THROTTLE) ---
+        if (mode === 'background') {
+            const { data: config } = await supabase
+                .from('configuracion_sistema')
+                .select('valor')
+                .eq('clave', 'last_audit_gen')
+                .single()
+            
+            const lastRun = config?.valor ? new Date(config.valor) : new Date(0)
+            const nowTime = new Date()
+            
+            if (lastRun.toDateString() === nowTime.toDateString()) {
+                return NextResponse.json({ success: true, message: 'Ya ejecutado hoy.' })
+            }
+        }
+
+        // 1. Obtener préstamos activos con su info de cliente
         const { data: prestamos, error: pError } = await supabase
             .from('prestamos')
             .select(`
                 id,
                 created_by,
-                cliente:clientes(id, nombres, dni, excepcion_voucher)
+                clientes:cliente_id(id, nombres, dni, excepcion_voucher)
             `)
             .eq('estado', 'activo')
 
@@ -24,7 +44,7 @@ export async function POST(request: Request) {
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
         const newTasks = []
 
-        // Obtener historial de tareas de este mes para evitar duplicados
+        // 2. Tareas ya existentes este mes (para no duplicar sobre el mismo préstamo)
         const { data: existingTasks } = await supabase
             .from('tareas_evidencia')
             .select('prestamo_id')
@@ -39,125 +59,131 @@ export async function POST(request: Request) {
              let priority = 0
              let detail = ''
 
-             const cliente = Array.isArray(p.cliente) ? p.cliente[0] : p.cliente;
+             // Manejo de la relación con el cliente (puede venir como objeto o array de 1 elemento)
+             const cliente = Array.isArray(p.clientes) ? p.clientes[0] : p.clientes;
+             if (!cliente) continue
 
-             // REGLA 1: Sin Notificaciones (Modo Excepción)
-             if (cliente?.excepcion_voucher) {
-                 // Solo auditamos si hay al menos un pago registrado para este préstamo
-                 const { count: pagosExistentes } = await supabase
-                    .from('pagos')
+             // --- REGLA 1: EXCEPCIÓN DE VOUCHER (AUDITORÍA 100% OBLIGATORIA) ---
+             if (cliente.excepcion_voucher) {
+                 const { count: cuotasPagadas } = await supabase
+                    .from('cronograma_cuotas')
                     .select('*', { count: 'exact', head: true })
                     .eq('prestamo_id', p.id)
+                    .gt('monto_pagado', 0.01)
 
-                 if (pagosExistentes && pagosExistentes > 0) {
+                 if (cuotasPagadas && cuotasPagadas > 0) {
                     priority = 1
-                    detail = 'P1: Cliente bajo excepción de voucher. Auditoría obligatoria.'
+                    detail = `P1: Cliente bajo excepción (${cuotasPagadas} cobros sin voucher obligatorio).`
                  }
              } 
              
-             // REGLA 2: Sin Evidencia (Si no es P1, evaluar tasa de voucher)
+             // --- REGLA 2: BAJA TASA DE ENTREGA / ALTO VOLUMEN DE FALTAS ---
              if (priority === 0) {
-                 const { data: lastPagos } = await supabase
-                    .from('pagos')
-                    .select('voucher_compartido')
+                 // Obtener todas las cuotas pagadas de este préstamo
+                 const { data: cuotasPagadas, error: cpError } = await supabase
+                    .from('cronograma_cuotas')
+                    .select('id')
                     .eq('prestamo_id', p.id)
-                    .order('fecha_pago', { ascending: false })
-                    .limit(5)
+                    .gt('monto_pagado', 0.01)
+                 
+                 if (cuotasPagadas && cuotasPagadas.length > 0) {
+                     const totalCobros = cuotasPagadas.length
+                     const idsCuotas = cuotasPagadas.map(c => c.id)
 
-                 if (lastPagos && lastPagos.length >= 3) {
-                     const sharedCount = lastPagos.filter(pg => pg.voucher_compartido).length
-                     if (sharedCount / lastPagos.length <= 0.5) {
+                     // Contar cuántos de esos cobros tienen voucher compartido real
+                     const { data: pagos, error: pgError } = await supabase
+                        .from('pagos')
+                        .select('id, voucher_compartido')
+                        .in('cuota_id', idsCuotas)
+                        .or('es_autopago_renovacion.is.null,es_autopago_renovacion.eq.false')
+
+                     const compartidos = pagos?.filter(pg => pg.voucher_compartido).length || 0
+                     const faltantes = totalCobros - compartidos
+                     const cumplimiento = compartidos / totalCobros
+
+                     // DISPARADORES:
+                     // A) Si faltan más de 3 vouchers en total
+                     // B) Si el cumplimiento es menor al 70% (con al menos 3 cobros)
+                     if (faltantes >= 3 || (totalCobros >= 3 && cumplimiento < 0.7)) {
                          priority = 2
-                         detail = 'P2: Baja tasa de vouchers compartidos en pagos recientes.'
+                         detail = `P2: Baja entrega detectada (${faltantes} vouchers faltantes de ${totalCobros} cobros realizados).`
                      }
                  }
              }
 
-             // REGLA 3: Aleatorio al 5%
+             // --- REGLA 3: CONTROL ALEATORIO DE SEGURIDAD (5%) ---
              if (priority === 0 && Math.random() < 0.05) {
-                 // Verificar que tenga al menos un pago registrado
-                 const { count: countTotal } = await supabase
-                    .from('pagos')
+                 const { count: pagosOk } = await supabase
+                    .from('cronograma_cuotas')
                     .select('*', { count: 'exact', head: true })
                     .eq('prestamo_id', p.id)
+                    .gt('monto_pagado', 0.01)
 
-                 if (countTotal && countTotal > 0) {
-                     priority = 3
-                     detail = 'P3: Selección aleatoria de control (5%).'
+                 if (pagosOk && pagosOk > 0) {
+                    priority = 3
+                    detail = 'P3: Control aleatorio preventivo (5%).'
                  }
              }
 
+             // --- ASIGNACIÓN DE LA TAREA ---
              if (priority > 0) {
-                 // Buscar quién debe realizar la tarea (Supervisor del asesor del préstamo)
                  const { data: creatorProfile } = await supabase
                     .from('perfiles')
                     .select('supervisor_id, rol')
                     .eq('id', p.created_by)
                     .single()
                  
-                 let assignTo = p.created_by // Por defecto: al creador
-
+                 let assignTo = p.created_by
                  if (creatorProfile?.supervisor_id) {
-                     // El creador tiene supervisor → asignamos al supervisor
                      assignTo = creatorProfile.supervisor_id
                  } else if (creatorProfile?.rol === 'admin') {
-                     // El creador es admin (sin supervisor) → buscar al asesor real del préstamo
-                     // via tareas de evidencia anteriores del mismo préstamo
-                     const { data: tareaAnterior } = await supabase
-                         .from('tareas_evidencia')
-                         .select('asesor_id, asesor:perfiles!asesor_id(supervisor_id)')
-                         .eq('prestamo_id', p.id)
-                         .neq('tipo', 'auditoria_dirigida')
-                         .order('created_at', { ascending: false })
-                         .limit(1)
-                         .single()
-                     
-                     if (tareaAnterior) {
-                         const asesor = Array.isArray(tareaAnterior.asesor) ? tareaAnterior.asesor[0] : tareaAnterior.asesor
-                         // Si el asesor tiene supervisor, asignar al supervisor
-                         assignTo = asesor?.supervisor_id || tareaAnterior.asesor_id
-                     }
+                     // Si el crédito fue creado por un admin, buscamos al asesor asignado al cliente
+                     const { data: cData } = await supabase
+                        .from('clientes')
+                        .select('asesor:asesor_id(id, supervisor_id)')
+                        .eq('id', cliente.id)
+                        .single()
+                     const asesor = Array.isArray(cData?.asesor) ? cData.asesor[0] : cData?.asesor
+                     assignTo = asesor?.supervisor_id || asesor?.id || p.created_by
                  }
 
                  newTasks.push({
-                     asesor_id: assignTo, // El supervisor que debe realizar la auditoría
+                     asesor_id: assignTo,
                      prestamo_id: p.id,
                      tipo: `auditoria_dirigida`,
-                     estado: 'pendiente',
+                     estado: 'pendiente'
                  })
              }
         }
 
+        // 3. Inserción de tareas y notificaciones
         if (newTasks.length > 0) {
-            const { error: insError } = await supabase
-                .from('tareas_evidencia')
-                .insert(newTasks)
-            
+            const { error: insError } = await supabase.from('tareas_evidencia').insert(newTasks)
             if (insError) throw insError
 
-            // NOTIFICAR A LOS ASIGNADOS
             for (const task of newTasks) {
-                const { data: prestamoInfo } = await supabase
-                    .from('prestamos')
-                    .select('id, clientes(nombres)')
-                    .eq('id', task.prestamo_id)
-                    .single()
-
-                const clienteNombres = (prestamoInfo?.clientes as any)?.nombres || 'Cliente'
-
+                const { data: pInfo } = await supabase.from('prestamos').select('clientes:cliente_id(nombres)').eq('id', task.prestamo_id).single()
+                const clienteNombre = (Array.isArray(pInfo?.clientes) ? pInfo?.clientes[0] : pInfo?.clientes)?.nombres || 'Cliente'
+                
                 await createFullNotification(task.asesor_id, {
                     titulo: '⚖️ Auditoría Dirigida',
-                    mensaje: `Se ha generado una auditoría obligatoria para el préstamo de ${clienteNombres}.`,
+                    mensaje: `Revisión obligatoria: ${clienteNombre}. Bajos niveles de vouchers detectados.`,
                     link: `/dashboard/tareas?tab=auditoria`,
                     tipo: 'warning'
                 })
             }
         }
 
+        // Actualizar marca de tiempo
+        await supabase
+            .from('configuracion_sistema')
+            .update({ valor: new Date().toISOString() })
+            .eq('clave', 'last_audit_gen')
+
         return NextResponse.json({
             success: true,
             totalCreated: newTasks.length,
-            message: `Se han generado ${newTasks.length} nuevas tareas de auditoría dirigida.`
+            message: `Generación finalizada. ${newTasks.length} alertas detectadas.`
         })
 
     } catch (e: any) {

@@ -30,6 +30,7 @@ interface RegistrarGestionModalProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     prestamoId: string
+    prestamos?: any[] // New: optional list for selector
     clienteNombre?: string
     clienteTelefono?: string
     onSuccess?: (nueva: any) => void
@@ -38,7 +39,8 @@ interface RegistrarGestionModalProps {
 export function RegistrarGestionModal({
     open,
     onOpenChange,
-    prestamoId,
+    prestamoId: defaultPrestamoId,
+    prestamos = [],
     clienteNombre = 'Cliente',
     clienteTelefono,
     onSuccess
@@ -46,6 +48,7 @@ export function RegistrarGestionModal({
     const [isPending, startTransition] = useTransition()
     
     // Form state
+    const [selectedPrestamoId, setSelectedPrestamoId] = useState(defaultPrestamoId)
     const [tipoGestion, setTipoGestion] = useState<TipoGestion>('Llamada')
     const [resultado, setResultado] = useState(RESULTADO_OPCIONES['Llamada'][0])
     const [notas, setNotas] = useState('')
@@ -55,16 +58,17 @@ export function RegistrarGestionModal({
     const [gpsLoading, setGpsLoading] = useState(false)
     const [gpsError, setGpsError] = useState<string | null>(null)
 
-    // Reset when open/close
+    // Reset when open/close or default changes
     useEffect(() => {
-        if (!open) {
+        if (open) {
+            setSelectedPrestamoId(defaultPrestamoId)
             setTipoGestion('Llamada')
             setResultado(RESULTADO_OPCIONES['Llamada'][0])
             setNotas('')
             setCoordenadas(null)
             setGpsError(null)
         }
-    }, [open])
+    }, [open, defaultPrestamoId])
 
     const handleChangeTipo = (tipo: TipoGestion) => {
         setTipoGestion(tipo)
@@ -110,7 +114,7 @@ export function RegistrarGestionModal({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    prestamo_id: prestamoId,
+                    prestamo_id: selectedPrestamoId,
                     tipo_gestion: tipoGestion,
                     resultado,
                     notas,
@@ -146,6 +150,42 @@ export function RegistrarGestionModal({
                 </DialogHeader>
 
                 <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+                    {/* Loan Selector (if multiple relevant) */}
+                    {(() => {
+                        const relevantLoans = prestamos.filter(l => 
+                            l.estado === 'activo' || 
+                            (['vencido', 'moroso', 'cpp'].includes(l.estado_mora?.toLowerCase()) && 
+                             l.estado !== 'refinanciado' && 
+                             l.estado !== 'finalizado')
+                        )
+                        
+                        if (relevantLoans.length <= 1) return null
+
+                        return (
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Asociar a Préstamo</label>
+                                <div className="grid grid-cols-1 gap-1.5">
+                                    {relevantLoans.map((loan) => (
+                                    <button
+                                        key={loan.id}
+                                        type="button"
+                                        onClick={() => setSelectedPrestamoId(loan.id)}
+                                        className={cn(
+                                            "w-full text-left px-3 py-2 rounded-lg border text-[11px] transition-all flex items-center justify-between",
+                                            selectedPrestamoId === loan.id
+                                                ? "bg-blue-600/20 border-blue-500/40 text-blue-200 font-medium"
+                                                : "bg-slate-900/40 border-slate-800 text-slate-500 hover:border-slate-700 hover:text-slate-400"
+                                        )}
+                                    >
+                                        <span>${loan.monto} ({loan.estado})</span>
+                                        {loan.estado_mora && <span className="uppercase text-[9px] px-1.5 rounded bg-slate-800">{loan.estado_mora}</span>}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        )
+                    })()}
+
                     {/* Tipo / Vía */}
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Vía de Contacto</label>

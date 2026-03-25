@@ -5,7 +5,7 @@ import { createClient } from '@/utils/supabase/client'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Search, ChevronRight, CheckCircle, Smartphone, User, CreditCard, DollarSign, Printer, ArrowRight, FileText } from 'lucide-react'
+import { Search, ChevronRight, CheckCircle, Smartphone, User, CreditCard, DollarSign, Printer, ArrowRight, FileText, MessageCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { api } from '@/services/api'
@@ -623,14 +623,34 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule }: PaymentWiz
                                 Nuevo Pago
                             </Button>
                             <Button 
+                                variant="outline"
                                 onClick={() => {
                                     router.push('/dashboard/pagos')
                                     router.refresh()
                                 }}
-                                className="h-12 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                                className="h-12 border-slate-700 bg-transparent hover:bg-slate-800 text-slate-300"
                             >
                                 <FileText className="w-4 h-4 mr-2" />
                                 Ver Pagos
+                            </Button>
+                            
+                            {/* BOTÓN WHATSAPP DESTACADO */}
+                            <Button 
+                                onClick={() => {
+                                    const mensaje = encodeURIComponent(
+                                        `✅ *COMPROBANTE DE PAGO*\n` +
+                                        `Hola *${selectedClient?.nombres}*, hemos registrado tu pago correctamente.\n\n` +
+                                        `💰 *Monto:* $${parseFloat(amount).toFixed(2)}\n` +
+                                        `🔢 *Cuota:* #${payingQuota?.numero_cuota}\n` +
+                                        `📉 *Saldo Restante:* $${paymentResult.saldo_pendiente_total?.toFixed(2) || '0.00'}\n\n` +
+                                        `¡Gracias por tu puntualidad!`
+                                    )
+                                    window.open(`https://wa.me/${selectedClient?.telefono}?text=${mensaje}`, '_blank')
+                                }}
+                                className="h-14 col-span-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-lg shadow-lg shadow-emerald-900/30 group mt-2"
+                            >
+                                <MessageCircle className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform" />
+                                Enviar Recibo por WhatsApp
                             </Button>
                         </div>
                     </div>

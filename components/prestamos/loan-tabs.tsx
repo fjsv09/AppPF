@@ -8,8 +8,8 @@ import { ClientGestiones } from "@/components/clientes/client-gestiones"
 import { CalendarDays, History, MessageSquare, Camera, AlertCircle, ShieldCheck } from "lucide-react"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { UploadEvidenceButton } from "@/components/dashboard/upload-evidence-button"
-import { useSearchParams } from "next/navigation"
-import { useState, useEffect } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
+import { useState, useEffect, useCallback } from "react"
 
 interface LoanTabsProps {
     prestamo: any
@@ -25,6 +25,7 @@ interface LoanTabsProps {
     }
     isBlockedByCuadre?: boolean
     blockReasonCierre?: string
+    systemAccess?: any
 }
 
 export function LoanTabs({ 
@@ -36,38 +37,56 @@ export function LoanTabs({
     tareaEvidencia,
     systemSchedule,
     isBlockedByCuadre,
-    blockReasonCierre
+    blockReasonCierre,
+    systemAccess
 }: LoanTabsProps) {
     const searchParams = useSearchParams()
+    const router = useRouter()
     const tabParam = searchParams.get('tab')
-    const [activeTab, setActiveTab] = useState("cronograma")
+    
+    // Validar el tab de la URL o usar el default
+    const validTabs = ["cronograma", "historial", "evidencia", "gestiones"]
+    const [activeTab, setActiveTab] = useState(() => {
+        if (tabParam && validTabs.includes(tabParam)) {
+            return tabParam
+        }
+        return "cronograma"
+    })
 
+    const handleTabChange = useCallback((value: string) => {
+        setActiveTab(value)
+        const params = new URLSearchParams(searchParams.toString())
+        params.set('tab', value)
+        router.replace(`?${params.toString()}`, { scroll: false })
+    }, [searchParams, router])
+
+    // Sincronizar estado si la URL cambia (ej: por botones de navegación)
     useEffect(() => {
-        if (tabParam && ["cronograma", "historial", "evidencia", "gestiones"].includes(tabParam)) {
+        if (tabParam && validTabs.includes(tabParam) && tabParam !== activeTab) {
             setActiveTab(tabParam)
         }
-    }, [tabParam])
+    }, [tabParam, activeTab])
 
     return (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
-            <div className="overflow-x-auto pb-1 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
-                <TabsList className="bg-slate-900/50 border border-slate-800 p-0.5 w-full grid grid-cols-4 md:flex md:w-fit">
-                    <TabsTrigger value="cronograma" className="h-7 px-0 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-4">
+            <div className="overflow-x-auto pb-1 scrollbar-none scroll-smooth w-full min-w-0">
+                <TabsList className="bg-slate-900/50 border border-slate-800 p-0.5 flex items-center w-max min-w-full md:min-w-0 md:w-fit gap-1">
+                    <TabsTrigger value="cronograma" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
                         <CalendarDays className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Cronograma
                     </TabsTrigger>
-                    <TabsTrigger value="historial" className="h-7 px-0 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
+                    <TabsTrigger value="historial" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
                         <History className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Historial
                     </TabsTrigger>
-                    <TabsTrigger value="evidencia" className="h-7 px-0 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
+                    <TabsTrigger value="evidencia" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
                         <Camera className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Evidencia
                     </TabsTrigger>
-                    <TabsTrigger value="gestiones" className="h-7 px-0 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
+                    <TabsTrigger value="gestiones" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
                         <MessageSquare className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Gestiones
                     </TabsTrigger>
                 </TabsList>
             </div>
 
-            <TabsContent value="cronograma" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0">
+            <TabsContent value="cronograma" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden">
                 <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
                     <CardContent className="p-3 md:p-6">
                         <CronogramaClient 
@@ -77,12 +96,13 @@ export function LoanTabs({
                             systemSchedule={systemSchedule}
                             isBlockedByCuadre={isBlockedByCuadre}
                             blockReasonCierre={blockReasonCierre}
+                            systemAccess={systemAccess}
                         />
                     </CardContent>
                 </Card>
             </TabsContent>
 
-            <TabsContent value="historial" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0">
+            <TabsContent value="historial" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden">
                 <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
                     <CardContent className="p-3 md:p-6">
                         <PaymentHistory pagos={pagos} prestamo={prestamo} cliente={cliente || prestamo.clientes} cronograma={cronograma} userRole={userRole} />
@@ -90,7 +110,7 @@ export function LoanTabs({
                 </Card>
             </TabsContent>
 
-            <TabsContent value="evidencia" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0">
+            <TabsContent value="evidencia" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden">
                 <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
                     <CardContent className="p-4 md:p-5">
                         {!tareaEvidencia ? (
@@ -177,11 +197,12 @@ export function LoanTabs({
                 </Card>
             </TabsContent>
 
-            <TabsContent value="gestiones" id="gestiones-tab" className="focus-visible:outline-none focus-visible:ring-0 mt-0">
+            <TabsContent value="gestiones" id="gestiones-tab" className="focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden">
                 <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
                     <CardContent className="p-0">
                         <ClientGestiones
-                            prestamoId={prestamo.id}
+                            loans={[prestamo]}
+                            clienteId={prestamo.cliente_id}
                             clienteNombre={cliente?.nombres || prestamo.clientes?.nombres || 'Cliente'}
                             userRol={userRole}
                         />

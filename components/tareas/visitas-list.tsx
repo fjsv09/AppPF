@@ -214,23 +214,13 @@ export function VisitasList({ visitas, userId }: VisitasListProps) {
                                 ) : null
                             })()}
                                      {userId === visita.asesor_id && (
-                                        <div className="flex-1 flex gap-2">
+                                        <div className="flex-1">
                                             <Button
                                                 onClick={() => handleAbrirCompletar(visita)}
-                                                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold gap-1.5"
+                                                className="w-full bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold gap-1.5"
                                             >
                                                 <Send className="w-3.5 h-3.5" />
-                                                Gestión
-                                            </Button>
-                                            <Button
-                                                onClick={() => {
-                                                    setSelectedLoanIdForPay(visita.prestamo_id)
-                                                    setQuickPayOpen(true)
-                                                }}
-                                                className="bg-emerald-600 hover:bg-emerald-500 text-white h-9 px-3 text-xs font-semibold gap-1.5"
-                                            >
-                                                <DollarSign className="w-3.5 h-3.5" />
-                                                Pagar
+                                                Registrar Gestión
                                             </Button>
                                         </div>
                                     )}

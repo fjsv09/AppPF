@@ -35,6 +35,21 @@ export async function PATCH(
             return NextResponse.json({ error: 'Solo administradores pueden aprobar solicitudes' }, { status: 403 })
         }
 
+        // --- VALIDAR SALDO SI HAY CUENTA DE ORIGEN ---
+        if (cuentaOrigenId) {
+            const { data: cuenta, error: cuentaError } = await supabaseAdmin
+                .from('cuentas_financieras')
+                .select('*')
+                .eq('id', cuentaOrigenId)
+                .single()
+            
+            if (cuentaError || !cuenta) {
+                return NextResponse.json({ error: 'Cuenta de origen no encontrada' }, { status: 404 })
+            }
+            
+            cuentaSeleccionada = cuenta
+        }
+
         // Verificar solicitud
         const { data: solicitud } = await supabaseAdmin
             .from('solicitudes')
@@ -46,9 +61,16 @@ export async function PATCH(
             return NextResponse.json({ error: 'Solicitud no encontrada' }, { status: 404 })
         }
 
-        if (solicitud.estado_solicitud !== 'pre_aprobado') {
+        if (solicitud.estado_solicitud !== 'pre_aprobado' && solicitud.estado_solicitud !== 'aprobado') {
             return NextResponse.json({ 
-                error: `Solo se pueden aprobar solicitudes pre-aprobadas. Estado actual: "${solicitud.estado_solicitud}"` 
+                error: `Solo se pueden aprobar solicitudes pre-aprobadas o aprobadas directamente. Estado actual: "${solicitud.estado_solicitud}"` 
+            }, { status: 400 })
+        }
+
+        // Validar saldo después de saber el monto de la solicitud
+        if (cuentaSeleccionada && cuentaSeleccionada.saldo < solicitud.monto_solicitado) {
+            return NextResponse.json({ 
+                error: `Saldo insuficiente en la cuenta "${cuentaSeleccionada.nombre}". Saldo actual: $${cuentaSeleccionada.saldo}. Requerido: $${solicitud.monto_solicitado}` 
             }, { status: 400 })
         }
 
@@ -129,7 +151,7 @@ export async function PATCH(
                 frecuencia: solicitud.modalidad,
                 cuotas: solicitud.cuotas,
                 estado: 'activo',
-                estado_mora: 'normal',
+                estado_mora: 'ok',
                 bloqueo_cronograma: false,
                 created_by: solicitud.asesor_id
             })

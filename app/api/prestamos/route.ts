@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { addDays, addWeeks, addMonths } from 'date-fns'
+import { checkSystemAccess } from '@/utils/systemRestrictions'
 
 // Helper for dates - STRICT UTC
 function parseUTCDate(dateStr: string): Date {
@@ -27,12 +28,44 @@ export async function POST(request: Request) {
     // Initialize Admin Client for Writes
     const supabaseAdmin = createAdminClient()
 
+    // 2. Verify Role & Access
+    const { data: perfil } = await supabaseAdmin
+        .from('perfiles')
+        .select('rol')
+        .eq('id', user.id)
+        .single()
+    
+    if (!perfil) {
+        return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 403 })
+    }
+
+    const access = await checkSystemAccess(supabaseAdmin, user.id, perfil.rol, 'prestamo')
+    if (!access.allowed) {
+        return NextResponse.json({ 
+            error: access.reason, 
+            tipo_error: access.code,
+            config: access.config 
+        }, { status: 403 })
+    }
+
     const body = await request.json()
     const { cliente_id, monto, interes, fecha_inicio, frecuencia, cuotas } = body
 
     if (!cliente_id || !monto || !interes || !fecha_inicio || !frecuencia || !cuotas) {
       return NextResponse.json({ error: 'Faltan campos requeridos (frecuencia, cuotas, etc)' }, { status: 400 })
     }
+
+    // [NUEVA LÓGICA] Detectar automáticamente si es un préstamo paralelo
+    const { data: prestamoActivo } = await supabaseAdmin
+        .from('prestamos')
+        .select('id')
+        .eq('cliente_id', cliente_id)
+        .eq('estado', 'activo')
+        .limit(1)
+        .maybeSingle()
+    
+    const esParalelo = !!prestamoActivo;
+
 
     const numCuotas = parseInt(cuotas)
     const principal = parseFloat(monto)
@@ -140,7 +173,8 @@ export async function POST(request: Request) {
                 fecha_inicio,
                 fecha_fin: formattedEndDate, 
                 estado: 'activo',
-                created_by: user.id
+                created_by: user.id,
+                es_paralelo: esParalelo
             })
             .select()
             .single()

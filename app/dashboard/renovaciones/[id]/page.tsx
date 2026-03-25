@@ -100,20 +100,11 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
 
     let cuentasAdmin: any[] = []
     if (perfil?.rol === 'admin' && ['pre_aprobado', 'pendiente_supervision'].includes(solicitud.estado_solicitud)) {
-        const { data: globalCartera } = await supabaseAdmin
-            .from('carteras')
-            .select('id')
-            .is('asesor_id', null)
-            .limit(1)
-            .single()
-
-        if (globalCartera) {
-            const { data: cuentas } = await supabaseAdmin
-                .from('cuentas_financieras')
-                .select('id, nombre, saldo, tipo')
-                .eq('cartera_id', globalCartera.id)
-            cuentasAdmin = cuentas || []
-        }
+        const { data: cuentas } = await supabaseAdmin
+            .from('cuentas_financieras')
+            .select('id, nombre, saldo, tipo')
+            .order('nombre')
+        cuentasAdmin = cuentas || []
     }
 
     return (

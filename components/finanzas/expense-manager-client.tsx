@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import { Plus, Receipt } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -38,11 +38,25 @@ export function ExpenseManagerClient({
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingExpense, setEditingExpense] = useState<any>(null)
+  const [accessResult, setAccessResult] = useState<any>(null)
+
+  useEffect(() => {
+    const checkAccess = async () => {
+      const { createClient } = await import('@/utils/supabase/client')
+      const { checkSystemAccess } = await import('@/utils/systemRestrictions')
+      const supabase = createClient()
+      const access = await checkSystemAccess(supabase, userId, userRole, 'otros')
+      setAccessResult(access)
+    }
+    checkAccess()
+  }, [userId, userRole])
 
   const handleEdit = (expense: any) => {
     setEditingExpense(expense)
     setIsEditOpen(true)
   }
+
+  const canCreate = !accessResult || accessResult.allowed || userRole === 'admin'
 
   return (
     <div className="page-container pb-16">
@@ -55,6 +69,11 @@ export function ExpenseManagerClient({
               <h1 className="page-title">Gestión de Gastos</h1>
               <p className="page-subtitle max-w-sm">
                 Registra y audita los gastos operativos de manera eficiente.
+                {!canCreate && accessResult?.reason && (
+                  <span className="block mt-1 text-amber-500 font-bold text-[10px] animate-pulse">
+                    ⚠️ {accessResult.reason}
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -63,7 +82,8 @@ export function ExpenseManagerClient({
         <div className="flex justify-end shrink-0">
           <Button 
             onClick={() => setIsCreateOpen(true)}
-            className="btn-action bg-blue-600 hover:bg-blue-500 shadow-blue-500/20 group"
+            disabled={!canCreate}
+            className={`btn-action bg-blue-600 hover:bg-blue-500 shadow-blue-500/20 group ${!canCreate ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
           >
             <Plus className="w-4 h-4 mr-1.5 group-hover:rotate-90 transition-transform" />
             Registrar Gasto
@@ -82,6 +102,7 @@ export function ExpenseManagerClient({
             <ExpenseList 
               expenses={expenses} 
               onEdit={handleEdit}
+              userRole={userRole}
             />
           </div>
         </div>

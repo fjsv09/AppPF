@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -18,6 +19,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useSidebar } from './providers/sidebar-provider'
+import { SimuladorPrestamoModal } from './prestamos/simulador-prestamo-modal'
+import { Calculator } from 'lucide-react'
 
 type Role = 'admin' | 'supervisor' | 'asesor'
 
@@ -32,6 +35,7 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
     const supabase = createClient()
     const { unreadCount } = useNotifications()
     const { isCollapsed, toggleSidebar } = useSidebar()
+    const [isSimModalOpen, setIsSimModalOpen] = useState(false)
 
     const handleSignOut = async () => {
         await supabase.auth.signOut()
@@ -110,6 +114,32 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
                     )}>
                         <NotificationsDropdown />
                     </div>
+                </div>
+
+                {/* Quick Action: Simulator */}
+                <div className={cn(
+                    "mb-6 px-2 animate-in fade-in duration-500 delay-150",
+                    isCollapsed ? "flex justify-center" : ""
+                )}>
+                    <Button
+                        onClick={() => setIsSimModalOpen(true)}
+                        className={cn(
+                            "w-full bg-gradient-to-r from-blue-600/10 to-indigo-600/10 hover:from-blue-600/20 hover:to-indigo-600/20 border border-blue-500/20 text-blue-400 group transition-all duration-300 rounded-xl flex items-center shadow-lg shadow-blue-500/5",
+                            isCollapsed ? "justify-center p-0 h-10 w-10" : "justify-start gap-3 h-11 px-4"
+                        )}
+                        title={isCollapsed ? "Simulador Ágil" : ""}
+                    >
+                        <Calculator className={cn(
+                            "transition-transform group-hover:scale-110 duration-300",
+                            isCollapsed ? "h-5 w-5" : "h-5 w-5"
+                        )} />
+                        {!isCollapsed && (
+                            <div className="flex flex-col items-start leading-tight">
+                                <span className="text-[11px] font-bold uppercase tracking-wider">Simulador</span>
+                                <span className="text-[8px] text-blue-400/50 uppercase font-medium tracking-widest">Ágil e Instantáneo</span>
+                            </div>
+                        )}
+                    </Button>
                 </div>
 
                 {/* Sidebar Collapse Toggle */}
@@ -252,6 +282,13 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
                         <DropdownMenuLabel className="text-slate-400 text-xs uppercase tracking-wider">Opciones</DropdownMenuLabel>
                         <DropdownMenuSeparator className="bg-slate-800" />
 
+                        {/* Simulator Mobile */}
+                        <DropdownMenuItem onClick={() => setIsSimModalOpen(true)} className="flex items-center gap-2 cursor-pointer text-blue-400 hover:text-blue-300 focus:text-blue-300 hover:bg-blue-500/10 focus:bg-blue-500/10">
+                            <Calculator className="h-4 w-4" />
+                            <span className="font-bold">Simulador Ágil</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="bg-slate-800" />
+
                         {/* Hidden Links */}
                         {filteredLinks.slice(4).map((link) => {
                             const Icon = link.icon
@@ -278,6 +315,11 @@ export function DashboardNav({ role, userName = 'Usuario' }: DashboardNavProps) 
                     </DropdownMenuContent>
                 </DropdownMenu>
             </nav>
+
+            <SimuladorPrestamoModal 
+                isOpen={isSimModalOpen} 
+                onClose={() => setIsSimModalOpen(false)} 
+            />
         </>
     )
 }

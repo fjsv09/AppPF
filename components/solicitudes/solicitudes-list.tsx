@@ -169,9 +169,10 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                             className="hidden md:grid gap-4 px-6 py-3 bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500 items-center"
                             style={{ gridTemplateColumns: 'repeat(12, minmax(0, 1fr))' }}
                         >
-                            <div className="col-span-4">Cliente</div>
+                            <div className="col-span-3">Cliente</div>
                             <div className="col-span-2 text-right">Monto</div>
-                            <div className="col-span-3 text-left pl-4">Asesor</div>
+                            <div className="col-span-2 text-center">Fecha</div>
+                            <div className="col-span-2 text-left pl-4">Asesor</div>
                             <div className="col-span-2 text-center">Estado</div>
                             <div className="col-span-1 text-right">Acción</div>
                         </div>
@@ -210,14 +211,17 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                                     <Badge variant="outline" className="text-[9px] h-4 px-1 py-0 bg-purple-500/10 text-purple-400 border-purple-500/30 font-medium">PROSPECTO</Badge>
                                                                 )}
                                                             </div>
-                                                            <span className="text-[10px] text-slate-500 font-mono mt-0.5">{solicitud.cliente?.dni || solicitud.prospecto_dni || '---'}</span>
-                                                        </div>
+                                                             <span className="text-[10px] text-slate-500 font-mono mt-0.5">{solicitud.cliente?.dni || solicitud.prospecto_dni || '---'}</span>
+                                                         </div>
                                                     </div>
-                                                    <div className="shrink-0 text-right">
+                                                    <div className="shrink-0 text-right flex flex-col items-end gap-1">
                                                          <Badge className={cn('text-[10px] py-0 h-5 border px-1.5 flex items-center gap-1', config.color)}>
                                                              <IconComponent className="w-3 h-3" />
                                                              {config.label}
                                                          </Badge>
+                                                          <span className="text-[9px] text-slate-500 font-mono">
+                                                              {new Date(solicitud.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                                          </span>
                                                     </div>
                                                 </div>
 
@@ -278,7 +282,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                             style={{ gridTemplateColumns: 'repeat(12, minmax(0, 1fr))' }}
                                         >
                                             {/* Cliente */}
-                                            <div className="col-span-4 flex items-center gap-3 min-w-0">
+                                            <div className="col-span-3 flex items-center gap-3 min-w-0">
                                                 <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0">
                                                     <span className="font-bold text-slate-300 text-xs">{(solicitud.cliente?.nombres || solicitud.prospecto_nombres)?.charAt(0) || '?'}</span>
                                                 </div>
@@ -291,8 +295,8 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                             <Badge variant="outline" className="text-[9px] h-4 px-1.5 py-0 bg-purple-500/10 text-purple-400 border-purple-500/30 font-medium">PROSPECTO</Badge>
                                                         )}
                                                     </div>
-                                                    <div className="text-[10px] text-slate-500 font-mono mt-0.5">{solicitud.cliente?.dni || solicitud.prospecto_dni || '---'}</div>
-                                                </div>
+                                                     <div className="text-[10px] text-slate-500 font-mono mt-0.5">{solicitud.cliente?.dni || solicitud.prospecto_dni || '---'}</div>
+                                                 </div>
                                             </div>
 
                                             {/* Monto */}
@@ -301,8 +305,18 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                 <div className="text-[10px] text-slate-400 mt-0.5">{solicitud.cuotas} {solicitud.modalidad}</div>
                                             </div>
 
+                                            {/* Fecha */}
+                                            <div className="col-span-2 flex flex-col items-center justify-center text-center">
+                                                <span className="text-xs font-medium text-slate-300">
+                                                    {new Date(solicitud.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                                </span>
+                                                <span className="text-[10px] text-slate-500 font-mono">
+                                                    {new Date(solicitud.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                            </div>
+
                                             {/* Asesor */}
-                                            <div className="col-span-3 text-left pl-4 flex items-center gap-2 min-w-0">
+                                            <div className="col-span-2 text-left pl-4 flex items-center gap-2 min-w-0">
                                                 <Users className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                                                 <span className="text-sm text-slate-300 truncate">{solicitud.asesor?.nombre_completo}</span>
                                             </div>

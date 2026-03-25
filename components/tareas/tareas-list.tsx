@@ -192,7 +192,7 @@ export function TareasList({ initialTareas, userId, userRol }: { initialTareas: 
 
                                             <div className="flex items-center justify-between gap-2 mt-1.5 pt-2.5 border-t border-slate-800/40">
                                                  <Link 
-                                                    href={`/dashboard/prestamos/${tarea.prestamo_id}`} 
+                                                    href={`/dashboard/prestamos/${tarea.prestamo_id}?tab=historial`} 
                                                     className="flex items-center gap-1.5 text-[12px] text-blue-400 hover:text-blue-300 font-medium transition-colors"
                                                  >
                                                     <ExternalLink className="w-3.5 h-3.5" /> Ir al Préstamo
@@ -371,7 +371,7 @@ export function TareasList({ initialTareas, userId, userRol }: { initialTareas: 
                                             {/* Acciones */}
                                             <div className="col-span-1 flex items-center justify-end">
                                                 <Link 
-                                                    href={`/dashboard/prestamos/${tarea.prestamo_id}`} 
+                                                    href={`/dashboard/prestamos/${tarea.prestamo_id}?tab=historial`} 
                                                     className="h-8 w-8 flex flex-shrink-0 items-center justify-center rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50 transition-all"
                                                     title="Ir al Préstamo"
                                                 >

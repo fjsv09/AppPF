@@ -55,46 +55,41 @@ export async function PATCH(
         }
 
         // ===== CALCULAR DESEMBOLSO NETO Y VALIDAR SALDO =====
-        let cuentaSeleccionada = null;
-        let monto_a_descontar = solicitud.monto_solicitado;
+        if (!cuentaOrigenId) {
+            return NextResponse.json({ error: 'Debes seleccionar una cuenta para el desembolso.' }, { status: 400 })
+        }
 
-        if (cuentaOrigenId) {
-            const { data: cuenta } = await supabaseAdmin
-                .from('cuentas_financieras')
-                .select('cartera_id, saldo')
-                .eq('id', cuentaOrigenId)
-                .single()
+        const { data: cuentaSeleccionada } = await supabaseAdmin
+            .from('cuentas_financieras')
+            .select('cartera_id, saldo')
+            .eq('id', cuentaOrigenId)
+            .single()
 
-            if (!cuenta) {
-                return NextResponse.json({ error: 'La cuenta de origen seleccionada no existe.' }, { status: 404 })
-            }
+        if (!cuentaSeleccionada) {
+            return NextResponse.json({ error: 'La cuenta de origen seleccionada no existe.' }, { status: 404 })
+        }
 
-            // Calcular saldo anterior (deuda retenida)
-            const { data: prestamoAnterior } = await supabaseAdmin
-                .from('prestamos')
-                .select(`
-                    id, 
-                    cronograma_cuotas (monto_cuota)
-                `)
-                .eq('id', solicitud.prestamo_id)
-                .eq('cronograma_cuotas.estado', 'pendiente');
+        // 1. Obtener cuotas pendientes ANTES de que el RPC las ponga como pagadas
+        const { data: cuotasPendientes } = await supabaseAdmin
+            .from('cronograma_cuotas')
+            .select('id, monto_cuota, monto_pagado')
+            .eq('prestamo_id', solicitud.prestamo_id)
+            .neq('estado', 'pagado');
 
-            let saldo_retenido = 0;
-            if (prestamoAnterior && prestamoAnterior.length > 0) {
-                const cuotasPendientes = prestamoAnterior[0].cronograma_cuotas || [];
-                saldo_retenido = cuotasPendientes.reduce((acc: number, c: any) => acc + Number(c.monto_cuota), 0);
-            }
+        let saldo_retenido = 0;
+        if (cuotasPendientes && cuotasPendientes.length > 0) {
+            saldo_retenido = cuotasPendientes.reduce((acc: number, c: any) => 
+                acc + (Number(c.monto_cuota) - Number(c.monto_pagado || 0)), 0);
+        }
 
-            const desembolso_neto = solicitud.monto_solicitado - saldo_retenido;
-            monto_a_descontar = desembolso_neto > 0 ? desembolso_neto : solicitud.monto_solicitado;
+        const desembolso_neto = solicitud.monto_solicitado - saldo_retenido;
+        // El monto a descontar de la cuenta es el NETO (lo que efectivamente sale del sistema)
+        const monto_a_descontar = desembolso_neto > 0 ? desembolso_neto : 0;
 
-            if (cuenta.saldo < monto_a_descontar) {
-                return NextResponse.json({ 
-                    error: `Saldo insuficiente en la cuenta. Se requieren $${monto_a_descontar} (Monto menos saldo retenido) pero la cuenta solo tiene $${cuenta.saldo}.` 
-                }, { status: 400 })
-            }
-            
-            cuentaSeleccionada = cuenta;
+        if (cuentaSeleccionada.saldo < monto_a_descontar) {
+            return NextResponse.json({ 
+                error: `Saldo insuficiente en la cuenta. Se requieren $${monto_a_descontar} (Monto nuevo - Deuda anterior) pero la cuenta solo tiene $${cuentaSeleccionada.saldo}.` 
+            }, { status: 400 })
         }
 
         // Procesar renovación usando la función RPC
@@ -104,129 +99,137 @@ export async function PATCH(
                 p_aprobado_por: user.id
             })
 
-        if (rpcError) {
-            console.error('Error processing renovation:', rpcError)
-            return NextResponse.json({ error: rpcError.message }, { status: 400 })
+        if (rpcError || !resultado?.success) {
+            console.error('Error processing renovation:', rpcError, resultado)
+            return NextResponse.json({ error: rpcError?.message || resultado?.error || 'Error procesando renovación' }, { status: 400 })
         }
 
-        if (!resultado.success) {
-            return NextResponse.json({ error: 'Error procesando renovación' }, { status: 400 })
-        }
+        // APLICAR CAMBIOS CONTABLES (Rollback manual si algo sale mal)
+        let rollbackInfo = {
+            prestamo_nuevo_id: (resultado as any).prestamo_nuevo_id,
+            solicitud_id: id,
+            prestamo_original_id: solicitud.prestamo_id
+        };
 
-        // ===== DESEMBOLSAR PRÉSTAMO (Deducir de cartera global) =====
-        if (cuentaOrigenId && cuentaSeleccionada) {
-            // Actualizar saldo
-            await supabaseAdmin
+        try {
+            // 1. Actualizar saldo real de la cuenta
+            const { error: errorSaldo } = await supabaseAdmin
                 .from('cuentas_financieras')
                 .update({ saldo: cuentaSeleccionada.saldo - monto_a_descontar })
                 .eq('id', cuentaOrigenId)
             
-            // Registrar movimiento financiero
+            if (errorSaldo) throw new Error(`Error actualizando saldo: ${errorSaldo.message}`);
+
+            // 2. Registrar movimientos financieros (Doble asiento)
             const nombreCliente = solicitud.cliente?.nombres || 'Cliente'
-            await supabaseAdmin
-                .from('movimientos_financieros')
-                .insert({
+            const movimientos = [];
+            
+            // Registro A: Ingreso (Cobro del saldo retenido)
+            if (saldo_retenido > 0) {
+                movimientos.push({
                     cartera_id: cuentaSeleccionada.cartera_id,
                     cuenta_origen_id: cuentaOrigenId,
-                    monto: monto_a_descontar,
-                    tipo: 'egreso',
-                    descripcion: `Desembolso neto por renovación #${resultado.prestamo_nuevo_id?.split('-')[0]} - Cliente: ${nombreCliente}`,
+                    monto: saldo_retenido,
+                    tipo: 'ingreso',
+                    descripcion: `Liquidación deuda previa por renovación (Préstamo #${solicitud.prestamo_id.split('-')[0]}) - Cliente: ${nombreCliente}`,
                     registrado_por: user.id
-                })
-        }
-
-
-        // Liquidar cuotas pendientes del préstamo anterior (Old Loan)
-        // Esto asegura que la deuda se considere saldada por la renovación
-        // Liquidar cuotas pendientes del préstamo anterior (Old Loan)
-        // 1. Obtener cuotas pendientes para saber el monto exacto a liquidar
-        const { data: cuotasPendientes } = await supabaseAdmin
-            .from('cronograma_cuotas')
-            .select('id, monto_cuota')
-            .eq('prestamo_id', solicitud.prestamo_id)
-            .neq('estado', 'pagado')
-
-        if (cuotasPendientes && cuotasPendientes.length > 0) {
-            console.log(`Liquidando ${cuotasPendientes.length} cuotas del préstamo ${solicitud.prestamo_id}`)
-            
-            // 2. Actualizar cada cuota para marcarla como pagada y saldar el monto
-            // Usamos Promise.all para hacerlo en paralelo
-            const updatePromises = cuotasPendientes.map(cuota => 
-                supabaseAdmin
-                    .from('cronograma_cuotas')
-                    .update({ 
-                        estado: 'pagado', 
-                        fecha_pago: new Date().toISOString(),
-                        monto_pagado: cuota.monto_cuota // Saldar deuda
-                    })
-                    .eq('id', cuota.id)
-            )
-
-            await Promise.all(updatePromises)
-        }
-
-        // Generar cronograma para el nuevo préstamo
-        const { error: cronogramaError } = await supabaseAdmin.rpc('generar_cronograma_db', {
-            p_prestamo_id: resultado.prestamo_nuevo_id
-        })
-
-        if (cronogramaError) {
-            console.error('Error generating cronograma:', cronogramaError)
-            // No hacemos rollback porque la renovación ya se procesó, pero registramos el error
-            await supabaseAdmin.from('alertas').insert({
-                tipo_alerta: 'error_cronograma',
-                descripcion: `Error generando cronograma para préstamo renovado ${resultado.prestamo_nuevo_id}: ${cronogramaError.message}`,
-                prestamo_id: resultado.prestamo_nuevo_id,
-                usuario_id: user.id
-            })
-        }
-
-        // Notificar al asesor
-        await createFullNotification(solicitud.asesor_id, {
-            titulo: '✅ Renovación Aprobada',
-            mensaje: `La renovación por $${solicitud.monto_solicitado} ha sido aprobada. Nuevo préstamo creado.`,
-            link: `/dashboard/prestamos/${resultado.prestamo_nuevo_id}`,
-            tipo: 'success'
-        })
-
-        // Auditoría
-        await supabaseAdmin.from('auditoria').insert({
-            usuario_id: user.id,
-            accion: 'aprobar_renovacion',
-            tabla_afectada: 'solicitudes_renovacion',
-            registro_id: id,
-            detalle: { 
-                prestamo_original: solicitud.prestamo_id,
-                prestamo_nuevo: resultado.prestamo_nuevo_id,
-                monto: solicitud.monto_solicitado,
-                saldo_anterior: resultado.saldo_anterior
+                });
             }
-        })
 
-        // ====== CREAR TAREA DE EVIDENCIA ======
-        const { data: nuevaTarea } = await supabaseAdmin.from('tareas_evidencia').insert({
-            asesor_id: solicitud.asesor_id,
-            prestamo_id: resultado.prestamo_nuevo_id,
-            tipo: 'renovacion'
-        }).select('id').single()
+            // Registro B: Egreso (Desembolso total)
+            movimientos.push({
+                cartera_id: cuentaSeleccionada.cartera_id,
+                cuenta_origen_id: cuentaOrigenId,
+                monto: solicitud.monto_solicitado,
+                tipo: 'egreso',
+                descripcion: `Desembolso total renovación #${resultado.prestamo_nuevo_id?.split('-')[0]} - Cliente: ${nombreCliente}`,
+                registrado_por: user.id
+            });
 
-        // Notificar al asesor sobre la nueva tarea
-        await createFullNotification(solicitud.asesor_id, {
-            titulo: '📸 Tarea Pendiente: Evidencia',
-            mensaje: `Sube la foto o contrato para la renovación aprobada de $${solicitud.monto_solicitado}.`,
-            link: '/dashboard/tareas',
-            tipo: 'warning'
-        })
+            const { error: moveError } = await supabaseAdmin.from('movimientos_financieros').insert(movimientos);
+            if (moveError) throw new Error(`Error registrando movimientos: ${moveError.message}`);
 
-        revalidatePath('/dashboard/renovaciones', 'page')
-        revalidatePath('/dashboard/prestamos', 'page')
-        revalidatePath('/dashboard', 'layout')
+            // 3. Generar UN SOLO recibo de pago consolidado para el historial
+            // Marcado como autopago para que NO aparezca en auditoría de vouchers
+            if (cuotasPendientes && cuotasPendientes.length > 0) {
+                const montoTotalLiquidado = cuotasPendientes.reduce((acc: number, c: any) => 
+                    acc + (Number(c.monto_cuota) - Number(c.monto_pagado || 0)), 0);
 
-        return NextResponse.json({
-            message: 'Renovación aprobada exitosamente',
-            prestamo_nuevo_id: resultado.prestamo_nuevo_id,
-            saldo_anterior: resultado.saldo_anterior
-        })
+                const { error: pagosError } = await supabaseAdmin.from('pagos').insert({
+                    cuota_id: cuotasPendientes[0].id, // Referencia a la primera cuota
+                    monto_pagado: montoTotalLiquidado,
+                    registrado_por: user.id,
+                    es_autopago_renovacion: true,
+                    voucher_compartido: true,
+                    metodo_pago: 'Renovación'
+                });
+                if (pagosError) throw new Error(`Error generando recibo: ${pagosError.message}`);
+            }
+
+            // 4. Generar cronograma para el nuevo préstamo
+            const { error: cronogramaError } = await supabaseAdmin.rpc('generar_cronograma_db', {
+                p_prestamo_id: resultado.prestamo_nuevo_id
+            })
+            if (cronogramaError) throw new Error(`Error generando cronograma: ${cronogramaError.message}`);
+
+            // 5. Notificar al asesor
+            await createFullNotification(solicitud.asesor_id, {
+                titulo: '✅ Renovación Aprobada',
+                mensaje: `La renovación por $${solicitud.monto_solicitado} ha sido aprobada. Nuevo préstamo creado.`,
+                link: `/dashboard/prestamos/${resultado.prestamo_nuevo_id}`,
+                tipo: 'success'
+            })
+
+            // 6. Auditoría
+            await supabaseAdmin.from('auditoria').insert({
+                usuario_id: user.id,
+                accion: 'aprobar_renovacion',
+                tabla_afectada: 'solicitudes_renovacion',
+                registro_id: id,
+                detalle: { 
+                    prestamo_original: solicitud.prestamo_id,
+                    prestamo_nuevo: resultado.prestamo_nuevo_id,
+                    monto: solicitud.monto_solicitado,
+                    desembolso_neto: monto_a_descontar
+                }
+            })
+
+            // 7. Tarea de Evidencia
+            await supabaseAdmin.from('tareas_evidencia').insert({
+                asesor_id: solicitud.asesor_id,
+                prestamo_id: resultado.prestamo_nuevo_id,
+                tipo: 'renovacion'
+            })
+
+            revalidatePath('/dashboard/renovaciones', 'page')
+            revalidatePath('/dashboard/prestamos', 'page')
+            revalidatePath('/dashboard', 'layout')
+
+            return NextResponse.json({
+                message: 'Renovación aprobada exitosamente',
+                prestamo_nuevo_id: resultado.prestamo_nuevo_id,
+                desembolso_neto: monto_a_descontar
+            })
+
+        } catch (errorOperacion: any) {
+            console.error('CRITICAL: Rollback triggered during approval:', errorOperacion);
+            
+            // INTENTO DE ROLLBACK MANUAL (Limpieza técnica)
+            // 1. Borrar préstamo nuevo si se creó
+            if (rollbackInfo.prestamo_nuevo_id) {
+                await supabaseAdmin.from('prestamos').delete().eq('id', rollbackInfo.prestamo_nuevo_id);
+                await supabaseAdmin.from('cronograma_cuotas').delete().eq('prestamo_id', rollbackInfo.prestamo_nuevo_id);
+            }
+            // 2. Revertir estado de la solicitud
+            await supabaseAdmin.from('solicitudes_renovacion').update({ estado_solicitud: 'pre_aprobado' }).eq('id', rollbackInfo.solicitud_id);
+            
+            // 3. Revertir préstamo original a activo (aproximación, ya que el RPC hizo cambios)
+            await supabaseAdmin.from('prestamos').update({ estado: 'activo' }).eq('id', rollbackInfo.prestamo_original_id);
+
+            return NextResponse.json({ 
+                error: `Error crítico durante el proceso contable. Se intentó revertir para evitar inconsistencias. Detalle: ${errorOperacion.message}` 
+            }, { status: 500 });
+        }
 
     } catch (e: any) {
         console.error('Unexpected error:', e)

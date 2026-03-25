@@ -3,6 +3,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
+import { checkSystemAccess } from '@/utils/systemRestrictions'
 
 export async function POST(request: Request) {
     const supabase = await createClient()
@@ -33,59 +34,26 @@ export async function POST(request: Request) {
             console.error('Perfil Error:', perfilError)
             return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 403 })
         }
+ 
+        // --- BLOQUEAR SUPERVISORES ---
+        if (perfil.rol === 'supervisor') {
+             return NextResponse.json({ 
+                 error: 'Los supervisores no tienen permisos para registrar pagos directamente.' 
+             }, { status: 403 })
+        }
 
-        // --- VERIFICACIÓN DE HORARIO ---
-        const { data: configs } = await supabaseAdmin
-            .from('configuracion_sistema')
-            .select('clave, valor')
-            .in('clave', ['horario_apertura', 'horario_cierre', 'desbloqueo_hasta'])
-
-        const configMap = (configs || []).reduce((acc: any, curr) => {
-            acc[curr.clave] = curr.valor
-            return acc
-        }, {})
-
-        const apertura = configMap['horario_apertura'] || '07:00'
-        const cierre = configMap['horario_cierre'] || '20:00'
-        const desbloqueoHasta = configMap['desbloqueo_hasta'] ? new Date(configMap['desbloqueo_hasta']) : null
-
-        // --- DETECCIÓN ROBUSTA DE HORA LIMA ---
-        const now = new Date()
-        const formatter = new Intl.DateTimeFormat('es-PE', {
-            timeZone: 'America/Lima',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-        })
-        const currentTimeString = formatter.format(now)
-
-        console.log(`[HORARIO CHECK] Hora actual (Lima): ${currentTimeString} | Rango: ${apertura} - ${cierre}`)
-
-        const isWithinHours = currentTimeString >= apertura && currentTimeString <= cierre
-        const isTemporaryUnlocked = desbloqueoHasta && now < desbloqueoHasta
-
-        if (!isWithinHours && !isTemporaryUnlocked && perfil.rol !== 'admin') {
-            console.warn(`[HORARIO BLOQUEO] Intento de pago bloqueado para rol: ${perfil.rol}. Fuera de horario.`)
+        // --- VERIFICACIÓN DE ACCESO Y REGLAS DE NEGOCIO (Horarios, Cuadres, Feriados) ---
+        const access = await checkSystemAccess(supabaseAdmin, user.id, perfil.rol, 'pago');
+        if (!access.allowed) {
+            console.warn(`[ACCESO BLOQUEADO] Pago rechazado: ${access.reason} para id: ${user.id}`);
             return NextResponse.json({ 
-                error: `Registro de pagos fuera de horario. La jornada es de ${apertura} a ${cierre}.`,
-                fuera_horario: true,
-                horario: { apertura, cierre, actual: currentTimeString }
-            }, { status: 403 })
+                error: access.reason,
+                tipo_error: access.code,
+                config: access.config,
+                bloqueado: true
+            }, { status: 403 });
         }
-        // --- FIN VERIFICACIÓN DE HORARIO ---
-
-        // --- VERIFICACIÓN DE BLOQUEO POR CUADRE (Solo Asesores) ---
-        if (perfil.rol === 'asesor') {
-            const blockStatus = await checkAdvisorBlocked(supabaseAdmin, user.id);
-            if (blockStatus.isBlocked) {
-                console.warn(`[CUADRE BLOQUEO] Intento de pago bloqueado para asesor: ${user.id}. Motivo: ${blockStatus.reason}`);
-                return NextResponse.json({ 
-                    error: blockStatus.reason,
-                    bloqueado_por_cuadre: true 
-                }, { status: 403 });
-            }
-        }
-        // --- FIN VERIFICACIÓN DE BLOQUEO POR CUADRE ---
+        // --- FIN VERIFICACIÓN DE ACCESO ---
 
         const body = await request.json()
         const { cuota_id, monto, metodo_pago = 'Efectivo' } = body
@@ -127,6 +95,15 @@ export async function POST(request: Request) {
             tabla_afectada: 'pagos',
             detalle: { cuota_id, monto, result }
         })
+
+        // Iniciar notificación asíncrona (no bloquea la respuesta del pago)
+        if (result.pago_id) {
+            import('@/utils/notifications').then(mod => {
+                mod.notificarPagoCliente(result.pago_id)
+            }).catch(err => {
+                console.error('Error al iniciar notificación:', err)
+            })
+        }
 
         revalidatePath('/dashboard/pagos')
         revalidatePath('/dashboard/prestamos', 'layout')

@@ -20,6 +20,7 @@ export async function GET(
         }
 
         // Evaluar elegibilidad usando la función RPC
+        // Ahora la lógica de Principal/Paralelo vive dentro de este RPC
         const { data: elegibilidad, error } = await supabaseAdmin
             .rpc('evaluar_elegibilidad_renovacion', { p_prestamo_id: id })
 

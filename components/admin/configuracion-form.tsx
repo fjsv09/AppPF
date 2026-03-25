@@ -66,6 +66,10 @@ const CONFIG_LABELS: Record<string, { nombre: string; descripcion: string; min?:
         nombre: 'Horario de Cierre',
         descripcion: 'Hora en la que se bloquea el registro de pagos (HH:MM)',
     },
+    'horario_fin_turno_1': {
+        nombre: 'Fin Primer Turno / Límite Cuadre',
+        descripcion: 'Hora en la que finaliza el turno y se exige el cuadre parcial (HH:MM)',
+    },
     'desbloqueo_hasta': {
         nombre: 'Desbloqueo Temporal',
         descripcion: 'Fecha y hora hasta la cual el sistema está desbloqueado por excepción (ISO)',
@@ -74,9 +78,16 @@ const CONFIG_LABELS: Record<string, { nombre: string; descripcion: string; min?:
 
 export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
     const router = useRouter()
-    const [config, setConfig] = useState<Record<string, string>>(
-        initialConfig.reduce((acc, item) => ({ ...acc, [item.clave]: item.valor }), {})
-    )
+    const [config, setConfig] = useState<Record<string, string>>(() => {
+        return initialConfig.reduce((acc: any, item) => {
+            let val = item.valor;
+            // Normalizar horarios (ej: "3" -> "03:00")
+            if ((item.clave.includes('horario') || item.clave.includes('cuadre')) && val && !val.includes(':') && !isNaN(Number(val))) {
+                val = `${val.padStart(2, '0')}:00`;
+            }
+            return { ...acc, [item.clave]: val };
+        }, {});
+    });
     const [saving, setSaving] = useState(false)
     const [unlocking, setUnlocking] = useState(false)
     const [editingKey, setEditingKey] = useState<string | null>(null)
@@ -102,8 +113,17 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
     const handleSave = async (clave: string) => {
         setSaving(true)
         try {
-            const valor = config[clave]
+            let valor = config[clave]
             const meta = CONFIG_LABELS[clave]
+
+            // Formateo automático de horarios
+            if (clave.includes('horario')) {
+                // Si solo pone un número (ej: "3" o "15"), convertir a "03:00" o "15:00"
+                if (valor && !valor.includes(':') && !isNaN(Number(valor))) {
+                    const hour = valor.padStart(2, '0')
+                    valor = `${hour}:00`
+                }
+            }
 
             // Validación (Solo para números)
             if (!clave.includes('horario') && !clave.includes('desbloqueo')) {
@@ -163,6 +183,7 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         'refinanciacion_min_mora',
         'horario_apertura',
         'horario_cierre',
+        'horario_fin_turno_1',
         'desbloqueo_hasta'
     ]
 
@@ -171,7 +192,11 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         if (!displayConfig.find(item => item.clave === key)) {
             displayConfig.push({
                 clave: key,
-                valor: key === 'horario_apertura' ? '07:00' : key === 'horario_cierre' ? '20:00' : 'N/A',
+                valor: 
+                    key === 'horario_apertura' ? '10:00' : 
+                    key === 'horario_cierre' ? '19:00' : 
+                    key === 'horario_fin_turno_1' ? '13:30' :
+                    'N/A',
                 descripcion: CONFIG_LABELS[key]?.descripcion || 'Configuración del sistema',
                 tipo: 'string'
             })
@@ -234,8 +259,15 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
                                     </div>
                                     <Input
                                         id={item.clave}
-                                        type={item.clave.includes('horario') ? 'text' : item.clave.includes('desbloqueo') ? 'text' : 'number'}
-                                        value={currentValue}
+                                        type={(item.clave.includes('horario') || item.clave.includes('cuadre')) ? 'text' : item.clave.includes('desbloqueo') ? 'text' : 'number'}
+                                        placeholder={item.clave.includes('horario') ? 'HH:MM' : ''}
+                                        value={
+                                            (isEditing) 
+                                                ? currentValue 
+                                                : ((item.clave.includes('horario') || item.clave.includes('cuadre')) && currentValue && !currentValue.includes(':') && !isNaN(Number(currentValue))) 
+                                                    ? `${currentValue.padStart(2, '0')}:00` 
+                                                    : currentValue
+                                        }
                                         onChange={(e) => setConfig({ ...config, [item.clave]: e.target.value })}
                                         disabled={!isEditing}
                                         className={cn(

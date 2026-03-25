@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createFullNotification } from '@/services/notification-service'
 import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
+import { checkSystemAccess } from '@/utils/systemRestrictions'
 
 export const dynamic = 'force-dynamic'
 
@@ -92,39 +93,16 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 403 })
         }
 
-        // VERIFICAR HORARIO DEL SISTEMA
-        const { data: configs } = await supabaseAdmin
-            .from('configuracion_sistema')
-            .select('clave, valor')
-            .in('clave', ['horario_apertura', 'horario_cierre', 'desbloqueo_hasta'])
-        
-        const configMap = (configs || []).reduce((acc: any, curr) => {
-            acc[curr.clave] = curr.valor
-            return acc
-        }, { horario_apertura: '07:00', horario_cierre: '20:00', desbloqueo_hasta: '1970-01-01' })
-
-        const now = new Date()
-        const peruTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }))
-        const currentTime = peruTime.getHours().toString().padStart(2, '0') + ':' + peruTime.getMinutes().toString().padStart(2, '0')
-        const isUnlocked = new Date(configMap.desbloqueo_hasta) > now
-
-        if (!isUnlocked && (currentTime < configMap.horario_apertura || currentTime > configMap.horario_cierre)) {
+        // --- VERIFICACIÓN DE ACCESO Y REGLAS DE NEGOCIO (Horarios, Turnos, Cuadres) ---
+        const access = await checkSystemAccess(supabaseAdmin, user.id, perfil.rol, 'renovacion');
+        if (!access.allowed) {
             return NextResponse.json({ 
-                error: `Sistema cerrado. El horario de operación es de ${configMap.horario_apertura} a ${configMap.horario_cierre}.`,
-                tipo_error: 'sistema_cerrado'
-            }, { status: 403 })
+                error: access.reason,
+                tipo_error: access.code,
+                config: access.config
+            }, { status: 403 });
         }
-
-        // VERIFICAR BLOQUEO POR CUADRE
-        if (perfil.rol === 'asesor') {
-            const blockStatus = await checkAdvisorBlocked(supabaseAdmin, user.id);
-            if (blockStatus.isBlocked) {
-                return NextResponse.json({ 
-                    error: blockStatus.reason,
-                    tipo_error: 'bloqueado_por_cuadre'
-                }, { status: 403 });
-            }
-        }
+        // --- FIN VERIFICACIÓN DE ACCESO ---
 
         const body = await request.json()
         const { 

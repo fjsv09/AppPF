@@ -46,7 +46,8 @@ export function PaymentHistory({ pagos, prestamo, cliente, cronograma, userRole 
                         <table className="w-full text-sm text-left">
                             <thead className="bg-slate-950/50 text-[9px] md:text-[10px] uppercase font-bold text-slate-500 border-b border-slate-800">
                                 <tr>
-                                    <th className="px-2 md:px-4 py-3 font-bold">Fecha</th>
+                                    <th className="px-2 md:px-4 py-3 font-bold">Fecha Pago</th>
+                                    <th className="px-2 md:px-4 py-3 font-bold text-center">Cuota / Vencimiento</th>
                                     <th className="px-2 md:px-4 py-3 text-right">
                                         <span className="md:hidden">Monto</span>
                                         <span className="hidden md:inline">Monto Total</span>
@@ -69,7 +70,19 @@ export function PaymentHistory({ pagos, prestamo, cliente, cronograma, userRole 
                                                     <span className="hidden md:inline">{format(new Date(pago.created_at), "d MMMM yyyy", { locale: es })}</span>
                                                 </span>
                                                 <span className="text-slate-500 text-[8px] md:text-xs">
-                                                    {format(new Date(pago.created_at), "HH:mm a", { locale: es })}
+                                                    {format(new Date(pago.created_at), "HH:mm", { locale: es })}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-2 md:px-4 py-3 text-center">
+                                            <div className="flex flex-col items-center">
+                                                <div className="flex items-center justify-center gap-1.5 mb-0.5">
+                                                    <Badge variant="outline" className="text-[9px] h-3.5 px-1 md:h-4 md:px-1.5 border-slate-700 bg-slate-800/50 text-slate-300 font-bold">
+                                                        #{pago.cronograma_cuotas?.numero_cuota || '?'}
+                                                    </Badge>
+                                                </div>
+                                                <span className="text-slate-500 text-[8px] md:text-[10px] whitespace-nowrap uppercase font-medium">
+                                                    Venció: {pago.cronograma_cuotas?.fecha_vencimiento ? format(new Date(pago.cronograma_cuotas.fecha_vencimiento + 'T12:00:00'), "dd/MM/yyyy") : 'N/A'}
                                                 </span>
                                             </div>
                                         </td>
@@ -91,8 +104,14 @@ export function PaymentHistory({ pagos, prestamo, cliente, cronograma, userRole 
                                         </td>
                                         <td className="px-2 md:px-4 py-3 text-center">
                                             {pago.metodo_pago ? (
-                                                <Badge variant="outline" className={`text-[8px] md:text-[10px] px-1 md:px-2 py-0 h-4 md:h-5 ${pago.metodo_pago === 'Efectivo' ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
-                                                    <span className="md:hidden">{pago.metodo_pago === 'Efectivo' ? 'EFEC' : 'YAPE'}</span>
+                                                <Badge variant="outline" className={`text-[8px] md:text-[10px] px-1 md:px-2 py-0 h-4 md:h-5 ${
+                                                    (pago.metodo_pago === 'Renovación' || pago.metodo_pago === 'Refinanciamiento')
+                                                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
+                                                        : pago.metodo_pago === 'Efectivo' 
+                                                            ? 'bg-slate-800 text-slate-300 border-slate-700' 
+                                                            : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                                }`}>
+                                                    <span className="md:hidden">{pago.metodo_pago === 'Efectivo' ? 'EFEC' : pago.metodo_pago === 'Renovación' ? 'RENOV' : pago.metodo_pago === 'Refinanciamiento' ? 'REFIN' : 'YAPE'}</span>
                                                     <span className="hidden md:inline">{pago.metodo_pago}</span>
                                                 </Badge>
                                             ) : (
@@ -102,7 +121,12 @@ export function PaymentHistory({ pagos, prestamo, cliente, cronograma, userRole 
                                         {(userRole === 'admin' || userRole === 'supervisor') && (
                                             <td className="px-2 md:px-4 py-3 text-center">
                                                 <div className="flex justify-center items-center gap-1">
-                                                    {pago.voucher_compartido ? (
+                                                    {pago.es_autopago_renovacion ? (
+                                                        <>
+                                                            <CheckCircle className="w-3.5 h-3.5 text-blue-500" />
+                                                            <span className="hidden md:inline text-[10px] font-bold text-blue-400 uppercase tracking-tighter">Sistema</span>
+                                                        </>
+                                                    ) : pago.voucher_compartido ? (
                                                         <>
                                                             <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
                                                             <span className="hidden md:inline text-[10px] font-bold text-emerald-400 uppercase tracking-tighter">Compartido</span>

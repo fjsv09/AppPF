@@ -38,6 +38,7 @@ const clientSchema = z.object({
   motivo_prestamo: z.string().min(10, "Explique el motivo del préstamo"),
   sector_id: z.string().min(1, "Sector es requerido"),
   estado: z.enum(["activo", "inactivo"]),
+  excepcion_voucher: z.boolean().default(false),
 })
 
 interface ClientEditModalProps {
@@ -85,6 +86,7 @@ export function ClientEditModal({ cliente, isOpen, onClose, onSuccess }: ClientE
       motivo_prestamo: cliente?.motivo_prestamo || "",
       sector_id: cliente?.sector_id || "",
       estado: cliente?.estado || "activo",
+      excepcion_voucher: cliente?.excepcion_voucher || false,
     }
   })
 
@@ -109,6 +111,7 @@ export function ClientEditModal({ cliente, isOpen, onClose, onSuccess }: ClientE
         setValue("motivo_prestamo", cliente.motivo_prestamo || "")
         setValue("sector_id", cliente.sector_id || "")
         setValue("estado", cliente.estado || "activo")
+        setValue("excepcion_voucher", cliente.excepcion_voucher || false)
     }
   }, [cliente, setValue])
 
@@ -279,6 +282,21 @@ export function ClientEditModal({ cliente, isOpen, onClose, onSuccess }: ClientE
                             <SelectContent className="bg-slate-900 border-slate-800">
                                 <SelectItem value="activo">Activo</SelectItem>
                                 <SelectItem value="inactivo">Inactivo</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-xs text-slate-400 ml-1">Exento de Recibo (Voucher)</label>
+                        <Select 
+                            value={String(cliente?.excepcion_voucher || false)}
+                            onValueChange={(val) => setValue("excepcion_voucher", val === "true")}
+                        >
+                            <SelectTrigger className="bg-slate-900 border-slate-800">
+                                <SelectValue placeholder="¿Exento de recibo?" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-slate-800">
+                                <SelectItem value="false">Requiere Recibo (Normal)</SelectItem>
+                                <SelectItem value="true">Exento de Recibo (Confianza)</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

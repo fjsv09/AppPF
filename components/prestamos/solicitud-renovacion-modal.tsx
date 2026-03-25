@@ -29,11 +29,13 @@ interface SolicitudRenovacionModalProps {
     systemSchedule?: {
         horario_apertura: string
         horario_cierre: string
+        horario_fin_turno_1?: string
         desbloqueo_hasta: string
     }
     isBlockedByCuadre?: boolean
     blockReasonCierre?: string
     trigger?: React.ReactNode
+    cuentas?: { id: string; nombre: string; saldo: number }[]
 }
 
 interface Elegibilidad {
@@ -84,38 +86,48 @@ export function SolicitudRenovacionModal({
     systemSchedule,
     isBlockedByCuadre,
     blockReasonCierre,
-    trigger
+    trigger,
+    cuentas = []
 }: SolicitudRenovacionModalProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [checkingEligibility, setCheckingEligibility] = useState(false)
     const [elegibilidad, setElegibilidad] = useState<any>(null)
     const [error, setError] = useState<string | null>(null)
-    const [canRequestDueToTime, setCanRequestDueToTime] = useState(true)
+    const [selectedCuenta, setSelectedCuenta] = useState<string>('')
     const router = useRouter()
 
-    // Evaluar elegibilidad cuando se abre el modal
-    useEffect(() => {
-        if (open) {
-            checkEligibility()
-            checkTimeStatus()
-        }
-    }, [open])
-
-    const checkTimeStatus = () => {
-        if (!systemSchedule) return
+    // Lógica de Horario Síncrona para bloqueo preventivo inmediato
+    const getCanRequestDueToTime = () => {
+        if (userRole === 'admin') return true;
+        if (!systemSchedule) return true;
 
         const now = new Date()
-        // Format to HH:MM in Peru time
         const peruTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }))
         const currentTime = peruTime.getHours().toString().padStart(2, '0') + ':' + peruTime.getMinutes().toString().padStart(2, '0')
         
-        const isUnlocked = systemSchedule.desbloqueo_hasta ? (new Date(systemSchedule.desbloqueo_hasta) > now) : false
-        const isWithinSchedule = currentTime >= systemSchedule.horario_apertura && currentTime < systemSchedule.horario_cierre
+        const finTurno1 = systemSchedule.horario_fin_turno_1 || '13:30'
+        const apertura = systemSchedule.horario_apertura || '07:00'
+        const cierre = systemSchedule.horario_cierre || '20:00'
         
-        // Final decision: if it's unlocked by exception OR within schedule, you can pay/request
-        setCanRequestDueToTime(isWithinSchedule || isUnlocked)
+        const isUnlocked = systemSchedule.desbloqueo_hasta ? (new Date(systemSchedule.desbloqueo_hasta) > now) : false
+        const isWithinHours = currentTime >= apertura && currentTime < cierre
+        
+        // Bloqueo preventivo si ya pasó el fin del turno 1 Y el servidor reporta bloqueo
+        const isWithinShift1 = currentTime < finTurno1
+        const allowedByTime = isWithinHours && (isWithinShift1 || !isBlockedByCuadre)
+        
+        return allowedByTime || isUnlocked
     }
+
+    const canRequestDueToTime = getCanRequestDueToTime()
+
+    // Evaluar elegibilidad cuando se abre el modal
+    useEffect(() => {
+        if (open && canRequestDueToTime && !isBlockedByCuadre) {
+            checkEligibility()
+        }
+    }, [open, canRequestDueToTime, isBlockedByCuadre])
 
     const checkEligibility = async () => {
         setCheckingEligibility(true)
@@ -125,8 +137,19 @@ export function SolicitudRenovacionModal({
                 ? `/api/prestamos/${prestamoId}/elegibilidad-directa`
                 : `/api/prestamos/${prestamoId}/elegibilidad-renovacion`
             
-            const response = await fetch(endpoint)
-            const data = await response.json()
+            // Add a timeout to prevent infinite hanging
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 15000)
+
+            const response = await fetch(endpoint, { signal: controller.signal })
+            clearTimeout(timeoutId)
+            
+            let data;
+            try {
+                 data = await response.json()
+            } catch (err) {
+                 throw new Error('El servidor retornó una respuesta inválida (no JSON)')
+            }
             
             if (!response.ok) {
                 if (data.elegibilidad) {
@@ -139,7 +162,11 @@ export function SolicitudRenovacionModal({
                 setElegibilidad(data)
             }
         } catch (e: any) {
-            setError(e.message || 'Error de conexión')
+            if (e.name === 'AbortError') {
+                setError('La evaluación de elegibilidad tardó demasiado (Timeout).')
+            } else {
+                setError(e.message || 'Error de conexión')
+            }
         } finally {
             setCheckingEligibility(false)
         }
@@ -151,14 +178,16 @@ export function SolicitudRenovacionModal({
 
         setLoading(true)
         const formData = new FormData(e.currentTarget)
+        const fecha_inicio = formData.get('fecha_inicio') as string
         
         const data = {
             prestamo_id: prestamoId,
-            monto_solicitado: parseFloat(formData.get('monto_solicitado') as string),
-            interes: resultados.interesFinal, // Usar interés calculado efectivo
-            cuotas: parseInt(formData.get('cuotas') as string),
-            modalidad: formData.get('modalidad') as string,
-            fecha_inicio_propuesta: formData.get('fecha_inicio') as string,
+            monto_solicitado: simulacion.monto,
+            interes: resultados.interesFinal, 
+            cuotas: simulacion.cuotas,
+            modalidad: simulacion.modalidad,
+            fecha_inicio_propuesta: fecha_inicio,
+            cuenta_id: selectedCuenta,
             score_al_solicitar: elegibilidad?.score || 0,
             detalles_score: elegibilidad?.score_detalle || {}
         }
@@ -281,7 +310,38 @@ export function SolicitudRenovacionModal({
                     </DialogDescription>
                 </DialogHeader>
 
-                {checkingEligibility ? (
+                {(!canRequestDueToTime && userRole !== 'admin') ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-6 text-center">
+                        <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center">
+                            <Lock className="h-8 w-8 text-red-500" />
+                        </div>
+                        <div className="space-y-2 max-w-xs">
+                            <h3 className="text-lg font-bold text-red-400">Sistema Cerrado</h3>
+                            <p className="text-slate-400 text-sm">
+                                No se pueden procesar solicitudes fuera del horario de operación ({systemSchedule?.horario_apertura} a {systemSchedule?.horario_cierre}).
+                                {systemSchedule?.desbloqueo_hasta && new Date(systemSchedule.desbloqueo_hasta) > new Date() ? ' (Desbloqueo activo pronto)' : ''}
+                            </p>
+                        </div>
+                        <Button variant="outline" onClick={() => setOpen(false)} className="mt-4 border-slate-700 text-slate-300">
+                            Cerrar
+                        </Button>
+                    </div>
+                ) : (isBlockedByCuadre && userRole === 'asesor') ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-6 text-center">
+                        <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center">
+                            <Lock className="h-8 w-8 text-amber-500" />
+                        </div>
+                        <div className="space-y-2 max-w-xs">
+                            <h3 className="text-lg font-bold text-amber-400">Cuadre Pendiente</h3>
+                            <p className="text-slate-400 text-sm">
+                                {blockReasonCierre || `Al finalizar el Primer Turno (${systemSchedule?.horario_fin_turno_1 || '13:30'}), debes realizar el CUADRE PARCIAL para continuar.`}
+                            </p>
+                        </div>
+                        <Button variant="outline" onClick={() => setOpen(false)} className="mt-4 border-slate-700 text-slate-300">
+                            Entendido
+                        </Button>
+                    </div>
+                ) : checkingEligibility ? (
                     <div className="flex flex-col items-center justify-center py-12 gap-4">
                         <Loader2 className="h-10 w-10 animate-spin text-amber-500" />
                         <p className="text-slate-400">Evaluando elegibilidad...</p>
@@ -477,6 +537,33 @@ export function SolicitudRenovacionModal({
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Selector de Cuenta - Solo visible y REQUERIDO para Refinanciación Directa (Admin) */}
+                            {isAdminDirectRefinance && (
+                                <div className="grid gap-2 mb-2">
+                                    <Label htmlFor="cuenta">Cuenta de Desembolso (Cartera) <span className="text-rose-500">*</span></Label>
+                                    <Select 
+                                        name="cuenta_id" 
+                                        value={selectedCuenta}
+                                        onValueChange={setSelectedCuenta}
+                                        required
+                                    >
+                                        <SelectTrigger className="bg-slate-950 border-slate-800">
+                                            <SelectValue placeholder="Seleccione una cuenta para el desembolso" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-[#0f172a] border-slate-700">
+                                            {cuentas.map((cuenta) => (
+                                                <SelectItem key={cuenta.id} value={cuenta.id}>
+                                                    <div className="flex justify-between items-center w-full min-w-[200px]">
+                                                        <span>{cuenta.nombre}</span>
+                                                        <span className="text-emerald-400 font-mono ml-4">${formatMoney(cuenta.saldo)}</span>
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
 
                             <div className="grid gap-2">
                                 <Label htmlFor="fecha_inicio">Fecha de Inicio</Label>

@@ -79,28 +79,44 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
     async function fetchStats() {
       if (!selectedCarteraId) return
 
+      // 0. Get the last cuadre of today (to only show incremental stats since the last rendez-vous)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const todayStr = today.toISOString().split('T')[0]
+
+      const { data: lastCuadre } = await supabase
+        .from('cuadres_diarios')
+        .select('created_at')
+        .eq('asesor_id', userId)
+        .eq('fecha', todayStr)
+        .in('estado', ['pendiente', 'aprobado'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      const statsStartTime = lastCuadre?.created_at || today.toISOString()
+
       // 1. Get the balance from the 'cobranzas' account
       const { data: accounts } = await supabase
         .from('cuentas_financieras')
-        .select('saldo')
+        .select('id, saldo')
         .eq('cartera_id', selectedCarteraId)
         .eq('tipo', 'cobranzas')
         .single()
-
-      const totalCobrado = parseFloat(accounts?.saldo || '0')
-
-      // 2. Get today's expenses
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
       
-      const { data: gastos } = await supabase
+      const currentBalance = parseFloat(accounts?.saldo || '0')
+      const accountId = accounts?.id
+
+      // 2. Get today's expenses made from THIS account SINCE the last session marker
+      const { data: gastosMovs } = await supabase
         .from('movimientos_financieros')
         .select('monto')
         .eq('cartera_id', selectedCarteraId)
+        .eq('cuenta_origen_id', accountId)
         .eq('tipo', 'egreso')
-        .gte('created_at', today.toISOString())
+        .gt('created_at', statsStartTime)
 
-      const totalGastos = gastos?.reduce((acc, g) => acc + (parseFloat(g.monto) || 0), 0) || 0
+      const totalGastos = gastosMovs?.reduce((acc, g) => acc + (parseFloat(g.monto) || 0), 0) || 0
 
       // 3. Check for pending cuadres for this advisor
       const { data: pending } = await supabase
@@ -111,15 +127,21 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
         .limit(1)
 
       setHasPending(!!(pending && pending.length > 0))
+
+      // LOGIC FIX: 
+      // Cobrado (Gross) = Account Balance + Expenses already subtracted
+      // Neto Final = Account Balance
       setStats({
-        cobrado: totalCobrado,
+        cobrado: currentBalance + totalGastos,
         gastos: totalGastos,
-        neto: totalCobrado - totalGastos
+        neto: currentBalance
       })
     }
 
     fetchStats()
   }, [selectedCarteraId, supabase, userId])
+
+  const hasMovements = stats.cobrado > 0 || stats.gastos > 0;
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     // Validation: No pending
@@ -128,9 +150,9 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
         return
     }
 
-    // Validation: Amount cannot be 0 if trying to clear (or at least cobrado must be > 0)
-    if (stats.neto <= 0) {
-        toast.error('No hay saldo recaudado por liquidar en esta cartera.')
+    // Validation: Si no hay saldo ni movimientos previos, no hay nada que cuadrar
+    if (stats.neto <= 0 && !hasMovements) {
+        toast.error('No hay saldo recaudado ni movimientos que liquidar.')
         return
     }
 
@@ -139,14 +161,15 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
     const totalEntregar = mEfectivo + mDigital
     
     // Validation: Total cannot be 0
-    if (totalEntregar <= 0) {
-        toast.error('El monto total a liquidar debe ser mayor a 0.')
+    // Validación: El monto debe ser mayor a 0, a menos que haya gastos/cobros que liquidar
+    if (totalEntregar <= 0 && !hasMovements) {
+        toast.error('No hay movimientos ni saldo por liquidar.')
         return
     }
 
-    // Validation: Cannot exceed collected gross
-    if (totalEntregar > stats.cobrado) {
-        toast.error(`El monto total (S/ ${totalEntregar.toFixed(2)}) no puede exceder el monto cobrado (S/ ${stats.cobrado.toFixed(2)})`)
+    // Validation: Cannot exceed amount available (net balance)
+    if (totalEntregar > stats.neto + 0.05) { // Small epsilon
+        toast.error(`El monto total (S/ ${totalEntregar.toFixed(2)}) no puede exceder el neto disponible (S/ ${stats.neto.toFixed(2)})`)
         return
     }
 
@@ -354,10 +377,14 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
 
               <Button
                 type="submit"
-                disabled={loading || hasPending || stats.neto <= 0}
+                disabled={loading || hasPending || (stats.neto <= 0 && !hasMovements)}
                 className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold h-14 rounded-xl transition-all shadow-xl shadow-blue-500/10 disabled:opacity-50 disabled:grayscale"
               >
-                {loading ? 'Procesando...' : hasPending ? 'Esperando Validación' : stats.neto <= 0 ? 'Sin Saldo por Cuadrar' : 'Enviar Solicitud de Cuadre'}
+                {loading ? 'Procesando...' : 
+                 hasPending ? 'Esperando Validación' : 
+                 (stats.neto <= 0 && hasMovements) ? 'Liquidar Movimientos/Gastos' :
+                 stats.neto <= 0 ? 'Sin Movimientos por Cuadrar' : 
+                 'Enviar Solicitud de Cuadre'}
               </Button>
               
               <p className="text-[10px] text-center text-slate-500 italic">

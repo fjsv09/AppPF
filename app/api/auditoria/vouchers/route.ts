@@ -37,10 +37,11 @@ export async function GET(request: Request) {
 
         if (!asesores) return NextResponse.json([])
 
-        // 2. Obtener todos los pagos en el rango (Usando nombres de columnas reales: registrado_por, fecha_pago)
+        // 2. Obtener todos los pagos en el rango (Excluyendo autopagos de renovación)
         let paymentsQuery = supabaseAdmin
             .from('pagos')
-            .select('id, registrado_por, voucher_compartido, cuota_id, fecha_pago')
+            .select('id, registrado_por, voucher_compartido, cuota_id, fecha_pago, es_autopago_renovacion')
+            .or('es_autopago_renovacion.is.null,es_autopago_renovacion.eq.false')
 
         if (from) paymentsQuery = paymentsQuery.gte('fecha_pago', from)
         if (to) paymentsQuery = paymentsQuery.lte('fecha_pago', to)

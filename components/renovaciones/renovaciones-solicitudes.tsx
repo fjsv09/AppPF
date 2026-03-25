@@ -335,6 +335,9 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                                         <Badge className={cn('text-[10px] py-0 h-5 border px-1.5', estado.bg, estado.color)}>
                                             {estado.label}
                                         </Badge>
+                                        <span className="text-[9px] text-slate-500 font-mono">
+                                            {new Date(sol.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                        </span>
                                         {sol.requiere_excepcion && (
                                             <Badge className="bg-amber-500/10 border-amber-500/20 text-amber-500 text-[9px] py-0 h-4">
                                                 <AlertTriangle className="h-2.5 w-2.5 mr-1" /> Exc
@@ -400,8 +403,9 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                 <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-400">
                     <div className="col-span-3">Cliente</div>
                     <div className="col-span-2 text-right">Solicitado</div>
-                    <div className="col-span-3 text-left pl-4">Asesor</div>
-                    <div className="col-span-2 text-center">Estado</div>
+                    <div className="col-span-2 text-center">Fecha</div>
+                    <div className="col-span-2 text-left pl-4">Asesor</div>
+                    <div className="col-span-1 text-center">Estado</div>
                     <div className="col-span-2 text-right">Acciones</div>
                 </div>
 
@@ -456,22 +460,31 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                                     </div>
                                 </div>
 
+                                {/* Fecha */}
+                                <div className="col-span-2 flex flex-col items-center justify-center text-center">
+                                    <span className="text-xs font-medium text-slate-300">
+                                        {new Date(sol.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                    </span>
+                                    <span className="text-[10px] text-slate-500 font-mono">
+                                        {new Date(sol.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                </div>
+
                                 {/* Asesor */}
-                                <div className="col-span-3 text-left pl-4 flex items-center gap-2 min-w-0">
+                                <div className="col-span-2 text-left pl-4 flex items-center gap-2 min-w-0">
                                     <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                                     <span className="text-sm text-slate-300 truncate">{sol.asesor?.nombre_completo}</span>
                                 </div>
 
                                 {/* Estado */}
-                                <div className="col-span-2 flex justify-center items-center min-w-0">
+                                <div className="col-span-1 flex justify-center items-center min-w-0">
                                     <div className="flex flex-col gap-1 items-center justify-center">
                                         <Badge className={cn('text-[10px] py-0 h-5 border px-2 flex items-center gap-1 w-max', estado.bg, estado.color)}>
-                                            <IconEstado className="h-3 w-3" />
                                             {estado.label}
                                         </Badge>
                                         {sol.requiere_excepcion && (
                                             <Badge className="bg-amber-500/10 border-amber-500/20 text-amber-400 text-[9px] py-0 h-4 flex items-center w-max">
-                                                <AlertTriangle className="h-2.5 w-2.5 mr-1" /> Excepción
+                                                <AlertTriangle className="h-2.5 w-2.5 mr-1" /> Exc
                                             </Badge>
                                         )}
                                     </div>

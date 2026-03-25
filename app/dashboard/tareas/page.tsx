@@ -4,7 +4,8 @@ import { redirect } from 'next/navigation'
 import { CheckCircle, ShieldCheck, Camera, MapPin, ClipboardList } from 'lucide-react'
 import { TareasList } from '@/components/tareas/tareas-list'
 import { VisitasList } from '@/components/tareas/visitas-list'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { TareasTabs } from '@/components/tareas/tareas-tabs'
 import { cn } from '@/lib/utils'
 import { BackButton } from '@/components/ui/back-button'
 
@@ -203,7 +204,7 @@ export default async function TareasHistoryPage({
                 </div>
             </div>
 
-            <Tabs defaultValue={tab && ['evidencia', 'auditoria', 'gestiones'].includes(tab) ? tab : (pendientesVisita.length > 0 ? 'gestiones' : 'evidencia')} className="w-full">
+            <TareasTabs defaultTab={tab && ['evidencia', 'auditoria', 'gestiones'].includes(tab) ? tab : 'evidencia'} className="w-full">
                 <div className="overflow-x-auto pb-1 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0 mb-6">
                     <TabsList className={cn(
                         "bg-slate-900/50 border border-slate-800 p-0.5 w-full grid md:flex md:w-fit",
@@ -260,7 +261,7 @@ export default async function TareasHistoryPage({
                 <TabsContent value="gestiones" className="mt-0">
                     <VisitasList visitas={tareasVisita} userId={user.id} />
                 </TabsContent>
-            </Tabs>
+            </TareasTabs>
         </div>
     )
 }

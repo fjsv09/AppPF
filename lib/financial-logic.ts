@@ -251,3 +251,137 @@ export function calculateClientSituation(client: any) {
 
   return highestRiskKey;
 }
+
+/**
+ * CONSTANTES DE MODALIDAD
+ */
+export const CUOTAS_ESTANDAR = {
+    diario: 24,   // 24 días
+    semanal: 4,   // 4 semanas
+    quincenal: 2, // 2 quincenas
+    mensual: 1,   // 1 mes
+}
+
+/**
+ * Función para verificar si es día hábil (no feriado ni domingo)
+ */
+export function esDiaHabil(fecha: Date | string, feriadosSet: Set<string>): boolean {
+    const d = typeof fecha === 'string' ? new Date(fecha + 'T12:00:00') : new Date(fecha)
+    const fechaStr = d.toISOString().split('T')[0]
+    const diaSemana = d.getDay()
+    // 0 = Domingo
+    return diaSemana !== 0 && !feriadosSet.has(fechaStr)
+}
+
+/**
+ * Función para obtener siguiente día hábil (AVANZA 1 día min)
+ */
+export function siguienteDiaHabil(fecha: Date, feriadosSet: Set<string>): Date {
+    const siguiente = new Date(fecha)
+    siguiente.setDate(siguiente.getDate() + 1)
+    while (!esDiaHabil(siguiente, feriadosSet)) {
+        siguiente.setDate(siguiente.getDate() + 1)
+    }
+    return siguiente
+}
+
+/**
+ * Función para validar día actual o mover al siguiente (SIN avanzar forzosamente)
+ */
+export function validarDiaHabil(fecha: Date, feriadosSet: Set<string>): Date {
+    const valid = new Date(fecha)
+    while (!esDiaHabil(valid, feriadosSet)) {
+        valid.setDate(valid.getDate() + 1)
+    }
+    return valid
+}
+
+/**
+ * Calcula las fechas de inicio y fin proyectadas de un préstamo.
+ */
+export function calcularFechasProyectadas(
+    fechaSolicitud: string, 
+    cuotas: number, 
+    modalidad: keyof typeof CUOTAS_ESTANDAR, 
+    feriadosSet: Set<string>
+) {
+    if (!fechaSolicitud || cuotas <= 0) return { fechaInicio: null, fechaFin: null }
+    
+    // Usar T12:00:00 para evitar desfaces de zona horaria
+    const fechaBase = new Date(fechaSolicitud + 'T12:00:00') 
+    if (isNaN(fechaBase.getTime())) return { fechaInicio: null, fechaFin: null }
+
+    let fechaPrimeraCuota: Date
+    
+    if (modalidad === 'diario') {
+        // Diario: Inicio + 2 días (Día de Gracia)
+        const baseDate = new Date(fechaBase)
+        baseDate.setDate(baseDate.getDate() + 2)
+        fechaPrimeraCuota = validarDiaHabil(baseDate, feriadosSet)
+    } else {
+         // Periódico: Start + Intervalo
+         const baseDate = new Date(fechaBase)
+         let daysToAdd = 0
+         let monthsToAdd = 0
+         
+         if (modalidad === 'semanal') daysToAdd = 7
+         else if (modalidad === 'quincenal') daysToAdd = 14
+         else if (modalidad === 'mensual') monthsToAdd = 1
+         
+         baseDate.setDate(baseDate.getDate() + daysToAdd)
+         baseDate.setMonth(baseDate.getMonth() + monthsToAdd)
+         
+         fechaPrimeraCuota = validarDiaHabil(baseDate, feriadosSet)
+    }
+
+    // Calcular fecha fin según modalidad
+    let fechaUltimaCuota = new Date(fechaBase) 
+    const n = cuotas // Total cuotas
+    
+    if (modalidad === 'mensual') {
+         fechaUltimaCuota.setMonth(fechaUltimaCuota.getMonth() + n)
+    } else if (modalidad === 'diario') {
+         fechaUltimaCuota = new Date(fechaPrimeraCuota)
+         let count = 0
+         let cursor = new Date(fechaPrimeraCuota)
+         while (count < (n - 1)) {
+             cursor = siguienteDiaHabil(cursor, feriadosSet)
+             count++
+         }
+         fechaUltimaCuota = cursor
+    } else {
+         // Semanal / Quincenal
+         let interval = 7
+         if (modalidad === 'quincenal') interval = 14
+         fechaUltimaCuota.setDate(fechaUltimaCuota.getDate() + (n * interval))
+    }
+    
+    // Ajustar ultima cuota si cae inhabil
+    fechaUltimaCuota = validarDiaHabil(fechaUltimaCuota, feriadosSet)
+
+    return { 
+        fechaInicio: fechaPrimeraCuota, 
+        fechaFin: fechaUltimaCuota 
+    }
+}
+
+/**
+ * Calcula el interés proporcional basado en cuotas y modalidad.
+ */
+export function calcularInteresProporcional(
+    cuotas: number, 
+    modalidad: keyof typeof CUOTAS_ESTANDAR, 
+    interesBase: number = 20
+) {
+    const cuotasEstandar = CUOTAS_ESTANDAR[modalidad]
+    if (cuotas <= 0) return { interes: interesBase, esAjustado: false, cuotasEstandar }
+
+    // Calcular proporcionalmente (Regla de 3)
+    const interesFinal = (cuotas / cuotasEstandar) * interesBase
+    
+    return { 
+        interes: Math.round(interesFinal * 100) / 100, // Redondear a 2 decimales
+        esAjustado: cuotas !== cuotasEstandar,
+        cuotasEstandar
+    }
+}

@@ -4,9 +4,10 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { BackButton } from '@/components/ui/back-button'
-import { Users, TrendingUp, CreditCard, Plus, Zap, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Users, TrendingUp, CreditCard, Plus, Zap, CheckCircle2, AlertTriangle, Lock } from 'lucide-react'
 import { ClientDirectory } from '@/components/clientes/client-directory'
 import { getTodayPeru, calculateClientSituation, calculateLoanMetrics } from '@/lib/financial-logic'
+import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -112,7 +113,29 @@ export default async function ClientesPage() {
     
     // Process clients to add calculated stats
     const clients = (clientsRaw || [])?.map((client: any) => {
+        // Process loans to identify primary active loan
         const activeLoans = client.prestamos?.filter((p: any) => p.estado === 'activo') || []
+        
+        // Define risk hierarchy
+        const riskLevels: Record<string, number> = {
+            'vencido': 5,
+            'moroso': 4,
+            'cpp': 3,
+            'deuda': 2,
+            'ok': 1
+        }
+
+        // Sort active loans: Higher risk first, then most recent
+        const sortedActive = [...activeLoans].sort((a: any, b: any) => {
+            const riskA = riskLevels[a.estado_mora?.toLowerCase() || 'ok'] || 0
+            const riskB = riskLevels[b.estado_mora?.toLowerCase() || 'ok'] || 0
+            if (riskA !== riskB) return riskB - riskA
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        })
+
+        const latestLoanId = client.prestamos?.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]?.id || null
+        const primaryLoanId = sortedActive[0]?.id || latestLoanId
+
         const situacion = calculateClientSituation(client)
 
         // Totales básicos
@@ -123,17 +146,13 @@ export default async function ClientesPage() {
             totalDebt += metrics.deudaExigibleTotal
             if (metrics.esRenovable) isRecaptable = true
         })
-        
 
         // Get latest GPS coordinates from solicitudes
         const latestSolicitud = client.solicitudes?.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
         const gps_coordenadas = latestSolicitud?.gps_coordenadas || null
         const documentos = latestSolicitud?.documentos_evaluacion || {}
-
         const historicalLoans = client.prestamos?.filter((p: any) => {
-             // Calculate pending balance
              const pendingBalance = p.cronograma_cuotas?.reduce((acc: number, c: any) => acc + (c.monto_cuota - (c.monto_pagado || 0)), 0) || 0
-             
              return (
                 p.estado === 'completado' || 
                 p.estado === 'renovado' || 
@@ -142,14 +161,12 @@ export default async function ClientesPage() {
              )
         }) || []
 
-        const latestLoanId = client.prestamos?.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]?.id || null
-
         return {
             ...client,
             situacion,
             gps_coordenadas,
             documentos,
-            prestamo_activo_id: activeLoans[0]?.id || latestLoanId,
+            prestamo_activo_id: primaryLoanId,
             giro_negocio: latestSolicitud?.giro_negocio,
             fuentes_ingresos: latestSolicitud?.fuentes_ingresos,
             ingresos_mensuales: latestSolicitud?.ingresos_mensuales,
@@ -169,8 +186,21 @@ export default async function ClientesPage() {
     const clientsAlDia = clients.filter((c: any) => c.situacion === 'ok' || c.situacion === 'deuda').length
     const clientsMora = clients.filter((c: any) => ['cpp', 'moroso', 'vencido'].includes(c.situacion)).length
     const recaptablesCount = clients.filter((c: any) => c.isRecaptable).length
+    // [REFORZADO] Lógica de Acceso al Sistema (Centralizada)
+    const { checkSystemAccess } = await import('@/utils/systemRestrictions')
+    const accessResult = await checkSystemAccess(supabaseAdmin, user?.id || '', userRole || 'asesor', 'solicitud')
+    const canCreateDueToTime = accessResult.allowed || userRole === 'admin'
+    
+    // Configuración para prop compatibility
+    const sysConfig = accessResult.config || {}
+    const systemSchedule = {
+        horario_apertura: sysConfig.horario_apertura || '07:00',
+        horario_cierre: sysConfig.horario_cierre || '20:00',
+        horario_fin_turno_1: sysConfig.horario_fin_turno_1 || '13:30',
+        desbloqueo_hasta: sysConfig.desbloqueo_hasta || ''
+    }
 
-    // Fetch perfiles for filters (if admin or supervisor)
+    // Fetch perfiles for filters (Restaura la lógica necesaria)
     let perfiles: any[] = []
     if (userRole === 'admin' || userRole === 'supervisor') {
         const { data: perfilesData } = await supabaseAdmin
@@ -195,10 +225,18 @@ export default async function ClientesPage() {
                     </div>
                 </div>
                 {userRole === 'asesor' && (
-                    <Link href="/dashboard/solicitudes/nueva">
-                        <Button className="btn-action bg-purple-600 hover:bg-purple-500 shadow-purple-900/20 hover:scale-105">
-                            <Plus className="mr-2 h-5 w-5" />
-                            Nueva Solicitud
+                    <Link href={canCreateDueToTime ? "/dashboard/solicitudes/nueva" : "#"}>
+                        <Button 
+                            disabled={!canCreateDueToTime}
+                            className={cn(
+                                "btn-action",
+                                canCreateDueToTime 
+                                    ? "bg-purple-600 hover:bg-purple-500 shadow-purple-900/20 hover:scale-105" 
+                                    : "bg-slate-700 opacity-60 cursor-not-allowed"
+                            )}
+                        >
+                            {canCreateDueToTime ? <Plus className="mr-2 h-5 w-5" /> : <Lock className="mr-2 h-5 w-5" />}
+                            {canCreateDueToTime ? 'Nueva Solicitud' : 'Cerrado'}
                         </Button>
                     </Link>
                 )}

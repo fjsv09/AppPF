@@ -11,7 +11,8 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Badge } from '@/components/ui/badge'
 import { User, CreditCard, Phone, MapPin, Activity, DollarSign, Calendar, FileText, TrendingUp, Wallet, CheckCircle, Plus, FileStack, MessageSquare, Users, History } from 'lucide-react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ClienteTabs } from '@/components/clientes/cliente-tabs'
 import { cn } from '@/lib/utils'
 import { ClientGestiones } from '@/components/clientes/client-gestiones'
 import { ClientExpediente } from '@/components/clientes/client-expediente'
@@ -207,35 +208,32 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
             )}>
                  {/* Main Content Column */}
                  <div className={cn(
-                    "space-y-6",
+                    "space-y-6 overflow-x-hidden",
                     (userRole === 'admin' || userRole === 'supervisor') ? "md:col-span-2" : "md:col-span-1"
                  )}>
                     
-                    <Tabs defaultValue="historial" className="w-full">
+                    <ClienteTabs defaultTab="historial" className="w-full">
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
-                            <div className="overflow-x-auto pb-1 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
-                                <TabsList className={cn(
-                                    "bg-slate-900/50 border border-slate-800 p-0.5 w-full grid md:flex md:w-fit",
-                                    userRole === 'admin' ? "grid-cols-5" : userRole === 'supervisor' ? "grid-cols-4" : "grid-cols-3"
-                                )}>
-                                    <TabsTrigger value="historial" className="h-7 px-0 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
+                            <div className="overflow-x-auto pb-1 scrollbar-none scroll-smooth w-full min-w-0">
+                                <TabsList className="bg-slate-900/50 border border-slate-800 p-0.5 flex items-center w-max min-w-full md:min-w-0 md:w-fit gap-1">
+                                    <TabsTrigger value="historial" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
                                         <Activity className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Historial
                                     </TabsTrigger>
-                                    <TabsTrigger value="gestiones" className="h-7 px-0 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
+                                    <TabsTrigger value="gestiones" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
                                         <MessageSquare className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Gestiones
                                     </TabsTrigger>
-                                    <TabsTrigger value="expediente" className="h-7 px-0 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
+                                    <TabsTrigger value="expediente" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
                                         <FileStack className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Expediente
                                     </TabsTrigger>
                                     
                                     {userRole === 'admin' && (
-                                        <TabsTrigger value="resumen" className="md:hidden h-7 px-0 text-[10px] data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
+                                        <TabsTrigger value="resumen" className="md:hidden h-7 px-2 text-[10px] data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
                                             <TrendingUp className="w-3 h-3 mr-1 md:mr-1.5" /> Resumen
                                         </TabsTrigger>
                                     )}
                                     
                                     {(userRole === 'admin' || userRole === 'supervisor') && (
-                                        <TabsTrigger value="habitos" className="md:hidden h-7 px-0 text-[10px] data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
+                                        <TabsTrigger value="habitos" className="md:hidden h-7 px-2 text-[10px] data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
                                             <Wallet className="w-3 h-3 mr-1 md:mr-1.5" /> Hábitos
                                         </TabsTrigger>
                                     )}
@@ -250,7 +248,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                             
                         </div>
 
-                        <TabsContent value="historial" className="space-y-4 m-0 animate-in fade-in slide-in-from-left-2 duration-300">
+                        <TabsContent value="historial" className="space-y-4 m-0 animate-in fade-in duration-300 overflow-x-hidden">
                             {loans?.map((loan: any) => {
                                  const isPaid = loan.estado === 'pagado' || loan.estado === 'finalizado';
                                  
@@ -305,18 +303,20 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                             )}
                         </TabsContent>
 
-                        <TabsContent value="gestiones" className="m-0 animate-in fade-in slide-in-from-right-2 duration-300">
+                        <TabsContent value="gestiones" className="m-0 animate-in fade-in duration-300 overflow-x-hidden">
                              <Card className="bg-slate-900/40 border-slate-800 backdrop-blur-sm">
                                 <CardContent className="p-0">
                                     <ClientGestiones 
-                                        prestamoId={loans?.find((l: any) => l.estado === 'activo')?.id || loans?.[0]?.id || ''} 
+                                        loans={loans || []} 
+                                        clienteId={id}
+                                        clienteNombre={cliente.nombres}
                                         userRol={userRole as any} 
                                     />
                                 </CardContent>
                              </Card>
                         </TabsContent>
 
-                            <TabsContent value="expediente" className="m-0 animate-in fade-in slide-in-from-right-2 duration-300">
+                            <TabsContent value="expediente" className="m-0 animate-in fade-in duration-300 overflow-x-hidden">
                                  <ClientExpediente documentos={documentos} />
                             </TabsContent>
 
@@ -382,7 +382,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                             </TabsContent>
 
                             {userRole === 'admin' && (
-                                <TabsContent value="asignaciones" className="m-0 animate-in fade-in slide-in-from-right-2 duration-300">
+                                <TabsContent value="asignaciones" className="m-0 animate-in fade-in duration-300 overflow-x-hidden">
                                     <Card className="bg-slate-900/40 border-slate-800 backdrop-blur-sm">
                                         <CardHeader className="py-2.5 px-4 border-b border-white/5">
                                             <CardTitle className="text-white text-sm flex items-center gap-2">
@@ -435,7 +435,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                     </Card>
                                 </TabsContent>
                             )}
-                    </Tabs>
+                    </ClienteTabs>
                  </div>
 
                   {/* Sidebar Stats column - Hidden on Mobile */}

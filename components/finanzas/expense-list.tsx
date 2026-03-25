@@ -23,9 +23,10 @@ import {
 interface ExpenseListProps {
   expenses: any[]
   onEdit?: (expense: any) => void
+  userRole?: string
 }
 
-export function ExpenseList({ expenses, onEdit }: ExpenseListProps) {
+export function ExpenseList({ expenses, onEdit, userRole }: ExpenseListProps) {
   if (expenses.length === 0) {
     return (
       <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm">
@@ -94,12 +95,14 @@ export function ExpenseList({ expenses, onEdit }: ExpenseListProps) {
                           </DialogContent>
                         </Dialog>
                     )}
-                    <button 
-                      onClick={() => onEdit?.(expense)}
-                      className="h-7 w-7 flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-lg transition-all border border-amber-500/10"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
+                    {userRole === 'admin' && (
+                      <button 
+                        onClick={() => onEdit?.(expense)}
+                        className="h-7 w-7 flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-lg transition-all border border-amber-500/10"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -192,13 +195,15 @@ export function ExpenseList({ expenses, onEdit }: ExpenseListProps) {
                     </span>
                   </TableCell>
                   <TableCell className="py-2 text-center">
-                    <button 
-                      onClick={() => onEdit?.(expense)}
-                      className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-md transition-all border border-amber-500/10 group"
-                      title="Editar gasto"
-                    >
-                      <Pencil className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
-                    </button>
+                    {userRole === 'admin' && (
+                      <button 
+                        onClick={() => onEdit?.(expense)}
+                        className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-md transition-all border border-amber-500/10 group"
+                        title="Editar gasto"
+                      >
+                        <Pencil className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
+                      </button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

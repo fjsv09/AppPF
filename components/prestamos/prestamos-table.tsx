@@ -53,6 +53,7 @@ interface PrestamosTableProps {
     systemSchedule?: {
         horario_apertura: string
         horario_cierre: string
+        horario_fin_turno_1: string
         desbloqueo_hasta: string
     }
     umbralCpp?: number
@@ -61,6 +62,8 @@ interface PrestamosTableProps {
     umbralMorosoOtros?: number
     isBlockedByCuadre?: boolean
     blockReasonCierre?: string
+    systemAccess?: any
+    cuentas?: any[]
 }
 
 type FilterTab = 'ruta_hoy' | 'cobranza' | 'morosos' | 'notificar' | 'semana' | 'en_curso' | 'renovaciones' | 'finalizados' | 'todos' | 'supervisor_alertas' | 'supervisor_mora' | 'renovados' | 'refinanciados' | 'anulados' | 'pendientes'
@@ -121,29 +124,66 @@ export function PrestamosTable({
     umbralCppOtros = 1,
     umbralMorosoOtros = 2,
     isBlockedByCuadre,
-    blockReasonCierre
+    blockReasonCierre,
+    systemAccess,
+    cuentas = []
 }: PrestamosTableProps) {
 
-    // Calcular el último préstamo de cada cliente (el más reciente por fecha_inicio o created_at)
-    // REGLA FUNDAMENTAL: Solo se puede renovar el ÚLTIMO préstamo de cada cliente
-    const ultimoPrestamoDeCliente = useMemo(() => {
-        const clientePrestamos: Record<string, { id: string, fecha: string }> = {}
+    // Lógica de Bloqueo Sensible al Tipo de Acción (Centralizada en la Tabla)
+    // Los PAGOS se permiten incluso si falta el cuadre del turno 1 (MISSING_MORNING_CUADRE)
+    // Pero se bloquean si es horario general, feriado o noche (bloqueo total).
+    const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK'].includes(systemAccess?.code);
+    const isBlockedForPayments = isBlockedByCuadre && isTotalBlock;
+    const isBlockedForOperations = isBlockedByCuadre;
+
+    // Mapa de gestión de préstamos por cliente para determinar elegibilidad de renovación
+    const loanManagementMap = useMemo(() => {
+        interface ClientData {
+            activeLoans: { id: string, fecha: string }[],
+            latestFinalized: { id: string, fecha: string } | null,
+            allEligibleIds: Set<string>
+        }
+        const clientManagement: Record<string, ClientData> = {}
         
         prestamos.forEach(p => {
             const clienteId = p.cliente_id || p.clientes?.id
             if (!clienteId) return
             
-            const fecha = p.fecha_inicio || p.created_at
-            const current = clientePrestamos[clienteId]
+            if (!clientManagement[clienteId]) {
+                clientManagement[clienteId] = { activeLoans: [], latestFinalized: null, allEligibleIds: new Set() }
+            }
             
-            // Si no hay registro o este préstamo es más reciente, actualizar
-            if (!current || fecha > current.fecha) {
-                clientePrestamos[clienteId] = { id: p.id, fecha }
+            const isEligible = ['activo', 'finalizado'].includes(p.estado)
+            if (!isEligible) return
+            
+            clientManagement[clienteId].allEligibleIds.add(p.id)
+            
+            const fecha = (p.fecha_inicio || p.created_at || '') as string
+            if (p.estado === 'activo') {
+                clientManagement[clienteId].activeLoans.push({ id: p.id, fecha })
+            } else if (p.estado === 'finalizado') {
+                const currentFinalized = clientManagement[clienteId].latestFinalized
+                if (!currentFinalized || fecha > currentFinalized.fecha) {
+                    clientManagement[clienteId].latestFinalized = { id: p.id, fecha }
+                }
             }
         })
         
-        // Retornar Set de IDs de préstamos que son "el último" de su cliente
-        return new Set(Object.values(clientePrestamos).map(v => v.id))
+        // Post-processing: Sort active loans from oldest to newest (to find the most ancient)
+        const finalizedMap: Record<string, { oldestActiveId: string | null, latestFinalizedId: string | null, allEligibleIds: Set<string> }> = {}
+        Object.keys(clientManagement).forEach(cid => {
+             const data = clientManagement[cid]
+             // Oldest to newest
+             data.activeLoans.sort((a, b) => a.fecha.localeCompare(b.fecha))
+             
+             finalizedMap[cid] = {
+                 oldestActiveId: data.activeLoans[0]?.id || null,
+                 latestFinalizedId: data.latestFinalized?.id || null,
+                 allEligibleIds: data.allEligibleIds
+             }
+        })
+        
+        return finalizedMap
     }, [prestamos])
 
     // Función helper para determinar si puede renovar
@@ -153,16 +193,31 @@ export function PrestamosTable({
     // 4. Si es normal, asesor y admin pueden renovar (supervisor NO)
     // 5. NO mostrar si hay solicitud pendiente
     const puedeRenovar = (prestamo: any) => {
-        // 1. FUNDAMENTAL DISQUALIFIERS (Must be the last loan, must not have pending request)
-        const esUltimoPrestamo = ultimoPrestamoDeCliente.has(prestamo.id)
-        if (!esUltimoPrestamo) return false
+        const clienteId = prestamo.cliente_id || prestamo.clientes?.id
+        const mgmt = loanManagementMap[clienteId]
+        if (!mgmt) return false
 
+        // 1. FUNDAMENTAL DISQUALIFIERS (Must not have pending request)
         const tieneSolicitudPendiente = prestamoIdsConSolicitudPendiente.includes(prestamo.id)
         if (tieneSolicitudPendiente) return false
         
-        // Valid for: active (not yet finished), finished, or refinanced
-        const estadoValido = ['activo', 'finalizado', 'refinanciado'].includes(prestamo.estado)
+        // Valid for: active or finished
+        const estadoValido = ['activo', 'finalizado'].includes(prestamo.estado)
         if (!estadoValido) return false
+
+        // 2. ROLE-BASED ACCESS & PRIORITY RULING
+        if (userRol !== 'admin') {
+            // ASESOR: Regla específica del usuario
+            // Si hay préstamos activos: solo se permite renovar el MÁS ANTIGUO de ellos
+            if (mgmt.oldestActiveId) {
+                if (prestamo.id !== mgmt.oldestActiveId) return false
+            } 
+            // Si no hay activos, pero hay finalizados: se permite renovar el MÁS RECIENTE finalizado (flujo normal)
+            else if (mgmt.latestFinalizedId) {
+                if (prestamo.id !== mgmt.latestFinalizedId) return false
+            }
+        }
+        // ADMIN: Puede renovar cualquiera que sea activo o finalizado (ya filtrado arriba)
 
         // 2. ELIGIBILITY CRITERIA
         const isRefinanciado = prestamo.estado === 'refinanciado'
@@ -196,7 +251,15 @@ export function PrestamosTable({
         // If it's a refinance candidate, only Admin can process/see.
         if (isRefinanciado && userRol !== 'admin') return false
 
-        // For others, if it's Ready, everyone can see it in Renovaciones view.
+        // 4. STATUS-BASED EXCLUSION (Except for Admin Refinance)
+        // No permitimos renovaciones normales en estados legales o castigados.
+        // Pero permitimos que el Administrador REFINANCIE un préstamo Vencido/Moroso.
+        const estadosProhibidos = ['legal', 'castigado']
+        if (estadosProhibidos.includes(prestamo.estado_mora || '')) return false
+        
+        // Si el préstamo está Vencido, solo el Admin puede usarlo para refinanciar (a menos que ya se haya pagado 60%)
+        if (prestamo.estado_mora === 'vencido' && userRol !== 'admin' && !cumpleUmbral) return false
+
         return true
     }
 
@@ -206,16 +269,12 @@ export function PrestamosTable({
     // 2. Solo ASESOR puede pagar (no admin, no supervisor)
     // 3. Préstamo no debe estar finalizado
     const puedePagar = (prestamo: any) => {
-        const esUltimoPrestamo = ultimoPrestamoDeCliente.has(prestamo.id)
         const isFinalized = prestamo.isFinalizado || prestamo.saldo_pendiente <= 0 || prestamo.estado === 'finalizado'
         
-        // REGLA #1: Solo el último préstamo del cliente puede recibir pagos
-        if (!esUltimoPrestamo) return false
-        
-        // REGLA #2: Solo asesor puede pagar
+        // REGLA #1: Solo asesor puede pagar (o admin en ciertos casos, pero aquí mantenemos la lógica actual)
         if (userRol !== 'asesor') return false
         
-        // REGLA #3: No se puede pagar si está finalizado
+        // REGLA #2: No se puede pagar si está finalizado (esto incluye saldo_pendiente <= 0.01)
         if (isFinalized) return false
         
         return true
@@ -274,24 +333,40 @@ export function PrestamosTable({
                 timeZone: 'America/Lima',
                 hour: '2-digit',
                 minute: '2-digit',
+                second: '2-digit',
                 hour12: false
             })
             const currentHourString = formatter.format(now)
 
             const apertura = systemSchedule.horario_apertura || '07:00'
             const cierre = systemSchedule.horario_cierre || '20:00'
+            const finTurno1 = systemSchedule.horario_fin_turno_1 || '13:30'
             const desbloqueoHasta = systemSchedule.desbloqueo_hasta ? new Date(systemSchedule.desbloqueo_hasta) : null
             
+            // Regla de horario estándar
             const isWithinHours = currentHourString >= apertura && currentHourString < cierre
+            
+            // Regla de turno 1 (A partir de las 13:30 el sistema "se bloquea" preventivamente si no hay cuadre, 
+            // pero aquí canRequestDueToTime es una validación MÁS estricta de "operación permitida")
+            // Si ya pasó el fin del turno 1, canRequestDueToTime será false para forzar el bloqueo en UI, 
+            // a menos que esté desbloqueado temporalmente.
+            const isWithinShift1 = currentHourString < finTurno1
+            
             const isTemporaryUnlocked = desbloqueoHasta && now < desbloqueoHasta
             
-            setCanRequestDueToTime(isWithinHours || isTemporaryUnlocked || userRol === 'admin')
+            // Permitir si: 
+            // 1. Es Admin
+            // 2. Está desbloqueado temporalmente
+            // El horario general permite operar. Bloqueos específicos (cuadre) se manejan por separado.
+            const allowedByTime = isWithinHours || isTemporaryUnlocked || userRol === 'admin'
+            
+            setCanRequestDueToTime(allowedByTime)
         }
 
         checkTime()
-        const interval = setInterval(checkTime, 60000) // Re-check every minute
+        const interval = setInterval(checkTime, 30000) // Re-check cada 30 segundos
         return () => clearInterval(interval)
-    }, [systemSchedule, userRol])
+    }, [systemSchedule, userRol, isBlockedByCuadre])
     // --- FIN LOGICA DE HORARIO ---
 
     // Sync local state if URL changes externally
@@ -360,6 +435,14 @@ export function PrestamosTable({
     const handleQuickPay = (prestamo: any, e: React.MouseEvent) => {
         e.preventDefault()
         e.stopPropagation()
+        
+        if (!canRequestDueToTime || isBlockedForPayments) {
+            toast.error("Sistema bloqueado", {
+                description: blockReasonCierre || "No puede realizar cobros fuera de horario o sin cuadre parcial."
+            });
+            return;
+        }
+
         setSelectedLoanForPay(prestamo)
         setQuickPayOpen(true)
     }
@@ -681,7 +764,7 @@ export function PrestamosTable({
         })
 
         return counts
-    }, [processedPrestamos, prestamoIdsConSolicitudPendiente, ultimoPrestamoDeCliente, userRol]);
+    }, [processedPrestamos, prestamoIdsConSolicitudPendiente, loanManagementMap, userRol]);
 
     const handleTabChange = (tab: FilterTab) => updateParams({ tab });
     const handleSearch = (term: string) => updateParams({ search: term });
@@ -810,49 +893,47 @@ export function PrestamosTable({
                                 </SelectItem>
                             </SelectGroup>
                             
-                            <SelectGroup>
-                                <SelectLabel className="text-[10px] uppercase text-slate-500 mt-2">Historial</SelectLabel>
-                                <SelectItem value="finalizados" className="focus:bg-slate-800 focus:text-white">
-                                    <div className="flex items-center justify-between w-full gap-2">
-                                        <span>Finalizados</span>
-                                        <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.finalizados}</Badge>
-                                    </div>
-                                </SelectItem>
-                                {userRol === 'admin' && (
-                                    <>
-                                        <SelectItem value="renovados" className="focus:bg-slate-800 focus:text-white">
-                                            <div className="flex items-center justify-between w-full gap-2">
-                                                <span>Renovados</span>
-                                                <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.renovados}</Badge>
-                                            </div>
-                                        </SelectItem>
-                                        <SelectItem value="refinanciados" className="focus:bg-slate-800 focus:text-white">
-                                            <div className="flex items-center justify-between w-full gap-2">
-                                                <span>Refinanciados</span>
-                                        <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.refinanciados}</Badge>
-                                            </div>
-                                        </SelectItem>
-                                        <SelectItem value="anulados" className="focus:bg-slate-800 focus:text-white">
-                                            <div className="flex items-center justify-between w-full gap-2">
-                                                <span>Anulados</span>
-                                                <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.anulados}</Badge>
-                                            </div>
-                                        </SelectItem>
-                                        <SelectItem value="pendientes" className="focus:bg-slate-800 focus:text-white">
-                                            <div className="flex items-center justify-between w-full gap-2">
-                                                <span>Pendientes</span>
-                                                <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.pendientes}</Badge>
-                                            </div>
-                                        </SelectItem>
-                                    </>
-                                )}
-                                <SelectItem value="todos" className="focus:bg-slate-800 focus:text-white">
-                                    <div className="flex items-center justify-between w-full gap-2">
-                                        <span>Todos</span>
-                                        <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.todos}</Badge>
-                                    </div>
-                                </SelectItem>
-                            </SelectGroup>
+                            {userRol === 'admin' && (
+                                <SelectGroup>
+                                    <SelectLabel className="text-[10px] uppercase text-slate-500 mt-2">Historial</SelectLabel>
+                                    <SelectItem value="finalizados" className="focus:bg-slate-800 focus:text-white">
+                                        <div className="flex items-center justify-between w-full gap-2">
+                                            <span>Finalizados</span>
+                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.finalizados}</Badge>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="renovados" className="focus:bg-slate-800 focus:text-white">
+                                        <div className="flex items-center justify-between w-full gap-2">
+                                            <span>Renovados</span>
+                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.renovados}</Badge>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="refinanciados" className="focus:bg-slate-800 focus:text-white">
+                                        <div className="flex items-center justify-between w-full gap-2">
+                                            <span>Refinanciados</span>
+                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.refinanciados}</Badge>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="anulados" className="focus:bg-slate-800 focus:text-white">
+                                        <div className="flex items-center justify-between w-full gap-2">
+                                            <span>Anulados</span>
+                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.anulados}</Badge>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="pendientes" className="focus:bg-slate-800 focus:text-white">
+                                        <div className="flex items-center justify-between w-full gap-2">
+                                            <span>Pendientes</span>
+                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.pendientes}</Badge>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="todos" className="focus:bg-slate-800 focus:text-white">
+                                        <div className="flex items-center justify-between w-full gap-2">
+                                            <span>Todos</span>
+                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.todos}</Badge>
+                                        </div>
+                                    </SelectItem>
+                                </SelectGroup>
+                            )}
                         </SelectContent>
                     </Select>
 
@@ -945,7 +1026,12 @@ export function PrestamosTable({
                 <TableSkeleton />
             ) : showMap && activeFilter === 'ruta_hoy' ? (
                 <div className="w-full animate-in fade-in duration-300">
-                    <RutaMapa prestamos={filteredPrestamos} onQuickPay={handleQuickPay} today={today} />
+                    <RutaMapa 
+                        prestamos={filteredPrestamos} 
+                        onQuickPay={handleQuickPay} 
+                        today={today} 
+                        isBlocked={!canRequestDueToTime || isBlockedForPayments}
+                    />
                 </div>
             ) : (
                 <>
@@ -1100,6 +1186,16 @@ export function PrestamosTable({
                                                                     <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500 bg-slate-800/50 border border-slate-700/50 px-1.5 py-0.5 rounded-md">
                                                                         {prestamo.frecuencia}
                                                                     </span>
+                                                                    {/* Chip: Préstamo Paralelo (Card View) */}
+                                                                    {prestamo.es_paralelo && (
+                                                                        <span 
+                                                                            title="Este es un préstamo paralelo (el cliente tiene otros préstamos activos)."
+                                                                            className="cursor-help flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-purple-400 bg-purple-500/10 border border-purple-500/25 px-1.5 py-0.5 rounded-md"
+                                                                        >
+                                                                            <Lock className="w-2.5 h-2.5 shrink-0" />
+                                                                            Paralelo
+                                                                        </span>
+                                                                    )}
                                                                 </>
                                                             )
                                                         })()}
@@ -1186,7 +1282,7 @@ export function PrestamosTable({
                                 <div className="col-span-6 flex items-end justify-end gap-1.5 h-full">
                                     {(() => {
                                         const isEffectivelyFinalized = prestamo.isFinalizado || prestamo.estado === 'finalizado' || prestamo.estado === 'renovado' || prestamo.saldo_pendiente <= 0;
-                                        const canRenew = puedeRenovar(prestamo) && !['vencido', 'legal', 'castigado'].includes(prestamo.estado_mora);
+                                        const canRenew = puedeRenovar(prestamo);
 
                                         return (
                                             <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="flex items-center gap-1.5">
@@ -1233,6 +1329,7 @@ export function PrestamosTable({
                                                                     systemSchedule={systemSchedule}
                                                                     isBlockedByCuadre={isBlockedByCuadre}
                                                                     blockReasonCierre={blockReasonCierre}
+                                                                    cuentas={cuentas}
                                                                     trigger={
                                                                         <Button 
                                                                             variant={isAdminDirectRefinance ? "default" : "ghost"}
@@ -1261,21 +1358,21 @@ export function PrestamosTable({
                                                     <Button 
                                                         variant="ghost" 
                                                         size="icon" 
-                                                        disabled={isBlockedByCuadre}
+                                                        disabled={!canRequestDueToTime || isBlockedForPayments}
                                                         className={cn(
                                                             "h-8 w-8 rounded-lg transition-all flex items-center justify-center shrink-0 border",
-                                                            isBlockedByCuadre 
+                                                            isBlockedForPayments 
                                                                 ? "opacity-40 grayscale pointer-events-none text-rose-500 bg-slate-800/50 border-slate-700/50" 
                                                                 : "text-slate-400 bg-slate-800/40 border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/50 hover:border-emerald-700/50"
                                                         )}
                                                         onClick={(e) => {
                                                             e.preventDefault()
                                                             e.stopPropagation()
-                                                            if (!isBlockedByCuadre) handleQuickPay(prestamo, e)
+                                                            if (!isBlockedForPayments) handleQuickPay(prestamo, e)
                                                         }}
-                                                        title={isBlockedByCuadre ? 'Bloqueado por cuadre pendiente' : 'Cobrar'}
+                                                        title={isBlockedForPayments ? 'Bloqueado por horario/feriado' : 'Cobrar'}
                                                     >
-                                                        {isBlockedByCuadre ? <Lock className="w-4 h-4 text-rose-500" /> : <DollarSign className="w-4 h-4" />}
+                                                        {isBlockedForPayments ? <Lock className="w-4 h-4 text-rose-500" /> : <DollarSign className="w-4 h-4" />}
                                                     </Button>
                                                 )}
 
@@ -1307,7 +1404,7 @@ export function PrestamosTable({
                                                             onClick={(e) => {
                                                                 e.preventDefault()
                                                                 e.stopPropagation()
-                                                                router.push(`/dashboard/prestamos/${prestamo.id}`)
+                                                                router.push(`/dashboard/prestamos/${prestamo.id}?tab=historial`)
                                                             }}
                                                         >
                                                             <Eye className="w-3.5 h-3.5 mr-2 text-slate-500" />
@@ -1357,11 +1454,10 @@ export function PrestamosTable({
                     <div className="col-span-1 text-right">Cuota</div>
                     <div className="col-span-1 text-right">Mora</div>
                     <div className="col-span-1 text-center">Prog.</div>
-                    <div className="col-span-1 text-center">Frecuencia</div>
-                    <div className="col-span-1 text-center">Día Pago</div>
+                    <div className="col-span-1 text-center">Pago</div>
                     <div className="col-span-1 text-center">Fechas</div>
                     <div className="col-span-1 text-center">Estado</div>
-                    <div className="col-span-1 text-right pr-4">Acción</div>
+                    <div className="col-span-2 text-right pr-4">ACCIONES</div>
                 </div>
 
                 {/* Table Body */}
@@ -1471,6 +1567,22 @@ export function PrestamosTable({
                                                     Refin.
                                                 </span>
                                             )}
+                                            {/* Chip: Préstamo Paralelo (Table View) */}
+                                            {prestamo.es_paralelo && (
+                                                <span 
+                                                    className="flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wide text-purple-400 bg-purple-500/10 border border-purple-500/25 px-1.5 py-0.5 rounded-md shrink-0 cursor-help"
+                                                    title="Este es un préstamo paralelo (el cliente tiene otros préstamos activos)."
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        toast.info("Préstamo Paralelo", {
+                                                            description: "Este es un préstamo paralelo (el cliente tiene otros préstamos activos)."
+                                                        });
+                                                    }}
+                                                >
+                                                    <Lock className="w-2.5 h-2.5 shrink-0" />
+                                                    Paralelo
+                                                </span>
+                                            )}
                                         </div>
                                         {(userRol === 'admin' || userRol === 'supervisor') && (
                                             <div className="flex items-center gap-1 mt-0.5 opacity-80 group-hover:opacity-100 transition-opacity">
@@ -1544,17 +1656,15 @@ export function PrestamosTable({
                                     })()}
                                 </div>
 
-                                {/* Frecuencia */}
-                                <div className="col-span-1 text-center">
-                                    <Badge variant="secondary" className="bg-slate-800 text-slate-400 hover:bg-slate-700 text-[10px]">
-                                        {prestamo.frecuencia}
-                                    </Badge>
-                                </div>
-
-                                {/* Día Pago */}
-                                <div className="col-span-1 text-center text-xs text-slate-400">
-                                    {getDiaPago(prestamo)}
-                                </div>
+                                 {/* Pago (Frecuencia + Día) */}
+                                 <div className="col-span-1 flex flex-col items-center justify-center gap-0.5">
+                                     <Badge variant="secondary" className="bg-slate-800 text-slate-400 hover:bg-slate-700 text-[10px] px-1.5 h-4.5">
+                                         {prestamo.frecuencia?.toLowerCase()}
+                                     </Badge>
+                                     <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">
+                                         {getDiaPago(prestamo)}
+                                     </span>
+                                 </div>
 
                                 {/* Fechas */}
                                 <div className="col-span-1 text-center text-[10px] text-slate-500">
@@ -1619,7 +1729,7 @@ export function PrestamosTable({
 
                                 {/* Acción */}
                                 <div 
-                                    className="col-span-1 flex justify-end gap-1 items-center"
+                                    className="col-span-2 flex justify-end gap-1.5 items-center pr-2"
                                     onClick={(e) => {
                                         e.preventDefault() 
                                         e.stopPropagation()
@@ -1630,8 +1740,8 @@ export function PrestamosTable({
                                     {prestamo.estado !== 'renovado' && (
                                         <Button 
                                             variant="ghost" 
-                                            size="icon" 
-                                            className="h-8 w-8 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all"
+                                            size="sm" 
+                                            className="h-8 w-8 p-0 shrink-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all font-bold"
                                             onClick={(e) => {
                                                 e.preventDefault()
                                                 e.stopPropagation()
@@ -1646,7 +1756,7 @@ export function PrestamosTable({
                                         </Button>
                                     )}
 
-                                    {puedeRenovar(prestamo) && !['vencido', 'legal', 'castigado'].includes(prestamo.estado_mora) && (
+                                    {puedeRenovar(prestamo) && (
                                         (() => {
                                             const limiteMora = typeof refinanciacionMinMora === 'number' ? refinanciacionMinMora : 50;
                                             const totalCuotasCalc = prestamo.numero_cuotas || prestamo.totalCuotas || 30;
@@ -1654,7 +1764,7 @@ export function PrestamosTable({
                                             const isAdminDirectRefinance = (porcentajeMora >= limiteMora) && (userRol === 'admin');
 
                                             return (
-                                                <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                                                <div className="flex shrink-0 items-center justify-center h-8 w-8" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
                                                     <SolicitudRenovacionModal 
                                                         prestamoId={prestamo.id} 
                                                         clienteNombre={prestamo.clientes?.nombres || 'Cliente'} 
@@ -1670,22 +1780,23 @@ export function PrestamosTable({
                                                         systemSchedule={systemSchedule}
                                                         isBlockedByCuadre={isBlockedByCuadre}
                                                         blockReasonCierre={blockReasonCierre}
+                                                        cuentas={cuentas}
                                                         trigger={
                                                             <Button 
                                                                 variant={isAdminDirectRefinance ? "default" : "ghost"}
                                                                 size="icon" 
                                                                 disabled={!canRequestDueToTime || isBlockedByCuadre}
-                                                                className={cn(
-                                                                    "h-8 w-8 rounded-lg transition-all flex items-center justify-center shrink-0 border",
-                                                                    (!canRequestDueToTime || isBlockedByCuadre) ? "opacity-40 grayscale pointer-events-none bg-slate-800/50 border-slate-700/50" :
-                                                                    isAdminDirectRefinance 
-                                                                        ? "bg-amber-500 hover:bg-amber-600 text-white shadow-sm border border-amber-400" 
-                                                                        : "text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50"
-                                                                )}
-                                                                title={isBlockedByCuadre ? 'Bloqueado por cuadre pendiente' : userRol === 'supervisor' ? 'Ver Evaluación' : (isAdminDirectRefinance ? 'Refinanciar' : 'Renovar')}
-                                                            >
-                                                                {isBlockedByCuadre ? <Lock className="w-4 h-4 text-rose-500" /> : <RotateCcw className="w-4 h-4" />}
-                                                            </Button>
+                                                               className={cn(
+                                                                   "h-full w-full p-0 shrink-0 rounded-lg transition-all flex items-center justify-center border font-bold",
+                                                                   (!canRequestDueToTime || isBlockedByCuadre) ? "opacity-40 grayscale pointer-events-none bg-slate-800/50 border-slate-700/50" :
+                                                                   isAdminDirectRefinance 
+                                                                       ? "bg-amber-500/80 hover:bg-amber-600 text-white border-amber-400" 
+                                                                       : "text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50"
+                                                               )}
+                                                               title={isBlockedByCuadre ? 'Bloqueado por cuadre pendiente' : userRol === 'supervisor' ? 'Ver Evaluación' : (isAdminDirectRefinance ? 'Refinanciar' : 'Renovar')}
+                                                           >
+                                                               {isBlockedByCuadre ? <Lock className="w-4 h-4 text-rose-500" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                                                           </Button>
                                                         }
                                                     />
                                                 </div>
@@ -1693,34 +1804,33 @@ export function PrestamosTable({
                                         })()
                                     )}
 
-                                    {/* Quick Pay Button - Solo asesor y último préstamo del cliente */}
                                     {puedePagar(prestamo) && (
                                         <Button 
                                             variant="ghost" 
-                                            size="icon" 
-                                            disabled={isBlockedByCuadre}
+                                            size="sm" 
+                                            disabled={!canRequestDueToTime || isBlockedForPayments}
                                             className={cn(
-                                                "h-8 w-8 rounded-lg transition-all flex items-center justify-center shrink-0 border",
-                                                isBlockedByCuadre 
+                                                "h-8 w-8 p-0 shrink-0 rounded-lg transition-all flex items-center justify-center shrink-0 border font-bold",
+                                                isBlockedForPayments 
                                                     ? "opacity-40 grayscale pointer-events-none text-rose-500 bg-slate-800/50 border-slate-700/50" 
                                                     : "text-slate-400 bg-slate-800/40 border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/50 hover:border-emerald-700/50"
                                             )}
                                             onClick={(e) => {
                                                 e.preventDefault()
                                                 e.stopPropagation()
-                                                if (!isBlockedByCuadre) handleQuickPay(prestamo, e)
+                                                if (!isBlockedForPayments) handleQuickPay(prestamo, e)
                                             }}
-                                            title={isBlockedByCuadre ? 'Bloqueado por cuadre pendiente' : 'Pago Rápido'}
+                                            title={isBlockedForPayments ? 'Bloqueado por horario/feriado' : 'Pago Rápido'}
                                         >
-                                            {isBlockedByCuadre ? <Lock className="w-4 h-4 text-rose-500" /> : <DollarSign className="w-3.5 h-3.5" />}
+                                            {isBlockedForPayments ? <Lock className="w-4 h-4 text-rose-500" /> : <DollarSign className="w-3.5 h-3.5" />}
                                         </Button>
                                     )}
 
                                     {/* Registrar Gestión Button - Para todos */}
                                     <Button 
                                         variant="ghost" 
-                                        size="icon" 
-                                        className="h-8 w-8 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50 transition-all"
+                                        size="sm" 
+                                        className="h-8 w-8 p-0 shrink-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 transition-all font-bold"
                                         onClick={(e) => {
                                             e.preventDefault()
                                             e.stopPropagation()
@@ -1734,8 +1844,8 @@ export function PrestamosTable({
                                     {/* Dropdown Menu */}
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-white hover:bg-slate-700 transition-all">
-                                                <MoreVertical className="w-4 h-4" />
+                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 shrink-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-white hover:bg-slate-700 transition-all data-[state=open]:bg-slate-700">
+                                                <MoreVertical className="w-3.5 h-3.5" />
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end" className="w-48 bg-slate-900 border-slate-700 text-slate-200">
@@ -1748,7 +1858,7 @@ export function PrestamosTable({
                                                     // Since the parent IS the link to detail, "Ver Detalle" is redundant but requested.
                                                     // I'll use router.push to be safe and explicit.
                                                     e.preventDefault()
-                                                    router.push(`/dashboard/prestamos/${prestamo.id}`)
+                                                    router.push(`/dashboard/prestamos/${prestamo.id}?tab=historial`)
                                                 }}
                                             >
                                                 <Eye className="w-3.5 h-3.5 mr-2 text-slate-500" />
@@ -1797,6 +1907,7 @@ export function PrestamosTable({
                 systemSchedule={systemSchedule}
                 isBlockedByCuadre={isBlockedByCuadre}
                 blockReasonCierre={blockReasonCierre}
+                systemAccess={systemAccess}
             />
 
             {selectedContractLoan && (

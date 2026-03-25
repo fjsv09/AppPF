@@ -133,7 +133,13 @@ export function ExpenseForm({ carteras, cuentas, categorias, advisors, userId, u
     setLoading(true)
     try {
       if (initialData?.id) {
-        // MODO EDICION
+        // MODO EDICION: Solo el administrador puede editar gastos
+        if (userRole !== 'admin') {
+           toast.error('Solo administradores pueden editar gastos registrados.')
+           setLoading(false)
+           return
+        }
+        
         const { error } = await supabase.rpc('actualizar_gasto_db', {
           p_gasto_id: initialData.id,
           p_cuenta_id: values.cuenta_id,

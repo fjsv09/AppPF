@@ -13,6 +13,8 @@ const inter = Inter({
 
 import { createAdminClient } from "@/utils/supabase/admin";
 
+export const revalidate = 0
+
 export async function generateMetadata(): Promise<Metadata> {
   const supabase = createAdminClient();
   const { data: config } = await supabase

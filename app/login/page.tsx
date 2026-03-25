@@ -1,11 +1,25 @@
-import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin'
 import { LoginFormContent } from '@/components/login-form'
+import { Metadata } from 'next'
 import { Suspense } from 'react'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+export async function generateMetadata(): Promise<Metadata> {
+    const supabase = createAdminClient()
+    const { data: config } = await supabase
+        .from('configuracion_sistema')
+        .select('clave, valor')
+        .eq('clave', 'nombre_sistema')
+        .single()
+    return {
+        title: `Acceso: ${config?.valor || 'Login'}`
+    }
+}
 
 export default async function LoginPage() {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     const { data: config } = await supabase
         .from('configuracion_sistema')
         .select('clave, valor')

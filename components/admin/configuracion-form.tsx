@@ -125,13 +125,8 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         if (!file) return
 
         setUploadingLogo(true)
-        const supabase = createClient()
 
         try {
-            // Obtener el usuario actual para el path (RLS)
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) throw new Error('Usuario no autenticado')
-
             // Validar tipo de archivo
             if (!file.type.startsWith('image/')) {
                 throw new Error('El archivo debe ser una imagen')
@@ -142,26 +137,26 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
                 throw new Error('La imagen es demasiado grande (máx 2MB)')
             }
 
-            const fileName = `logo_${Date.now()}.${file.name.split('.').pop()}`
-            const filePath = `${user.id}/${fileName}`
+            const formData = new FormData()
+            formData.append('file', file)
 
-            const { data: uploadData, error: uploadError } = await supabase.storage
-                .from('avatares')
-                .upload(filePath, file, {
-                    cacheControl: '3600',
-                    upsert: true
-                })
+            const response = await fetch('/api/configuracion/upload-logo', {
+                method: 'POST',
+                body: formData
+            })
 
-            if (uploadError) throw uploadError
+            if (!response.ok) {
+                const error = await response.json()
+                throw new Error(error.error || 'Error al subir el logo')
+            }
 
-            const { data: { publicUrl } } = supabase.storage
-                .from('avatares')
-                .getPublicUrl(filePath)
-
-            setConfig(prev => ({ ...prev, logo_sistema_url: publicUrl }))
+            const data = await response.json()
+            const freshUrl = data.publicUrl
+            
+            setConfig(prev => ({ ...prev, logo_sistema_url: freshUrl }))
             
             toast.success('Logo subido', {
-                description: 'La imagen ha sido procesada correctamente. No olvides guardar los cambios.'
+                description: 'La imagen ha sido cargada. Recuerda guardar el cambio para aplicarlo permanentemente.'
             })
         } catch (error: any) {
             toast.error('Error al subir logo', {

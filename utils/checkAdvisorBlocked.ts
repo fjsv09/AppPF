@@ -1,19 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 
 export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: string): Promise<{ isBlocked: boolean, reason: string, leftover: number }> {
-    // --- 1. LOGGING FISICO (PARA DEBUGEAR EN PRODUCCION) ---
-    const fs = require('fs');
-    const logPath = 'c:/Users/fjsvc/OneDrive/Escritorio/AppPF/debug_access.log';
-    const writeLog = (msg: string) => {
-        try {
-            const time = new Date().toISOString();
-            fs.appendFileSync(logPath, `[${time}] [CHECK_ADVISOR] ${msg}\n`);
-        } catch(e) {}
-    };
-
-    writeLog(`[START] Analyzing user: ${userId}`);
-
-    // --- 2. CONFIGURACIÓN DE FECHA LIMA (ULTRA ROBUSTA) ---
+    // --- 1. CONFIGURACIÓN DE FECHA LIMA (ULTRA ROBUSTA) ---
     const now = new Date();
     const limaTime = now.toLocaleString('en-US', { timeZone: 'America/Lima' });
     const limaDate = new Date(limaTime);
@@ -31,17 +19,14 @@ export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: stri
         .order('fecha', { ascending: false })
         .order('created_at', { ascending: false });
 
-    writeLog(`[HISTORY] Found ${history?.length || 0} previous records. Today is ${todayStr}`);
 
     if (history && history.length > 0) {
         const daysEvaluated = new Set();
         for (const record of history) {
             if (!daysEvaluated.has(record.fecha)) {
                 daysEvaluated.add(record.fecha);
-                writeLog(`[DAY_CHECK] Day: ${record.fecha} | Type: ${record.tipo_cuadre} | Status: ${record.estado}`);
                 if (record.tipo_cuadre !== 'final' || record.estado !== 'aprobado') {
                     const statusMsg = record.estado === 'pendiente' ? 'está PENDIENTE DE REVISIÓN' : (record.estado === 'rechazado' ? 'fue RECHAZADO' : 'está INCOMPLETO (Falta Cierre Final)');
-                    writeLog(`[BLOCK] INTEGRITY_FAIL: ${record.fecha} -> ${statusMsg}`);
                     return {
                         isBlocked: true,
                         reason: `El cierre del día ${record.fecha} ${statusMsg}. Debes regularizarlo con el administrador para operar hoy.`,
@@ -63,7 +48,6 @@ export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: stri
         .eq('tipo', 'cobranzas');
 
     if (!accounts || accounts.length === 0) {
-        writeLog(`[INFO] No accounts found, but integrity check passed.`);
         return { isBlocked: false, reason: '', leftover: 0 };
     }
 
@@ -89,10 +73,8 @@ export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: stri
     const deudaNetaHoy = (ingresosHoy - gastosHoy) - entregasAprobadasHoy;
     const leftoverHistorical = saldoActualTotal - deudaNetaHoy;
 
-    writeLog(`[DEBT_CHECK] Saldo: ${saldoActualTotal} | NetoHoy: ${deudaNetaHoy} | Historical: ${leftoverHistorical}`);
 
     if (leftoverHistorical > 1.05) {
-        writeLog(`[BLOCK] PENDING_SALDO: ${leftoverHistorical}`);
         return {
             isBlocked: true,
             reason: `Tienes un SALDO PENDIENTE de S/ ${leftoverHistorical.toFixed(2)} de días anteriores. Debes liquidar para continuar.`,
@@ -100,6 +82,5 @@ export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: stri
         };
     }
 
-    writeLog(`[RESULT] ALLOWED`);
     return { isBlocked: false, reason: '', leftover: leftoverHistorical };
 }

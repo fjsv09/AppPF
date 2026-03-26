@@ -1,0 +1,154 @@
+[2026-03-26T13:39:05.819Z] [ACCESS_REQ] User: ad64792f-35f9-4150-accc-f5e0542857d8 | Role: asesor | Action: solicitud | Day: 4 | Time: 08:39
+[2026-03-26T13:39:06.084Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:39:06.084Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:39:06.627Z] [CHECK_BLOCK_RESULT] isBlocked: false | Reason: 
+[2026-03-26T13:39:10.065Z] [ACCESS_REQ] User: ad64792f-35f9-4150-accc-f5e0542857d8 | Role: asesor | Action: prestamo | Day: 4 | Time: 08:39
+[2026-03-26T13:39:10.662Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:39:10.664Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:39:11.129Z] [CHECK_BLOCK_RESULT] isBlocked: false | Reason: 
+[2026-03-26T13:41:00.035Z] [ACCESS_REQ] User: 998d2693-6a29-4fbc-91ff-f32fa00f77bb | Role: asesor | Action: prestamo | Day: 4 | Time: 08:41
+[2026-03-26T13:41:00.090Z] [ACCESS_REQ] User: ad64792f-35f9-4150-accc-f5e0542857d8 | Role: asesor | Action: prestamo | Day: 4 | Time: 08:41
+[2026-03-26T13:41:00.774Z] [ACCESS_REQ] User: aec4dcf5-51de-49a7-bfa3-652abf51c0f2 | Role: supervisor | Action: prestamo | Day: 4 | Time: 08:41
+[2026-03-26T13:41:01.537Z] [CHECK_ADVISOR] [START] Analyzing user: 998d2693-6a29-4fbc-91ff-f32fa00f77bb
+[2026-03-26T13:41:01.556Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:41:01.556Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for 998d2693-6a29-4fbc-91ff-f32fa00f77bb
+[2026-03-26T13:41:01.557Z] [CHECK_ADVISOR] [START] Analyzing user: 998d2693-6a29-4fbc-91ff-f32fa00f77bb
+[2026-03-26T13:41:01.565Z] [ACCESS_REQ] User: ad64792f-35f9-4150-accc-f5e0542857d8 | Role: asesor | Action: solicitud | Day: 4 | Time: 08:41
+[2026-03-26T13:41:01.569Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:41:01.569Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:41:01.570Z] [CHECK_ADVISOR] [START] Analyzing user: ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:41:01.593Z] [CHECK_ADVISOR] [START] Analyzing user: ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:41:01.789Z] [CHECK_ADVISOR] [HISTORY] Found 8 previous records. Today is 2026-03-26
+[2026-03-26T13:41:01.790Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:41:01.790Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:41:01.797Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:41:01.813Z] [CHECK_ADVISOR] [HISTORY] Found 8 previous records. Today is 2026-03-26
+[2026-03-26T13:41:01.813Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:41:01.814Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:41:01.814Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:41:01.841Z] [CHECK_ADVISOR] [HISTORY] Found 19 previous records. Today is 2026-03-26
+[2026-03-26T13:41:01.841Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:41:01.842Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:41:01.842Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:41:01.848Z] [CHECK_ADVISOR] [HISTORY] Found 19 previous records. Today is 2026-03-26
+[2026-03-26T13:41:01.848Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:41:01.848Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:41:02.078Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:41:02.078Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:41:02.078Z] [CHECK_ADVISOR] [START] Analyzing user: ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:41:02.324Z] [CHECK_ADVISOR] [HISTORY] Found 19 previous records. Today is 2026-03-26
+[2026-03-26T13:41:02.324Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:41:02.324Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:41:02.325Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:41:04.500Z] [ACCESS_REQ] User: ad64792f-35f9-4150-accc-f5e0542857d8 | Role: asesor | Action: prestamo | Day: 4 | Time: 08:41
+[2026-03-26T13:41:04.505Z] [ACCESS_REQ] User: 998d2693-6a29-4fbc-91ff-f32fa00f77bb | Role: asesor | Action: prestamo | Day: 4 | Time: 08:41
+[2026-03-26T13:41:04.994Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:41:04.995Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for 998d2693-6a29-4fbc-91ff-f32fa00f77bb
+[2026-03-26T13:41:04.996Z] [CHECK_ADVISOR] [START] Analyzing user: 998d2693-6a29-4fbc-91ff-f32fa00f77bb
+[2026-03-26T13:41:05.030Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:41:05.030Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:41:05.030Z] [CHECK_ADVISOR] [START] Analyzing user: ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:41:05.218Z] [CHECK_ADVISOR] [HISTORY] Found 8 previous records. Today is 2026-03-26
+[2026-03-26T13:41:05.219Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:41:05.219Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:41:05.219Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:41:05.275Z] [CHECK_ADVISOR] [HISTORY] Found 19 previous records. Today is 2026-03-26
+[2026-03-26T13:41:05.276Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:41:05.276Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:41:05.276Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:41:27.154Z] [ACCESS_REQ] User: ad64792f-35f9-4150-accc-f5e0542857d8 | Role: asesor | Action: solicitud | Day: 4 | Time: 08:41
+[2026-03-26T13:41:27.677Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:41:27.677Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:41:27.677Z] [CHECK_ADVISOR] [START] Analyzing user: ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:41:27.943Z] [CHECK_ADVISOR] [HISTORY] Found 19 previous records. Today is 2026-03-26
+[2026-03-26T13:41:27.943Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:41:27.943Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:41:27.943Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:41:42.809Z] [ACCESS_REQ] User: ad64792f-35f9-4150-accc-f5e0542857d8 | Role: asesor | Action: prestamo | Day: 4 | Time: 08:41
+[2026-03-26T13:41:43.328Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:41:43.328Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:41:43.329Z] [CHECK_ADVISOR] [START] Analyzing user: ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:41:43.573Z] [CHECK_ADVISOR] [HISTORY] Found 19 previous records. Today is 2026-03-26
+[2026-03-26T13:41:43.573Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:41:43.574Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:41:43.574Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:41:51.491Z] [ACCESS_REQ] User: ad64792f-35f9-4150-accc-f5e0542857d8 | Role: asesor | Action: prestamo | Day: 4 | Time: 08:41
+[2026-03-26T13:41:52.026Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:41:52.027Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:41:52.027Z] [CHECK_ADVISOR] [START] Analyzing user: ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:41:52.303Z] [CHECK_ADVISOR] [HISTORY] Found 19 previous records. Today is 2026-03-26
+[2026-03-26T13:41:52.303Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:41:52.304Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:41:52.304Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:43:03.469Z] [ACCESS_REQ] User: ad64792f-35f9-4150-accc-f5e0542857d8 | Role: asesor | Action: prestamo | Day: 4 | Time: 08:43
+[2026-03-26T13:43:03.632Z] [ACCESS_REQ] User: 998d2693-6a29-4fbc-91ff-f32fa00f77bb | Role: asesor | Action: prestamo | Day: 4 | Time: 08:43
+[2026-03-26T13:43:03.674Z] [ACCESS_REQ] User: aec4dcf5-51de-49a7-bfa3-652abf51c0f2 | Role: supervisor | Action: prestamo | Day: 4 | Time: 08:43
+[2026-03-26T13:43:03.805Z] [ACCESS_REQ] User: ad64792f-35f9-4150-accc-f5e0542857d8 | Role: asesor | Action: solicitud | Day: 4 | Time: 08:43
+[2026-03-26T13:43:03.897Z] [CHECK_ADVISOR] [START] Analyzing user: ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:43:03.987Z] [CHECK_ADVISOR] [START] Analyzing user: 998d2693-6a29-4fbc-91ff-f32fa00f77bb
+[2026-03-26T13:43:04.054Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:43:04.054Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:43:04.054Z] [CHECK_ADVISOR] [START] Analyzing user: ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:43:04.171Z] [CHECK_ADVISOR] [HISTORY] Found 19 previous records. Today is 2026-03-26
+[2026-03-26T13:43:04.171Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:43:04.172Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:43:04.179Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:43:04.179Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for 998d2693-6a29-4fbc-91ff-f32fa00f77bb
+[2026-03-26T13:43:04.180Z] [CHECK_ADVISOR] [START] Analyzing user: 998d2693-6a29-4fbc-91ff-f32fa00f77bb
+[2026-03-26T13:43:04.199Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:43:04.251Z] [CHECK_ADVISOR] [HISTORY] Found 8 previous records. Today is 2026-03-26
+[2026-03-26T13:43:04.251Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:43:04.252Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:43:04.306Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:43:04.306Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:43:04.307Z] [CHECK_ADVISOR] [START] Analyzing user: ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:43:04.329Z] [CHECK_ADVISOR] [HISTORY] Found 19 previous records. Today is 2026-03-26
+[2026-03-26T13:43:04.330Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:43:04.330Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:43:04.330Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:43:04.435Z] [CHECK_ADVISOR] [HISTORY] Found 8 previous records. Today is 2026-03-26
+[2026-03-26T13:43:04.436Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:43:04.437Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:43:04.438Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:43:04.561Z] [CHECK_ADVISOR] [HISTORY] Found 19 previous records. Today is 2026-03-26
+[2026-03-26T13:43:04.561Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:43:04.562Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:43:04.562Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:43:06.665Z] [ACCESS_REQ] User: 998d2693-6a29-4fbc-91ff-f32fa00f77bb | Role: asesor | Action: prestamo | Day: 4 | Time: 08:43
+[2026-03-26T13:43:06.959Z] [ACCESS_REQ] User: ad64792f-35f9-4150-accc-f5e0542857d8 | Role: asesor | Action: prestamo | Day: 4 | Time: 08:43
+[2026-03-26T13:43:07.203Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:43:07.203Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for 998d2693-6a29-4fbc-91ff-f32fa00f77bb
+[2026-03-26T13:43:07.203Z] [CHECK_ADVISOR] [START] Analyzing user: 998d2693-6a29-4fbc-91ff-f32fa00f77bb
+[2026-03-26T13:43:07.441Z] [CHECK_ADVISOR] [HISTORY] Found 8 previous records. Today is 2026-03-26
+[2026-03-26T13:43:07.441Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:43:07.442Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:43:07.442Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:43:07.466Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:43:07.466Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:43:07.467Z] [CHECK_ADVISOR] [START] Analyzing user: ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:43:07.699Z] [CHECK_ADVISOR] [HISTORY] Found 19 previous records. Today is 2026-03-26
+[2026-03-26T13:43:07.699Z] [CHECK_ADVISOR] [DAY_CHECK] Day: 2026-03-25 | Type: parcial | Status: aprobado
+[2026-03-26T13:43:07.699Z] [CHECK_ADVISOR] [BLOCK] INTEGRITY_FAIL: 2026-03-25 -> está INCOMPLETO (Falta Cierre Final)
+[2026-03-26T13:43:07.700Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:50:18.256Z] [ACCESS_REQ] User: 998d2693-6a29-4fbc-91ff-f32fa00f77bb | Role: asesor | Action: prestamo | Day: 4 | Time: 08:50
+[2026-03-26T13:50:18.268Z] [ACCESS_REQ] User: aec4dcf5-51de-49a7-bfa3-652abf51c0f2 | Role: supervisor | Action: prestamo | Day: 4 | Time: 08:50
+[2026-03-26T13:50:18.991Z] [ACCESS_REQ] User: ad64792f-35f9-4150-accc-f5e0542857d8 | Role: asesor | Action: prestamo | Day: 4 | Time: 08:50
+[2026-03-26T13:50:19.167Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:50:19.167Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for 998d2693-6a29-4fbc-91ff-f32fa00f77bb
+[2026-03-26T13:50:19.191Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:50:19.297Z] [ACCESS_REQ] User: ad64792f-35f9-4150-accc-f5e0542857d8 | Role: asesor | Action: solicitud | Day: 4 | Time: 08:50
+[2026-03-26T13:50:19.406Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:50:19.563Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:50:19.564Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:50:19.817Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:50:19.842Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:50:19.843Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:50:20.102Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:50:22.302Z] [ACCESS_REQ] User: 998d2693-6a29-4fbc-91ff-f32fa00f77bb | Role: asesor | Action: prestamo | Day: 4 | Time: 08:50
+[2026-03-26T13:50:22.951Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:50:22.951Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for 998d2693-6a29-4fbc-91ff-f32fa00f77bb
+[2026-03-26T13:50:22.957Z] [ACCESS_REQ] User: ad64792f-35f9-4150-accc-f5e0542857d8 | Role: asesor | Action: prestamo | Day: 4 | Time: 08:50
+[2026-03-26T13:50:23.264Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.
+[2026-03-26T13:50:23.644Z] [UNLOCKED_STATE] isTemp: false | DesbloqueoHasta: 2026-03-26T03:57:55.875Z
+[2026-03-26T13:50:23.645Z] [CHECK_BLOCK_START] calling checkAdvisorBlocked for ad64792f-35f9-4150-accc-f5e0542857d8
+[2026-03-26T13:50:24.206Z] [CHECK_BLOCK_RESULT] isBlocked: true | Reason: El cierre del día 2026-03-25 está INCOMPLETO (Falta Cierre Final). Debes regularizarlo con el administrador para operar hoy.

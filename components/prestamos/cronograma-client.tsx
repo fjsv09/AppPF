@@ -32,6 +32,7 @@ type Props = {
     isBlockedByCuadre?: boolean
     blockReasonCierre?: string
     systemAccess?: any
+    pagos?: any[]
 }
 
 export function CronogramaClient({ 
@@ -41,11 +42,12 @@ export function CronogramaClient({
     systemSchedule, 
     isBlockedByCuadre, 
     blockReasonCierre,
-    systemAccess 
+    systemAccess,
+    pagos = []
 }: Props) {
     // Solo se bloquean los pagos si el bloqueo es TOTAL (Horario, Feriado, Noche)
     // El bloqueo por falta de cuadre (Mañana) PERMITE pagos.
-    const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK'].includes(systemAccess?.code);
+    const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK', 'PENDING_SALDO'].includes(systemAccess?.code);
     const isBlockedForPayments = isBlockedByCuadre && isTotalBlock;
     // Solo el asesor puede realizar pagos
     const puedePagar = userRol === 'asesor'
@@ -190,7 +192,7 @@ export function CronogramaClient({
                     <div>
                         <p className="text-rose-400 font-bold text-sm">Registro de Pagos Bloqueado</p>
                         <p className="text-slate-400 text-xs mt-0.5">
-                            Fuera de horario de operación o día feriado.
+                            {blockReasonCierre || "Fuera de horario de operación o día feriado."}
                         </p>
                     </div>
                 </div>
@@ -373,6 +375,15 @@ export function CronogramaClient({
                                                     </Badge>
                                                 ) : (
                                                     <span className="text-[9px] md:text-[10px] text-slate-600 font-medium uppercase">Pendiente</span>
+                                                )}
+                                                
+                                                {/* Indicador de Pago por Sistema (Excedente) */}
+                                                {isPaid && (pagos || []).some(p => (p.pagos_distribucion || []).some((d: any) => d.cuota_id === cuota.id && d.tipo !== 'directo')) && (
+                                                    <div className="mt-1">
+                                                        <span className="text-[7px] md:text-[8px] bg-blue-500/20 text-blue-300 px-1 py-0.5 rounded border border-blue-500/30 font-black uppercase tracking-tighter">
+                                                            Saldado (+)
+                                                        </span>
+                                                    </div>
                                                 )}
                                             </td>
                                             {puedePagar && prestamo.bloqueo_cronograma && (

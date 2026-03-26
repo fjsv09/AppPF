@@ -9,6 +9,7 @@ import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TareasTabs } from '@/components/tareas/tareas-tabs'
 import { cn } from '@/lib/utils'
 import { BackButton } from '@/components/ui/back-button'
+import { Suspense } from 'react'
 
 export const dynamic = 'force-dynamic'
 
@@ -209,7 +210,8 @@ export default async function TareasHistoryPage({
                 </div>
             </div>
 
-            <TareasTabs defaultTab={tab && ['evidencia', 'auditoria', 'gestiones'].includes(tab) ? tab : 'evidencia'} className="w-full">
+            <Suspense fallback={<div className="h-96 w-full animate-pulse bg-slate-900/50 rounded-2xl border border-slate-800" />}>
+                <TareasTabs defaultTab={tab && ['evidencia', 'auditoria', 'gestiones'].includes(tab) ? tab : 'evidencia'} className="w-full">
                 <div className="overflow-x-auto pb-1 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0 mb-6">
                     <TabsList className={cn(
                         "bg-slate-900/50 border border-slate-800 p-0.5 w-full grid md:flex md:w-fit",
@@ -267,6 +269,7 @@ export default async function TareasHistoryPage({
                     <VisitasList visitas={tareasVisita} userId={user.id} />
                 </TabsContent>
             </TareasTabs>
+            </Suspense>
         </div>
     )
 }

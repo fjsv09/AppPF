@@ -1,69 +1,105 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 
 export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: string): Promise<{ isBlocked: boolean, reason: string, leftover: number }> {
-    const { data: lastFinal } = await supabase
+    // --- 1. LOGGING FISICO (PARA DEBUGEAR EN PRODUCCION) ---
+    const fs = require('fs');
+    const logPath = 'c:/Users/fjsvc/OneDrive/Escritorio/AppPF/debug_access.log';
+    const writeLog = (msg: string) => {
+        try {
+            const time = new Date().toISOString();
+            fs.appendFileSync(logPath, `[${time}] [CHECK_ADVISOR] ${msg}\n`);
+        } catch(e) {}
+    };
+
+    writeLog(`[START] Analyzing user: ${userId}`);
+
+    // --- 2. CONFIGURACIÓN DE FECHA LIMA (ULTRA ROBUSTA) ---
+    const now = new Date();
+    const limaTime = now.toLocaleString('en-US', { timeZone: 'America/Lima' });
+    const limaDate = new Date(limaTime);
+    const todayStr = `${limaDate.getFullYear()}-${String(limaDate.getMonth() + 1).padStart(2, '0')}-${String(limaDate.getDate()).padStart(2, '0')}`;
+    const startOfTodayISO = `${todayStr}T00:00:00-05:00`;
+
+    // --- 3. REVISIÓN DE INTEGRIDAD OBLIGATORIA (SIEMPRE SE EJECUTA) ---
+    // Rule: All advisors MUST have a FINAL APPROVED report for every day they operated PRIOR to today.
+    // This ignores balance (even if they owe 0, they MUST report the final status of the day).
+    const { data: history } = await supabase
         .from('cuadres_diarios')
-        .select('created_at')
+        .select('fecha, tipo_cuadre, estado')
         .eq('asesor_id', userId)
-        .eq('tipo_cuadre', 'final')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .lt('fecha', todayStr)
+        .order('fecha', { ascending: false })
+        .order('created_at', { ascending: false });
 
-    if (!lastFinal) {
-        return { isBlocked: false, reason: '', leftover: 0 };
+    writeLog(`[HISTORY] Found ${history?.length || 0} previous records. Today is ${todayStr}`);
+
+    if (history && history.length > 0) {
+        const daysEvaluated = new Set();
+        for (const record of history) {
+            if (!daysEvaluated.has(record.fecha)) {
+                daysEvaluated.add(record.fecha);
+                writeLog(`[DAY_CHECK] Day: ${record.fecha} | Type: ${record.tipo_cuadre} | Status: ${record.estado}`);
+                if (record.tipo_cuadre !== 'final' || record.estado !== 'aprobado') {
+                    const statusMsg = record.estado === 'pendiente' ? 'está PENDIENTE DE REVISIÓN' : (record.estado === 'rechazado' ? 'fue RECHAZADO' : 'está INCOMPLETO (Falta Cierre Final)');
+                    writeLog(`[BLOCK] INTEGRITY_FAIL: ${record.fecha} -> ${statusMsg}`);
+                    return {
+                        isBlocked: true,
+                        reason: `El cierre del día ${record.fecha} ${statusMsg}. Debes regularizarlo con el administrador para operar hoy.`,
+                        leftover: 0
+                    };
+                }
+            }
+        }
     }
 
-    const tLastFinal = lastFinal.created_at;
-
-    const { data: carteras } = await supabase
-        .from('carteras')
-        .select('id')
-        .eq('asesor_id', userId);
+    // --- 4. CÁLCULO DE SALDO FINANCIERO (SEGUNDA CAPA) ---
+    // Si la integridad está bien, verificamos que no deba dinero acumulado.
     
-    if (!carteras || carteras.length === 0) {
-        return { isBlocked: false, reason: '', leftover: 0 };
-    }
-
-    const carteraIds = carteras.map((c: any) => c.id);
-
-    // 1. Current Saldo in cobranzas
-    const { data: cuentas } = await supabase
+    // a) Cuentas de cobranzas
+    const { data: accounts } = await supabase
         .from('cuentas_financieras')
-        .select('saldo')
-        .in('cartera_id', carteraIds)
+        .select('id, saldo, cartera_id')
+        .eq('asesor_id', userId)
         .eq('tipo', 'cobranzas');
 
-    const saldoActual = cuentas?.reduce((acc: number, c: any) => acc + parseFloat(c.saldo), 0) || 0;
+    if (!accounts || accounts.length === 0) {
+        writeLog(`[INFO] No accounts found, but integrity check passed.`);
+        return { isBlocked: false, reason: '', leftover: 0 };
+    }
 
-    // 2. Ingresos since last Cierre Final
-    const { data: pagosPost } = await supabase
-        .from('pagos')
-        .select('monto_pagado')
-        .eq('registrado_por', userId)
-        .gte('created_at', tLastFinal);
-    
-    const ingresosSince = pagosPost?.reduce((acc: number, p: any) => acc + parseFloat(p.monto_pagado), 0) || 0;
+    const accountIds = accounts.map(a => a.id);
+    const saldoActualTotal = accounts.reduce((acc: number, c: any) => acc + parseFloat(c.saldo || 0), 0) || 0;
 
-    // 3. Gastos since last Cierre Final
-    const { data: gastosPost } = await supabase
+    // b) Flujo de hoy
+    const { data: movementsToday } = await supabase
         .from('movimientos_financieros')
-        .select('monto')
-        .in('cartera_id', carteraIds)
-        .eq('tipo', 'egreso')
-        .gte('created_at', tLastFinal);
+        .select('monto, tipo, cuenta_origen_id, cuenta_destino_id')
+        .or(`cuenta_origen_id.in.(${accountIds.join(',')}),cuenta_destino_id.in.(${accountIds.join(',')})`)
+        .gte('created_at', startOfTodayISO);
+
+    const ingresosHoy = movementsToday?.filter(m => m.cuenta_destino_id && accountIds.includes(m.cuenta_destino_id))
+                                      .reduce((acc, m) => acc + parseFloat(m.monto || 0), 0) || 0;
     
-    const gastosSince = gastosPost?.reduce((acc: number, g: any) => acc + parseFloat(g.monto), 0) || 0;
+    const gastosHoy = movementsToday?.filter(m => m.tipo === 'egreso' && m.cuenta_origen_id && accountIds.includes(m.cuenta_origen_id))
+                                     .reduce((acc, m) => acc + parseFloat(m.monto || 0), 0) || 0;
 
-    const leftover = saldoActual - ingresosSince + gastosSince;
+    const entregasAprobadasHoy = movementsToday?.filter(m => m.tipo === 'transferencia' && m.cuenta_origen_id && accountIds.includes(m.cuenta_origen_id))
+                                                .reduce((acc, m) => acc + parseFloat(m.monto || 0), 0) || 0;
 
-    if (leftover > 1) { // 1 to account for any decimal rounding anomalies
+    const deudaNetaHoy = (ingresosHoy - gastosHoy) - entregasAprobadasHoy;
+    const leftoverHistorical = saldoActualTotal - deudaNetaHoy;
+
+    writeLog(`[DEBT_CHECK] Saldo: ${saldoActualTotal} | NetoHoy: ${deudaNetaHoy} | Historical: ${leftoverHistorical}`);
+
+    if (leftoverHistorical > 1.05) {
+        writeLog(`[BLOCK] PENDING_SALDO: ${leftoverHistorical}`);
         return {
             isBlocked: true,
-            reason: `Quedó un saldo pendiente de S/ ${leftover.toFixed(2)} por cuadrar de tu último Cierre del Día. Regulariza tu cuadre para continuar operando.`,
-            leftover
+            reason: `Tienes un SALDO PENDIENTE de S/ ${leftoverHistorical.toFixed(2)} de días anteriores. Debes liquidar para continuar.`,
+            leftover: leftoverHistorical
         };
     }
 
-    return { isBlocked: false, reason: '', leftover: 0 };
+    writeLog(`[RESULT] ALLOWED`);
+    return { isBlocked: false, reason: '', leftover: leftoverHistorical };
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -56,14 +56,14 @@ export function QuickPayModal({
     const [sharing, setSharing] = useState(false)
     const [lastPayment, setLastPayment] = useState<any>(null)
 
-    const supabase = createClient()
+    const supabase = useMemo(() => createClient(), [])
 
     // Calculate Today Peru if not provided
     const today = initialToday || new Date().toLocaleString("en-CA", { timeZone: "America/Lima" }).split(',')[0]
 
     // Solo se bloquean los pagos si el bloqueo es TOTAL (Horario, Feriado, Noche)
     // El bloqueo por falta de cuadre (Mañana) PERMITE pagos.
-    const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK'].includes(systemAccess?.code);
+    const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK', 'PENDING_SALDO'].includes(systemAccess?.code);
     const isBlockedForPayments = isBlockedByCuadre && isTotalBlock;
 
     // --- LOGICA DE HORARIO SÍNCRONA ---

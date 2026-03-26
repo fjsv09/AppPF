@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectLa
 import { 
     AlertCircle, Wallet, Search, Users, Calendar, MoreVertical, 
     CalendarDays, CheckCircle2, AlertTriangle, MapPin, DollarSign, FileText, ChevronRight, Eye,
-    X, RotateCcw, MessageCircle, MessageSquare, Loader2, ListFilter, LayoutGrid, Table, Lock
+    X, RotateCcw, MessageCircle, MessageSquare, Loader2, ListFilter, LayoutGrid, Table, Lock, ClipboardList
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
@@ -33,7 +33,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { AsignarVisitaModal } from '../gestiones/asignar-visita-modal'
 import { Progress } from "@/components/ui/progress"
+import { getTodayPeru, calculateLoanMetrics, getLoanStatusUI } from "@/lib/financial-logic";
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
@@ -70,7 +72,7 @@ type FilterTab = 'ruta_hoy' | 'cobranza' | 'morosos' | 'notificar' | 'semana' | 
 type SortBy = 'fecha_inicio' | 'frecuencia'
 type SortOrder = 'asc' | 'desc'
 
-const TableSkeleton = () => (
+export const TableSkeleton = () => (
     <div className="animate-pulse space-y-4">
         {/* Mobile Skeleton */}
         <div className="md:hidden space-y-4">
@@ -132,7 +134,7 @@ export function PrestamosTable({
     // Lógica de Bloqueo Sensible al Tipo de Acción (Centralizada en la Tabla)
     // Los PAGOS se permiten incluso si falta el cuadre del turno 1 (MISSING_MORNING_CUADRE)
     // Pero se bloquean si es horario general, feriado o noche (bloqueo total).
-    const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK'].includes(systemAccess?.code);
+    const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK', 'PENDING_SALDO'].includes(systemAccess?.code);
     const isBlockedForPayments = isBlockedByCuadre && isTotalBlock;
     const isBlockedForOperations = isBlockedByCuadre;
 
@@ -320,9 +322,6 @@ export function PrestamosTable({
     const [canRequestDueToTime, setCanRequestDueToTime] = useState(true)
 
     // 1. ADD INTERNAL REFRESH EFFECT (User Request: "refresque internamente al entrar")
-    useEffect(() => {
-        router.refresh()
-    }, [router])
 
     useEffect(() => {
         if (!systemSchedule) return
@@ -462,6 +461,19 @@ export function PrestamosTable({
         }
         setSelectedLoanForGestion(prestamo)
         setGestionOpen(true)
+    }
+
+    // Asignar Tarea State
+    const [asignarTareaOpen, setAsignarTareaOpen] = useState(false)
+    const [selectedLoanForAsignar, setSelectedLoanForAsignar] = useState<any>(null)
+
+    const handleOpenAsignarTarea = (prestamo: any, e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault()
+            e.stopPropagation()
+        }
+        setSelectedLoanForAsignar(prestamo)
+        setAsignarTareaOpen(true)
     }
 
     // Sectores Logic
@@ -1019,19 +1031,30 @@ export function PrestamosTable({
                 </div>
             </div>
 
-            {/* -------------------- CONTENT -------------------- */}
-            {isPending || isFiltering ? (
-                <TableSkeleton />
-            ) : showMap ? (
-                <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500 mb-6">
-                    <RutaMapa 
-                        prestamos={filteredPrestamos} 
-                        onQuickPay={handleQuickPay} 
-                        today={today} 
-                        isBlocked={!canRequestDueToTime || isBlockedForPayments}
-                    />
-                </div>
-            ) : (
+            <div className="relative min-h-[400px]">
+                {/* Loader centralizado (basado en feedback de usuario) */}
+                {(isPending || isFiltering) && (
+                    <div className="absolute inset-x-0 top-20 z-50 flex items-center justify-center animate-in fade-in duration-300">
+                        <div className="bg-slate-950/40 backdrop-blur-md p-4 rounded-full border border-white/5 shadow-2xl">
+                            <Loader2 className="w-8 h-8 text-slate-400 animate-spin" />
+                        </div>
+                    </div>
+                )}
+                
+                <div className={cn(
+                    "transition-all duration-300",
+                    (isPending || isFiltering) ? "opacity-40 grayscale-[0.5] pointer-events-none blur-[1px]" : "opacity-100"
+                )}>
+                    {showMap ? (
+                        <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500 mb-6">
+                            <RutaMapa 
+                                prestamos={filteredPrestamos} 
+                                onQuickPay={handleQuickPay} 
+                                today={today} 
+                                isBlocked={!canRequestDueToTime || isBlockedForPayments}
+                            />
+                        </div>
+                    ) : (
                 <>
                 {/* -------------------- MOBILE CARDS VIEW -------------------- */}
              <div className={cn(
@@ -1117,91 +1140,57 @@ export function PrestamosTable({
                                 </div>
 
                                 {/* Top Right: Amount/Status */}
-                                <div className="shrink-0 text-right">
+                                 <div className="shrink-0 text-right">
                                     {(() => {
-                                        const isEffectivelyFinalized = prestamo.isFinalizado || prestamo.estado === 'finalizado' || prestamo.estado === 'renovado' || prestamo.estado === 'refinanciado' || prestamo.saldo_pendiente <= 0;
-                                        
+                                        const statusUI = getLoanStatusUI(prestamo);
+                                        const isHistoricalMora = (prestamo.isFinalizado || prestamo.estado === 'finalizado' || prestamo.estado === 'renovado' || prestamo.estado === 'refinanciado' || prestamo.saldo_pendiente <= 0) && ['vencido', 'moroso'].includes(prestamo.estado_mora);
+
                                         return (
                                             <div className="flex flex-row items-center justify-end gap-1">
-                                                {(() => {
-                                                    const getTooltipText = () => {
-                                                        const isDiario = prestamo.frecuencia?.toLowerCase() === 'diario'
-                                                        if (prestamo.estado === 'refinanciado') return 'Préstamo refinanciado administrativamente'
-                                                        if (prestamo.estado === 'renovado') return 'Préstamo renovado'
-                                                        if (isEffectivelyFinalized) return 'Préstamo pagado completamente'
-                                                        if (prestamo.estado_mora === 'vencido') return 'Préstamo pasó su fecha de fin con deuda pendiente'
-                                                        if (prestamo.estado_mora === 'moroso') return isDiario ? 'Diario: 10+ cuotas atrasadas' : 'Semanal/Otro: 7+ días desde primera cuota vencida'
-                                                        if (prestamo.estado_mora === 'cpp') return isDiario ? 'Diario: 4-9 cuotas atrasadas' : 'Semanal/Otro: 4-6 días desde primera cuota vencida'
-                                                        if (prestamo.deudaHoy > 0) return `Deuda exigible hoy: $${prestamo.deudaHoy.toFixed(2)}`
-                                                        return 'Sin deuda pendiente a la fecha'
-                                                    }
-
-                                                    return (
-                                                        <>
-                                                            {/* Warning: Finalized/Renewed with historical delinquency */}
-                                                            {(prestamo.isFinalizado || prestamo.estado === 'finalizado' || prestamo.estado === 'renovado' || prestamo.estado === 'refinanciado' || prestamo.saldo_pendiente <= 0) && ['vencido', 'moroso'].includes(prestamo.estado_mora) && (
-                                                                <span 
-                                                                    className="text-amber-500 text-xs cursor-pointer" 
-                                                                    onClick={(e) => {
-                                                                        e.preventDefault()
-                                                                        e.stopPropagation()
-                                                                        toast.info(`Historial de mora: ${prestamo.estado_mora}`, {
-                                                                            description: 'Este préstamo tuvo problemas de pago antes de ser finalizado o renovado.',
-                                                                        })
-                                                                    }}
-                                                                >
-                                                                    ⚠️
-                                                                </span>
-                                                            )}
-                                                                    <span 
-                                                                        onClick={(e) => {
-                                                                            e.preventDefault();
-                                                                            e.stopPropagation();
-                                                                            toast(getTooltipText(), {
-                                                                                description: prestamo.estado === 'refinanciado' ? 'El cliente refinanció este saldo.' : undefined
-                                                                            })
-                                                                        }}
-                                                                        className={cn(
-                                                                            "cursor-pointer text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md border",
-                                                                            prestamo.estado === 'refinanciado' ? "border-indigo-500 text-indigo-400 bg-slate-900/50" :
-                                                                            prestamo.estado === 'renovado' ? "border-slate-600 text-slate-500 bg-slate-900/50" :
-                                                                            isEffectivelyFinalized ? "border-slate-600 text-slate-500 bg-slate-900/50" :
-                                                                            prestamo.estado_mora === 'vencido' ? "border-rose-500 text-rose-500 bg-slate-900/50" :
-                                                                            prestamo.estado_mora === 'moroso' ? "border-red-600 text-red-600 bg-slate-900/50" :
-                                                                            prestamo.estado_mora === 'cpp' ? "border-orange-500 text-orange-500 bg-slate-900/50" :
-                                                                            prestamo.deudaHoy > 0 ? "border-amber-400 text-amber-400 bg-slate-900/50" : 
-                                                                            "border-emerald-500 text-emerald-500 bg-slate-900/50"
-                                                                        )}>
-                                                                        {prestamo.estado === 'refinanciado' ? 'Refin' :
-                                                                         prestamo.estado === 'renovado' ? 'Renov' :
-                                                                         isEffectivelyFinalized ? 'Final' :
-                                                                         prestamo.estado_mora === 'vencido' ? 'Venc' :
-                                                                         prestamo.estado_mora === 'moroso' ? 'Mora' :
-                                                                         prestamo.estado_mora === 'cpp' ? 'CPP' :
-                                                                         prestamo.deudaHoy > 0 ? 'Deuda' : 'OK'}
-                                                                    </span>
-                                                                    {/* Frecuencia Badge */}
-                                                                    <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500 bg-slate-800/50 border border-slate-700/50 px-1.5 py-0.5 rounded-md">
-                                                                        {prestamo.frecuencia}
-                                                                    </span>
-                                                                    {/* Chip: Préstamo Paralelo (Card View) */}
-                                                                    {prestamo.es_paralelo && (
-                                                                        <span 
-                                                                            title="Este es un préstamo paralelo (el cliente tiene otros préstamos activos)."
-                                                                            className="cursor-help flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-purple-400 bg-purple-500/10 border border-purple-500/25 px-1.5 py-0.5 rounded-md"
-                                                                        >
-                                                                            <Lock className="w-2.5 h-2.5 shrink-0" />
-                                                                            Paralelo
-                                                                        </span>
-                                                                    )}
-                                                                </>
-                                                            )
-                                                        })()}
-                                                    </div>
-                                                )
-                                            })()}
-                                        </div>
-                                    </div>
+                                                {isHistoricalMora && (
+                                                    <span 
+                                                        className="text-amber-500 text-xs cursor-pointer" 
+                                                        onClick={(e) => {
+                                                            e.preventDefault()
+                                                            e.stopPropagation()
+                                                            toast.info(`Historial de mora: ${prestamo.estado_mora}`, {
+                                                                description: 'Este préstamo tuvo problemas de pago antes de ser finalizado o renovado.',
+                                                            })
+                                                        }}
+                                                    >
+                                                        ⚠️
+                                                    </span>
+                                                )}
+                                                <Badge 
+                                                    variant="outline"
+                                                    className={cn(
+                                                        "text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md bg-slate-900/50",
+                                                        statusUI.border,
+                                                        statusUI.color,
+                                                        statusUI.animate && "animate-pulse"
+                                                    )}
+                                                >
+                                                    {statusUI.label}
+                                                </Badge>
+                                                {/* Frecuencia Badge */}
+                                                <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500 bg-slate-800/50 border border-slate-700/50 px-1.5 py-0.5 rounded-md">
+                                                    {prestamo.frecuencia}
+                                                </span>
+                                                {/* Chip: Préstamo Paralelo (Card View) */}
+                                                {prestamo.es_paralelo && (
+                                                    <span 
+                                                        title="Este es un préstamo paralelo (el cliente tiene otros préstamos activos)."
+                                                        className="cursor-help flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-purple-400 bg-purple-500/10 border border-purple-500/25 px-1.5 py-0.5 rounded-md"
+                                                    >
+                                                        <Lock className="w-2.5 h-2.5 shrink-0" />
+                                                        Paralelo
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )
+                                    })()}
+                                </div>
+                            </div>
 
 
                             {/* MIDDLE ROW: Stats & Info (Full Width, Left Aligned) */}
@@ -1397,6 +1386,17 @@ export function PrestamosTable({
                                                         </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end" className="w-48 bg-slate-900 border-slate-700 text-slate-200">
+                                                         {userRol === 'admin' && (
+                                                            <DropdownMenuItem 
+                                                                className="hover:bg-slate-800 cursor-pointer text-xs"
+                                                                onClick={(e) => {
+                                                                    handleOpenAsignarTarea(prestamo, e)
+                                                                }}
+                                                            >
+                                                                <ClipboardList className="w-3.5 h-3.5 mr-2 text-slate-500" />
+                                                                Asignar Tarea
+                                                            </DropdownMenuItem>
+                                                         )}
                                                         <DropdownMenuItem 
                                                             className="hover:bg-slate-800 cursor-pointer text-xs"
                                                             onClick={(e) => {
@@ -1669,25 +1669,16 @@ export function PrestamosTable({
                                     {rangoFechas}
                                 </div>
 
-                                {/* Estado */}
                                 <div className="col-span-1 text-center flex items-center justify-center gap-1">
                                     {(() => {
-                                        // Tooltip explanations
+                                        const statusUI = getLoanStatusUI(prestamo);
                                         const isDiario = prestamo.frecuencia?.toLowerCase() === 'diario'
-                                        
-                                        // Definición robusta de Finalizado / Renovado / Refinanciado
                                         const metrics = prestamo.metrics
-                                        const isEffectivelyFinalized = 
-                                            prestamo.isFinalizado || 
-                                            prestamo.estado === 'finalizado' || 
-                                            prestamo.estado === 'renovado' ||
-                                            prestamo.estado === 'refinanciado' ||
-                                            (metrics?.saldoPendiente || 0) <= 0.01
-
+                                        
                                         const getTooltip = () => {
                                             if (prestamo.estado === 'refinanciado') return 'Préstamo refinanciado administrativamente'
                                             if (prestamo.estado === 'renovado') return 'Préstamo renovado'
-                                            if (isEffectivelyFinalized) return 'Préstamo pagado completamente'
+                                            if (statusUI.label === 'FINAL') return 'Préstamo pagado completamente'
                                             if (prestamo.estado_mora === 'vencido') return 'Venció con deuda pendiente'
                                             if (prestamo.estado_mora === 'moroso') return isDiario ? `Status Moroso: ≥${umbralMoroso} cuotas atrasadas (Conf. Actual)` : `Status Moroso: ≥${umbralMorosoOtros} cuotas atrasadas (Conf. Actual)`
                                             if (prestamo.estado_mora === 'cpp') return isDiario ? `Status CPP: ≥${umbralCpp} cuotas atrasadas (Conf. Actual)` : `Status CPP: ≥${umbralCppOtros} cuotas atrasadas (Conf. Actual)`
@@ -1701,21 +1692,11 @@ export function PrestamosTable({
                                                 title={getTooltip()}
                                                 className={cn(
                                                     "text-[10px] h-5 px-1.5 uppercase tracking-wide bg-slate-950/50 cursor-help",
-                                                    prestamo.estado === 'refinanciado' ? "border-indigo-500 text-indigo-400" :
-                                                    prestamo.estado === 'renovado' ? "border-slate-600 text-slate-500" :
-                                                    isEffectivelyFinalized ? "border-slate-600 text-slate-500" :
-                                                    (prestamo.estado_mora === 'moroso' || prestamo.estado_mora === 'vencido') ? "border-rose-500 text-rose-500 animate-pulse" :
-                                                    prestamo.estado_mora === 'cpp' ? "border-orange-500 text-orange-500" :
-                                                    prestamo.estado_mora === 'deuda' ? "border-amber-400 text-amber-400" : 
-                                                    "border-emerald-500 text-emerald-500"
+                                                    statusUI.border,
+                                                    statusUI.color,
+                                                    statusUI.animate && "animate-pulse"
                                                 )}>
-                                                {prestamo.estado === 'refinanciado' ? 'Refin' :
-                                                 prestamo.estado === 'renovado' ? 'Renov' :
-                                                 isEffectivelyFinalized ? 'Final' :
-                                                 prestamo.estado_mora === 'vencido' ? 'Vencido' :
-                                                 prestamo.estado_mora === 'moroso' ? 'Moroso' :
-                                                 prestamo.estado_mora === 'cpp' ? 'CPP' :
-                                                 prestamo.estado_mora === 'deuda' ? 'Deuda' : 'OK'}
+                                                {statusUI.label}
                                             </Badge>
                                         )
                                     })()}
@@ -1839,6 +1820,19 @@ export function PrestamosTable({
                                         <MessageSquare className="w-3.5 h-3.5" />
                                     </Button>
 
+                                    {/* Asignar Tarea - Solo Admin en PC */}
+                                    {userRol === 'admin' && (
+                                        <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-8 w-8 p-0 shrink-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-amber-400 hover:bg-amber-900/40 transition-all font-bold"
+                                            onClick={(e) => handleOpenAsignarTarea(prestamo, e)}
+                                            title="Asignar Tarea"
+                                        >
+                                            <ClipboardList className="w-3.5 h-3.5" />
+                                        </Button>
+                                    )}
+
                                     {/* Dropdown Menu */}
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
@@ -1889,8 +1883,10 @@ export function PrestamosTable({
                 </div>
             </div>
         </div>
-    </>
-)}
+            </>
+        )}
+                </div> {/* transition wrapper */}
+            </div> {/* relative container */}
 
             {/* Modals outside the main list container but inside the main layout div */}
             <QuickPayModal 
@@ -1926,6 +1922,17 @@ export function PrestamosTable({
                 onSuccess={() => {
                     // Refresh if needed, but gestiones are usually in a separate view
                     // router.refresh() 
+                }}
+            />
+
+            <AsignarVisitaModal
+                open={asignarTareaOpen}
+                onClose={() => setAsignarTareaOpen(false)}
+                prestamoId={selectedLoanForAsignar?.id}
+                clienteId={selectedLoanForAsignar?.cliente_id || selectedLoanForAsignar?.clientes?.id}
+                clienteNombre={selectedLoanForAsignar?.clientes?.nombres || 'Cliente'}
+                onAsignada={() => {
+                    router.refresh()
                 }}
             />
         </div>

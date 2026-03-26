@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Receipt, History, User, CheckCircle, ShieldAlert } from 'lucide-react'
 import { PaymentVoucher } from './payment-voucher'
+import { cn, formatDatePeru } from '@/lib/utils'
 
 interface PaymentHistoryProps {
     pagos: any[]
@@ -66,11 +67,11 @@ export function PaymentHistory({ pagos, prestamo, cliente, cronograma, userRole 
                                         <td className="px-2 md:px-4 py-3">
                                             <div className="flex flex-col">
                                                 <span className="text-slate-300 font-medium text-[9px] md:text-sm">
-                                                    <span className="md:hidden">{format(new Date(pago.created_at), "d MMM", { locale: es })}</span>
-                                                    <span className="hidden md:inline">{format(new Date(pago.created_at), "d MMMM yyyy", { locale: es })}</span>
+                                                    <span className="md:hidden">{formatDatePeru(pago.created_at, 'dayMonth')}</span>
+                                                    <span className="hidden md:inline">{formatDatePeru(pago.created_at, 'dayMonthYear')}</span>
                                                 </span>
                                                 <span className="text-slate-500 text-[8px] md:text-xs">
-                                                    {format(new Date(pago.created_at), "HH:mm", { locale: es })}
+                                                    {formatDatePeru(pago.created_at, 'time')}
                                                 </span>
                                             </div>
                                         </td>

@@ -1,11 +1,12 @@
 import { Metadata } from "next";
+import { Suspense } from "react";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Plus, Wallet, TrendingUp, AlertCircle, Users, Trophy, CheckCircle2, ArrowUpRight, RotateCcw } from "lucide-react";
-import { PrestamosTable } from "@/components/prestamos/prestamos-table";
+import { PrestamosTable, TableSkeleton } from "@/components/prestamos/prestamos-table";
 import { AdminLoanActions } from "@/components/prestamos/admin-loan-actions";
 import { BackButton } from "@/components/ui/back-button";
 import { getTodayPeru, calculateLoanMetrics } from "@/lib/financial-logic";
@@ -549,29 +550,30 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                         </div>
                     </div>
                 )}
-
-                <PrestamosTable 
-                    prestamos={prestamos || []} 
-                    today={today}
-                    totalPrestado={totalPrestado}
-                    overdueAmount={overdueAmount}
-                    perfiles={perfiles}
-                    userRol={userRole}
-                    userId={user?.id}
-                    prestamoIdsConSolicitudPendiente={prestamoIdsConSolicitudPendiente}
-                    renovacionMinPagado={renovacionMinPagado}
-                    refinanciacionMinMora={refinanciacionMinMora}
-                    prestamoIdsProductoRefinanciamiento={prestamoIdsProductoRefinanciamiento}
-                    systemSchedule={systemSchedule}
-                    umbralCpp={umbralCpp}
-                    umbralMoroso={umbralMoroso}
-                    umbralCppOtros={umbralCppOtros}
-                    umbralMorosoOtros={umbralMorosoOtros}
-                    isBlockedByCuadre={isBlockedByCuadre}
-                    blockReasonCierre={blockReasonCierre}
-                    systemAccess={systemAccess}
-                    cuentas={cuentasAdmin || []}
-                />
+                <Suspense fallback={<TableSkeleton />}>
+                    <PrestamosTable 
+                        prestamos={prestamos || []} 
+                        today={today}
+                        totalPrestado={totalPrestado}
+                        overdueAmount={capitalEnRiesgo}
+                        perfiles={perfiles || []}
+                        userRol={userRole}
+                        userId={user?.id}
+                        prestamoIdsConSolicitudPendiente={prestamoIdsConSolicitudPendiente}
+                        renovacionMinPagado={renovacionMinPagado}
+                        refinanciacionMinMora={refinanciacionMinMora}
+                        prestamoIdsProductoRefinanciamiento={prestamoIdsProductoRefinanciamiento}
+                        systemSchedule={systemSchedule}
+                        umbralCpp={umbralCpp}
+                        umbralMoroso={umbralMoroso}
+                        umbralCppOtros={umbralCppOtros}
+                        umbralMorosoOtros={umbralMorosoOtros}
+                        isBlockedByCuadre={isBlockedByCuadre}
+                        blockReasonCierre={blockReasonCierre}
+                        systemAccess={systemAccess}
+                        cuentas={cuentasAdmin || []}
+                    />
+                </Suspense>
             </div>
         </div>
     )

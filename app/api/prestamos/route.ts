@@ -193,13 +193,32 @@ export async function POST(request: Request) {
         p_responsable: user.id
     })
 
+    const { data: cliente } = await supabaseAdmin
+        .from('clientes')
+        .select('nombres, asesor_id')
+        .eq('id', cliente_id)
+        .single()
+
+    const targetAsesorId = cliente?.asesor_id || user.id
+
     await supabaseAdmin.from('tareas_evidencia').insert({
-        asesor_id: user.id, // En creación directa el admin es el responsable inicial de la tarea o se delega
+        asesor_id: targetAsesorId, 
         prestamo_id: prestamo.id,
         tipo: 'nuevo_prestamo'
     })
 
-    // 11. Auditoría
+    // 11. Notificar al asesor responsable (DB + PUSH)
+    if (targetAsesorId) {
+        const { createFullNotification } = await import('@/services/notification-service')
+        await createFullNotification(targetAsesorId, {
+            titulo: '📷 Evidencia Requerida',
+            mensaje: `Se requiere foto de evidencia para el nuevo préstamo de ${cliente?.nombres || 'Cliente'}.`,
+            link: `/dashboard/tareas?tab=evidencia`,
+            tipo: 'warning'
+        }).catch(err => console.error('Error enviando notificación:', err))
+    }
+
+    // 12. Auditoría
     await supabaseAdmin.from('auditoria').insert({
         usuario_id: user.id,
         accion: 'crear_prestamo_directo',

@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { cn } from "@/lib/utils"
+import { cn, formatDatePeru } from "@/lib/utils"
 import { toast } from "sonner"
 import { AsignarVisitaModal } from "@/components/gestiones/asignar-visita-modal"
 import { RegistrarGestionModal } from "@/components/gestiones/registrar-gestion-modal"
@@ -218,7 +218,7 @@ export function ClientGestiones({ loans = [], clienteId, clienteNombre = 'Client
                                                 {gestion.resultado}
                                             </Badge>
                                         </div>
-                                        <span className="text-[9px] font-medium text-slate-500">{format(new Date(gestion.created_at), "dd MMM · HH:mm", { locale: es })}</span>
+                                        <span className="text-[9px] font-medium text-slate-500">{formatDatePeru(gestion.created_at)}</span>
                                     </div>
                                     {gestion.notas && <p className="text-[11px] text-slate-400 leading-snug italic mb-1.5 line-clamp-2">"{gestion.notas}"</p>}
                                     <div className="flex items-center justify-between">

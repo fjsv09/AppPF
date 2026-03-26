@@ -5,11 +5,12 @@ import { Card, CardContent } from "@/components/ui/card"
 import { CronogramaClient } from "./cronograma-client"
 import { PaymentHistory } from "./payment-history"
 import { ClientGestiones } from "@/components/clientes/client-gestiones"
-import { CalendarDays, History, MessageSquare, Camera, AlertCircle, ShieldCheck } from "lucide-react"
+import { CalendarDays, History, MessageSquare, Camera, AlertCircle, ShieldCheck, Loader2 } from "lucide-react"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { UploadEvidenceButton } from "@/components/dashboard/upload-evidence-button"
+import { DailyCollectorLog } from "./daily-collector-log"
 import { useSearchParams, useRouter } from "next/navigation"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useTransition } from "react"
 
 interface LoanTabsProps {
     prestamo: any
@@ -46,20 +47,14 @@ export function LoanTabs({
     
     // Validar el tab de la URL o usar el default
     const validTabs = ["cronograma", "historial", "evidencia", "gestiones"]
+    const [isPending, startTransition] = useTransition()
     const [activeTab, setActiveTab] = useState(() => {
         if (tabParam && validTabs.includes(tabParam)) {
             return tabParam
         }
         return "cronograma"
     })
-
-    const handleTabChange = useCallback((value: string) => {
-        setActiveTab(value)
-        const params = new URLSearchParams(searchParams.toString())
-        params.set('tab', value)
-        router.replace(`?${params.toString()}`, { scroll: false })
-    }, [searchParams, router])
-
+    
     // Sincronizar estado si la URL cambia (ej: por botones de navegación)
     useEffect(() => {
         if (tabParam && validTabs.includes(tabParam) && tabParam !== activeTab) {
@@ -67,10 +62,23 @@ export function LoanTabs({
         }
     }, [tabParam, activeTab])
 
+    const handleTabChange = useCallback((value: string) => {
+        setActiveTab(value) // Feedback inmediato en el label
+        startTransition(() => {
+            const params = new URLSearchParams(searchParams.toString())
+            params.set('tab', value)
+            router.replace(`?${params.toString()}`, { scroll: false })
+        })
+    }, [searchParams, router])
+
     return (
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-4">
-            <div className="overflow-x-auto pb-1 scrollbar-none scroll-smooth w-full min-w-0">
-                <TabsList className="bg-slate-900/50 border border-slate-800 p-0.5 flex items-center w-max min-w-full md:min-w-0 md:w-fit gap-1">
+            <div className={`overflow-x-auto pb-1 scrollbar-none scroll-smooth w-full min-w-0 transition-opacity duration-300 ${isPending ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+                <TabsList className="bg-slate-900/50 border border-slate-800 p-0.5 flex items-center w-max min-w-full md:min-w-0 md:w-fit gap-1 relative overflow-hidden">
+                    {/* Indicador de carga sutil */}
+                    {isPending && (
+                        <div className="absolute inset-0 bg-blue-500/5 animate-pulse" />
+                    )}
                     <TabsTrigger value="cronograma" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
                         <CalendarDays className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Cronograma
                     </TabsTrigger>
@@ -86,33 +94,66 @@ export function LoanTabs({
                 </TabsList>
             </div>
 
-            <TabsContent value="cronograma" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden">
-                <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
-                    <CardContent className="p-3 md:p-6">
-                        <CronogramaClient 
-                            prestamo={prestamo} 
-                            cronograma={cronograma} 
-                            userRol={userRole} 
-                            systemSchedule={systemSchedule}
-                            isBlockedByCuadre={isBlockedByCuadre}
-                            blockReasonCierre={blockReasonCierre}
-                            systemAccess={systemAccess}
-                        />
-                    </CardContent>
-                </Card>
+            <TabsContent value="cronograma" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
+                {isPending ? (
+                    <div className="flex items-center justify-center py-20 bg-slate-900/10 border border-slate-800/50 rounded-2xl animate-in fade-in duration-300">
+                        <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+                    </div>
+                ) : (
+                    <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
+                        <CardContent className="p-3 md:p-6">
+                            <CronogramaClient 
+                                prestamo={prestamo} 
+                                cronograma={cronograma} 
+                                userRol={userRole} 
+                                systemSchedule={systemSchedule}
+                                isBlockedByCuadre={isBlockedByCuadre}
+                                blockReasonCierre={blockReasonCierre}
+                                systemAccess={systemAccess}
+                                pagos={pagos}
+                            />
+                        </CardContent>
+                    </Card>
+                )}
             </TabsContent>
 
-            <TabsContent value="historial" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden">
-                <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
-                    <CardContent className="p-3 md:p-6">
-                        <PaymentHistory pagos={pagos} prestamo={prestamo} cliente={cliente || prestamo.clientes} cronograma={cronograma} userRole={userRole} />
-                    </CardContent>
-                </Card>
+            <TabsContent value="historial" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
+                {isPending ? (
+                    <div className="flex items-center justify-center py-20 bg-slate-900/10 border border-slate-800/50 rounded-2xl animate-in fade-in duration-300">
+                        <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+                    </div>
+                ) : (
+                    <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
+                        <CardContent className="p-3 md:p-6 space-y-8">
+                            {/* Nueva Bitácora de Campo (Evidencia Diaria) */}
+                            <DailyCollectorLog 
+                                cronograma={cronograma} 
+                                pagos={pagos} 
+                                prestamo={prestamo} 
+                                cliente={cliente}
+                                userRole={userRole}
+                            />
+                            
+                            {/* Historial de Pagos Individuales (Original) */}
+                            <div className="pt-4 border-t border-slate-800/50">
+                                <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                                    <History className="w-3.5 h-3.5" /> Listado Individual de Recibos
+                                </h3>
+                                <PaymentHistory pagos={pagos} prestamo={prestamo} cliente={cliente || prestamo.clientes} cronograma={cronograma} userRole={userRole} />
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
             </TabsContent>
 
-            <TabsContent value="evidencia" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden">
-                <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
-                    <CardContent className="p-4 md:p-5">
+            <TabsContent value="evidencia" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
+                {isPending ? (
+                    <div className="flex items-center justify-center py-20 bg-slate-900/10 border border-slate-800/50 rounded-2xl animate-in fade-in duration-300">
+                        <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+                    </div>
+                ) : (
+                    <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
+                        <CardContent className="p-4 md:p-5">
                         {!tareaEvidencia ? (
                             <div className="flex flex-col items-center justify-center py-8 text-slate-500">
                                 <Camera className="w-10 h-10 mb-3 opacity-20" />
@@ -195,19 +236,26 @@ export function LoanTabs({
                         )}
                     </CardContent>
                 </Card>
+                )}
             </TabsContent>
 
-            <TabsContent value="gestiones" id="gestiones-tab" className="focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden">
-                <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
-                    <CardContent className="p-0">
-                        <ClientGestiones
-                            loans={[prestamo]}
-                            clienteId={prestamo.cliente_id}
-                            clienteNombre={cliente?.nombres || prestamo.clientes?.nombres || 'Cliente'}
-                            userRol={userRole}
-                        />
-                    </CardContent>
-                </Card>
+            <TabsContent value="gestiones" id="gestiones-tab" className="focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
+                {isPending ? (
+                    <div className="flex items-center justify-center py-20 bg-slate-900/10 border border-slate-800/50 rounded-2xl animate-in fade-in duration-300">
+                        <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+                    </div>
+                ) : (
+                    <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
+                        <CardContent className="p-0">
+                            <ClientGestiones
+                                loans={[prestamo]}
+                                clienteId={prestamo.cliente_id}
+                                clienteNombre={cliente?.nombres || prestamo.clientes?.nombres || 'Cliente'}
+                                userRol={userRole}
+                            />
+                        </CardContent>
+                    </Card>
+                )}
             </TabsContent>
         </Tabs>
     )

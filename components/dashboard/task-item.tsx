@@ -29,10 +29,15 @@ export function TaskItem({ tarea, variant, userId, onSelect, onAction }: TaskIte
 
     const typeLabel = typeMap[tarea.tipo] || { short: 'GES', full: 'Gestión', color: 'bg-slate-800 text-slate-400 border-slate-700' }
 
-    const motivo = tarea.prestamo?.solicitud?.motivo_prestamo || 
-                  (tarea.tipo === 'renovacion' ? 'Renovación de Crédito' : 
-                  (tarea.tipo === 'refinanciacion' ? 'Refinanciación Mora' : 
-                  tarea.notas || 'Sin descripción'))
+    const responsable = tarea.asesor?.nombre_completo || 'Sistema'
+    const subtext = tarea.prestamo?.solicitud?.motivo_prestamo || 
+                   (tarea.tipo === 'renovacion' ? 'Renovación de Crédito' : 
+                   (tarea.tipo === 'refinanciacion' ? 'Refinanciación Mora' : 
+                   tarea.notas))
+                   
+    const motivo = subtext 
+        ? `${subtext} · ${responsable}` 
+        : `Responsable: ${responsable}`
 
     if (variant === 'compact') {
         return (

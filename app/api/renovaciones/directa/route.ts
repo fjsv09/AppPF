@@ -60,8 +60,7 @@ export async function POST(request: Request) {
             .from('prestamos')
             .select(`
                 cliente_id, 
-                created_by,
-                clientes ( asesor_id )
+                created_by
             `)
             .eq('id', prestamo_id)
             .single()
@@ -239,18 +238,30 @@ export async function POST(request: Request) {
                 detalle: { prestamo_original: prestamo_id, monto: monto_solicitado }
             })
 
-            const asesorResponsable = (prestamoInfo?.clientes as any)?.asesor_id || prestamoInfo.created_by || user.id;
-            await supabaseAdmin.from('tareas_evidencia').insert({
+            // Obtener el asesor del cliente para la tarea
+            const { data: clienteInfo } = await supabaseAdmin
+                .from('clientes')
+                .select('asesor_id')
+                .eq('id', prestamoInfo!.cliente_id)
+                .single()
+
+            const asesorResponsable = clienteInfo?.asesor_id || prestamoInfo?.created_by || user.id;
+
+            const { error: errorTarea } = await supabaseAdmin.from('tareas_evidencia').insert({
                 asesor_id: asesorResponsable,
                 prestamo_id: resultado.prestamo_nuevo_id,
                 tipo: 'refinanciacion'
             })
 
+            if (errorTarea) {
+                console.error('Error creando tarea de evidencia:', errorTarea)
+            }
+
             if (asesorResponsable) {
                 await createFullNotification(asesorResponsable, {
                     titulo: 'Reestructuración: Subir Evidencia',
                     mensaje: `Administración ha refinanciado a un cliente de tu cartera ($${monto_solicitado}).`,
-                    link: '/dashboard/tareas',
+                    link: '/dashboard/tareas?tab=evidencia',
                     tipo: 'warning'
                 }).catch(() => {});
             }

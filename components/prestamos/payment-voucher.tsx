@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { api } from '@/services/api'
+import { formatDatePeru } from '@/lib/utils'
 
 interface PaymentVoucherProps {
     open: boolean
@@ -187,7 +188,7 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-500">Fecha</span>
                                     <span className="text-slate-300">
-                                        {format(new Date(payment.created_at), "dd MMM yyyy - HH:mm", { locale: es })}
+                                        {formatDatePeru(payment.created_at)}
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-sm">

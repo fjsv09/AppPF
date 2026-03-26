@@ -85,6 +85,7 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
     console.log('Updating employee:', editingEmployee.id, { supervisorId, rawSueldo })
 
     const updates: any = {
+      nombre_completo: formData.get('nombre_completo') as string,
       sueldo_base: rawSueldo ? parseFloat(rawSueldo as string) : 0,
       fecha_nacimiento: formData.get('fecha_nacimiento') as string || null,
       supervisor_id: supervisorId === 'none' ? null : (supervisorId || null),
@@ -121,6 +122,7 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
       if (email !== editingEmployee.email) authUpdates.email = email
       if (password) authUpdates.password = password
       if (updates.rol !== editingEmployee.rol) authUpdates.role = updates.rol
+      if (updates.nombre_completo !== editingEmployee.nombre_completo) authUpdates.nombre = updates.nombre_completo
 
       if (Object.keys(authUpdates).length > 1) {
         const authRes = await fetch('/api/admin/update-auth', {
@@ -337,7 +339,17 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={updateEmployee} className="space-y-4 py-4">
-             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Nombre Completo</label>
+                  <Input 
+                      name="nombre_completo" 
+                      defaultValue={editingEmployee?.nombre_completo} 
+                      className="bg-slate-950 border-slate-800 h-10"
+                      required
+                  />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-500 uppercase">Correo Electrónico</label>
                     <Input 

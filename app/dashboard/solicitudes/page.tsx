@@ -87,28 +87,12 @@ export default async function SolicitudesPage() {
     })
     const currentHourString = formatter.format(now)
     
-    // 1. Time restriction
-    const isWithinHours = currentHourString >= systemSchedule.horario_apertura && currentHourString < systemSchedule.horario_cierre
-    const isTemporaryUnlocked = new Date(systemSchedule.desbloqueo_hasta) > now
+    // Centralized Access Check
+    const { checkSystemAccess } = await import('@/utils/systemRestrictions')
+    const access = await checkSystemAccess(supabaseAdmin, user?.id || '', perfil?.rol || 'asesor', 'solicitud')
     
-    let canCreateDueToTime = isWithinHours || isTemporaryUnlocked || perfil?.rol === 'admin'
-
-    // 2. Cuadre restriction (Only for Asesor after Shift 1)
-    if (canCreateDueToTime && perfil?.rol === 'asesor' && currentHourString >= systemSchedule.horario_fin_turno_1 && !isTemporaryUnlocked) {
-        const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
-        const { data: morningCuadre } = await supabaseAdmin
-            .from('cuadres_diarios')
-            .select('id')
-            .eq('asesor_id', user?.id)
-            .eq('fecha', todayStr)
-            .eq('tipo_cuadre', 'parcial')
-            .in('estado', ['pendiente', 'aprobado'])
-            .maybeSingle();
-        
-        if (!morningCuadre) {
-            canCreateDueToTime = false
-        }
-    }
+    let canCreateDueToTime = access.allowed || perfil?.rol === 'admin'
+    const blockReason = access.reason || 'Acceso restringido'
 
     // Agrupar por estado para mostrar tabs
     const pendientes = solicitudes?.filter(s => s.estado_solicitud === 'pendiente_supervision') || []
@@ -130,20 +114,38 @@ export default async function SolicitudesPage() {
                     </div>
                 </div>
                 {perfil?.rol === 'asesor' && (
-                    <Link href={canCreateDueToTime ? "/dashboard/solicitudes/nueva" : "#"}>
-                        <Button 
-                            disabled={!canCreateDueToTime}
-                            className={cn(
-                                "btn-action",
-                                canCreateDueToTime 
-                                    ? "bg-purple-600 hover:bg-purple-500 shadow-purple-900/20 hover:scale-105" 
-                                    : "bg-slate-700 opacity-60 cursor-not-allowed"
-                            )}
-                        >
-                            {canCreateDueToTime ? <Plus className="mr-2 h-5 w-5" /> : <Lock className="mr-2 h-5 w-5" />}
-                            {canCreateDueToTime ? 'Nueva Solicitud' : 'Cerrado'}
-                        </Button>
-                    </Link>
+                    <div className="flex flex-col items-end gap-3">
+                        <Link href={canCreateDueToTime ? "/dashboard/solicitudes/nueva" : "#"}>
+                            <Button 
+                                disabled={!canCreateDueToTime}
+                                className={cn(
+                                    "h-12 px-6 rounded-xl font-bold transition-all duration-300",
+                                    canCreateDueToTime 
+                                        ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-900/20 hover:scale-105 active:scale-95 border border-purple-400/20" 
+                                        : "bg-slate-800/80 text-slate-500 border border-slate-700/50 cursor-not-allowed grayscale"
+                                )}
+                            >
+                                {canCreateDueToTime ? <Plus className="mr-2 h-5 w-5" /> : <Lock className="mr-2 h-4 w-4" />}
+                                {canCreateDueToTime ? 'Nueva Solicitud' : 'Bloqueado'}
+                            </Button>
+                        </Link>
+                        
+                        {!canCreateDueToTime && (
+                            <div className="flex items-center gap-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 backdrop-blur-md max-w-[320px] animate-in fade-in slide-in-from-top-2 duration-500">
+                                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-rose-500/20 flex items-center justify-center border border-rose-500/30">
+                                    <Lock className="w-4 h-4 text-rose-500" />
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-[11px] font-bold text-rose-400 uppercase tracking-wider leading-none mb-1">
+                                        Restricción Operativa
+                                    </span>
+                                    <span className="text-[10px] text-slate-300 leading-tight">
+                                        {blockReason}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 )}
             </div>
 

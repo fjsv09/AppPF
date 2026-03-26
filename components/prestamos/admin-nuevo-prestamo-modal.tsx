@@ -66,7 +66,7 @@ export function AdminNuevoPrestamoModal({ isOpen, onClose, cuentas, feriados }: 
     const [searchTerm, setSearchTerm] = useState('')
     const [selectedClient, setSelectedClient] = useState<Cliente | null>(null)
     const router = useRouter()
-    const supabase = createClient()
+    const supabase = useMemo(() => createClient(), [])
 
     const feriadosSet = useMemo(() => new Set(feriados), [feriados])
 

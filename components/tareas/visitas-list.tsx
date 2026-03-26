@@ -12,7 +12,7 @@ import {
 import { QuickPayModal } from "../prestamos/quick-pay-modal"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { cn } from "@/lib/utils"
+import { cn, formatDatePeru } from "@/lib/utils"
 import { toast } from "sonner"
 
 const RESULTADO_OPCIONES = ['Contacto Exitoso', 'No Ubicado', 'Promesa de Pago', 'Negativa de Pago']
@@ -232,7 +232,7 @@ export function VisitasList({ visitas, userId }: VisitasListProps) {
 
                                 <div className="mt-2 text-[10px] text-slate-600 flex items-center gap-1">
                                     <ClipboardList className="w-3 h-3" />
-                                    Asignada {format(new Date(visita.created_at), "dd MMM · HH:mm", { locale: es })}
+                                    Asignada {formatDatePeru(visita.created_at)}
                                 </div>
                             </div>
                         )
@@ -260,7 +260,7 @@ export function VisitasList({ visitas, userId }: VisitasListProps) {
                                                 {cliente?.nombres || 'Cliente'}
                                             </p>
                                             <p className="text-[10px] text-slate-600">
-                                                Completada {format(new Date(visita.created_at), "dd MMM · HH:mm", { locale: es })}
+                                                Completada {formatDatePeru(visita.created_at)}
                                             </p>
                                         </div>
                                     </div>

@@ -499,7 +499,12 @@ export function SupervisorEfficiency({
 
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-3">
                                 {/* METRICAS DE CRECIMIENTO */}
-                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group">
+                                <div 
+                                    className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group relative cursor-help"
+                                    onMouseEnter={() => setActiveTooltip('cartera')}
+                                    onMouseLeave={() => setActiveTooltip(null)}
+                                    onClick={() => setActiveTooltip(activeTooltip === 'cartera' ? null : 'cartera')}
+                                >
                                     <p className="text-[8px] md:text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <Users className="w-2.5 h-2.5" /> Cartera
                                     </p>
@@ -507,9 +512,19 @@ export function SupervisorEfficiency({
                                         <span className="text-lg md:text-xl font-black text-white">{data.teamSummary.totalClientes}</span>
                                         <span className="text-[7px] md:text-[8px] font-bold text-slate-500 uppercase">tit.</span>
                                     </div>
+                                    {activeTooltip === 'cartera' && (
+                                        <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-950 border border-slate-800 p-2 rounded-lg shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-1 duration-200">
+                                            <p className="text-[10px] text-slate-300">Total de clientes únicos asignados bajo este filtro.</p>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group">
+                                <div 
+                                    className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group relative cursor-help"
+                                    onMouseEnter={() => setActiveTooltip('nuevos')}
+                                    onMouseLeave={() => setActiveTooltip(null)}
+                                    onClick={() => setActiveTooltip(activeTooltip === 'nuevos' ? null : 'nuevos')}
+                                >
                                     <p className="text-[8px] md:text-[9px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <UserCheck className="w-2.5 h-2.5" /> Nuevos
                                     </p>
@@ -517,79 +532,164 @@ export function SupervisorEfficiency({
                                         <span className="text-lg md:text-xl font-black text-white">{data.teamSummary.clientesNuevosMes}</span>
                                         <span className="text-[7px] md:text-[8px] font-bold text-slate-500 uppercase">ing.</span>
                                     </div>
+                                    {activeTooltip === 'nuevos' && (
+                                        <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-950 border border-slate-800 p-2 rounded-lg shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-1 duration-200">
+                                            <p className="text-[10px] text-slate-300">Clientes registrados durante el mes en curso.</p>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group">
+                                <div 
+                                    className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group relative cursor-help"
+                                    onMouseEnter={() => setActiveTooltip('activos')}
+                                    onMouseLeave={() => setActiveTooltip(null)}
+                                    onClick={() => setActiveTooltip(activeTooltip === 'activos' ? null : 'activos')}
+                                >
                                     <p className="text-[8px] md:text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <TrendingUp className="w-2.5 h-2.5" /> Activos
                                     </p>
                                     <div className="flex items-baseline gap-1">
                                         <span className="text-lg md:text-xl font-black text-white">{data.teamSummary.totalClientesConDeudaActiva}</span>
                                     </div>
+                                    {activeTooltip === 'activos' && (
+                                        <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-950 border border-slate-800 p-2 rounded-lg shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-1 duration-200">
+                                            <p className="text-[10px] text-slate-300">Clientes con al menos un préstamo vigente actualmente.</p>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group">
+                                <div 
+                                    className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group relative cursor-help"
+                                    onMouseEnter={() => setActiveTooltip('renov')}
+                                    onMouseLeave={() => setActiveTooltip(null)}
+                                    onClick={() => setActiveTooltip(activeTooltip === 'renov' ? null : 'renov')}
+                                >
                                     <p className="text-[8px] md:text-[9px] font-black text-purple-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <RefreshCw className="w-2.5 h-2.5" /> Renov.
                                     </p>
                                     <div className="flex items-baseline gap-1">
                                         <span className="text-lg md:text-xl font-black text-white">{data.teamSummary.renovacionesMes}</span>
                                     </div>
+                                    {activeTooltip === 'renov' && (
+                                        <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-950 border border-slate-800 p-2 rounded-lg shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-1 duration-200">
+                                            <p className="text-[10px] text-slate-300">Total de renovaciones completadas en el mes actual.</p>
+                                        </div>
+                                    )}
                                 </div>
                                 
-                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group">
+                                <div 
+                                    className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group relative cursor-help"
+                                    onMouseEnter={() => setActiveTooltip('potenc')}
+                                    onMouseLeave={() => setActiveTooltip(null)}
+                                    onClick={() => setActiveTooltip(activeTooltip === 'potenc' ? null : 'potenc')}
+                                >
                                     <p className="text-[8px] md:text-[9px] font-black text-purple-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <Zap className="w-2.5 h-2.5" /> Potenc.
                                     </p>
                                     <div className="flex items-baseline gap-1">
                                         <span className="text-lg md:text-xl font-black text-purple-400">{data.teamSummary.totalRenovables}</span>
                                     </div>
+                                    {activeTooltip === 'potenc' && (
+                                        <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-950 border border-slate-800 p-2 rounded-lg shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-1 duration-200">
+                                            <p className="text-[10px] text-slate-300">Clientes que cumplen las reglas para renovar su crédito.</p>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* RIESGO Y CONTROL */}
-                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group">
+                                <div 
+                                    className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group relative cursor-help"
+                                    onMouseEnter={() => setActiveTooltip('refinan')}
+                                    onMouseLeave={() => setActiveTooltip(null)}
+                                    onClick={() => setActiveTooltip(activeTooltip === 'refinan' ? null : 'refinan')}
+                                >
                                     <p className="text-[8px] md:text-[9px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <Clock className="w-2.5 h-2.5" /> Refinan.
                                     </p>
                                     <div className="flex items-baseline gap-1">
                                         <span className="text-lg md:text-xl font-black text-white">{data.teamSummary.refinanciamientosMes}</span>
                                     </div>
+                                    {activeTooltip === 'refinan' && (
+                                        <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-950 border border-slate-800 p-2 rounded-lg shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-1 duration-200">
+                                            <p className="text-[10px] text-slate-300">Créditos reestructurados por el administrador este mes.</p>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group">
+                                <div 
+                                    className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:bg-slate-900/60 transition-all group relative cursor-help"
+                                    onMouseEnter={() => setActiveTooltip('restrin')}
+                                    onMouseLeave={() => setActiveTooltip(null)}
+                                    onClick={() => setActiveTooltip(activeTooltip === 'restrin' ? null : 'restrin')}
+                                >
                                     <p className="text-[8px] md:text-[9px] font-black text-rose-500 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <AlertTriangle className="w-2.5 h-2.5" /> Restrin.
                                     </p>
                                     <div className="flex items-baseline gap-1">
                                         <span className="text-lg md:text-xl font-black text-rose-500">{data.teamSummary.clientesBloqueados}</span>
                                     </div>
+                                    {activeTooltip === 'restrin' && (
+                                        <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-950 border border-slate-800 p-2 rounded-lg shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-1 duration-200">
+                                            <p className="text-[10px] text-slate-300">Clientes con bloqueo activo por falta de pago o sanción.</p>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 border-rose-500/20 hover:bg-rose-500/5 transition-all group">
+                                <div 
+                                    className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 border-rose-500/20 hover:bg-rose-500/5 transition-all group relative cursor-help"
+                                    onMouseEnter={() => setActiveTooltip('critica')}
+                                    onMouseLeave={() => setActiveTooltip(null)}
+                                    onClick={() => setActiveTooltip(activeTooltip === 'critica' ? null : 'critica')}
+                                >
                                     <p className="text-[8px] md:text-[9px] font-black text-rose-600 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <ShieldAlert className="w-2.5 h-2.5" /> Crítica
                                     </p>
                                     <div className="flex items-baseline gap-1">
                                         <span className="text-lg md:text-xl font-black text-rose-600">{data.teamSummary.totalAlertaCritica}</span>
                                     </div>
+                                    {activeTooltip === 'critica' && (
+                                        <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-950 border border-slate-800 p-2 rounded-lg shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-1 duration-200">
+                                            <p className="text-[10px] text-slate-300">Préstamos con más de 7 días de atraso (Mora Moroso).</p>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 border-amber-500/20 hover:bg-amber-500/5 transition-all group">
+                                <div 
+                                    className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 border-amber-500/20 hover:bg-amber-500/5 transition-all group relative cursor-help"
+                                    onMouseEnter={() => setActiveTooltip('advert')}
+                                    onMouseLeave={() => setActiveTooltip(null)}
+                                    onClick={() => setActiveTooltip(activeTooltip === 'advert' ? null : 'advert')}
+                                >
                                     <p className="text-[8px] md:text-[9px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <AlertTriangle className="w-2.5 h-2.5" /> Advert.
                                     </p>
                                     <div className="flex items-baseline gap-1">
                                         <span className="text-lg md:text-xl font-black text-amber-500">{data.teamSummary.totalAdvertencia}</span>
                                     </div>
+                                    {activeTooltip === 'advert' && (
+                                        <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-950 border border-slate-800 p-2 rounded-lg shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-1 duration-200">
+                                            <p className="text-[10px] text-slate-300">Préstamos con 4 a 6 días de atraso (Mora CPP).</p>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 border-orange-500/20 hover:bg-orange-500/5 transition-all group">
+                                <div 
+                                    className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 border-orange-500/20 hover:bg-orange-500/5 transition-all group relative cursor-help"
+                                    onMouseEnter={() => setActiveTooltip('vencidos')}
+                                    onMouseLeave={() => setActiveTooltip(null)}
+                                    onClick={() => setActiveTooltip(activeTooltip === 'vencidos' ? null : 'vencidos')}
+                                >
                                     <p className="text-[8px] md:text-[9px] font-black text-orange-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <Clock className="w-2.5 h-2.5" /> Vencidos
                                     </p>
                                     <div className="flex items-baseline gap-1">
                                         <span className="text-lg md:text-xl font-black text-orange-400">{data.teamSummary.totalVencidos}</span>
                                     </div>
+                                    {activeTooltip === 'vencidos' && (
+                                        <div className="absolute bottom-full right-0 mb-2 w-48 bg-slate-950 border border-slate-800 p-2 rounded-lg shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-1 duration-200">
+                                            <p className="text-[10px] text-slate-300">Capital cuya fecha de contrato venció y mantiene saldo pendiente.</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, useEffect, useCallback } from 'react'
-import { cn } from '@/lib/utils'
+import { cn, formatDatePeru } from '@/lib/utils'
 import { BackButton } from '@/components/ui/back-button'
 
 export default function AuditoriaPage() {
@@ -164,10 +164,10 @@ export default function AuditoriaPage() {
                                     
                                     <div className="flex-shrink-0 w-11 sm:w-12 text-center border-r border-slate-800/50 pr-1.5 sm:pr-2">
                                         <div className="text-[10px] sm:text-[11px] font-bold text-blue-400 leading-none mb-0.5 font-mono">
-                                            {format(new Date(log.created_at), 'HH:mm')}
+                                            {formatDatePeru(log.created_at, 'time')}
                                         </div>
                                         <div className="text-[8px] sm:text-[9px] text-slate-500 font-mono uppercase tracking-tighter">
-                                            {format(new Date(log.created_at), 'dd MMM', { locale: es })}
+                                            {formatDatePeru(log.created_at, 'dayMonth')}
                                         </div>
                                     </div>
 

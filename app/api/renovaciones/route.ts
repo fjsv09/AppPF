@@ -129,15 +129,23 @@ export async function POST(request: Request) {
         if (!prestamoInfo) {
             return NextResponse.json({ error: 'Préstamo no encontrado' }, { status: 404 })
         }
+        
+        // REGLA DE NEGOCIO: Solo el administrador puede renovar préstamos que ya fueron refinanciados por mora
+        const { data: origen } = await supabaseAdmin
+            .from('renovaciones')
+            .select('prestamo_original:prestamo_original_id(estado)')
+            .eq('prestamo_nuevo_id', prestamo_id)
+            .maybeSingle()
+        
+        const esProductoDeRefinanciamiento = (origen?.prestamo_original as any)?.estado === 'refinanciado'
 
-        // REGLA DE NEGOCIO: Solo admin puede solicitar renovación de préstamos refinanciados
-        if (prestamoInfo.estado === 'refinanciado' && perfil.rol !== 'admin') {
+        if ((esProductoDeRefinanciamiento || prestamoInfo.estado === 'refinanciado') && perfil.rol !== 'admin') {
             return NextResponse.json({ 
-                error: 'Solo el administrador puede solicitar renovación de préstamos refinanciados',
+                error: 'Este préstamo es producto de una refinanciación por mora y solo puede ser renovado por el administrador.',
                 tipo_error: 'rol_insuficiente'
             }, { status: 403 })
         }
-
+        
         // REGLA DE NEGOCIO: No permitir múltiples solicitudes pendientes para el mismo préstamo
         const { data: solicitudExistente } = await supabaseAdmin
             .from('solicitudes_renovacion')

@@ -154,16 +154,62 @@ export async function GET(request: Request) {
         // Métricas Finales
         let totalRenovables = 0, totalAlertaCritica = 0, totalAdvertencia = 0, totalVencidos = 0;
         const clientesConActivo = new Set();
+        
         prestamosRaw?.forEach(p => {
+            const asesorIdForLoan = clientToAsesorMap.get(p.cliente_id)
+            const isTargeted = targetAsesorIds.includes(asesorIdForLoan || '')
+            if (!isTargeted) return
+
             const metrics = calculateLoanMetrics(p, today, config);
             if (metrics.esRenovable) totalRenovables++;
+            
             const cronograma = p.cronograma_cuotas || [];
             const sortedCronograma = [...cronograma].sort((a, b) => new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime());
             const fechaUltimaCuota = sortedCronograma.length > 0 ? sortedCronograma[sortedCronograma.length - 1].fecha_vencimiento : null;
-            if (fechaUltimaCuota && fechaUltimaCuota < today && metrics.cuotasAtrasadas > 0 && metrics.saldoPendiente > 0.5) totalVencidos++;
-            else { if (metrics.isCritico) totalAlertaCritica++; else if (metrics.isMora) totalAdvertencia++; }
+            
+            if (fechaUltimaCuota && fechaUltimaCuota < today && metrics.cuotasAtrasadas > 0 && metrics.saldoPendiente > 0.5) {
+                totalVencidos++;
+            } else { 
+                if (metrics.isCritico) totalAlertaCritica++; 
+                else if (metrics.isMora) totalAdvertencia++; 
+            }
             if (p.estado === 'activo') clientesConActivo.add(p.cliente_id);
         });
+
+        // 5. Cálculos de Resumen Operativo (Mes Actual) - Filtros estrictos
+        const nowPeru = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Lima' }));
+        const firstOfMonth = new Date(nowPeru.getFullYear(), nowPeru.getMonth(), 1).toISOString();
+        const targetClienteIds = clienteIds.filter(id => targetAsesorIds.includes(clientToAsesorMap.get(id) || ''));
+
+        // Clientes Nuevos del Mes (Filtered)
+        const { count: clientesNuevosMes } = await supabaseAdmin
+            .from('clientes')
+            .select('*', { count: 'exact', head: true })
+            .in('asesor_id', targetAsesorIds)
+            .gte('created_at', firstOfMonth)
+
+        // Renovaciones del Mes (Filtered via Evidence Tasks)
+        const { count: renovacionesMes } = await supabaseAdmin
+            .from('tareas_evidencia')
+            .select('*', { count: 'exact', head: true })
+            .in('asesor_id', targetAsesorIds)
+            .eq('tipo', 'renovacion')
+            .gte('created_at', firstOfMonth)
+
+        // Refinanciamientos del Mes (Filtered by loan status change and advisor)
+        const { count: refinanciamientosMes } = await supabaseAdmin
+            .from('prestamos')
+            .select('*', { count: 'exact', head: true })
+            .in('cliente_id', targetClienteIds)
+            .eq('estado', 'refinanciado')
+            .gte('updated_at', firstOfMonth)
+
+        // Clientes Bloqueados / Restringidos (Filtered)
+        const { count: clientesBloqueados } = await supabaseAdmin
+            .from('clientes')
+            .select('*', { count: 'exact', head: true })
+            .in('asesor_id', targetAsesorIds)
+            .eq('estado', 'bloqueado')
 
         // Pendientes
         const { data: solicitudes } = await supabaseAdmin.from('solicitudes').select(`id, monto_solicitado, created_at, cliente:cliente_id(nombres), asesor:asesor_id(nombre_completo)`).in('asesor_id', asesorIds).eq('estado_solicitud', 'pendiente_supervision').limit(5)
@@ -178,7 +224,7 @@ export async function GET(request: Request) {
         return NextResponse.json({
             teamSummary: {
                 totalAsesores: equipoCompleto?.length || 0,
-                totalClientes: clienteIds.length,
+                totalClientes: clienteIds.filter(id => targetAsesorIds.includes(clientToAsesorMap.get(id) || '')).length,
                 totalCapitalActivo: Math.round(totalCapitalEnRiesgoGlobal),
                 moraGlobal: totalOriginalCapitalGlobal > 0 ? (totalMoraGlobalMonto / totalOriginalCapitalGlobal) * 100 : 0,
                 moraMontoGlobal: totalMoraGlobalMonto,
@@ -189,8 +235,12 @@ export async function GET(request: Request) {
                 metaHoyPagado: totalMetaHoyPagado,
                 metaHoyPrestamosTotal: prestamosHoyTotalContado.size,
                 metaHoyPrestamosPagados: prestamosHoyPagadosContado.size,
+                renovacionesMes: renovacionesMes || 0,
+                clientesNuevosMes: clientesNuevosMes || 0,
+                clientesBloqueados: clientesBloqueados || 0,
+                refinanciamientosMes: refinanciamientosMes || 0,
                 totalRenovables,
-                totalInactivos: clienteIds.filter(cid => !clientesConActivo.has(cid)).length,
+                totalInactivos: clienteIds.filter(cid => targetAsesorIds.includes(clientToAsesorMap.get(cid) || '') && !clientesConActivo.has(cid)).length,
                 totalAlertaCritica,
                 totalAdvertencia,
                 totalVencidos,

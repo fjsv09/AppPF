@@ -4,9 +4,12 @@ import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Wallet, MapPin, CheckCircle2, AlertTriangle, User, Lock } from 'lucide-react'
+import { Wallet, MapPin, CheckCircle2, AlertTriangle, User, Lock, Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+
+import { getTodayPeru, getLoanStatusUI } from '@/lib/financial-logic'
 
 // Fix Leaflet's default icon path issues in Next.js
 if (typeof window !== 'undefined') {
@@ -40,12 +43,7 @@ const createCustomIcon = (color: string) => {
     })
 }
 
-const icons = {
-    paid: createCustomIcon('#64748b'), // Slate 500
-    normal: createCustomIcon('#10b981'), // Emerald 500
-    warning: createCustomIcon('#f59e0b'), // Amber 500
-    critical: createCustomIcon('#ef4444'), // Red 500
-}
+// icons object removed - now dynamic via getLoanStatusUI
 
 interface RutaMapaProps {
     prestamos: any[]
@@ -88,37 +86,19 @@ export default function RutaMapa({ prestamos, onQuickPay, today, isBlocked = fal
 
         if (isNaN(lat) || isNaN(lng)) return null;
 
-        // Determine status logic
-        const cuotasPagadas = p.total_pagado_acumulado ? Math.floor(p.total_pagado_acumulado / (p.valorCuota || 0)) : 0
-        const totalCuotas = p.numero_cuotas || p.totalCuotas || 0
-        const deudaHoy = p.deudaHoy || 0
-        const isFullyPaid = p.saldo_pendiente <= 0 || (cuotasPagadas >= totalCuotas && totalCuotas > 0)
-        
-        let icon = icons.normal
-        let statusText = 'Pendiente'
-        let statusColor = 'text-emerald-500'
-
-        if (isFullyPaid || (deudaHoy <= 0)) {
-            icon = icons.paid
-            statusText = 'Al Día / Pagado'
-            statusColor = 'text-slate-400'
-        } else if (p.estado_mora === 'vencido' || p.estado_mora === 'moroso' || p.cuotasAtrasadas >= 3) {
-            icon = icons.critical
-            statusText = 'Morosidad Crítica'
-            statusColor = 'text-red-500'
-        } else if (p.estado_mora === 'cpp' || p.cuotasAtrasadas >= 1) {
-            icon = icons.warning
-            statusText = 'Atrasado'
-            statusColor = 'text-amber-500'
-        }
+        // Use centralized UI logic
+        const statusUI = getLoanStatusUI(p);
+        const icon = createCustomIcon(statusUI.marker);
+        const deudaHoy = p.deudaHoy || 0;
 
         return {
             ...p,
             lat,
             lng,
             icon,
-            statusText,
-            statusColor,
+            statusText: statusUI.label,
+            statusColor: statusUI.color,
+            badgeClass: cn(statusUI.border, statusUI.color, statusUI.animate && "animate-pulse"),
             deudaHoy
         }
     }).filter(Boolean) as any[]
@@ -165,8 +145,22 @@ export default function RutaMapa({ prestamos, onQuickPay, today, isBlocked = fal
                                     <span className="truncate">{item.clientes?.nombres}</span>
                                 </div>
                                 
-                                <div className="text-xs text-slate-600 mb-2 font-mono flex items-center justify-between">
-                                    <span>#{item.clientes?.dni}</span>
+                                <div className="mb-3">
+                                    <a 
+                                        href={item.clientes?.telefono ? `tel:${item.clientes?.telefono}` : '#'} 
+                                        className={cn(
+                                            "flex items-center gap-2 text-xs font-bold transition-all px-2.5 py-2 rounded-xl border shadow-sm",
+                                            item.clientes?.telefono 
+                                                ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200" 
+                                                : "text-slate-400 bg-slate-50 border-slate-200 cursor-not-allowed"
+                                        )}
+                                        onClick={(e) => {
+                                            if (!item.clientes?.telefono) e.preventDefault();
+                                        }}
+                                    >
+                                        <Phone className={cn("w-3.5 h-3.5", item.clientes?.telefono ? "text-emerald-600" : "text-slate-300")} />
+                                        <span>{item.clientes?.telefono || 'Sin teléfono'}</span>
+                                    </a>
                                 </div>
 
                                 <div className="flex bg-slate-100 rounded-lg p-2 mb-3 items-center justify-between border border-slate-200">
@@ -178,10 +172,9 @@ export default function RutaMapa({ prestamos, onQuickPay, today, isBlocked = fal
                                     </div>
                                     <div className="flex flex-col items-end">
                                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estado</span>
-                                         <span className={`text-xs font-bold flex items-center gap-1 ${item.statusColor}`}>
-                                            {item.deudaHoy <= 0 ? <CheckCircle2 className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                                         <Badge variant="outline" className={cn("text-[10px] h-5 px-1.5 uppercase tracking-wide bg-slate-950/50", item.badgeClass)}>
                                             {item.statusText}
-                                        </span>
+                                        </Badge>
                                     </div>
                                 </div>
 
@@ -212,10 +205,11 @@ export default function RutaMapa({ prestamos, onQuickPay, today, isBlocked = fal
             <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-md p-3 rounded-xl border border-slate-200 shadow-lg z-[1000] text-xs pointer-events-none">
                 <h4 className="font-bold text-slate-700 mb-2 uppercase tracking-wider text-[10px]">Leyenda</h4>
                 <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm border border-emerald-600"></div><span className="text-slate-600 font-medium">Pendiente (Al Día)</span></div>
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500 shadow-sm border border-amber-600"></div><span className="text-slate-600 font-medium">Mora Leve</span></div>
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500 shadow-sm border border-red-600"></div><span className="text-slate-600 font-medium">Mora Crítica</span></div>
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-500 shadow-sm border border-slate-600"></div><span className="text-slate-600 font-medium">Pagado</span></div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm border border-emerald-600"></div><span className="text-slate-600 font-medium">Al día (OK)</span></div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-400 shadow-sm border border-amber-500"></div><span className="text-slate-600 font-medium">Deuda Hoy</span></div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-orange-500 shadow-sm border border-orange-600"></div><span className="text-slate-600 font-medium">CPP (Mora Leve)</span></div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-rose-500 shadow-sm border border-rose-600"></div><span className="text-slate-600 font-medium">Moroso / Vencido</span></div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-500 shadow-sm border border-slate-600"></div><span className="text-slate-600 font-medium">Finalizado / Renovado</span></div>
                 </div>
             </div>
 

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { createClient } from '@/utils/supabase/client'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -91,6 +92,8 @@ export function SolicitudRenovacionModal({
 }: SolicitudRenovacionModalProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
+    const [fetching, setFetching] = useState(false)
+    const supabase = useMemo(() => createClient(), [])
     const [checkingEligibility, setCheckingEligibility] = useState(false)
     const [elegibilidad, setElegibilidad] = useState<any>(null)
     const [error, setError] = useState<string | null>(null)

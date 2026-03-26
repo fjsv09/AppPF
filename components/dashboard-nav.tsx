@@ -57,8 +57,8 @@ export function DashboardNav({
         { href: '/dashboard/prestamos', label: 'Préstamos', icon: Banknote, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
         
         // --- Gestión Financiera ---
-        { href: '/dashboard/admin/cuadres', label: 'Gestión de Cuadres', icon: Landmark, roles: ['admin'], category: 'Finanzas' },
         { href: '/dashboard/admin/carteras', label: 'Gestionar Carteras', icon: Briefcase, roles: ['admin'], category: 'Finanzas' },
+        { href: '/dashboard/admin/cuadres', label: 'Gestión de Cuadres', icon: Landmark, roles: ['admin'], category: 'Finanzas' },
 
         { href: '/dashboard/cuadre', label: 'Cuadre de Caja', icon: Wallet, roles: ['asesor'], category: 'Finanzas' },
         { href: '/dashboard/gastos', label: 'Gastos Operativos', icon: Receipt, roles: ['admin', 'supervisor', 'asesor'], category: 'Finanzas' },

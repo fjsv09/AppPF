@@ -385,3 +385,99 @@ export function calcularInteresProporcional(
         cuotasEstandar
     }
 }
+/**
+ * Centraliza la identificación visual de los estados de un préstamo para toda la aplicación.
+ * Mapea el estado del negocio a etiquetas, colores y estilos de UI (CSS y Leaflet).
+ */
+export function getLoanStatusUI(loan: any) {
+    const isEffectivelyFinalized = 
+        loan.isFinalizado || 
+        loan.estado === 'finalizado' || 
+        loan.estado === 'renovado' ||
+        loan.estado === 'refinanciado' ||
+        (loan.saldo_pendiente || loan.metrics?.saldoPendiente || 0) <= 0.01;
+
+    // Jerarquía de estados coincidente con la tabla de préstamos
+    if (loan.estado === 'refinanciado') {
+        return {
+            label: 'REFIN',
+            color: 'text-indigo-400',
+            border: 'border-indigo-500',
+            bg: 'bg-indigo-900/10',
+            marker: '#6366f1', // Indigo 500
+            animate: false
+        }
+    }
+    if (loan.estado === 'renovado') {
+        return {
+            label: 'RENOV',
+            color: 'text-slate-500',
+            border: 'border-slate-600',
+            bg: 'bg-slate-900/10',
+            marker: '#64748b', // Slate 500
+            animate: false
+        }
+    }
+    if (isEffectivelyFinalized) {
+        return {
+            label: 'FINAL',
+            color: 'text-slate-500',
+            border: 'border-slate-600',
+            bg: 'bg-slate-900/10',
+            marker: '#64748b', // Slate 500
+            animate: false
+        }
+    }
+    if (loan.estado_mora === 'vencido') {
+        return {
+            label: 'VENCIDO',
+            color: 'text-rose-500',
+            border: 'border-rose-500',
+            bg: 'bg-rose-900/10',
+            marker: '#f43f5e', // Rose 500
+            animate: false
+        }
+    }
+    if (loan.estado_mora === 'moroso') {
+        return {
+            label: 'MOROSO',
+            color: 'text-rose-500',
+            border: 'border-rose-500',
+            bg: 'bg-rose-900/10',
+            marker: '#f43f5e', // Rose 500
+            animate: true
+        }
+    }
+    if (loan.estado_mora === 'cpp') {
+        return {
+            label: 'CPP',
+            color: 'text-orange-500',
+            border: 'border-orange-500',
+            bg: 'bg-orange-950/20',
+            marker: '#f97316', // Orange 500
+            animate: false
+        }
+    }
+
+    // deudaHoy existe en objetos enriquecidos por calculateLoanMetrics
+    const deuda = Number(loan.deudaHoy || loan.deuda_exigible_hoy || 0);
+    if (deuda > 0.01) {
+        return {
+            label: 'DEUDA',
+            color: 'text-amber-400',
+            border: 'border-amber-400',
+            bg: 'bg-amber-950/20',
+            marker: '#fbbf24', // Amber 400
+            animate: false
+        }
+    }
+
+    return {
+        label: 'OK',
+        color: 'text-emerald-500',
+        border: 'border-emerald-500',
+        bg: 'bg-emerald-950/20',
+        marker: '#10b981', // Emerald 500
+        animate: false
+    }
+}

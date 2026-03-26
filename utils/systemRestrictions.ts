@@ -48,6 +48,20 @@ export async function checkSystemAccess(
 
     console.log(`[SYSTEM ACCESS] User: ${userId} (${userRole}) | Time: ${timePart} | Day: ${limaDayOfWeek} (${todayStr}) | Action: ${action}`);
 
+    // --- LOGGING FISICO (PARA DEBUGEAR EN PRODUCCION) ---
+    const fs = require('fs');
+    const logPath = 'c:/Users/fjsvc/OneDrive/Escritorio/AppPF/debug_access.log';
+    const writeLog = (msg: string) => {
+        try {
+            const t = new Date().toISOString();
+            fs.appendFileSync(logPath, `[${t}] ${msg}\n`);
+        } catch(e) {
+            console.error('FAILED TO WRITE LOG:', e);
+        }
+    };
+
+    writeLog(`[ACCESS_REQ] User: ${userId} | Role: ${userRole} | Action: ${action} | Day: ${limaDayOfWeek} | Time: ${timePart}`);
+
     // 3. CHECK SUNDAYS AND HOLIDAYS
     const isSunday = limaDayOfWeek === 0;
     const { data: holiday } = await supabase
@@ -99,8 +113,27 @@ export async function checkSystemAccess(
     });
 
     const isTemporaryUnlocked = config.desbloqueo_hasta && new Date(config.desbloqueo_hasta) > now;
+    writeLog(`[UNLOCKED_STATE] isTemp: ${isTemporaryUnlocked} | DesbloqueoHasta: ${config.desbloqueo_hasta}`);
 
-    // 5. GLOBAL HOUR BLOCK
+    // 5. SALDO PENDIENTE BLOCK (Except for the Cuadre itself)
+    if (userRole === 'asesor' && action !== 'cuadre' && !isTemporaryUnlocked) {
+        writeLog(`[CHECK_BLOCK_START] calling checkAdvisorBlocked for ${userId}`);
+        const blockStatus = await checkAdvisorBlocked(supabase, userId);
+        writeLog(`[CHECK_BLOCK_RESULT] isBlocked: ${blockStatus.isBlocked} | Reason: ${blockStatus.reason}`);
+        if (blockStatus.isBlocked) {
+            const shiftMessage = (timePart >= config.horario_apertura && timePart <= config.horario_fin_turno_1)
+                ? `Primer Turno (${config.horario_apertura} - ${config.horario_fin_turno_1}): `
+                : '';
+
+            return {
+                allowed: false,
+                reason: `${shiftMessage}${blockStatus.reason}`,
+                code: 'PENDING_SALDO'
+            };
+        }
+    }
+
+    // 6. GLOBAL HOUR BLOCK
     if (!isTemporaryUnlocked && userRole !== 'admin' && action !== 'cuadre') {
         if (timePart < config.horario_apertura || timePart > config.horario_cierre) {
             console.warn(`[SYSTEM ACCESS] Blocked by hours: ${timePart} outside ${config.horario_apertura} - ${config.horario_cierre}`);
@@ -172,21 +205,6 @@ export async function checkSystemAccess(
         }
     }
 
-    // 8. SALDO PENDIENTE BLOCK (Except for the Cuadre itself)
-    if (userRole === 'asesor' && action !== 'cuadre' && !isTemporaryUnlocked) {
-        const blockStatus = await checkAdvisorBlocked(supabase, userId);
-        if (blockStatus.isBlocked) {
-            const shiftMessage = (timePart >= config.horario_apertura && timePart <= config.horario_fin_turno_1)
-                ? `Primer Turno (${config.horario_apertura} - ${config.horario_fin_turno_1}): `
-                : '';
-
-            return {
-                allowed: false,
-                reason: `${shiftMessage}${blockStatus.reason}`,
-                code: 'PENDING_SALDO'
-            };
-        }
-    }
 
     return { allowed: true, config };
 }

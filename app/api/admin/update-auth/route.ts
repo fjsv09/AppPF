@@ -14,7 +14,7 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: NextRequest) {
     try {
-        const { id, email, password, role } = await request.json()
+        const { id, email, password, role, nombre } = await request.json()
 
         if (!id) {
             return NextResponse.json({ error: 'ID de usuario requerido' }, { status: 400 })
@@ -23,7 +23,15 @@ export async function POST(request: NextRequest) {
         const updates: any = {}
         if (email) updates.email = email
         if (password) updates.password = password
-        if (role) updates.user_metadata = { rol: role }
+        
+        // Update user_metadata if role or name changed
+        const metadata: any = {}
+        if (role) metadata.rol = role
+        if (nombre) metadata.nombre_completo = nombre
+        
+        if (Object.keys(metadata).length > 0) {
+            updates.user_metadata = metadata
+        }
 
         if (Object.keys(updates).length > 0) {
             const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, updates)

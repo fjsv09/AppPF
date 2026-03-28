@@ -54,7 +54,8 @@ export default async function ConfiguracionPage() {
             'horario_fin_turno_1',
             'desbloqueo_hasta',
             'nombre_sistema',
-            'logo_sistema_url'
+            'logo_sistema_url',
+            'visita_tiempo_minimo'
         ])
         .order('clave')
     

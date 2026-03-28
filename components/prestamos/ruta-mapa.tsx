@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Wallet, MapPin, CheckCircle2, AlertTriangle, User, Lock, Phone } from 'lucide-react'
+import { Wallet, MapPin, CheckCircle2, AlertTriangle, User, Lock, Phone, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -145,11 +146,11 @@ export default function RutaMapa({ prestamos, onQuickPay, today, isBlocked = fal
                                     <span className="truncate">{item.clientes?.nombres}</span>
                                 </div>
                                 
-                                <div className="mb-3">
+                                <div className="grid grid-cols-2 gap-2 mb-3">
                                     <a 
                                         href={item.clientes?.telefono ? `tel:${item.clientes?.telefono}` : '#'} 
                                         className={cn(
-                                            "flex items-center gap-2 text-xs font-bold transition-all px-2.5 py-2 rounded-xl border shadow-sm",
+                                            "flex items-center justify-center gap-1.5 text-xs font-bold transition-all px-2 py-2 rounded-xl border shadow-sm",
                                             item.clientes?.telefono 
                                                 ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200" 
                                                 : "text-slate-400 bg-slate-50 border-slate-200 cursor-not-allowed"
@@ -159,8 +160,18 @@ export default function RutaMapa({ prestamos, onQuickPay, today, isBlocked = fal
                                         }}
                                     >
                                         <Phone className={cn("w-3.5 h-3.5", item.clientes?.telefono ? "text-emerald-600" : "text-slate-300")} />
-                                        <span>{item.clientes?.telefono || 'Sin teléfono'}</span>
+                                        <span>Llamar</span>
                                     </a>
+                                    <Button
+                                        asChild
+                                        variant="outline"
+                                        className="h-9 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-1.5 text-xs font-bold"
+                                    >
+                                        <Link href={`/dashboard/prestamos/${item.id}`}>
+                                            <ChevronRight className="w-3.5 h-3.5" />
+                                            Detallles
+                                        </Link>
+                                    </Button>
                                 </div>
 
                                 <div className="flex bg-slate-100 rounded-lg p-2 mb-3 items-center justify-between border border-slate-200">

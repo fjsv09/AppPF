@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
-import { Loader2, Lock, CheckCircle, DollarSign, RefreshCw, Share2 } from 'lucide-react'
+import { Loader2, Lock, CheckCircle, DollarSign, RefreshCw, Share2, MapPin, Clock, Save, Navigation, X } from 'lucide-react'
 import { toBlob } from 'html-to-image'
 import { QuickPayModal } from './quick-pay-modal'
 
@@ -19,6 +19,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
+import { VisitActionButton } from './visit-action-button'
 
 type Props = {
     prestamo: any
@@ -270,19 +271,26 @@ export function CronogramaClient({
                                 </div>
                             </div>
                             
-                            <Button 
-                                onClick={() => setQuickPayOpen(true)}
-                                size="lg"
-                                className={`w-full font-bold shadow-lg h-12 text-base rounded-xl ${
-                                    isOverdue 
-                                    ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-900/20' 
-                                    : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'
-                                } ${(!canPayDueToTime || isBlockedForPayments) ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
-                                disabled={!canPayDueToTime || isBlockedForPayments}
-                            >
-                                <DollarSign className="w-5 h-5 mr-2" />
-                                {isBlockedForPayments ? 'Operación Bloqueada' : !canPayDueToTime ? 'Sistema Cerrado' : isOverdue ? 'Pagar Cuota Vencida' : 'Registrar Pago'}
-                            </Button>
+                            <div className="flex flex-col gap-2">
+                                <Button 
+                                    onClick={() => setQuickPayOpen(true)}
+                                    size="lg"
+                                    className={`w-full font-bold shadow-lg h-12 text-base rounded-xl ${
+                                        isOverdue 
+                                        ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-900/20' 
+                                        : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'
+                                    } ${(!canPayDueToTime || isBlockedForPayments) ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+                                    disabled={!canPayDueToTime || isBlockedForPayments}
+                                >
+                                    <DollarSign className="w-5 h-5 mr-2" />
+                                    {isBlockedForPayments ? 'Operación Bloqueada' : !canPayDueToTime ? 'Sistema Cerrado' : isOverdue ? 'Pagar Cuota Vencida' : 'Registrar Pago'}
+                                </Button>
+
+                                {/* NUEVO: Boton Iniciar Visita - Se abriría un modal para GPS */}
+                                {prestamo.estado === 'activo' && !active.visitado && (
+                                    <VisitActionButton cuotaId={active.id} />
+                                )}
+                            </div>
                         </div>
                     )
                 })()
@@ -343,6 +351,7 @@ export function CronogramaClient({
                                                 <span className={`font-mono text-[10px] md:text-sm ${cuota.isOverdue && !isPaid ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                                                     {cuota.fecha_vencimiento.split('-').reverse().join('/')}
                                                 </span>
+                                                {cuota.visitado && <Badge variant="outline" className="ml-2 bg-indigo-500/10 text-indigo-400 border-indigo-500/20 text-[8px]">VISITADO</Badge>}
                                             </td>
                                             <td className="px-2 md:px-4 py-3 text-right text-slate-300 font-medium text-[11px] md:text-sm">
                                                 <span className="md:hidden">${parseFloat(cuota.monto_cuota).toFixed(0)}</span>
@@ -388,25 +397,29 @@ export function CronogramaClient({
                                             </td>
                                             {puedePagar && prestamo.bloqueo_cronograma && (
                                                 <td className="hidden sm:table-cell px-2 md:px-4 py-3 text-center">
-                                                    {/* Botón Pagar - Visible en PC y Tablet */}
-                                                    {!isPaid && (
-                                                        <Button
-                                                            size="sm"
-                                                            disabled={cuota.isLocked}
-                                                            onClick={() => setQuickPayOpen(true)}
-                                                            className={`
-                                                                h-7 px-3 text-xs rounded-lg transition-all
-                                                                ${cuota.isActive 
-                                                                    ? cuota.isOverdue
-                                                                        ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-900/20'
-                                                                        : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'
-                                                                    : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700 hover:bg-slate-800'}
-                                                                ${((!canPayDueToTime || isBlockedForPayments) && cuota.isActive) ? 'opacity-40 grayscale-0 pointer-events-none' : ''}
-                                                            `}
-                                                        >
-                                                            {cuota.isLocked ? <Lock className="w-3 h-3" /> : (!canPayDueToTime || isBlockedForPayments) && cuota.isActive ? '🚫' : 'Pagar'}
-                                                        </Button>
-                                                    )}
+                                                    <div className="flex flex-col gap-1.5 items-center justify-center">
+                                                        {!isPaid && (
+                                                            <Button
+                                                                size="sm"
+                                                                disabled={cuota.isLocked}
+                                                                onClick={() => setQuickPayOpen(true)}
+                                                                className={`
+                                                                    h-7 px-3 text-xs rounded-lg transition-all w-full
+                                                                    ${cuota.isActive 
+                                                                        ? cuota.isOverdue
+                                                                            ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-900/20'
+                                                                            : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'
+                                                                        : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700 hover:bg-slate-800'}
+                                                                    ${((!canPayDueToTime || isBlockedForPayments) && cuota.isActive) ? 'opacity-40 grayscale-0 pointer-events-none' : ''}
+                                                                `}
+                                                            >
+                                                                {cuota.isLocked ? <Lock className="w-3 h-3" /> : (!canPayDueToTime || isBlockedForPayments) && cuota.isActive ? '🚫' : 'Pagar'}
+                                                            </Button>
+                                                        )}
+                                                        {cuota.isActive && !cuota.visitado && !isPaid && (
+                                                            <VisitActionButton cuotaId={cuota.id} />
+                                                        )}
+                                                    </div>
                                                 </td>
                                             )}
                                         </tr>
@@ -432,3 +445,5 @@ export function CronogramaClient({
         </div>
     )
 }
+
+

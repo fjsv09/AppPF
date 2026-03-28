@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { CronogramaClient } from "./cronograma-client"
 import { PaymentHistory } from "./payment-history"
 import { ClientGestiones } from "@/components/clientes/client-gestiones"
-import { CalendarDays, History, MessageSquare, Camera, AlertCircle, ShieldCheck, Loader2 } from "lucide-react"
+import { CalendarDays, History, MessageSquare, Camera, AlertCircle, ShieldCheck, Loader2, MapPin } from "lucide-react"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { UploadEvidenceButton } from "@/components/dashboard/upload-evidence-button"
 import { DailyCollectorLog } from "./daily-collector-log"
@@ -29,6 +29,8 @@ interface LoanTabsProps {
     systemAccess?: any
 }
 
+import { VisitadosList } from "./visitados-list"
+
 export function LoanTabs({ 
     prestamo, 
     cronograma, 
@@ -46,7 +48,7 @@ export function LoanTabs({
     const tabParam = searchParams.get('tab')
     
     // Validar el tab de la URL o usar el default
-    const validTabs = ["cronograma", "historial", "evidencia", "gestiones"]
+    const validTabs = ["cronograma", "historial", "evidencia", "gestiones", "visitas"]
     const [isPending, startTransition] = useTransition()
     const [activeTab, setActiveTab] = useState(() => {
         if (tabParam && validTabs.includes(tabParam)) {
@@ -84,6 +86,9 @@ export function LoanTabs({
                     </TabsTrigger>
                     <TabsTrigger value="historial" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
                         <History className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Historial
+                    </TabsTrigger>
+                    <TabsTrigger value="visitas" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
+                        <MapPin className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Visitas
                     </TabsTrigger>
                     <TabsTrigger value="evidencia" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
                         <Camera className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Evidencia
@@ -141,6 +146,20 @@ export function LoanTabs({
                                 </h3>
                                 <PaymentHistory pagos={pagos} prestamo={prestamo} cliente={cliente || prestamo.clientes} cronograma={cronograma} userRole={userRole} />
                             </div>
+                        </CardContent>
+                    </Card>
+                )}
+            </TabsContent>
+
+            <TabsContent value="visitas" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
+                {isPending ? (
+                    <div className="flex items-center justify-center py-20 bg-slate-900/10 border border-slate-800/50 rounded-2xl animate-in fade-in duration-300">
+                        <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+                    </div>
+                ) : (
+                    <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
+                        <CardContent className="p-0">
+                            <VisitadosList prestamoId={prestamo.id} />
                         </CardContent>
                     </Card>
                 )}

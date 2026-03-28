@@ -57,3 +57,28 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 }
+export async function GET(request: Request) {
+    try {
+        const { searchParams } = new URL(request.url)
+        const clave = searchParams.get('clave')
+
+        if (!clave) {
+            return NextResponse.json({ error: 'Clave requerida' }, { status: 400 })
+        }
+
+        const supabase = await createClient()
+        const { data, error } = await supabase
+            .from('configuracion_sistema')
+            .select('valor')
+            .eq('clave', clave)
+            .single()
+
+        if (error) {
+            return NextResponse.json({ error: 'Configuración no encontrada' }, { status: 404 })
+        }
+
+        return NextResponse.json(data)
+    } catch (error: any) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+}

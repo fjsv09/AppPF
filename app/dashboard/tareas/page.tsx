@@ -130,10 +130,24 @@ export default async function TareasHistoryPage({
         tareasVisita    = tareas?.filter(t => t.tipo === 'visita_asignada' || t.tipo === 'gestion_asignada') || []
     }
 
+    // 1. Obtener préstamos que ya pagaron hoy
+    const todayStrFetch = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+    const { data: pagosHoy } = await supabaseAdmin
+        .from('pagos')
+        .select('cuota_id, cronograma_cuotas(prestamo_id)')
+        .gte('created_at', `${todayStrFetch}T00:00:00Z`)
+    
+    const prestamosPagadosHoy = new Set((pagosHoy || []).map(p => (p.cronograma_cuotas as any)?.prestamo_id).filter(Boolean))
+
     const pendientesEvidencia  = tareasEvidencia.filter(t => t.estado === 'pendiente')
     const completadasEvidencia = tareasEvidencia.filter(t => t.estado === 'completada')
     const pendientesAuditoria  = tareasAuditoria.filter(t => t.estado === 'pendiente')
-    const pendientesVisita     = tareasVisita.filter(t => t.estado === 'pendiente')
+    
+    // Filtrar visitas pendientes: solo las que NO han pagado hoy
+    const pendientesVisita     = tareasVisita.filter(t => 
+        t.estado === 'pendiente' && 
+        !prestamosPagadosHoy.has(t.prestamo_id)
+    )
 
     // Enriquecer visitas con coordenadas GPS del cliente (desde solicitudes)
     if (tareasVisita.length > 0) {

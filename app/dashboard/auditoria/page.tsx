@@ -12,6 +12,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, useEffect, useCallback } from 'react'
 import { cn, formatDatePeru } from '@/lib/utils'
 import { BackButton } from '@/components/ui/back-button'
+import { AuditoriaVisitasPanel } from '@/components/prestamos/auditoria-visitas-panel'
+import { MapPin } from 'lucide-react'
 
 export default function AuditoriaPage() {
     const supabase = createClient()
@@ -21,6 +23,7 @@ export default function AuditoriaPage() {
     const [user, setUser] = useState<any>(null)
     const [perfil, setPerfil] = useState<any>(null)
     const [auditoria, setAuditoria] = useState<any[]>([])
+    const [allProfiles, setAllProfiles] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
 
     // Read tab from URL, fallback to role-based default
@@ -49,7 +52,15 @@ export default function AuditoriaPage() {
                 .single()
             setPerfil(perfilData)
 
-            if (perfilData?.rol === 'admin') {
+            if (perfilData?.rol === 'admin' || perfilData?.rol === 'supervisor') {
+                // Determine filter based on role
+                let profilesQuery = supabase.from('perfiles').select('*')
+                if (perfilData?.rol === 'supervisor') {
+                    profilesQuery = profilesQuery.eq('supervisor_id', user.id)
+                }
+                const { data: advisors } = await profilesQuery.eq('rol', 'asesor')
+                setAllProfiles(advisors || [])
+
                 const { data: logs, error: logsError } = await supabase
                     .from('auditoria')
                     .select('*')
@@ -151,6 +162,12 @@ export default function AuditoriaPage() {
                         <Receipt className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" />
                         Control de Vouchers
                     </TabsTrigger>
+                    {(userRol === 'admin' || userRol === 'supervisor') && (
+                        <TabsTrigger value="visitas" className="h-7 px-0 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
+                            <MapPin className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" />
+                            Auditoría de Visitas
+                        </TabsTrigger>
+                    )}
                 </TabsList>
             </div>
 
@@ -211,6 +228,16 @@ export default function AuditoriaPage() {
                 <TabsContent value="vouchers" className="mt-0">
                     <VoucherAlerts />
                 </TabsContent>
+
+                {(userRol === 'admin' || userRol === 'supervisor') && (
+                    <TabsContent value="visitas" className="mt-0 outline-none">
+                        <AuditoriaVisitasPanel 
+                            userRol={userRol as any} 
+                            userId={user?.id} 
+                            perfiles={allProfiles} 
+                        />
+                    </TabsContent>
+                )}
             </Tabs>
         </div>
     )

@@ -7,7 +7,7 @@ import dynamic from 'next/dynamic'
 
 const RutaMapa = dynamic(() => import('./ruta-mapa'), { 
   ssr: false,
-  loading: () => <div className="h-[400px] w-full rounded-xl bg-slate-900 animate-pulse flex items-center justify-center text-slate-500">Cargando mapa...</div>
+  loading: () => <div className="h-[400px] w-full rounded-xl bg-slate-900 animate-pulse flex items-center justify-center text-slate-500 text-xs font-black uppercase tracking-widest">Cargando mapa interactivo...</div>
 })
 
 import { Badge } from '@/components/ui/badge'
@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectLa
 import { 
     AlertCircle, Wallet, Search, Users, Calendar, MoreVertical, 
     CalendarDays, CheckCircle2, AlertTriangle, MapPin, DollarSign, FileText, ChevronRight, Eye,
-    X, RotateCcw, MessageCircle, MessageSquare, Loader2, ListFilter, LayoutGrid, Table, Lock, ClipboardList
+    X, RotateCcw, MessageCircle, MessageSquare, Loader2, ListFilter, LayoutGrid, Table, Lock, ClipboardList, ShieldAlert
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
@@ -25,6 +25,7 @@ import { ContratoGenerator } from './contrato-generator'
 import { QuickPayModal } from './quick-pay-modal'
 import { SolicitudRenovacionModal } from './solicitud-renovacion-modal'
 import { RegistrarGestionModal } from '../gestiones/registrar-gestion-modal'
+import { VisitActionButton } from './visit-action-button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,7 +69,7 @@ interface PrestamosTableProps {
     cuentas?: any[]
 }
 
-type FilterTab = 'ruta_hoy' | 'cobranza' | 'morosos' | 'notificar' | 'semana' | 'en_curso' | 'renovaciones' | 'finalizados' | 'todos' | 'supervisor_alertas' | 'supervisor_mora' | 'renovados' | 'refinanciados' | 'anulados' | 'pendientes'
+type FilterTab = 'ruta_hoy' | 'cobranza' | 'morosos' | 'notificar' | 'semana' | 'en_curso' | 'renovaciones' | 'finalizados' | 'todos' | 'supervisor_alertas' | 'supervisor_mora' | 'renovados' | 'refinanciados' | 'anulados' | 'pendientes' | 'visitas_control'
 type SortBy = 'fecha_inicio' | 'frecuencia'
 type SortOrder = 'asc' | 'desc'
 
@@ -295,6 +296,16 @@ export function PrestamosTable({
     const filtroAsesor = searchParams.get('asesor') || 'todos'
     const filtroSector = searchParams.get('sector') || 'todos'
     const filtroFrecuencia = searchParams.get('frecuencia') || 'todos'
+    
+    // --- PROTECCIÓN DE RUTA (VISITAS CONTROL) ---
+    useEffect(() => {
+        if (activeFilter === 'visitas_control' && userRol === 'asesor') {
+            // Un asesor no puede entrar a la pestaña de control geográfico de supervisión. Devolver a ruta_hoy.
+            const params = new URLSearchParams(searchParams.toString())
+            params.set('tab', 'ruta_hoy')
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+        }
+    }, [activeFilter, userRol, searchParams, pathname, router])
     
     // Sorting State
     const sortBy = (searchParams.get('sortBy') as SortBy) || 'fecha_inicio'
@@ -530,6 +541,13 @@ export function PrestamosTable({
                   const asesor = perfiles.find(profile => profile.id === p.clientes?.asesor_id)
                   const asesor_nombre = asesor?.nombre_completo || 'N/A'
 
+                  // Check if visited today
+                  const hoyPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+                  const cronograma = p.cronograma_cuotas || []
+                  const isVisitadoHoy = cronograma.some((c: any) => 
+                    c.fecha_vencimiento === hoyPeru && c.visitado === true
+                  )
+
                   return {
                       ...p,
                       progreso,
@@ -546,7 +564,8 @@ export function PrestamosTable({
                       totalCuotas,
                       cuotasPagadas,
                       cuotasAtrasadas, // Add this
-                      asesor_nombre // Add asesor name
+                      asesor_nombre, // Add asesor name
+                      isVisitadoHoy
                   }
         })
         return enriched
@@ -696,6 +715,11 @@ export function PrestamosTable({
                 }
                 break
 
+            case 'visitas_control':
+                // Visitas Control: Solo los de "Ruta Hoy" (quienes deben ser visitados hoy)
+                filtered = filtered.filter(p => p.cuota_dia_hoy > 0.01 && p.estado === 'activo')
+                break
+
             case 'todos':
                 // No filter
                 break
@@ -738,6 +762,7 @@ export function PrestamosTable({
             refinanciados: 0,
             anulados: 0,
             pendientes: 0,
+            visitas_control: 0,
             todos: 0
         }
 
@@ -753,7 +778,10 @@ export function PrestamosTable({
                 counts.en_curso++
                 counts.semana++
                 
-                if (p.cuota_dia_hoy > 0.01) counts.ruta_hoy++
+                if (p.cuota_dia_hoy > 0.01) {
+                    counts.ruta_hoy++
+                    counts.visitas_control++
+                }
                 if (p.atrasadas >= 1 && p.deudaHoy > 0) counts.cobranza++
                 
                 const isCritical = (isDiario && p.atrasadas >= 7) || (!isDiario && p.atrasadas >= 2)
@@ -863,6 +891,14 @@ export function PrestamosTable({
                                         <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.ruta_hoy}</Badge>
                                     </div>
                                 </SelectItem>
+                                {(userRol === 'admin' || userRol === 'supervisor') && (
+                                    <SelectItem value="visitas_control" className="focus:bg-slate-800 focus:text-white">
+                                        <div className="flex items-center justify-between w-full gap-2">
+                                            <span className="text-blue-400">Control de Visitas</span>
+                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.visitas_control}</Badge>
+                                        </div>
+                                    </SelectItem>
+                                )}
                                 <SelectItem value="cobranza" className="focus:bg-slate-800 focus:text-white">
                                     <div className="flex items-center justify-between w-full gap-2">
                                         <span className="text-amber-400">Cobranza</span>
@@ -1113,12 +1149,39 @@ export function PrestamosTable({
                                         </h3>
                                         <div className="flex flex-col gap-0.5 mt-0.5">
 
-                                            {prestamo.clientes?.sectores?.nombre && (
-                                                <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                                                    <MapPin className="w-2.5 h-2.5 opacity-70 text-indigo-400" />
-                                                    <span className="truncate max-w-[120px]">{prestamo.clientes.sectores.nombre}</span>
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    {prestamo.clientes?.sectores?.nombre && (
+                                                        <div className="flex items-center gap-1 text-[10px] text-slate-400 shrink-0">
+                                                            <MapPin className="w-2.5 h-2.5 opacity-70 text-indigo-400" />
+                                                            <span className="truncate max-w-[80px]">{prestamo.clientes.sectores.nombre}</span>
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {/* Pnd. Visita / Visitado - Next to location */}
+                                                    {prestamo.isVisitadoHoy ? (
+                                                        <span className="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 shrink-0">
+                                                            <MapPin className="w-2.5 h-2.5" />
+                                                            Visitado
+                                                        </span>
+                                                    ) : (
+                                                        (activeFilter === 'visitas_control' || activeFilter === 'ruta_hoy') && (
+                                                            <span className="text-slate-500 bg-slate-500/5 border border-slate-700/50 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase transition-opacity shrink-0">
+                                                                Pnd. Visita
+                                                            </span>
+                                                        )
+                                                    )}
+
+                                                    {/* Pararelo Label - Next to location */}
+                                                    {prestamo.es_paralelo && (
+                                                        <span 
+                                                            title="Este es un préstamo paralelo (el cliente tiene otros préstamos activos)."
+                                                            className="cursor-help flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-purple-400 bg-purple-500/10 border border-purple-500/25 px-1.5 py-0.5 rounded-md shrink-0"
+                                                        >
+                                                            <Lock className="w-2.5 h-2.5 shrink-0" />
+                                                            Paralelo
+                                                        </span>
+                                                    )}
                                                 </div>
-                                            )}
                                             {/* Chip: Producto de Refinanciamiento */}
                                             {prestamoIdsProductoRefinanciamiento.includes(prestamo.id) && (
                                                 <div 
@@ -1176,16 +1239,6 @@ export function PrestamosTable({
                                                 <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500 bg-slate-800/50 border border-slate-700/50 px-1.5 py-0.5 rounded-md">
                                                     {prestamo.frecuencia}
                                                 </span>
-                                                {/* Chip: Préstamo Paralelo (Card View) */}
-                                                {prestamo.es_paralelo && (
-                                                    <span 
-                                                        title="Este es un préstamo paralelo (el cliente tiene otros préstamos activos)."
-                                                        className="cursor-help flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-purple-400 bg-purple-500/10 border border-purple-500/25 px-1.5 py-0.5 rounded-md"
-                                                    >
-                                                        <Lock className="w-2.5 h-2.5 shrink-0" />
-                                                        Paralelo
-                                                    </span>
-                                                )}
                                             </div>
                                         )
                                     })()}
@@ -1363,20 +1416,25 @@ export function PrestamosTable({
                                                     </Button>
                                                 )}
 
-                                                {/* Registrar Gestión Button - Para todos */}
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    className="h-8 w-8 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50 transition-all"
-                                                    onClick={(e) => {
-                                                        e.preventDefault()
-                                                        e.stopPropagation()
-                                                        handleOpenGestion(prestamo)
-                                                    }}
-                                                    title="Registrar Gestión"
-                                                >
-                                                    <MessageSquare className="w-3.5 h-3.5" />
-                                                </Button>
+                                                 {/* Iniciar Visita Button (GPS Control) */}
+                                                 
+                                                 {(() => {
+                                                     if (userRol !== 'asesor' || isEffectivelyFinalized) return null;
+                                                     
+                                                     const cronograma = (prestamo.cronograma_cuotas || []);
+                                                     const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+                                                     
+                                                     const cuotaHoy = cronograma.find((c: any) => c.fecha_vencimiento === hoy && c.estado !== 'pagado');
+                                                     const cuotaPendiente = cronograma.find((c: any) => c.estado !== 'pagado');
+                                                     const cuotaTargetId = cuotaHoy?.id || cuotaPendiente?.id;
+                                                     
+                                                     if (!cuotaTargetId) return null;
+                                                     
+                                                     return <VisitActionButton cuotaId={cuotaTargetId} variant="icon" className="h-8 w-8" />;
+                                                 })()}
+
+                                                 {/* Registrar Gestión Button - Para todos */}
+
 
                                                 {/* Dropdown Menu para opciones extra */}
                                                 <DropdownMenu>
@@ -1386,6 +1444,17 @@ export function PrestamosTable({
                                                         </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end" className="w-48 bg-slate-900 border-slate-700 text-slate-200">
+                                                        <DropdownMenuItem 
+                                                            className="hover:bg-slate-800 cursor-pointer text-xs"
+                                                            onClick={(e) => {
+                                                                e.preventDefault()
+                                                                e.stopPropagation()
+                                                                handleOpenGestion(prestamo)
+                                                            }}
+                                                        >
+                                                            <MessageSquare className="w-3.5 h-3.5 mr-2 text-blue-400" />
+                                                            Registrar Gestión
+                                                        </DropdownMenuItem>
                                                          {userRol === 'admin' && (
                                                             <DropdownMenuItem 
                                                                 className="hover:bg-slate-800 cursor-pointer text-xs"
@@ -1669,7 +1738,18 @@ export function PrestamosTable({
                                     {rangoFechas}
                                 </div>
 
-                                <div className="col-span-1 text-center flex items-center justify-center gap-1">
+                                <div className="col-span-1 text-center flex items-center justify-center gap-1 group/visit">
+                                    {prestamo.isVisitadoHoy ? (
+                                        <div className="shrink-0" title="Visitado hoy (Marcaron ubicación GPS)">
+                                            <MapPin className="w-4 h-4 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.3)] animate-pulse" />
+                                        </div>
+                                    ) : (
+                                        activeFilter === 'visitas_control' && (
+                                            <div className="shrink-0 opacity-50 italic text-[7px] text-slate-500 uppercase font-black tracking-tighter">
+                                                Pnd.
+                                            </div>
+                                        )
+                                    )}
                                     {(() => {
                                         const statusUI = getLoanStatusUI(prestamo);
                                         const isDiario = prestamo.frecuencia?.toLowerCase() === 'diario'
@@ -1805,20 +1885,6 @@ export function PrestamosTable({
                                         </Button>
                                     )}
 
-                                    {/* Registrar Gestión Button - Para todos */}
-                                    <Button 
-                                        variant="ghost" 
-                                        size="sm" 
-                                        className="h-8 w-8 p-0 shrink-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 transition-all font-bold"
-                                        onClick={(e) => {
-                                            e.preventDefault()
-                                            e.stopPropagation()
-                                            handleOpenGestion(prestamo)
-                                        }}
-                                        title="Registrar Gestión"
-                                    >
-                                        <MessageSquare className="w-3.5 h-3.5" />
-                                    </Button>
 
                                     {/* Asignar Tarea - Solo Admin en PC */}
                                     {userRol === 'admin' && (
@@ -1841,6 +1907,17 @@ export function PrestamosTable({
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end" className="w-48 bg-slate-900 border-slate-700 text-slate-200">
+                                            <DropdownMenuItem 
+                                                className="hover:bg-slate-800 cursor-pointer text-xs text-blue-400 font-bold"
+                                                onClick={(e) => {
+                                                    e.preventDefault()
+                                                    e.stopPropagation()
+                                                    handleOpenGestion(prestamo)
+                                                }}
+                                            >
+                                                <MessageSquare className="w-3.5 h-3.5 mr-2" />
+                                                Registrar Gestión
+                                            </DropdownMenuItem>
                                             <DropdownMenuItem 
                                                 className="hover:bg-slate-800 cursor-pointer text-xs"
                                                 onClick={(e) => {

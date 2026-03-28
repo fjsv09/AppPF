@@ -81,6 +81,12 @@ const CONFIG_LABELS: Record<string, { nombre: string; descripcion: string; min?:
     'logo_sistema_url': {
         nombre: 'Logo del Sistema',
         descripcion: 'URL de la imagen del logo principal del sistema',
+    },
+    'visita_tiempo_minimo': {
+        nombre: 'Tiempo Mínimo de Visita (min)',
+        descripcion: 'Minutos que el asesor debe permanecer en la ubicación para dar por válida la visita',
+        min: 1,
+        max: 60
     }
 }
 
@@ -229,6 +235,7 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         if (clave.includes('desbloqueo')) return '🔓'
         if (clave.includes('nombre')) return '🏷️'
         if (clave.includes('logo')) return '🖼️'
+        if (clave.includes('visita')) return '📍'
         return '⚙️'
     }
 
@@ -245,7 +252,8 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         'horario_fin_turno_1',
         'desbloqueo_hasta',
         'nombre_sistema',
-        'logo_sistema_url'
+        'logo_sistema_url',
+        'visita_tiempo_minimo'
     ]
 
     const displayConfig = [...initialConfig]

@@ -1,13 +1,14 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
     MapPin, Navigation, Navigation2, User, AlertTriangle,
     CheckCircle2, Loader2, Send, X, ClipboardList, ExternalLink,
-    Phone, MessageSquare, DollarSign
+    Phone, MessageSquare, DollarSign, Eye
 } from "lucide-react"
 import { QuickPayModal } from "../prestamos/quick-pay-modal"
 import { format } from "date-fns"
@@ -217,6 +218,13 @@ export function VisitasList({ visitas, userId }: VisitasListProps) {
                                     </a>
                                 ) : null
                             })()}
+                                    <Link
+                                        href={`/dashboard/prestamos/${visita.prestamo_id}`}
+                                        className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg bg-slate-900/40 border border-slate-800 hover:border-slate-700"
+                                    >
+                                        <Eye className="w-3 h-3" />
+                                        Ver Préstamo
+                                    </Link>
                                      {userId === visita.asesor_id && (
                                         <div className="flex-1">
                                             <Button

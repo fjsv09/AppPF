@@ -27,6 +27,8 @@ import { cn } from '@/lib/utils'
 
 interface VisitActionButtonProps {
     cuotaId: string
+    clientCoords?: string // "lat,lon"
+    userLoc?: [number, number] | null
     variant?: 'default' | 'outline' | 'ghost' | 'icon'
     className?: string
     showText?: boolean
@@ -35,6 +37,8 @@ interface VisitActionButtonProps {
 
 export function VisitActionButton({ 
     cuotaId, 
+    clientCoords,
+    userLoc: externalUserLoc,
     variant = 'outline', 
     className,
     showText = true,
@@ -45,15 +49,24 @@ export function VisitActionButton({
     const [visitaEnCurso, setVisitaEnCurso] = useState<any>(null)
     const [timer, setTimer] = useState(0)
     const [minTime, setMinTime] = useState(5) // Default 5 mins
+    const [radioMax, setRadioMax] = useState(300) // Default 300m
+    const [internalUserLoc, setInternalUserLoc] = useState<[number, number] | null>(null)
     const timerRef = useRef<NodeJS.Timeout | null>(null)
     const router = useRouter()
 
+    const userLoc = externalUserLoc || internalUserLoc
+
     useEffect(() => {
-        // Cargar config minTime
+        // Cargar config minTime y radioMax
         fetch('/api/configuracion?clave=visita_tiempo_minimo')
             .then(res => res.json())
             .then(data => setMinTime(parseInt(data.valor) || 5))
             .catch(() => setMinTime(5))
+
+        fetch('/api/configuracion?clave=visita_radio_maximo')
+            .then(res => res.json())
+            .then(data => setRadioMax(parseInt(data.valor) || 300))
+            .catch(() => setRadioMax(300))
 
         // Revisar si hay visita en el localstorage para esta cuota específica
         const saved = localStorage.getItem(`visita_${cuotaId}`)
@@ -64,7 +77,17 @@ export function VisitActionButton({
             const elapsed = Math.floor((Date.now() - new Date(data.fecha_inicio).getTime()) / 1000)
             setTimer(elapsed > 0 ? elapsed : 0)
         }
-    }, [cuotaId])
+
+        // Si no tenemos loc externa but tenemos clientCoords, trackeamos localmente
+        if (!externalUserLoc && clientCoords && navigator.geolocation) {
+            const watchId = navigator.geolocation.watchPosition(
+                (pos) => setInternalUserLoc([pos.coords.latitude, pos.coords.longitude]),
+                () => {},
+                { enableHighAccuracy: true }
+            )
+            return () => navigator.geolocation.clearWatch(watchId)
+        }
+    }, [cuotaId, externalUserLoc, clientCoords])
 
     useEffect(() => {
         if (visitaEnCurso && open) {
@@ -81,6 +104,17 @@ export function VisitActionButton({
 
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
 
+    const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+        const R = 6371000;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return Math.round(R * c);
+    }
+
     const handleStart = async (e?: React.MouseEvent) => {
         if (e) {
             e.preventDefault()
@@ -96,6 +130,22 @@ export function VisitActionButton({
 
         navigator.geolocation.getCurrentPosition(async (pos) => {
             const { latitude, longitude } = pos.coords
+
+            // Validación de distancia CLIENT SIDE
+            if (clientCoords) {
+                const parts = clientCoords.split(',')
+                const latClie = parseFloat(parts[0])
+                const lonClie = parseFloat(parts[1])
+                if (!isNaN(latClie) && !isNaN(lonClie)) {
+                    const dist = calculateDistance(latitude, longitude, latClie, lonClie)
+                    if (dist > radioMax) {
+                        toast.error(`📍 Fuera de rango para iniciar visita. Estás a ${dist}m. El radio máximo es ${radioMax}m.`)
+                        setLoading(false)
+                        return
+                    }
+                }
+            }
+
             try {
                 const res = await fetch('/api/visitas', {
                     method: 'POST',
@@ -127,10 +177,10 @@ export function VisitActionButton({
             }
         }, (err) => {
             console.error("GPS Error:", err)
-            const msg = err.code === 3 ? "Tiempo agotado al capturar GPS (10s). Reintenta." : "Error al capturar GPS. Verifica permisos."
+            const msg = err.code === 3 ? "Tiempo agotado al capturar GPS (15s). Reintenta." : "Error al capturar GPS. Verifica permisos."
             toast.error(msg)
             setLoading(false)
-        }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 })
+        }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
     }
 
     const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
@@ -250,17 +300,48 @@ export function VisitActionButton({
                             </AlertDialogTitle>
                             <AlertDialogDescription className="text-slate-400">
                                 Grabaremos tu ubicación GPS actual y se requiere una permanencia mínima de {minTime} minutos para validar el registro.
+                                
+                                {(() => {
+                                    if (!clientCoords || !userLoc) return null;
+                                    const parts = clientCoords.split(',')
+                                    const dist = calculateDistance(userLoc[0], userLoc[1], parseFloat(parts[0]), parseFloat(parts[1]))
+                                    const isFar = dist > radioMax
+                                    return (
+                                        <div className={cn(
+                                            "mt-4 p-3 rounded-xl border flex flex-col gap-1 items-center justify-center transition-all",
+                                            isFar ? "bg-red-500/10 border-red-500/30 text-red-500" : "bg-emerald-500/10 border-emerald-500/30 text-emerald-500"
+                                        )}>
+                                            <div className="flex items-center gap-2 font-black text-lg">
+                                                <MapPin className="w-4 h-4" />
+                                                <span>Distancia: {dist < 1000 ? `${dist}m` : `${(dist/1000).toFixed(1)}km`}</span>
+                                            </div>
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-center">
+                                                {isFar ? `❌ FUERA DEL RADIO PERMITIDO (MAX ${radioMax}M)` : `✓ DENTRO DEL RADIO DE VISITA`}
+                                            </p>
+                                        </div>
+                                    )
+                                })()}
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDialogOpen(false); }} className="bg-slate-900 border-slate-800 text-slate-400">
                                 Cancelar
                             </AlertDialogCancel>
-                            <AlertDialogAction 
+                             <AlertDialogAction 
                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleStart(); }}
-                                className="bg-indigo-600 hover:bg-indigo-500 font-bold"
+                                disabled={loading || (() => {
+                                    if (!clientCoords || !userLoc) return false;
+                                    const parts = clientCoords.split(',')
+                                    return calculateDistance(userLoc[0], userLoc[1], parseFloat(parts[0]), parseFloat(parts[1])) > radioMax
+                                })()}
+                                className={cn(
+                                    "font-bold transition-all",
+                                    (clientCoords && userLoc && calculateDistance(userLoc[0], userLoc[1], parseFloat(clientCoords.split(',')[0]), parseFloat(clientCoords.split(',')[1])) > radioMax)
+                                        ? "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700"
+                                        : "bg-indigo-600 hover:bg-indigo-500 text-white"
+                                )}
                             >
-                                Sí, Iniciar Visita
+                                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Sí, Iniciar Visita"}
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>

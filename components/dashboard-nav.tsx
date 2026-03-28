@@ -74,11 +74,11 @@ export function DashboardNav({
         
         // --- Gestión y Supervisión ---
         { href: '/dashboard/asistencia', label: 'Asistencia', icon: Clock, roles: ['admin'], category: 'Gestión' },
+        { href: '/dashboard/usuarios', label: 'Gestión de Equipo', icon: UserCog, roles: ['admin'], category: 'Gestión' },
         { href: '/dashboard/supervision', label: 'Supervisión', icon: ChartBar, roles: ['admin', 'supervisor'], category: 'Gestión' },
         { href: '/dashboard/auditoria', label: 'Auditoría', icon: History, roles: ['admin', 'supervisor'], category: 'Gestión' },
         
         // --- Configuración y Admin ---
-        { href: '/dashboard/usuarios', label: 'Gestión de Equipo', icon: UserCog, roles: ['admin'], category: 'Configuración' },
         { href: '/dashboard/admin/sectores', label: 'Sectores', icon: Briefcase, roles: ['admin'], category: 'Configuración' },
         { href: '/dashboard/config-sistema', label: 'Configuración', icon: Cog, roles: ['admin'], category: 'Configuración' },
         { href: '/dashboard/alertas', label: 'Alertas', icon: ShieldAlert, roles: ['admin'], category: 'Configuración' },

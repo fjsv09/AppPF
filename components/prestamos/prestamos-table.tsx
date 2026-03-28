@@ -141,6 +141,18 @@ export function PrestamosTable({
     const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK', 'PENDING_SALDO'].includes(systemAccess?.code);
     const isBlockedForPayments = isBlockedByCuadre && isTotalBlock;
     const isBlockedForOperations = isBlockedByCuadre;
+    const [userLoc, setUserLoc] = useState<[number, number] | null>(null)
+
+    useEffect(() => {
+        if (typeof window !== 'undefined' && navigator.geolocation) {
+           const id = navigator.geolocation.watchPosition(
+                (pos) => setUserLoc([pos.coords.latitude, pos.coords.longitude]),
+                (err) => console.error("Error GPS Table:", err),
+                { enableHighAccuracy: true }
+           )
+           return () => navigator.geolocation.clearWatch(id)
+        }
+    }, [])
 
     // Mapa de gestión de préstamos por cliente para determinar elegibilidad de renovación
     const loanManagementMap = useMemo(() => {
@@ -1451,7 +1463,15 @@ export function PrestamosTable({
                                                      
                                                      if (!cuotaTargetId) return null;
                                                      
-                                                     return <VisitActionButton cuotaId={cuotaTargetId} variant="icon" className="h-8 w-8" />;
+                                                     const clientCoords = prestamo.gps_coordenadas || (prestamo.clientes?.solicitudes?.[0]?.gps_coordenadas);
+                                                     
+                                                     return <VisitActionButton 
+                                                        cuotaId={cuotaTargetId} 
+                                                        clientCoords={clientCoords}
+                                                        userLoc={userLoc}
+                                                        variant="icon" 
+                                                        className="h-8 w-8" 
+                                                     />;
                                                  })()}
 
                                                  {/* Registrar Gestión Button - Para todos */}

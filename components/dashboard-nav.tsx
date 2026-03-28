@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { Home, Users, Banknote, Calendar, ShieldAlert, History, LogOut, Settings, ChartBar, FileText, Menu, RefreshCw, Cog, Briefcase, Camera, Bell, Landmark, Wallet, UserCog, Receipt, CreditCard, Target, Award, Contact, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Home, Users, Banknote, Calendar, ShieldAlert, History, LogOut, Settings, ChartBar, FileText, Menu, RefreshCw, Cog, Briefcase, Camera, Bell, Landmark, Wallet, UserCog, Receipt, CreditCard, Target, Award, Contact, ChevronLeft, ChevronRight, Clock } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Button } from './ui/button'
@@ -73,6 +73,7 @@ export function DashboardNav({
         { href: '/dashboard/pagos', label: 'Pagos', icon: Calendar, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
         
         // --- Gestión y Supervisión ---
+        { href: '/dashboard/asistencia', label: 'Asistencia', icon: Clock, roles: ['admin'], category: 'Gestión' },
         { href: '/dashboard/supervision', label: 'Supervisión', icon: ChartBar, roles: ['admin', 'supervisor'], category: 'Gestión' },
         { href: '/dashboard/auditoria', label: 'Auditoría', icon: History, roles: ['admin', 'supervisor'], category: 'Gestión' },
         

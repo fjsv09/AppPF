@@ -1,14 +1,29 @@
 "use client"
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { CheckCircle2, AlertTriangle, AlertCircle, Receipt, Loader2, ArrowUpRight, TrendingDown, Calendar as CalendarIcon, Filter, Clock } from 'lucide-react'
+import { 
+    CheckCircle2, 
+    AlertTriangle, 
+    AlertCircle, 
+    Receipt, 
+    Loader2, 
+    ArrowUpRight, 
+    Calendar as CalendarIcon, 
+    Filter, 
+    Clock, 
+    Download,
+    User,
+    Phone,
+    ExternalLink,
+    ChevronRight,
+    Search
+} from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { createClient } from '@/utils/supabase/client'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { format, subDays, startOfMonth, endOfMonth, startOfDay, endOfDay } from 'date-fns'
-import { cn } from '@/lib/utils'
+import { cn, formatDatePeru } from '@/lib/utils'
 import { 
     Dialog, 
     DialogContent, 
@@ -17,7 +32,8 @@ import {
     DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { ExternalLink, User, History, Phone } from 'lucide-react'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { toast } from 'sonner'
 
 type DateRangeType = 'today' | '7days' | 'month' | 'custom'
 
@@ -28,12 +44,11 @@ export function VoucherAlerts() {
     const [fromDate, setFromDate] = useState<string>(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
     const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
     const [selectedAdvisor, setSelectedAdvisor] = useState<any>(null)
+    const [searchTerm, setSearchTerm] = useState('')
 
     const fetchVouchersStats = useCallback(async () => {
         setLoading(true)
-
         try {
-            // Construir params de fecha
             const now = new Date()
             let startIso: string | null = null
             let endIso: string | null = null
@@ -54,20 +69,18 @@ export function VoucherAlerts() {
 
             const url = new URL('/api/auditoria/vouchers', window.location.origin)
             if (startIso) url.searchParams.set('from', startIso)
-            if (endIso) url.searchParams.set('to', endIso) // Changed from `if (startIso) url.searchParams.set('to', endIso || '')` to `if (endIso) url.searchParams.set('to', endIso)`
+            if (endIso) url.searchParams.set('to', endIso)
 
             const response = await fetch(url.toString())
             if (!response.ok) throw new Error('Error al cargar estadísticas')
-            
             const data = await response.json()
             
-            // Calcular % tras recibir la data consolidada del backend
             const finalStats = data.map((s: any) => ({
                 ...s,
-                percentage: s.total > 0 ? (s.compartidos / s.total) * 100 : 0,
+                pendientesCount: s.pendientes?.length || 0,
+                percentage: s.total > 0 ? (s.compartidos / s.total) * 100 : 100,
                 hasActivity: s.total > 0
             })).sort((a: any, b: any) => {
-                // Ordenar: primero los que tienen actividad y menor porcentaje, luego los sin actividad
                 if (a.hasActivity && !b.hasActivity) return -1
                 if (!a.hasActivity && b.hasActivity) return 1
                 return a.percentage - b.percentage
@@ -76,6 +89,7 @@ export function VoucherAlerts() {
             setStats(finalStats)
         } catch (error) {
             console.error("Error fetching voucher stats:", error)
+            toast.error("No se pudieron cargar los datos de vouchers")
         } finally {
             setLoading(false)
         }
@@ -85,248 +99,191 @@ export function VoucherAlerts() {
         fetchVouchersStats()
     }, [fetchVouchersStats])
 
+    const filteredStats = useMemo(() => {
+        return stats.filter(s => 
+            s.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+    }, [stats, searchTerm])
+
+    const getStatusColor = (percentage: number, hasActivity: boolean) => {
+        if (!hasActivity) return 'text-slate-500 bg-slate-500/10 border-slate-500/20'
+        if (percentage >= 90) return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20'
+        if (percentage >= 60) return 'text-amber-500 bg-amber-500/10 border-amber-500/20'
+        return 'text-red-500 bg-red-500/10 border-red-500/20'
+    }
+
+    const getStatusLabel = (percentage: number, hasActivity: boolean) => {
+        if (!hasActivity) return 'Sin Actividad'
+        if (percentage >= 90) return 'Confiable'
+        if (percentage >= 60) return 'Advertencia'
+        return 'Crítico'
+    }
+
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
-            {/* Header and Controls */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-amber-500/10 rounded-xl border border-amber-500/20 shadow-lg shadow-amber-500/5">
-                        <Receipt className="w-6 h-6 text-amber-500" />
+            <Card className="bg-[#0a0a0c]/80 border-slate-800 shadow-2xl overflow-hidden backdrop-blur-xl">
+                <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                            <Receipt className="w-5 h-5 text-amber-500" />
+                        </div>
+                        <div>
+                            <CardTitle className="text-lg font-bold text-white tracking-tight">Monitor de Vouchers</CardTitle>
+                            <p className="text-xs text-slate-500 mt-0.5">Auditoría de cumplimiento por asesor en entrega de recibos.</p>
+                        </div>
                     </div>
-                    <div>
-                        <h2 className="text-xl font-bold text-white tracking-tight">Monitor de Entrega de Recibos</h2>
-                        <p className="text-sm text-slate-400">Auditoría de cumplimiento por asesor.</p>
-                    </div>
-                </div>
-
-                {/* Filters */}
-                <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 bg-slate-900/40 p-2 rounded-2xl border border-slate-800/50 backdrop-blur-md w-full max-w-full lg:w-fit">
-                    <div className="flex items-center gap-2 px-3 py-1.5 sm:border-r border-slate-800/50 shrink-0">
-                        <Filter className="w-4 h-4 text-slate-500" />
-                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Filtrar por periodo</span>
-                    </div>
-
-                    <Select value={dateRangeType} onValueChange={(val: DateRangeType) => setDateRangeType(val)}>
-                        <SelectTrigger className="w-full sm:w-[180px] h-10 bg-slate-950/50 border-slate-700/50 text-slate-300 rounded-xl text-xs">
-                            <CalendarIcon className="w-3.5 h-3.5 mr-2 text-amber-500" />
-                            <SelectValue placeholder="Periodo" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-900 border-slate-800 text-slate-300">
-                            <SelectItem value="today">Hoy ({format(new Date(), 'dd MMM')})</SelectItem>
-                            <SelectItem value="7days">Últimos 7 días</SelectItem>
-                            <SelectItem value="month">Este Mes</SelectItem>
-                            <SelectItem value="custom">Rango Personalizado</SelectItem>
-                        </SelectContent>
-                    </Select>
-
-                    {dateRangeType === 'custom' && (
-                        <div className="flex flex-wrap items-center gap-2 animate-in slide-in-from-left-2 duration-300 w-full sm:w-auto">
+                    
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="relative w-full sm:w-48">
+                            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
                             <Input 
-                                type="date" 
-                                value={fromDate} 
-                                onChange={(e) => setFromDate(e.target.value)}
-                                className="h-10 flex-1 sm:w-full sm:max-w-[140px] bg-slate-950/50 border-slate-700/50 text-slate-300 text-xs rounded-xl"
-                            />
-                            <span className="text-slate-600">a</span>
-                            <Input 
-                                type="date" 
-                                value={toDate} 
-                                onChange={(e) => setToDate(e.target.value)}
-                                className="h-10 flex-1 sm:w-full sm:max-w-[140px] bg-slate-950/50 border-slate-700/50 text-slate-300 text-xs rounded-xl"
+                                placeholder="Buscar asesor..." 
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-9 h-9 text-[11px] bg-slate-950/50 border-slate-700/50 text-slate-300 rounded-lg placeholder:text-slate-600 focus:border-amber-500/50 transition-colors"
                             />
                         </div>
-                    )}
-                </div>
-            </div>
-
-            {loading ? (
-                <div className="flex flex-col items-center justify-center py-24 gap-4 bg-slate-900/20 rounded-3xl border border-slate-800/50">
-                    <div className="relative">
-                        <Loader2 className="w-10 h-10 animate-spin text-amber-500" />
-                        <div className="absolute inset-0 blur-lg bg-amber-500/20 animate-pulse" />
-                    </div>
-                    <p className="text-slate-400 font-medium animate-pulse">Analizando registros de pagos...</p>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {stats.length === 0 && (
-                        <div className="col-span-full flex flex-col items-center justify-center py-20 bg-slate-900/40 rounded-2xl border border-slate-800/50 border-dashed">
-                            <AlertCircle className="w-10 h-10 text-slate-700 mb-3" />
-                            <p className="text-slate-500 font-medium">No se encontraron cobros en este periodo.</p>
-                        </div>
-                    )}
-                    {stats.map((s, idx) => {
-                        const statusColor = !s.hasActivity ? 'slate' : s.percentage >= 80 ? 'emerald' : s.percentage >= 50 ? 'amber' : 'rose'
                         
-                        return (
-                            <div 
-                                key={idx} 
-                                onClick={() => setSelectedAdvisor(s)}
-                                className={cn(
-                                    "relative overflow-hidden group transition-all duration-300 hover:scale-[1.01] border border-slate-800/50 cursor-pointer rounded-2xl p-4",
-                                    "bg-[#0a0a0a]/60 backdrop-blur-xl",
-                                    statusColor === 'rose' && "hover:border-rose-500/30",
-                                    statusColor === 'amber' && "hover:border-amber-500/30",
-                                    statusColor === 'emerald' && "hover:border-emerald-500/30",
-                                    statusColor === 'slate' && "hover:border-slate-800",
-                                )}
-                            >
-                                <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-2">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        <div className={cn(
-                                            "w-2 h-2 rounded-full shrink-0",
-                                            statusColor === 'emerald' && "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]",
-                                            statusColor === 'amber' && "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]",
-                                            statusColor === 'rose' && "bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]",
-                                            statusColor === 'slate' && "bg-slate-700"
-                                        )} />
-                                        <span className="text-sm font-bold text-slate-100 truncate group-hover:text-white transition-colors">{s.nombre}</span>
-                                    </div>
-                                    <Badge 
-                                        variant="outline" 
-                                        className={cn(
-                                            "text-[10px] px-2 py-0 rounded-md border font-mono",
-                                            statusColor === 'rose' && "bg-rose-500/10 text-rose-400 border-rose-500/20",
-                                            statusColor === 'amber' && "bg-amber-500/10 text-amber-400 border-amber-500/20",
-                                            statusColor === 'emerald' && "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-                                            statusColor === 'slate' && "bg-slate-800/50 text-slate-500 border-slate-700"
-                                        )}
-                                    >
-                                        {s.percentage.toFixed(0)}%
-                                    </Badge>
-                                </div>
+                        <Select value={dateRangeType} onValueChange={(val: DateRangeType) => setDateRangeType(val)}>
+                            <SelectTrigger className="w-[140px] h-9 bg-slate-950/50 border-slate-700/50 text-slate-300 rounded-lg text-[10px] uppercase font-bold tracking-wider">
+                                <CalendarIcon className="w-3.5 h-3.5 mr-2 text-amber-500" />
+                                <SelectValue placeholder="Periodo" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-slate-800 text-slate-300">
+                                <SelectItem value="today">Hoy</SelectItem>
+                                <SelectItem value="7days">7 Días</SelectItem>
+                                <SelectItem value="month">Este Mes</SelectItem>
+                                <SelectItem value="custom">Personalizado</SelectItem>
+                            </SelectContent>
+                        </Select>
 
-                                <div className="flex items-end justify-between gap-4">
-                                    <div className="flex-1 space-y-3">
-                                        <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                                            <span>Cumplimiento</span>
-                                            <span className="text-slate-400 font-mono">{s.compartidos} <span className="text-slate-600">/</span> {s.total}</span>
-                                        </div>
-                                        <div className="h-1.5 w-full bg-slate-950 overflow-hidden rounded-full border border-white/5">
-                                            {s.hasActivity ? (
-                                                <div 
-                                                    className={cn(
-                                                        "h-full transition-all duration-1000",
-                                                        statusColor === 'emerald' && "bg-emerald-500",
-                                                        statusColor === 'amber' && "bg-amber-500",
-                                                        statusColor === 'rose' && "bg-rose-500"
-                                                    )} 
-                                                    style={{ width: `${s.percentage}%` }}
-                                                />
-                                            ) : (
-                                                <div className="h-full w-full bg-slate-900/50" />
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="shrink-0 flex flex-col items-center gap-1">
-                                        <div className="p-2 bg-slate-950/50 rounded-lg border border-slate-800/50 group-hover:border-slate-700 transition-colors">
-                                            <ArrowUpRight className="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors" />
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                {s.hasActivity && s.percentage < 50 && (
-                                    <div className="mt-4 pt-3 border-t border-white/5 flex items-center gap-2">
-                                        <AlertTriangle className="w-3 h-3 text-rose-500 shrink-0" />
-                                        <span className="text-[9px] text-rose-400 font-medium">Bajo desempeño en entrega</span>
-                                    </div>
-                                )}
+                        {dateRangeType === 'custom' && (
+                            <div className="flex items-center gap-1.5 animate-in slide-in-from-right-2">
+                                <Input 
+                                    type="date" 
+                                    value={fromDate} 
+                                    onChange={(e) => setFromDate(e.target.value)}
+                                    className="h-9 w-32 bg-slate-950/50 border-slate-700/50 text-slate-300 text-[10px] rounded-lg"
+                                />
+                                <Input 
+                                    type="date" 
+                                    value={toDate} 
+                                    onChange={(e) => setToDate(e.target.value)}
+                                    className="h-9 w-32 bg-slate-950/50 border-slate-700/50 text-slate-300 text-[10px] rounded-lg"
+                                />
                             </div>
-                        )
-                    })}
-                </div>
-            )}
+                        )}
+                    </div>
+                </CardHeader>
+
+                <CardContent className="p-0">
+                    {loading ? (
+                        <div className="flex flex-col items-center justify-center py-24 gap-4">
+                            <div className="relative">
+                                <Loader2 className="w-10 h-10 animate-spin text-amber-500/50" />
+                                <div className="absolute inset-0 blur-xl bg-amber-500/10 animate-pulse" />
+                            </div>
+                            <p className="text-[11px] text-slate-500 uppercase tracking-[0.2em] font-black animate-pulse">Analizando Transacciones...</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader className="bg-white/5">
+                                    <TableRow className="hover:bg-transparent border-white/5">
+                                        <TableHead className="text-[10px] uppercase font-black text-slate-500 h-10 px-4">Asesor</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-black text-slate-500 h-10 text-center">Cobros</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-black text-slate-500 h-10 text-center">Enviados</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-black text-slate-500 h-10 text-center">Pendientes</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-black text-slate-500 h-10 text-center">Cumplimiento</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-black text-slate-500 h-10 text-right pr-4">Estado</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {filteredStats.map((s, idx) => (
+                                        <TableRow 
+                                            key={idx} 
+                                            onClick={() => setSelectedAdvisor(s)}
+                                            className="border-white/5 hover:bg-white/5 transition-all cursor-pointer group"
+                                        >
+                                            <TableCell className="py-3 px-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="h-8 w-8 rounded-full border border-white/10 overflow-hidden bg-slate-800 flex items-center justify-center shrink-0 group-hover:border-amber-500/30 transition-colors">
+                                                        <User className="w-3.5 h-3.5 text-slate-500 group-hover:text-amber-500 transition-colors" />
+                                                    </div>
+                                                    <span className="font-bold text-slate-200 text-[13px] group-hover:text-amber-400 transition-colors">{s.nombre}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-center font-bold text-slate-400 text-sm">{s.total}</TableCell>
+                                            <TableCell className="text-center font-bold text-emerald-400 text-sm">{s.compartidos}</TableCell>
+                                            <TableCell className="text-center">
+                                                <span className={cn(
+                                                    "font-black text-sm",
+                                                    s.pendientesCount > 0 ? "text-red-400" : "text-emerald-500/50"
+                                                )}>
+                                                    {s.pendientesCount}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <div className="flex flex-col items-center gap-1.5 max-w-[100px] mx-auto">
+                                                    <div className="flex justify-between w-full text-[9px] font-black font-mono">
+                                                        <span className="text-slate-500">{s.percentage.toFixed(0)}%</span>
+                                                    </div>
+                                                    <div className="h-1 w-full bg-slate-950 rounded-full overflow-hidden border border-white/5">
+                                                        <div 
+                                                            className={cn(
+                                                                "h-full transition-all duration-1000",
+                                                                s.percentage >= 90 ? "bg-emerald-500" : s.percentage >= 60 ? "bg-amber-500" : "bg-red-500"
+                                                            )} 
+                                                            style={{ width: `${s.percentage}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right pr-6">
+                                                <Badge className={cn(
+                                                    "font-black tracking-wider text-[9px] uppercase border px-2 py-0.5",
+                                                    getStatusColor(s.percentage, s.hasActivity)
+                                                )}>
+                                                    {getStatusLabel(s.percentage, s.hasActivity)}
+                                                </Badge>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {filteredStats.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={6} className="h-40 text-center">
+                                                <div className="flex flex-col items-center justify-center text-slate-500 gap-2">
+                                                    <Search className="w-8 h-8 opacity-10" />
+                                                    <p className="text-xs italic">No se encontraron resultados para tu búsqueda.</p>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             {/* Drill-down Modal */}
             <Dialog open={!!selectedAdvisor} onOpenChange={(open) => !open && setSelectedAdvisor(null)}>
-                <DialogContent className="bg-slate-950 border-slate-800 text-slate-300 max-w-2xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="p-2 bg-blue-500/10 rounded-lg">
-                                <User className="w-5 h-5 text-blue-500" />
-                            </div>
-                            <div>
-                                <DialogTitle className="text-xl font-bold text-white">Detalle de Cobros: {selectedAdvisor?.nombre}</DialogTitle>
-                                <DialogDescription className="text-slate-500">
-                                    Pagos registrados que aún no cuentan con respaldo de voucher.
-                                </DialogDescription>
-                            </div>
-                        </div>
+                <DialogContent className="bg-slate-950 border-slate-800 text-white max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+                    <DialogHeader className="p-6 border-b border-white/5">
+                        <DialogTitle className="flex items-center gap-3 text-xl font-bold text-amber-500">
+                            <Receipt className="w-6 h-6" />
+                            Cobros de {selectedAdvisor?.nombre}
+                        </DialogTitle>
+                        <DialogDescription className="text-slate-500">
+                            Pendientes de voucher para el periodo: {dateRangeType === 'custom' ? `${fromDate} / ${toDate}` : dateRangeType.toUpperCase()}
+                        </DialogDescription>
                     </DialogHeader>
 
-                    <div className="mt-6">
+                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                         {selectedAdvisor?.pendientes?.length > 0 ? (
                             <div className="space-y-3">
-                                {/* Vista Desktop: Tabla */}
-                                <div className="hidden md:block rounded-xl border border-slate-800 overflow-hidden">
-                                    <table className="w-full text-sm text-left">
-                                        <thead className="bg-slate-900/50 text-slate-400 text-xs uppercase tracking-wider">
-                                            <tr>
-                                                <th className="px-4 py-3 font-semibold">Cliente</th>
-                                                <th className="px-4 py-3 font-semibold text-center">Cuotas</th>
-                                                <th className="px-4 py-3 text-right">Acción</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-800">
-                                            {(() => {
-                                                const groups = Object.values(
-                                                    selectedAdvisor.pendientes.reduce((acc: any, p: any) => {
-                                                        if (!acc[p.prestamo_id]) {
-                                                            acc[p.prestamo_id] = {
-                                                                cliente: p.cliente,
-                                                                telefono: p.telefono,
-                                                                prestamo_id: p.prestamo_id,
-                                                                cuotas: []
-                                                            }
-                                                        }
-                                                        acc[p.prestamo_id].cuotas.push(p.cuota)
-                                                        return acc
-                                                    }, {})
-                                                );
-                                                return groups.map((group: any, idx: number) => (
-                                                    <tr key={idx} className="hover:bg-white/5 transition-colors group">
-                                                        <td className="px-4 py-4">
-                                                            <div className="flex flex-col">
-                                                                <span className="font-medium text-white">{group.cliente}</span>
-                                                                <span className="text-[10px] text-slate-500 font-mono">ID: {group.prestamo_id.split('-')[0]}...</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-4 py-4 text-center">
-                                                            <div className="flex flex-col items-center">
-                                                                <span className="text-lg font-bold text-rose-500 leading-none">{group.cuotas.length}</span>
-                                                                <span className="text-[9px] uppercase text-slate-500 font-medium tracking-tighter">pendientes</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-4 py-4 text-right">
-                                                            <div className="flex items-center justify-end gap-2">
-                                                                {group.telefono && (
-                                                                    <Button 
-                                                                        variant="outline" size="sm" 
-                                                                        className="h-9 w-9 p-0 bg-emerald-500/5 border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 group/phone"
-                                                                        onClick={(e) => { e.stopPropagation(); window.location.href = `tel:${group.telefono}`; }}
-                                                                    >
-                                                                        <Phone className="w-4 h-4 group-hover/phone:scale-110 transition-transform" />
-                                                                    </Button>
-                                                                )}
-                                                                <Button 
-                                                                    variant="outline" size="sm" 
-                                                                    className="h-9 w-9 p-0 bg-blue-500/5 border-blue-500/20 hover:bg-blue-500/20 text-blue-400 group/link"
-                                                                    onClick={(e) => { e.stopPropagation(); window.location.href = `/dashboard/prestamos/${group.prestamo_id}?tab=historial`; }}
-                                                                >
-                                                                    <ExternalLink className="w-4 h-4 group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5 transition-transform" />
-                                                                </Button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                ));
-                                            })()}
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                {/* Vista Móvil: Tarjetas */}
-                                <div className="md:hidden space-y-3">
-                                    {Object.values(
+                                {(() => {
+                                    const groups = Object.values(
                                         selectedAdvisor.pendientes.reduce((acc: any, p: any) => {
                                             if (!acc[p.prestamo_id]) {
                                                 acc[p.prestamo_id] = {
@@ -339,60 +296,81 @@ export function VoucherAlerts() {
                                             acc[p.prestamo_id].cuotas.push(p.cuota)
                                             return acc
                                         }, {})
-                                    ).map((group: any, idx: number) => (
-                                        <div key={idx} className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 flex items-center justify-between gap-4">
+                                    );
+
+                                    return groups.map((group: any, idx: number) => (
+                                        <div key={idx} className="bg-slate-900/40 border border-white/5 rounded-2xl p-4 flex items-center justify-between gap-4 group hover:border-amber-500/30 transition-all">
                                             <div className="flex-1 min-w-0">
-                                                <p className="font-semibold text-white truncate text-sm">{group.cliente}</p>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <Badge variant="outline" className="bg-rose-500/10 border-rose-500/20 text-rose-400 text-[10px] px-1.5 h-5">
+                                                <div className="flex items-center gap-2 mb-1.5">
+                                                    <span className="font-bold text-slate-100 text-[14px] truncate group-hover:text-white transition-colors capitalize">
+                                                        {group.cliente.toLowerCase()}
+                                                    </span>
+                                                    <Badge variant="outline" className="bg-red-500/10 border-red-500/20 text-red-400 text-[9px] px-1.5 h-4 font-black">
                                                         {group.cuotas.length} {group.cuotas.length === 1 ? 'Cuota' : 'Cuotas'}
                                                     </Badge>
-                                                    <span className="text-[10px] text-slate-500 font-mono">ID: {group.prestamo_id.split('-')[0]}</span>
+                                                </div>
+                                                <div className="flex items-center gap-3 text-[10px] text-slate-500 font-mono tracking-tighter uppercase">
+                                                    <span className="flex items-center gap-1">
+                                                        <Clock className="w-3 h-3 text-slate-600" />
+                                                        ID: {group.prestamo_id.split('-')[0]}
+                                                    </span>
+                                                    {group.telefono && (
+                                                        <span className="flex items-center gap-1 text-emerald-500/60">
+                                                            <Phone className="w-3 h-3" />
+                                                            {group.telefono}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
+
                                             <div className="flex items-center gap-2 shrink-0">
                                                 {group.telefono && (
                                                     <Button 
-                                                        variant="outline" size="sm" 
-                                                        className="h-10 w-10 p-0 bg-emerald-500/5 border-emerald-500/20 text-emerald-400 active:bg-emerald-500/20"
-                                                        onClick={(e) => { e.stopPropagation(); window.location.href = `tel:${group.telefono}`; }}
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        onClick={() => window.location.href = `tel:${group.telefono}`}
+                                                        className="h-10 w-10 p-0 bg-emerald-500/5 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white"
                                                     >
                                                         <Phone className="w-4 h-4" />
                                                     </Button>
                                                 )}
                                                 <Button 
-                                                    variant="outline" size="sm" 
-                                                    className="h-10 w-10 p-0 bg-blue-500/5 border-blue-500/20 text-blue-400 active:bg-blue-500/20"
-                                                    onClick={(e) => { e.stopPropagation(); window.location.href = `/dashboard/prestamos/${group.prestamo_id}?tab=historial`; }}
+                                                    asChild
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="h-10 px-4 bg-amber-500/10 border-amber-500/20 text-amber-500 hover:bg-amber-500 hover:text-white font-bold text-[11px] gap-2 rounded-xl"
                                                 >
-                                                    <ExternalLink className="w-4 h-4" />
+                                                    <a href={`/dashboard/prestamos/${group.prestamo_id}?tab=historial`}>
+                                                        Auditar
+                                                        <ExternalLink className="w-3.5 h-3.5" />
+                                                    </a>
                                                 </Button>
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
+                                    ));
+                                })()}
                             </div>
                         ) : (
-                            <div className="flex flex-col items-center justify-center py-12 text-center bg-slate-900/30 rounded-2xl border border-slate-800/50">
-                                <div className="p-3 bg-emerald-500/10 rounded-full mb-4">
-                                    <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                            <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+                                <div className="p-4 bg-emerald-500/5 rounded-full border border-emerald-500/10">
+                                    <CheckCircle2 className="w-12 h-12 text-emerald-500/30" />
                                 </div>
-                                <h3 className="text-white font-bold text-lg">¡Todo al día!</h3>
-                                <p className="text-slate-500 text-sm max-w-xs mt-1">
-                                    Este asesor ha compartido todos los vouchers correspondientes a sus cobros auditables.
-                                </p>
+                                <div className="space-y-1">
+                                    <h3 className="text-white font-bold text-lg">¡Impecable!</h3>
+                                    <p className="text-slate-500 text-sm max-w-[280px]">Este asesor ha cumplido con la entrega de todos sus vouchers.</p>
+                                </div>
                             </div>
                         )}
-                        
-                        <div className="flex justify-end pt-4">
-                            <Button 
-                                variant="outline" 
-                                className="bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
-                                onClick={() => setSelectedAdvisor(null)}
-                            >
-                                Cerrar
-                            </Button>
-                        </div>
+                    </div>
+
+                    <div className="p-4 border-t border-white/5 bg-slate-900/50 flex justify-end">
+                        <Button 
+                            variant="ghost" 
+                            onClick={() => setSelectedAdvisor(null)}
+                            className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-wider"
+                        >
+                            Cerrar Monitor
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>

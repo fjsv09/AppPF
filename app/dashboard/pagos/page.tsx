@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Plus, DollarSign, Calendar, TrendingUp, ArrowUpRight } from 'lucide-react'
 import { TablaCuotasVencidas } from '@/components/pagos/tabla-cuotas-vencidas'
+import { RecentPaymentsList } from '@/components/pagos/recent-payments-list'
 import { BackButton } from '@/components/ui/back-button'
 
 export const dynamic = 'force-dynamic'
@@ -18,9 +19,11 @@ export const metadata: Metadata = {
     title: 'Transacciones y Cobros'
 }
 
-export default async function PagosPage(props: { searchParams: Promise<{ fecha?: string }> }) {
+export default async function PagosPage(props: { searchParams: Promise<{ fecha?: string, p_page?: string }> }) {
     const searchParams = await props.searchParams;
     const fechaParam = searchParams.fecha;
+    const paymentPage = Number(searchParams.p_page) || 1
+    const ITEMS_PER_PAGE = 10
 
     const supabase = await createClient()
     const supabaseAdmin = createAdminClient(
@@ -46,7 +49,7 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         .in('rol', ['supervisor', 'asesor'])
         .order('nombre_completo')
 
-    // Build pagos query with role-based filtering
+    // Build pagos query with role-based filtering and pagination
     let pagosQuery = supabaseAdmin
         .from('pagos')
         .select(`
@@ -57,7 +60,7 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
                     clientes!inner (nombres, asesor_id)
                 )
             )
-        `)
+        `, { count: 'exact' })
 
     if (userRol === 'asesor') {
         pagosQuery = pagosQuery.eq('cronograma_cuotas.prestamos.clientes.asesor_id', userId)
@@ -66,15 +69,16 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         pagosQuery = pagosQuery.in('cronograma_cuotas.prestamos.clientes.asesor_id', teamAsesorIds)
     }
 
-    const { data: pagos, error: pagosError } = await pagosQuery
+    const { data: pagos, count: totalPagos, error: pagosError } = await pagosQuery
         .order('fecha_pago', { ascending: false })
-        .limit(20)
+        .range((paymentPage - 1) * ITEMS_PER_PAGE, (paymentPage * ITEMS_PER_PAGE) - 1)
 
     if (pagosError) {
         console.error('Error fetching pagos:', pagosError.message)
     }
 
     // Fetch pending quotas for filter date (or today/overdue)
+    // ... (rest of the server-side logic stays the same) ...
     const now = new Date()
     const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     
@@ -99,10 +103,8 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
 
     // Conditional Date Filter
     if (fechaParam) {
-        // Si el usuario seleccionó una fecha específica -> Filtro estricto (solo ese día)
         cuotasQuery = cuotasQuery.eq('fecha_vencimiento', fechaParam)
     } else {
-        // Por defecto -> Filtro acumulado (todo lo vencido hasta hoy)
         cuotasQuery = cuotasQuery.lte('fecha_vencimiento', todayISO)
     }
     
@@ -203,19 +205,24 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
     
     // Usar todayISO para filtrar pagos 'de hoy' independientemente del filtro de tabla
     const today = todayISO
-    const pagosHoy = pagos?.filter((p: any) => getLocalDate(p.fecha_pago) === today)
-    
-    const totalCobradoHoy = pagosHoy?.reduce((acc: number, curr: any) => acc + (curr.monto_pagado || 0), 0) || 0
+    // Para las estadísticas de "Cobrado Hoy", necesitamos fetch TODOS los pagos de hoy, no solo los paginados.
+    // Pero por ahora, usemos lo que tenemos o hagamos un fetch extra si es necesario.
+    // Dado que el dashboard de pagos suele mostrar lo reciente, y ya limitamos, hagamos un fetch de balance hoy.
+    const { data: pagosHoyData } = await supabaseAdmin
+        .from('pagos')
+        .select('monto_pagado')
+        .gte('fecha_pago', `${today}T00:00:00`)
+        .lte('fecha_pago', `${today}T23:59:59`)
+
+    const totalCobradoHoy = pagosHoyData?.reduce((acc: number, curr: any) => acc + (curr.monto_pagado || 0), 0) || 0
         
     const totalPendienteHoy = cuotasFiltradas.reduce((acc: number, curr: any) => acc + (curr.totalPendiente || 0), 0) || 0
     
-    const totalMostrado = pagos?.reduce((acc: number, curr: any) => acc + (curr.monto_pagado || 0), 0) || 0
+    // Total cobrado mostrado en la página actual (para métrica informativa)
+    const totalMostradoPaginado = pagos?.reduce((acc: number, curr: any) => acc + (curr.monto_pagado || 0), 0) || 0
 
     return (
         <div className="page-container">
-            {/* ... (Header & Stats Code Omitted for Brevity - No changes needed there) ... */}
-            {/* Header & Actions */}
-            {/* Header & Actions */}
             <div className="page-header">
                 <div>
                     <div className="flex items-center gap-3">
@@ -236,7 +243,6 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
 
             {/* Daily Stats Grid */}
             <div className="kpi-grid md:grid-cols-3">
-                {/* Stat 1: Collected Today */}
                 <div className="kpi-card group hover:border-emerald-500/30 flex items-center gap-4">
                    <div className="p-3 bg-emerald-500/10 rounded-xl group-hover:bg-emerald-500/20 transition-colors">
                         <DollarSign className="w-7 h-7 text-emerald-500" />
@@ -247,7 +253,6 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
                    </div>
                 </div>
 
-                 {/* Stat 2: Pending Today */}
                  <div className="kpi-card group hover:border-blue-500/30 flex items-center gap-4">
                    <div className="p-3 bg-blue-500/10 rounded-xl group-hover:bg-blue-500/20 transition-colors">
                         <Calendar className="w-7 h-7 text-blue-500" />
@@ -258,21 +263,19 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
                    </div>
                 </div>
 
-                {/* Stat 3: Total Recent */}
                 <div className="kpi-card group hover:border-purple-500/30 flex items-center gap-4">
                    <div className="p-3 bg-purple-500/10 rounded-xl group-hover:bg-purple-500/20 transition-colors">
                         <TrendingUp className="w-7 h-7 text-purple-500" />
                    </div>
                    <div>
-                        <p className="kpi-label">Flujo Reciente</p>
-                        <h3 className="kpi-value">${totalMostrado.toLocaleString()}</h3>
+                        <p className="kpi-label">Flujo en esta Página</p>
+                        <h3 className="kpi-value">${totalMostradoPaginado.toLocaleString()}</h3>
                    </div>
                 </div>
             </div>
 
             {/* Main Content */}
             <div className="grid lg:grid-cols-5 gap-8">
-                {/* Left Column: Pending Collections Table (Larger) */}
                 <div className="lg:col-span-3 space-y-4">
                      <h2 className="section-title">
                         <div className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.6)]" />
@@ -288,62 +291,12 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
                     />
                 </div>
 
-                {/* Right Column: Recent Payments (Smaller) */}
-                <div className="lg:col-span-2 space-y-4">
-                     <h2 className="section-title">
-                        <TrendingUp className="h-5 w-5 text-emerald-500" />
-                        Pagos Recientes
-                     </h2>
-
-                    <div className="content-card">
-                        <div className="divide-y divide-slate-800/50 max-h-[500px] overflow-y-auto">
-                            {pagos?.map((pago: any) => (
-                                <div key={pago.id} className="p-4 hover:bg-white/5 transition-colors flex items-center justify-between gap-4 group cursor-default">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-9 h-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/20 transition-all">
-                                            <DollarSign className="w-4 h-4 text-emerald-500" />
-                                        </div>
-                                        <div>
-                                            <div className="font-medium text-slate-200 text-sm group-hover:text-white transition-colors flex items-center gap-2">
-                                                {pago.cronograma_cuotas?.prestamos?.clientes?.nombres || 'Cliente'}
-                                                {pago.metodo_pago && pago.metodo_pago !== 'Efectivo' && (
-                                                    <span className="text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded uppercase tracking-wider font-bold">
-                                                        {pago.metodo_pago}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="text-xs text-slate-500 font-mono mt-0.5">
-                                                {format(new Date(pago.fecha_pago), 'dd MMM', { locale: es })} • Cuota #{pago.cronograma_cuotas?.numero_cuota || '-'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="text-right">
-                                        <div className="text-base font-bold text-emerald-400 group-hover:text-emerald-300 transition-colors">
-                                            +${pago.monto_pagado}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                            
-                            {(!pagos || pagos.length === 0) && (
-                                <div className="flex flex-col items-center justify-center py-12 text-slate-500">
-                                    <div className="w-14 h-14 bg-slate-800/50 rounded-full flex items-center justify-center mb-3 border border-slate-800">
-                                        <div className="flex gap-1">
-                                            <div className="w-1.5 h-1.5 bg-slate-600 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                                            <div className="w-1.5 h-1.5 bg-slate-600 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                                            <div className="w-1.5 h-1.5 bg-slate-600 rounded-full animate-bounce" />
-                                        </div>
-                                    </div>
-                                    <h3 className="font-medium text-slate-400">Sin movimientos recientes</h3>
-                                    <p className="text-sm text-slate-600 mt-1 text-center max-w-[180px]">
-                                        Los últimos pagos aparecerán aquí
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
+                <RecentPaymentsList 
+                    pagos={pagos || []}
+                    totalRecords={totalPagos || 0}
+                    currentPage={paymentPage}
+                    pageSize={ITEMS_PER_PAGE}
+                />
             </div>
         </div>
     )

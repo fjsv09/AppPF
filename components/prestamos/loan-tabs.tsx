@@ -48,10 +48,15 @@ export function LoanTabs({
     const tabParam = searchParams.get('tab')
     
     // Validar el tab de la URL o usar el default
-    const validTabs = ["cronograma", "historial", "evidencia", "gestiones", "visitas"]
+    const isAdvisor = userRole === 'asesor'
+    const allowedTabs = ["cronograma", "historial", "evidencia", "gestiones"]
+    if (!isAdvisor) {
+        allowedTabs.push("visitas")
+    }
+    
     const [isPending, startTransition] = useTransition()
     const [activeTab, setActiveTab] = useState(() => {
-        if (tabParam && validTabs.includes(tabParam)) {
+        if (tabParam && allowedTabs.includes(tabParam)) {
             return tabParam
         }
         return "cronograma"
@@ -59,10 +64,13 @@ export function LoanTabs({
     
     // Sincronizar estado si la URL cambia (ej: por botones de navegación)
     useEffect(() => {
-        if (tabParam && validTabs.includes(tabParam) && tabParam !== activeTab) {
+        if (tabParam && allowedTabs.includes(tabParam) && tabParam !== activeTab) {
             setActiveTab(tabParam)
+        } else if (tabParam && !allowedTabs.includes(tabParam)) {
+            setActiveTab("cronograma")
+            // Opcional: router.replace(...) para limpiar la URL
         }
-    }, [tabParam, activeTab])
+    }, [tabParam, activeTab, allowedTabs])
 
     const handleTabChange = useCallback((value: string) => {
         setActiveTab(value) // Feedback inmediato en el label
@@ -87,9 +95,11 @@ export function LoanTabs({
                     <TabsTrigger value="historial" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
                         <History className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Historial
                     </TabsTrigger>
-                    <TabsTrigger value="visitas" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
-                        <MapPin className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Visitas
-                    </TabsTrigger>
+                    {!isAdvisor && (
+                        <TabsTrigger value="visitas" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
+                            <MapPin className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Visitas
+                        </TabsTrigger>
+                    )}
                     <TabsTrigger value="evidencia" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
                         <Camera className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Evidencia
                     </TabsTrigger>
@@ -151,19 +161,21 @@ export function LoanTabs({
                 )}
             </TabsContent>
 
-            <TabsContent value="visitas" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
-                {isPending ? (
-                    <div className="flex items-center justify-center py-20 bg-slate-900/10 border border-slate-800/50 rounded-2xl animate-in fade-in duration-300">
-                        <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
-                    </div>
-                ) : (
-                    <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
-                        <CardContent className="p-0">
-                            <VisitadosList prestamoId={prestamo.id} />
-                        </CardContent>
-                    </Card>
-                )}
-            </TabsContent>
+            {!isAdvisor && (
+                <TabsContent value="visitas" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
+                    {isPending ? (
+                        <div className="flex items-center justify-center py-20 bg-slate-900/10 border border-slate-800/50 rounded-2xl animate-in fade-in duration-300">
+                            <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+                        </div>
+                    ) : (
+                        <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
+                            <CardContent className="p-0">
+                                <VisitadosList prestamoId={prestamo.id} userRole={userRole} />
+                            </CardContent>
+                        </Card>
+                    )}
+                </TabsContent>
+            )}
 
             <TabsContent value="evidencia" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
                 {isPending ? (

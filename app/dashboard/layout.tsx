@@ -5,6 +5,7 @@ import { DashboardNav } from '@/components/dashboard-nav'
 import { SidebarProvider } from '@/components/providers/sidebar-provider'
 import { DashboardMain } from '@/components/dashboard-main'
 import { AdminTaskSync } from '@/components/dashboard/admin-task-sync'
+import { DashboardProtection } from '@/components/providers/dashboard-protection'
 
 export default async function DashboardLayout({
   children,
@@ -53,18 +54,20 @@ export default async function DashboardLayout({
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen text-slate-200">
-        <DashboardNav 
-          role={userRole} 
-          userName={userName} 
-          systemName={configMap?.nombre_sistema || 'Sistema PF'} 
-          systemLogo={configMap?.logo_sistema_url}
-        />
-        <DashboardMain>
-          {userRole === 'admin' && <AdminTaskSync />}
-          {children}
-        </DashboardMain>
-      </div>
+      <DashboardProtection userRole={userRole} userName={userName}>
+        <div className="min-h-screen text-slate-200">
+          <DashboardNav 
+            role={userRole} 
+            userName={userName} 
+            systemName={configMap?.nombre_sistema || 'Sistema PF'} 
+            systemLogo={configMap?.logo_sistema_url}
+          />
+          <DashboardMain>
+            {userRole === 'admin' && <AdminTaskSync />}
+            {children}
+          </DashboardMain>
+        </div>
+      </DashboardProtection>
     </SidebarProvider>
   )
 }

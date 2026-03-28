@@ -33,6 +33,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { PaginationControlled } from '@/components/ui/pagination-controlled'
+import { useMemo } from 'react'
 
 interface EmployeeManagerProps {
   employees: any[]
@@ -47,6 +49,16 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
   const [loading, setLoading] = useState<string | null>(null)
   const supabase = createClient()
   const router = useRouter()
+
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 10
+
+  const totalPages = Math.ceil(employees.length / ITEMS_PER_PAGE)
+  
+  const paginatedEmployees = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE
+    return employees.slice(start, start + ITEMS_PER_PAGE)
+  }, [employees, currentPage])
 
   async function toggleStatus(id: string, currentStatus: boolean) {
     const userToToggle = employees.find(e => e.id === id)
@@ -196,7 +208,7 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {employees.map((emp) => (
+                {paginatedEmployees.map((emp) => (
                   <TableRow key={emp.id} className="border-slate-800 hover:bg-slate-800/20 transition-colors">
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -259,7 +271,7 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
 
           {/* Mobile View */}
           <div className="md:hidden divide-y divide-slate-800">
-            {employees.map((emp) => (
+            {paginatedEmployees.map((emp) => (
               <div key={emp.id} className="p-4 space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -326,6 +338,19 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
               </div>
             ))}
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="p-4 border-t border-slate-800/50">
+              <PaginationControlled 
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                totalRecords={employees.length}
+                pageSize={ITEMS_PER_PAGE}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

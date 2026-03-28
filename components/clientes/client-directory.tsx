@@ -13,6 +13,7 @@ import { Users, Search, Phone, ChevronLeft, ChevronRight, Calendar, Loader2, Lin
 import { cn } from "@/lib/utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import dynamic from 'next/dynamic'
+import { PaginationControlled } from '@/components/ui/pagination-controlled'
 import { ClientEditModal } from './client-edit-modal'
 import { RegistrarGestionModal } from '../gestiones/registrar-gestion-modal'
 import { Edit, MessageSquare, DollarSign } from 'lucide-react'
@@ -882,35 +883,14 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             )}
             
             {/* Pagination Components */}
-            {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-6 px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl">
-                    <div className="text-sm text-slate-400">
-                        Mostrando <span className="font-medium text-slate-200">{((currentPage - 1) * ITEMS_PER_PAGE) + 1}</span> a <span className="font-medium text-slate-200">{Math.min(currentPage * ITEMS_PER_PAGE, filteredClientes.length)}</span> de <span className="font-medium text-slate-200">{filteredClientes.length}</span> clientes
-                    </div>
-                    <div className="flex space-x-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePageChange(currentPage - 1)}
-                            disabled={currentPage === 1}
-                            className="bg-slate-900 border-slate-700 text-slate-300 pointer-events-auto hover:bg-slate-800 hover:text-white disabled:opacity-50"
-                        >
-                            <ChevronLeft className="h-4 w-4 mr-1" />
-                            Anterior
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePageChange(currentPage + 1)}
-                            disabled={currentPage === totalPages}
-                            className="bg-slate-900 border-slate-700 text-slate-300 pointer-events-auto hover:bg-slate-800 hover:text-white disabled:opacity-50"
-                        >
-                            Siguiente
-                            <ChevronRight className="h-4 w-4 ml-1" />
-                        </Button>
-                    </div>
-                </div>
-            )}
+            <PaginationControlled
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+                totalRecords={filteredClientes.length}
+                pageSize={ITEMS_PER_PAGE}
+                className="mt-6"
+            />
 
             {/* Reassign Modal */}
             <Dialog open={isReasignModalOpen} onOpenChange={setIsReasignModalOpen}>

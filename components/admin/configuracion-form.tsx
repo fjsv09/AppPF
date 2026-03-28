@@ -87,6 +87,36 @@ const CONFIG_LABELS: Record<string, { nombre: string; descripcion: string; min?:
         descripcion: 'Minutos que el asesor debe permanecer en la ubicación para dar por válida la visita',
         min: 1,
         max: 60
+    },
+    'asistencia_radio_metros': {
+        nombre: 'Radio de Asistencia (metros)',
+        descripcion: 'Distancia máxima permitida desde la oficina para marcar asistencia GPS',
+        min: 10,
+        max: 500
+    },
+    'asistencia_descuento_por_minuto': {
+        nombre: 'Descuento por Tardanza (S/ x min)',
+        descripcion: 'Monto en soles que se descuenta por cada minuto de tardanza',
+    },
+    'asistencia_tolerancia_minutos': {
+        nombre: 'Tolerancia de Asistencia (min)',
+        descripcion: 'Minutos de gracia después de la hora de apertura antes de marcar tardanza',
+        min: 0,
+        max: 60
+    },
+    'oficina_lat': {
+        nombre: 'Latitud de la Oficina',
+        descripcion: 'Coordenada GPS latitud del centro de la oficina principal',
+    },
+    'oficina_lon': {
+        nombre: 'Longitud de la Oficina',
+        descripcion: 'Coordenada GPS longitud del centro de la oficina principal',
+    },
+    'visita_radio_maximo': {
+        nombre: 'Radio Máximo de Visita (metros)',
+        descripcion: 'Distancia máxima permitida entre el asesor y el cliente para iniciar/finalizar una visita',
+        min: 10,
+        max: 5000
     }
 }
 
@@ -236,6 +266,8 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         if (clave.includes('nombre')) return '🏷️'
         if (clave.includes('logo')) return '🖼️'
         if (clave.includes('visita')) return '📍'
+        if (clave.includes('asistencia') || clave.includes('hora_limite')) return '🕐'
+        if (clave.includes('oficina')) return '🏢'
         return '⚙️'
     }
 
@@ -253,7 +285,13 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         'desbloqueo_hasta',
         'nombre_sistema',
         'logo_sistema_url',
-        'visita_tiempo_minimo'
+        'visita_tiempo_minimo',
+        'asistencia_radio_metros',
+        'asistencia_descuento_por_minuto',
+        'asistencia_tolerancia_minutos',
+        'oficina_lat',
+        'oficina_lon',
+        'visita_radio_maximo'
     ]
 
     const displayConfig = [...initialConfig]

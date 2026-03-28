@@ -55,7 +55,13 @@ export default async function ConfiguracionPage() {
             'desbloqueo_hasta',
             'nombre_sistema',
             'logo_sistema_url',
-            'visita_tiempo_minimo'
+            'visita_tiempo_minimo',
+            'asistencia_radio_metros',
+            'asistencia_descuento_por_minuto',
+            'asistencia_tolerancia_minutos',
+            'oficina_lat',
+            'oficina_lon',
+            'visita_radio_maximo'
         ])
         .order('clave')
     

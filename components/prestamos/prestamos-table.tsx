@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import dynamic from 'next/dynamic'
+import { PaginationControlled } from '@/components/ui/pagination-controlled'
 
 const RutaMapa = dynamic(() => import('./ruta-mapa'), { 
   ssr: false,
@@ -72,6 +73,8 @@ interface PrestamosTableProps {
 type FilterTab = 'ruta_hoy' | 'cobranza' | 'morosos' | 'notificar' | 'semana' | 'en_curso' | 'renovaciones' | 'finalizados' | 'todos' | 'supervisor_alertas' | 'supervisor_mora' | 'renovados' | 'refinanciados' | 'anulados' | 'pendientes' | 'visitas_control'
 type SortBy = 'fecha_inicio' | 'frecuencia'
 type SortOrder = 'asc' | 'desc'
+
+const ITEMS_PER_PAGE = 10
 
 export const TableSkeleton = () => (
     <div className="animate-pulse space-y-4">
@@ -296,6 +299,7 @@ export function PrestamosTable({
     const filtroAsesor = searchParams.get('asesor') || 'todos'
     const filtroSector = searchParams.get('sector') || 'todos'
     const filtroFrecuencia = searchParams.get('frecuencia') || 'todos'
+    const currentPage = Number(searchParams.get('page')) || 1
     
     // --- PROTECCIÓN DE RUTA (VISITAS CONTROL) ---
     useEffect(() => {
@@ -743,6 +747,13 @@ export function PrestamosTable({
         return filtered
     }, [processedPrestamos, activeFilter, searchQuery, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia, userRol, perfiles, sortBy, sortOrder]) // Dependencies Updated
 
+    // 2.5 Pagination
+    const totalPages = Math.ceil(filteredPrestamos.length / ITEMS_PER_PAGE)
+    const paginatedPrestamos = useMemo(() => {
+        const start = (currentPage - 1) * ITEMS_PER_PAGE
+        return filteredPrestamos.slice(start, start + ITEMS_PER_PAGE)
+    }, [filteredPrestamos, currentPage])
+
     // --------------------------------------------------------------------------------
     // 3. STATS/COUNTS Logic (Must use PROCESSED but ALL data to count correctly)
     // --------------------------------------------------------------------------------
@@ -1092,12 +1103,22 @@ export function PrestamosTable({
                         </div>
                     ) : (
                 <>
+                    {/* Pagination Top */}
+                    <PaginationControlled 
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={(page) => updateParams({ page: String(page) })}
+                        totalRecords={filteredPrestamos.length}
+                        pageSize={ITEMS_PER_PAGE}
+                        className="mb-4"
+                    />
+
                 {/* -------------------- MOBILE CARDS VIEW -------------------- */}
              <div className={cn(
                  "space-y-4",
                  viewType === 'cards' ? "md:hidden" : "hidden"
              )}>
-                {filteredPrestamos.map((prestamo) => (
+                {paginatedPrestamos.map((prestamo) => (
                     <div
                         key={prestamo.id}
                         className={cn(
@@ -1529,7 +1550,7 @@ export function PrestamosTable({
 
                 {/* Table Body */}
                 <div className="divide-y divide-slate-800/50 text-sm">
-                    {filteredPrestamos.map((prestamo) => {
+                    {paginatedPrestamos.map((prestamo) => {
                         // Calculate quotas info
                         const calculatedTotal = prestamo.valorCuota > 0 ? Math.round(prestamo.totalPagar / prestamo.valorCuota) : 0
                         const totalCuotas = prestamo.numero_cuotas || calculatedTotal || 0
@@ -1960,7 +1981,16 @@ export function PrestamosTable({
                 </div>
             </div>
         </div>
-            </>
+            {/* Pagination Bottom */}
+            <PaginationControlled 
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={(page) => updateParams({ page: String(page) })}
+                totalRecords={filteredPrestamos.length}
+                pageSize={ITEMS_PER_PAGE}
+                className="mt-6"
+            />
+                </>
         )}
                 </div> {/* transition wrapper */}
             </div> {/* relative container */}

@@ -30,13 +30,15 @@ interface VisitActionButtonProps {
     variant?: 'default' | 'outline' | 'ghost' | 'icon'
     className?: string
     showText?: boolean
+    disabled?: boolean
 }
 
 export function VisitActionButton({ 
     cuotaId, 
     variant = 'outline', 
     className,
-    showText = true 
+    showText = true,
+    disabled = false
 }: VisitActionButtonProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
@@ -123,10 +125,12 @@ export function VisitActionButton({
             } finally {
                 setLoading(false)
             }
-        }, () => {
-            toast.error('Error al capturar GPS. Verifica permisos.')
+        }, (err) => {
+            console.error("GPS Error:", err)
+            const msg = err.code === 3 ? "Tiempo agotado al capturar GPS (10s). Reintenta." : "Error al capturar GPS. Verifica permisos."
+            toast.error(msg)
             setLoading(false)
-        }, { enableHighAccuracy: true })
+        }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 })
     }
 
     const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
@@ -193,10 +197,12 @@ export function VisitActionButton({
             } finally {
                 setLoading(false)
             }
-        }, () => {
-            toast.error('Error al capturar GPS final')
+        }, (err) => {
+            console.error("GPS End Error:", err)
+            const msg = err.code === 3 ? "Tiempo agotado al capturar GPS final (10s). Reintenta." : "Error al capturar GPS final"
+            toast.error(msg)
             setLoading(false)
-        })
+        }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 })
     }
 
     const formatTime = (seconds: number) => {
@@ -224,7 +230,7 @@ export function VisitActionButton({
                 variant="outline"
                 size="sm"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDialogOpen(true); }}
-                disabled={loading}
+                disabled={loading || disabled}
                 className={cn("h-7 px-3 text-[10px] md:text-xs rounded-lg border-indigo-500 text-indigo-400 hover:bg-indigo-950 font-bold", className)}
             >
                 {loading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <MapPin className="w-3 h-3 mr-1" />}

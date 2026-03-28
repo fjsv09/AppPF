@@ -62,9 +62,18 @@ export async function POST(request: Request) {
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
             const distancia = R * c
 
-            if (distancia > 300) {
+            // Obtener radio máximo de configuración
+            const { data: configRadio } = await supabaseAdmin
+                .from('configuracion_sistema')
+                .select('valor')
+                .eq('clave', 'visita_radio_maximo')
+                .single()
+            
+            const radioMax = parseInt(configRadio?.valor) || 300
+
+            if (distancia > radioMax) {
                  return NextResponse.json({ 
-                     error: `📍 Fuera de rango. Estás a ${Math.round(distancia)}m del domicilio registrado.` 
+                     error: `📍 Fuera de rango. Estás a ${Math.round(distancia)}m. El radio permitido es de ${radioMax}m.` 
                  }, { status: 403 })
             }
         }

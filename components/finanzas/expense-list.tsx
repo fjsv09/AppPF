@@ -4,6 +4,8 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Receipt, Calendar, Tag, CreditCard, User, History, Camera, ExternalLink, Pencil } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { PaginationControlled } from '@/components/ui/pagination-controlled'
+import { useState, useMemo } from 'react'
 import {
   Table,
   TableBody,
@@ -27,6 +29,16 @@ interface ExpenseListProps {
 }
 
 export function ExpenseList({ expenses, onEdit, userRole }: ExpenseListProps) {
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 10
+
+  const totalPages = Math.ceil(expenses.length / ITEMS_PER_PAGE)
+  
+  const paginatedExpenses = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE
+    return expenses.slice(start, start + ITEMS_PER_PAGE)
+  }, [expenses, currentPage])
+
   if (expenses.length === 0) {
     return (
       <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm">
@@ -43,8 +55,8 @@ export function ExpenseList({ expenses, onEdit, userRole }: ExpenseListProps) {
       <CardContent className="p-0">
         {/* Mobile View: Stacked Cards */}
         <div className="md:hidden divide-y divide-slate-800/50">
-          {expenses.length > 0 ? (
-            expenses.map((expense) => (
+          {paginatedExpenses.length > 0 ? (
+            paginatedExpenses.map((expense) => (
               <div key={expense.id} className="p-3 space-y-3 hover:bg-slate-800/20 transition-colors">
                 <div className="flex justify-between items-start gap-4">
                   <div className="space-y-1 min-w-0">
@@ -130,7 +142,7 @@ export function ExpenseList({ expenses, onEdit, userRole }: ExpenseListProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {expenses.map((expense) => (
+              {paginatedExpenses.map((expense) => (
                 <TableRow key={expense.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
                   <TableCell className="text-slate-300 py-2">
                     <div className="flex flex-col">
@@ -210,6 +222,19 @@ export function ExpenseList({ expenses, onEdit, userRole }: ExpenseListProps) {
             </TableBody>
           </Table>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="p-4 border-t border-slate-800/50">
+            <PaginationControlled 
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              totalRecords={expenses.length}
+              pageSize={ITEMS_PER_PAGE}
+            />
+          </div>
+        )}
       </CardContent>
     </Card>
   )

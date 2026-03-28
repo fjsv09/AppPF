@@ -1,16 +1,27 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Wallet, MapPin, CheckCircle2, AlertTriangle, User, Lock, Phone, ChevronRight } from 'lucide-react'
+import { Wallet, MapPin, User, Lock, Phone, Navigation, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-
+import { VisitActionButton } from './visit-action-button'
 import { getTodayPeru, getLoanStatusUI } from '@/lib/financial-logic'
+
+// Helper for distance calculation
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371000 // meters
+    const dLat = (lat2 - lat1) * Math.PI / 180
+    const dLon = (lon2 - lon1) * Math.PI / 180
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return Math.round(R * c)
+}
 
 // Fix Leaflet's default icon path issues in Next.js
 if (typeof window !== 'undefined') {
@@ -44,8 +55,6 @@ const createCustomIcon = (color: string) => {
     })
 }
 
-// icons object removed - now dynamic via getLoanStatusUI
-
 interface RutaMapaProps {
     prestamos: any[]
     onQuickPay: (prestamo: any, e: React.MouseEvent) => void
@@ -67,9 +76,27 @@ function BoundsAutoFitter({ markers }: { markers: [number, number][] }) {
 
 export default function RutaMapa({ prestamos, onQuickPay, today, isBlocked = false }: RutaMapaProps) {
     const [isMounted, setIsMounted] = useState(false)
+    const [userLoc, setUserLoc] = useState<[number, number] | null>(null)
+    const [radioMax, setRadioMax] = useState(300)
 
     useEffect(() => {
         setIsMounted(true)
+        
+        // Fetch radius config
+        fetch('/api/configuracion?clave=visita_radio_maximo')
+            .then(res => res.json())
+            .then(data => {
+                if (data.valor) setRadioMax(parseInt(data.valor))
+            })
+            .catch(err => console.error("Error fetching radius config:", err))
+        if (typeof window !== 'undefined' && navigator.geolocation) {
+            const watchId = navigator.geolocation.watchPosition(
+                (pos) => setUserLoc([pos.coords.latitude, pos.coords.longitude]),
+                (err) => console.error("Error GPS:", err),
+                { enableHighAccuracy: true }
+            )
+            return () => navigator.geolocation.clearWatch(watchId)
+        }
     }, [])
 
     if (!isMounted) return <div className="h-[400px] w-full rounded-xl bg-slate-900 animate-pulse flex items-center justify-center text-slate-500">Cargando mapa...</div>
@@ -133,83 +160,145 @@ export default function RutaMapa({ prestamos, onQuickPay, today, isBlocked = fal
                 
                 <BoundsAutoFitter markers={markersList} />
 
-                {mapItems.map((item) => (
+                {/* Advisor Location Marker */}
+                {userLoc && (
                     <Marker 
-                        key={item.id} 
-                        position={[item.lat, item.lng]}
-                        icon={item.icon}
+                        position={userLoc}
+                        icon={L.divIcon({
+                            className: 'user-icon',
+                            html: `
+                                <div style="
+                                    background-color: #3b82f6;
+                                    width: 16px;
+                                    height: 16px;
+                                    border-radius: 50%;
+                                    border: 3px solid white;
+                                    box-shadow: 0 0 15px rgba(59, 130, 246, 0.8);
+                                    animation: pulse_marker 2s infinite;
+                                "></div>
+                            `,
+                            iconSize: [16, 16],
+                            iconAnchor: [8, 8]
+                        })}
                     >
-                        <Popup className="custom-popup">
-                            <div className="p-1 min-w-[200px]">
-                                <div className="font-bold text-sm mb-1 flex items-center gap-2">
-                                    <User className="w-3.5 h-3.5 opacity-70" />
-                                    <span className="truncate">{item.clientes?.nombres}</span>
-                                </div>
-                                
-                                <div className="grid grid-cols-2 gap-2 mb-3">
-                                    <a 
-                                        href={item.clientes?.telefono ? `tel:${item.clientes?.telefono}` : '#'} 
-                                        className={cn(
-                                            "flex items-center justify-center gap-1.5 text-xs font-bold transition-all px-2 py-2 rounded-xl border shadow-sm",
-                                            item.clientes?.telefono 
-                                                ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200" 
-                                                : "text-slate-400 bg-slate-50 border-slate-200 cursor-not-allowed"
-                                        )}
-                                        onClick={(e) => {
-                                            if (!item.clientes?.telefono) e.preventDefault();
-                                        }}
-                                    >
-                                        <Phone className={cn("w-3.5 h-3.5", item.clientes?.telefono ? "text-emerald-600" : "text-slate-300")} />
-                                        <span>Llamar</span>
-                                    </a>
-                                    <Button
-                                        asChild
-                                        variant="outline"
-                                        className="h-9 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-1.5 text-xs font-bold"
-                                    >
-                                        <Link href={`/dashboard/prestamos/${item.id}`}>
-                                            <ChevronRight className="w-3.5 h-3.5" />
-                                            Detallles
-                                        </Link>
-                                    </Button>
-                                </div>
-
-                                <div className="flex bg-slate-100 rounded-lg p-2 mb-3 items-center justify-between border border-slate-200">
-                                    <div className="flex flex-col">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mora / Día</span>
-                                        <span className={`font-bold text-lg font-mono ${item.statusColor}`}>
-                                            ${item.deudaHoy.toFixed(2)}
-                                        </span>
-                                    </div>
-                                    <div className="flex flex-col items-end">
-                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estado</span>
-                                         <Badge variant="outline" className={cn("text-[10px] h-5 px-1.5 uppercase tracking-wide bg-slate-950/50", item.badgeClass)}>
-                                            {item.statusText}
-                                        </Badge>
-                                    </div>
-                                </div>
-
-                                {item.deudaHoy > 0 && (
-                                    <Button 
-                                        onClick={(e) => {
-                                             if (!isBlocked) onQuickPay(item, e);
-                                        }}
-                                        disabled={isBlocked}
-                                        className={cn(
-                                            "w-full shadow-sm flex items-center justify-center gap-2 h-8",
-                                            isBlocked 
-                                                ? "bg-slate-300 text-slate-500 cursor-not-allowed" 
-                                                : "bg-emerald-600 hover:bg-emerald-700 text-white"
-                                        )}
-                                    >
-                                        {isBlocked ? <Lock className="w-3.5 h-3.5" /> : <Wallet className="w-3.5 h-3.5" />}
-                                        {isBlocked ? 'Bloqueado' : 'Cobrar'}
-                                    </Button>
-                                )}
-                            </div>
+                        <Popup>
+                            <div className="p-1 font-bold text-blue-600">Mi ubicación</div>
                         </Popup>
                     </Marker>
-                ))}
+                )}
+
+                {mapItems.map((item) => {
+                    const distance = userLoc ? calculateDistance(userLoc[0], userLoc[1], item.lat, item.lng) : null;
+                    const isFar = distance !== null && distance > radioMax;
+
+                    return (
+                        <Marker 
+                            key={item.id} 
+                            position={[item.lat, item.lng]}
+                            icon={item.icon}
+                        >
+                            <Popup className="custom-popup">
+                                <div className="p-1 min-w-[220px]">
+                                    <div className="font-bold text-sm mb-1 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <User className="w-3.5 h-3.5 opacity-70" />
+                                            <span className="truncate">{item.clientes?.nombres}</span>
+                                        </div>
+                                        {distance !== null && (
+                                            <div className={cn(
+                                                "text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-1 font-black",
+                                                isFar ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"
+                                            )}>
+                                                <Navigation className="w-2.5 h-2.5" />
+                                                {distance < 1000 ? `${distance}m` : `${(distance/1000).toFixed(1)}km`}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {isFar && (
+                                        <div className="mb-2 p-1.5 bg-red-50 border border-red-100 rounded-lg text-[10px] text-red-600 font-bold flex items-center gap-1.5">
+                                            <AlertTriangle className="w-3 h-3 shrink-0" />
+                                            <span>Fuera de rango para iniciar visita (&gt;{radioMax}m)</span>
+                                        </div>
+                                    )}
+                                
+                                    <div className="grid grid-cols-2 gap-2 mb-3">
+                                        <a 
+                                            href={item.clientes?.telefono ? `tel:${item.clientes?.telefono}` : '#'} 
+                                            className={cn(
+                                                "flex items-center justify-center gap-1.5 text-xs font-bold transition-all px-2 py-2 rounded-xl border shadow-sm",
+                                                item.clientes?.telefono 
+                                                    ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200" 
+                                                    : "text-slate-400 bg-slate-50 border-slate-200 cursor-not-allowed"
+                                            )}
+                                            onClick={(e) => {
+                                                if (!item.clientes?.telefono) e.preventDefault();
+                                            }}
+                                        >
+                                            <Phone className={cn("w-3.5 h-3.5", item.clientes?.telefono ? "text-emerald-600" : "text-slate-300")} />
+                                            <span>Llamar</span>
+                                        </a>
+                                        {(() => {
+                                            const cronograma = (item.cronograma_cuotas || []);
+                                            const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+                                            const cuotaHoy = cronograma.find((c: any) => c.fecha_vencimiento === hoy && c.estado !== 'pagado');
+                                            const cuotaPendiente = cronograma.find((c: any) => c.estado !== 'pagado');
+                                            const cuotaTargetId = cuotaHoy?.id || cuotaPendiente?.id;
+                                            
+                                            if (!cuotaTargetId) return null;
+                                            
+                                            return (
+                                                <VisitActionButton 
+                                                    cuotaId={cuotaTargetId} 
+                                                    variant="default" 
+                                                    className={cn(
+                                                        "h-9 rounded-xl text-xs font-bold w-full",
+                                                        isFar ? "bg-slate-200 text-slate-400 border-slate-300 opacity-60 cursor-not-allowed" : "bg-indigo-600 text-white"
+                                                    )}
+                                                    showText={true}
+                                                    disabled={isFar}
+                                                />
+                                            );
+                                        })()}
+                                    </div>
+
+                                    <div className="flex bg-slate-100 rounded-lg p-2 mb-3 items-center justify-between border border-slate-200">
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mora / Día</span>
+                                            <span className={`font-bold text-lg font-mono ${item.statusColor}`}>
+                                                ${item.deudaHoy.toFixed(2)}
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col items-end">
+                                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estado</span>
+                                             <Badge variant="outline" className={cn("text-[10px] h-5 px-1.5 uppercase tracking-wide bg-slate-950/50", item.badgeClass)}>
+                                                {item.statusText}
+                                            </Badge>
+                                        </div>
+                                    </div>
+
+                                    {item.deudaHoy > 0 && (
+                                        <Button 
+                                            onClick={(e) => {
+                                                 if (!isBlocked) onQuickPay(item, e);
+                                            }}
+                                            disabled={isBlocked}
+                                            className={cn(
+                                                "w-full shadow-sm flex items-center justify-center gap-2 h-8",
+                                                isBlocked 
+                                                    ? "bg-slate-300 text-slate-500 cursor-not-allowed" 
+                                                    : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                            )}
+                                        >
+                                            {isBlocked ? <Lock className="w-3.5 h-3.5" /> : <Wallet className="w-3.5 h-3.5" />}
+                                            {isBlocked ? 'Bloqueado' : 'Cobrar'}
+                                        </Button>
+                                    )}
+                                </div>
+                            </Popup>
+                        </Marker>
+                    );
+                })}
             </MapContainer>
 
             {/* Global legend overlay */}
@@ -241,6 +330,11 @@ export default function RutaMapa({ prestamos, onQuickPay, today, isBlocked = fal
                 }
                 .leaflet-container {
                     background-color: #0f172a !important; 
+                }
+                @keyframes pulse_marker {
+                    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+                    70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+                    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
                 }
             `}</style>
         </div>

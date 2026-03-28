@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowUpRight, Search, Filter, Users, UserCheck, Calendar } from 'lucide-react'
+import { PaginationControlled } from '@/components/ui/pagination-controlled'
 
 interface CuotaVencida {
     id: string
@@ -35,6 +36,8 @@ interface Props {
     userId: string
     initialDate?: string
 }
+
+const ITEMS_PER_PAGE = 10
 
 export function TablaCuotasVencidas({ cuotasVencidas, perfiles, userRol, userId, initialDate }: Props) {
     const router = useRouter()
@@ -98,6 +101,21 @@ export function TablaCuotasVencidas({ cuotasVencidas, perfiles, userRol, userId,
             return true
         })
     }, [cuotasVencidas, busqueda, filtroSupervisor, filtroAsesor, userRol])
+
+    // Pagination Logic
+    const currentPage = Number(searchParams.get('page')) || 1
+    const totalPages = Math.ceil(cuotasFiltradas.length / ITEMS_PER_PAGE)
+    
+    const paginatedCuotas = useMemo(() => {
+        const start = (currentPage - 1) * ITEMS_PER_PAGE
+        return cuotasFiltradas.slice(start, start + ITEMS_PER_PAGE)
+    }, [cuotasFiltradas, currentPage])
+
+    const handlePageChange = (page: number) => {
+        const params = new URLSearchParams(searchParams.toString())
+        params.set('page', String(page))
+        router.push(`${pathname}?${params.toString()}`, { scroll: false })
+    }
 
     // Calcular totales
     const totalPendienteGlobal = cuotasFiltradas.reduce((acc, c) => acc + c.totalPendiente, 0)
@@ -206,7 +224,7 @@ export function TablaCuotasVencidas({ cuotasVencidas, perfiles, userRol, userId,
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-800/50">
-                                    {cuotasFiltradas.map((cuota) => (
+                                    {paginatedCuotas.map((cuota) => (
                                         <tr key={cuota.prestamoId} className="hover:bg-white/5 transition-colors">
                                             <td className="px-4 py-3">
                                                 <span className="font-medium text-slate-200">{cuota.clienteNombre}</span>
@@ -249,7 +267,7 @@ export function TablaCuotasVencidas({ cuotasVencidas, perfiles, userRol, userId,
 
                     {/* Mobile Card View */}
                     <div className="md:hidden space-y-4">
-                        {cuotasFiltradas.map((cuota) => (
+                        {paginatedCuotas.map((cuota) => (
                             <div key={cuota.prestamoId} className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 space-y-4 shadow-sm">
                                 <div className="flex justify-between items-start gap-4">
                                     <div>
@@ -287,6 +305,16 @@ export function TablaCuotasVencidas({ cuotasVencidas, perfiles, userRol, userId,
                             </div>
                         ))}
                     </div>
+
+                    {/* Pagination */}
+                    <PaginationControlled 
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={handlePageChange}
+                        totalRecords={cuotasFiltradas.length}
+                        pageSize={ITEMS_PER_PAGE}
+                        className="mt-6"
+                    />
                 </>
             )}
         </div>

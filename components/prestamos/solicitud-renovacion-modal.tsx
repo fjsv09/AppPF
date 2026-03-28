@@ -109,16 +109,22 @@ export function SolicitudRenovacionModal({
         const peruTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }))
         const currentTime = peruTime.getHours().toString().padStart(2, '0') + ':' + peruTime.getMinutes().toString().padStart(2, '0')
         
-        const finTurno1 = systemSchedule.horario_fin_turno_1 || '13:30'
-        const apertura = systemSchedule.horario_apertura || '07:00'
-        const cierre = systemSchedule.horario_cierre || '20:00'
+        const timeToMinutes = (timeStr: string) => {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
+        };
+
+        const tNow = timeToMinutes(currentTime);
+        const tApertura = timeToMinutes(systemSchedule.horario_apertura || '07:00');
+        const tCierre = timeToMinutes(systemSchedule.horario_cierre || '20:00');
+        const tFinTurno1 = timeToMinutes(systemSchedule.horario_fin_turno_1 || '13:30');
         
-        const isUnlocked = systemSchedule.desbloqueo_hasta ? (new Date(systemSchedule.desbloqueo_hasta) > now) : false
-        const isWithinHours = currentTime >= apertura && currentTime < cierre
+        const isUnlocked = systemSchedule.desbloqueo_hasta ? (new Date(systemSchedule.desbloqueo_hasta) > now) : false;
+        const isWithinHours = tNow >= tApertura && tNow < tCierre;
         
         // Bloqueo preventivo si ya pasó el fin del turno 1 Y el servidor reporta bloqueo
-        const isWithinShift1 = currentTime < finTurno1
-        const allowedByTime = isWithinHours && (isWithinShift1 || !isBlockedByCuadre)
+        const isWithinShift1 = tNow < tFinTurno1;
+        const allowedByTime = isWithinHours && (isWithinShift1 || !isBlockedByCuadre);
         
         return allowedByTime || isUnlocked
     }

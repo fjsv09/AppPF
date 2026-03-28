@@ -353,30 +353,33 @@ export function PrestamosTable({
     useEffect(() => {
         if (!systemSchedule) return
         
+        const timeToMinutes = (timeStr: string) => {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
+        };
+
         const checkTime = () => {
             const now = new Date()
             const formatter = new Intl.DateTimeFormat('es-PE', {
                 timeZone: 'America/Lima',
                 hour: '2-digit',
                 minute: '2-digit',
-                second: '2-digit',
                 hour12: false
             })
             const currentHourString = formatter.format(now)
 
-            const apertura = systemSchedule.horario_apertura || '07:00'
-            const cierre = systemSchedule.horario_cierre || '20:00'
-            const finTurno1 = systemSchedule.horario_fin_turno_1 || '13:30'
+            const tNow = timeToMinutes(currentHourString);
+            const tApertura = timeToMinutes(systemSchedule.horario_apertura || '07:00');
+            const tCierre = timeToMinutes(systemSchedule.horario_cierre || '20:00');
+            const tFinTurno1 = timeToMinutes(systemSchedule.horario_fin_turno_1 || '13:30');
+            
             const desbloqueoHasta = systemSchedule.desbloqueo_hasta ? new Date(systemSchedule.desbloqueo_hasta) : null
             
             // Regla de horario estándar
-            const isWithinHours = currentHourString >= apertura && currentHourString < cierre
+            const isWithinHours = tNow >= tApertura && tNow < tCierre;
             
-            // Regla de turno 1 (A partir de las 13:30 el sistema "se bloquea" preventivamente si no hay cuadre, 
-            // pero aquí canRequestDueToTime es una validación MÁS estricta de "operación permitida")
-            // Si ya pasó el fin del turno 1, canRequestDueToTime será false para forzar el bloqueo en UI, 
-            // a menos que esté desbloqueado temporalmente.
-            const isWithinShift1 = currentHourString < finTurno1
+            // Regla de turno 1 (A partir de las 13:30 el sistema "se bloquea" preventivamente si no hay cuadre)
+            const isWithinShift1 = tNow < tFinTurno1;
             
             const isTemporaryUnlocked = desbloqueoHasta && now < desbloqueoHasta
             

@@ -84,12 +84,18 @@ export function QuickPayModal({
         })
         const currentHourString = formatter.format(now)
 
-        const apertura = systemSchedule.horario_apertura || '10:00'
-        const cierre = systemSchedule.horario_cierre || '19:00'
-        const desbloqueoHasta = systemSchedule.desbloqueo_hasta ? new Date(systemSchedule.desbloqueo_hasta) : null
+        const timeToMinutes = (timeStr: string) => {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
+        };
+
+        const tNow = timeToMinutes(currentHourString);
+        const tApertura = timeToMinutes(systemSchedule.horario_apertura || '10:00');
+        const tCierre = timeToMinutes(systemSchedule.horario_cierre || '19:00');
+        const tDesbloqueo = systemSchedule.desbloqueo_hasta ? new Date(systemSchedule.desbloqueo_hasta) : null;
         
-        const isWithinHours = currentHourString >= apertura && currentHourString < cierre
-        const isTemporaryUnlocked = desbloqueoHasta && now < desbloqueoHasta
+        const isWithinHours = tNow >= tApertura && tNow < tCierre;
+        const isTemporaryUnlocked = tDesbloqueo && now < tDesbloqueo;
         
         return isWithinHours || isTemporaryUnlocked
     }

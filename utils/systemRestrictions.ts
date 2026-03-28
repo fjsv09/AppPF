@@ -16,6 +16,12 @@ export async function checkSystemAccess(
     userRole: string, 
     action: SystemAction = 'otros'
 ): Promise<AccessResult> {
+    // Helper para comparar horas de forma robusta (numérica)
+    const timeToMinutes = (t: string) => {
+        const [h, m] = t.split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
+    };
+
     // 1. ADMIN EXCEPTION FOR HOLIDAYS (Rule 4)
     // "los dias feriados y domingos... usuarios excepto el admin no puedan hacer nada"
     // We'll evaluate holidays first, then standard rules.
@@ -101,11 +107,17 @@ export async function checkSystemAccess(
 
     const isTemporaryUnlocked = config.desbloqueo_hasta && new Date(config.desbloqueo_hasta) > now;
 
+    // Helper para comparar horas
+    const tNow = timeToMinutes(timePart);
+    const tApertura = timeToMinutes(config.horario_apertura);
+    const tCierre = timeToMinutes(config.horario_cierre);
+    const tFinTurno1 = timeToMinutes(config.horario_fin_turno_1);
+
     // 5. SALDO PENDIENTE BLOCK (Except for the Cuadre itself)
     if (userRole === 'asesor' && action !== 'cuadre' && !isTemporaryUnlocked) {
         const blockStatus = await checkAdvisorBlocked(supabase, userId);
         if (blockStatus.isBlocked) {
-            const shiftMessage = (timePart >= config.horario_apertura && timePart <= config.horario_fin_turno_1)
+            const shiftMessage = (tNow >= tApertura && tNow <= tFinTurno1)
                 ? `Primer Turno (${config.horario_apertura} - ${config.horario_fin_turno_1}): `
                 : '';
 
@@ -119,7 +131,7 @@ export async function checkSystemAccess(
 
     // 6. GLOBAL HOUR BLOCK
     if (!isTemporaryUnlocked && userRole !== 'admin' && action !== 'cuadre') {
-        if (timePart < config.horario_apertura || timePart > config.horario_cierre) {
+        if (tNow < tApertura || tNow > tCierre) {
             console.warn(`[SYSTEM ACCESS] Blocked by hours: ${timePart} outside ${config.horario_apertura} - ${config.horario_cierre}`);
             return {
                 allowed: false,
@@ -130,16 +142,18 @@ export async function checkSystemAccess(
     }
 
     // 6. NIGHT BLOCK
-    if (timePart >= config.horario_cierre && action !== 'cuadre' && !isTemporaryUnlocked && userRole !== 'admin') {
-         return {
-             allowed: false,
-             reason: `A partir de las ${config.horario_cierre}, el sistema solo permite realizar el CIERRE FINAL de caja.`,
-             code: 'NIGHT_RESTRICTION'
-         };
+    if (action !== 'cuadre' && !isTemporaryUnlocked && userRole !== 'admin') {
+         if (tNow >= tCierre) {
+            return {
+                allowed: false,
+                reason: `A partir de las ${config.horario_cierre}, el sistema solo permite realizar el CIERRE FINAL de caja.`,
+                code: 'NIGHT_RESTRICTION'
+            };
+         }
     }
 
     // 7. CUADRE MAÑANA RULE (At the end of Shift 1)
-    if (timePart >= config.horario_fin_turno_1 && (action === 'solicitud' || action === 'renovacion' || action === 'prestamo') && !isTemporaryUnlocked && userRole !== 'admin') {
+    if (tNow >= tFinTurno1 && (action === 'solicitud' || action === 'renovacion' || action === 'prestamo') && !isTemporaryUnlocked && userRole !== 'admin') {
         const { data: firstCuadre } = await supabase
             .from('cuadres_diarios')
             .select('created_at')

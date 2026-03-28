@@ -48,11 +48,8 @@ export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: stri
         const gastosHoy = movementsToday?.filter(m => m.tipo === 'egreso' && m.cuenta_origen_id && accountIds.includes(m.cuenta_origen_id))
                                          .reduce((acc, m) => acc + parseFloat(m.monto || 0), 0) || 0;
 
-        const entregasAprobadasHoy = movementsToday?.filter(m => m.tipo === 'transferencia' && m.cuenta_origen_id && accountIds.includes(m.cuenta_origen_id))
-                                                    .reduce((acc, m) => acc + parseFloat(m.monto || 0), 0) || 0;
-
-        const deudaNetaHoy = (ingresosHoy - gastosHoy) - entregasAprobadasHoy;
-        leftoverHistorical = saldoActualTotal - deudaNetaHoy;
+        const deudaNetaHoy = (ingresosHoy - gastosHoy);
+        leftoverHistorical = Math.max(0, saldoActualTotal - deudaNetaHoy);
     }
 
     // --- 4. REVISIÓN DE INTEGRIDAD ---
@@ -69,7 +66,7 @@ export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: stri
         for (const record of history) {
             if (!daysEvaluated.has(record.fecha)) {
                 daysEvaluated.add(record.fecha);
-                if (record.tipo_cuadre !== 'final' || record.estado !== 'aprobado') {
+                if ((record.tipo_cuadre !== 'final' && leftoverHistorical > 1.05) || record.estado !== 'aprobado') {
                     const statusMsg = record.estado === 'pendiente' ? 'está PENDIENTE' : (record.estado === 'rechazado' ? 'fue RECHAZADO' : 'está INCOMPLETO');
                     const amountStr = leftoverHistorical > 1 
                         ? `. Saldo pendiente: S/ ${leftoverHistorical.toLocaleString('es-PE', { minimumFractionDigits: 2 })}` 

@@ -7,9 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
-import { Loader2, Lock, CheckCircle, DollarSign, RefreshCw, Share2, MapPin, Clock, Save, Navigation, X } from 'lucide-react'
+import { Loader2, Lock, CheckCircle, RefreshCw } from 'lucide-react'
 import { toBlob } from 'html-to-image'
-import { QuickPayModal } from './quick-pay-modal'
 
 import {
     Dialog,
@@ -19,7 +18,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-import { VisitActionButton } from './visit-action-button'
 
 type Props = {
     prestamo: any
@@ -46,16 +44,14 @@ export function CronogramaClient({
     systemAccess,
     pagos = []
 }: Props) {
-    // Solo se bloquean los pagos si el bloqueo es TOTAL (Horario, Feriado, Noche)
-    // El bloqueo por falta de cuadre (Mañana) PERMITE pagos.
-    const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK', 'PENDING_SALDO'].includes(systemAccess?.code);
+    // Solo se bloquean los pagos si el bloqueo es TOTAL (Horario, Feriado, Noche, Corte Mañana)
+    // El bloqueo por falta de cuadre (Mañana) AHORA TAMBIÉN BLOQUEA pagos (Requerimiento de obligar entrega de dinero).
+    const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK', 'PENDING_SALDO', 'MISSING_MORNING_CUADRE'].includes(systemAccess?.code);
     const isBlockedForPayments = isBlockedByCuadre && isTotalBlock;
     // Solo el asesor puede realizar pagos
     const puedePagar = userRol === 'asesor'
     const router = useRouter()
     const [loading, setLoading] = useState(false)
-    // Quick Pay Modal State
-    const [quickPayOpen, setQuickPayOpen] = useState(false)
 
     // --- LOGICA DE HORARIO ---
     const now = new Date()
@@ -67,13 +63,22 @@ export function CronogramaClient({
     })
     const currentHourString = formatter.format(now)
 
+    const timeToMinutes = (timeStr: string) => {
+        const [h, m] = timeStr.split(':').map(Number);
+        return h * 60 + m;
+    };
+
     const apertura = systemSchedule?.horario_apertura || '10:00'
     const cierre = systemSchedule?.horario_cierre || '19:00'
-    const desbloqueoHasta = systemSchedule?.desbloqueo_hasta ? new Date(systemSchedule.desbloqueo_hasta) : null
+
+    const tNow = timeToMinutes(currentHourString);
+    const tApertura = timeToMinutes(apertura);
+    const tCierre = timeToMinutes(cierre);
+    const tDesbloqueo = systemSchedule?.desbloqueo_hasta ? new Date(systemSchedule.desbloqueo_hasta) : null;
     
     // Si cierre es 19:00, y son 19:19 -> isWithinHours será False
-    const isWithinHours = currentHourString >= apertura && currentHourString < cierre
-    const isTemporaryUnlocked = desbloqueoHasta && now < desbloqueoHasta
+    const isWithinHours = tNow >= tApertura && tNow < tCierre;
+    const isTemporaryUnlocked = tDesbloqueo && now < tDesbloqueo;
     
     // Para ver si el sistema está operando, no eximimos al admin (para que pueda testear)
     const canPayDueToTime = isWithinHours || isTemporaryUnlocked
@@ -142,8 +147,10 @@ export function CronogramaClient({
         // Locked = not paid AND not active
         const isLocked = !isMathematicallyPaid && !isActive
         
-        // Display pending amount
-        const displayPending = isMathematicallyPaid ? 0 : c.pendiente
+        // Display pending amount - ONLY show if partially paid
+        // If nothing paid (0) -> 0 (user wants it to assume full debt if not touched)
+        // If fully paid -> 0
+        const displayPending = (c.montoPagado <= 0.01 || isMathematicallyPaid) ? 0 : c.pendiente
 
         return { 
             ...c, 
@@ -238,63 +245,7 @@ export function CronogramaClient({
                 </div>
             )}
 
-            {/* Mobile Active Quota Card - Quick Actions - Solo visible para asesor */}
-            {puedePagar && processedQuotas.find(q => q.isActive && !q.isMathematicallyPaid && prestamo.bloqueo_cronograma) && (
-                (() => {
-                    const active = processedQuotas.find(q => q.isActive)!;
-                    const isOverdue = active.isOverdue;
-                    return (
-                        <div className={`md:hidden mb-4 rounded-xl border p-4 shadow-lg ${
-                            isOverdue 
-                            ? 'bg-gradient-to-br from-red-950/40 to-slate-950 border-red-500/30 shadow-red-900/10' 
-                            : 'bg-gradient-to-br from-blue-950/40 to-slate-900 border-blue-500/30 shadow-blue-900/10'
-                        }`}>
-                            <div className="flex justify-between items-start mb-4">
-                                <div>
-                                    <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-0.5">
-                                        {isOverdue ? 'Cuota Vencida' : 'Próximo Vencimiento'}
-                                    </p>
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className={`
-                                            ${isOverdue ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/30'}
-                                        `}>
-                                            Cuota #{active.numero_cuota}
-                                        </Badge>
-                                        <span className="text-sm font-medium text-white">{active.fecha_vencimiento.split('-').reverse().join('/')}</span>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-0.5">Pendiente</p>
-                                    <p className={`text-xl font-bold ${isOverdue ? 'text-red-400' : 'text-blue-400'}`}>
-                                        ${active.displayPending.toFixed(2)}
-                                    </p>
-                                </div>
-                            </div>
-                            
-                            <div className="flex flex-col gap-2">
-                                <Button 
-                                    onClick={() => setQuickPayOpen(true)}
-                                    size="lg"
-                                    className={`w-full font-bold shadow-lg h-12 text-base rounded-xl ${
-                                        isOverdue 
-                                        ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-900/20' 
-                                        : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'
-                                    } ${(!canPayDueToTime || isBlockedForPayments) ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
-                                    disabled={!canPayDueToTime || isBlockedForPayments}
-                                >
-                                    <DollarSign className="w-5 h-5 mr-2" />
-                                    {isBlockedForPayments ? 'Operación Bloqueada' : !canPayDueToTime ? 'Sistema Cerrado' : isOverdue ? 'Pagar Cuota Vencida' : 'Registrar Pago'}
-                                </Button>
 
-                                {/* NUEVO: Boton Iniciar Visita - Se abriría un modal para GPS */}
-                                {prestamo.estado === 'activo' && !active.visitado && (
-                                    <VisitActionButton cuotaId={active.id} />
-                                )}
-                            </div>
-                        </div>
-                    )
-                })()
-            )}
 
             {/* Quota Table */}
             <div className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden">
@@ -309,11 +260,8 @@ export function CronogramaClient({
                                     <span className="hidden md:inline">Monto Cuota</span>
                                 </th>
                                 <th className="px-2 md:px-4 py-3 text-right">Pagado</th>
-                                <th className="px-2 md:px-4 py-3 text-right text-white">Pendiente</th>
+                                <th className="px-2 md:px-4 py-3 text-right text-blue-400">Saldo</th>
                                 <th className="hidden sm:table-cell px-4 py-3 text-center">Estado</th>
-                                {puedePagar && prestamo.bloqueo_cronograma && (
-                                    <th className="hidden sm:table-cell px-4 py-3 text-center w-16 md:w-24">Acción</th>
-                                )}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/50">
@@ -395,33 +343,6 @@ export function CronogramaClient({
                                                     </div>
                                                 )}
                                             </td>
-                                            {puedePagar && prestamo.bloqueo_cronograma && (
-                                                <td className="hidden sm:table-cell px-2 md:px-4 py-3 text-center">
-                                                    <div className="flex flex-col gap-1.5 items-center justify-center">
-                                                        {!isPaid && (
-                                                            <Button
-                                                                size="sm"
-                                                                disabled={cuota.isLocked}
-                                                                onClick={() => setQuickPayOpen(true)}
-                                                                className={`
-                                                                    h-7 px-3 text-xs rounded-lg transition-all w-full
-                                                                    ${cuota.isActive 
-                                                                        ? cuota.isOverdue
-                                                                            ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-900/20'
-                                                                            : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'
-                                                                        : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700 hover:bg-slate-800'}
-                                                                    ${((!canPayDueToTime || isBlockedForPayments) && cuota.isActive) ? 'opacity-40 grayscale-0 pointer-events-none' : ''}
-                                                                `}
-                                                            >
-                                                                {cuota.isLocked ? <Lock className="w-3 h-3" /> : (!canPayDueToTime || isBlockedForPayments) && cuota.isActive ? '🚫' : 'Pagar'}
-                                                            </Button>
-                                                        )}
-                                                        {cuota.isActive && !cuota.visitado && !isPaid && (
-                                                            <VisitActionButton cuotaId={cuota.id} />
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            )}
                                         </tr>
                                     )
                                 })
@@ -430,18 +351,6 @@ export function CronogramaClient({
                     </table>
                 </div>
             </div>
-
-            <QuickPayModal 
-                open={quickPayOpen}
-                onOpenChange={setQuickPayOpen}
-                prestamo={prestamo}
-                userRol={userRol}
-                systemSchedule={systemSchedule}
-                isBlockedByCuadre={isBlockedByCuadre}
-                blockReasonCierre={blockReasonCierre}
-                systemAccess={systemAccess}
-                onSuccess={() => router.refresh()}
-            />
         </div>
     )
 }

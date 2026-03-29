@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectLabel, SelectGroup } from "@/components/ui/select"
 import { 
     AlertCircle, Wallet, Search, Users, Calendar, MoreVertical, 
-    CalendarDays, CheckCircle2, AlertTriangle, MapPin, DollarSign, FileText, ChevronRight, Eye,
+    CalendarDays, CheckCircle2, AlertTriangle, MapPin, DollarSign, FileText, ChevronRight, Eye, Files,
     X, RotateCcw, MessageCircle, MessageSquare, Loader2, ListFilter, LayoutGrid, Table, Lock, ClipboardList, ShieldAlert
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -138,7 +138,7 @@ export function PrestamosTable({
     // Lógica de Bloqueo Sensible al Tipo de Acción (Centralizada en la Tabla)
     // Los PAGOS se permiten incluso si falta el cuadre del turno 1 (MISSING_MORNING_CUADRE)
     // Pero se bloquean si es horario general, feriado o noche (bloqueo total).
-    const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK', 'PENDING_SALDO'].includes(systemAccess?.code);
+    const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK', 'PENDING_SALDO', 'MISSING_MORNING_CUADRE'].includes(systemAccess?.code);
     const isBlockedForPayments = isBlockedByCuadre && isTotalBlock;
     const isBlockedForOperations = isBlockedByCuadre;
     const [userLoc, setUserLoc] = useState<[number, number] | null>(null)
@@ -1130,7 +1130,7 @@ export function PrestamosTable({
 
                 {/* -------------------- MOBILE CARDS VIEW -------------------- */}
              <div className={cn(
-                 "space-y-4",
+                 "space-y-2",
                  viewType === 'cards' ? "md:hidden" : "hidden"
              )}>
                 {paginatedPrestamos.map((prestamo) => (
@@ -1139,8 +1139,8 @@ export function PrestamosTable({
                         className={cn(
                             "group block bg-slate-900 border border-slate-800/60 rounded-xl mb-3 relative overflow-hidden transition-all duration-200 shadow-sm hover:shadow-md hover:border-slate-700",
                             // Status Bar (Left Border)
-                            prestamo.estado === 'refinanciado' ? "border-l-[4px] border-l-indigo-500 bg-slate-900/60 opacity-60 grayscale" :
-                            (prestamo.isFinalizado || prestamo.estado === 'renovado' || prestamo.saldo_pendiente <= 0 || (prestamo.totalCuotas > 0 && prestamo.cuotasPagadas >= prestamo.totalCuotas)) ? "border-l-[4px] border-l-slate-600 bg-slate-900/60 opacity-60 grayscale" :
+                            prestamo.estado === 'refinanciado' ? "border-l-[4px] border-l-indigo-500 bg-slate-900/40" :
+                            (prestamo.isFinalizado || prestamo.estado === 'renovado' || prestamo.saldo_pendiente <= 0 || (prestamo.totalCuotas > 0 && prestamo.cuotasPagadas >= prestamo.totalCuotas)) ? "border-l-[4px] border-l-slate-600 bg-slate-900/40" :
                             prestamo.estado_mora === 'vencido' ? "border-l-[4px] border-l-rose-500" :
                             prestamo.estado_mora === 'moroso' ? "border-l-[4px] border-l-red-600" :
                             prestamo.estado_mora === 'cpp' || (prestamo.deudaHoy > 0 && prestamo.cuotasAtrasadas >= 3) ? "border-l-[4px] border-l-orange-500" :
@@ -1149,13 +1149,13 @@ export function PrestamosTable({
                         )}
                     >
                         {/* Compact Ledger View */}
-                        <div className="flex flex-col py-3 px-4 gap-3 relative bg-gradient-to-br from-slate-900/50 to-slate-900/10 hover:bg-slate-800/20 transition-colors">
+                        <div className="flex flex-col py-2 px-3 gap-2 relative bg-gradient-to-br from-slate-900/50 to-slate-900/10 hover:bg-slate-800/20 transition-colors">
                             {/* TOP ROW: Identity & Header Status */}
                             <div className="flex items-start justify-between gap-3">
-                                <div className="flex items-center gap-3 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0">
                                     {/* Avatar */}
                                     <div className="shrink-0">
-                                        <div className="w-10 h-10 rounded-full border border-slate-700 bg-slate-800 text-slate-300 flex items-center justify-center overflow-hidden shadow-sm">
+                                        <div className="w-9 h-9 rounded-full border border-slate-700 bg-slate-800 text-slate-300 flex items-center justify-center overflow-hidden shadow-sm">
                                             {prestamo.clientes?.foto_perfil ? (
                                                 <div onClick={(e) => e.stopPropagation()} className="w-full h-full relative z-10">
                                                     <ImageLightbox
@@ -1180,7 +1180,7 @@ export function PrestamosTable({
 
                                     {/* Name & DNI */}
                                     <div className="flex flex-col min-w-0">
-                                        <h3 className="text-slate-100 font-bold text-base leading-tight truncate pr-1">
+                                        <h3 className="text-slate-100 font-bold text-sm leading-tight truncate pr-1">
                                             {prestamo.clientes?.nombres}
                                         </h3>
                                         <div className="flex flex-col gap-0.5 mt-0.5">
@@ -1283,24 +1283,33 @@ export function PrestamosTable({
 
 
                             {/* MIDDLE ROW: Stats & Info (Full Width, Left Aligned) */}
-                            <div className="grid grid-cols-12 gap-1 items-end">
-                                {/* Stats (Capital, Cuota, Progress) - Spans left */}
-                                <div className="col-span-6 flex flex-col gap-2">
-                                     <div className="flex items-center gap-4">
+                            <div className="grid grid-cols-12 gap-2 items-end">
+                                {/* Stats & Asesor - Spans left */}
+                                <div className="col-span-7 flex flex-col gap-2">
+                                     <div className="flex items-center gap-2.5">
                                         <div className="flex flex-col">
-                                            <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Capital</span>
-                                            <span className="font-mono text-slate-300 text-sm">${prestamo.monto?.toFixed(0)}</span>
+                                            <span className="text-[8px] text-slate-500 uppercase font-black tracking-wider mb-0.5">Capital</span>
+                                            <span className="font-mono text-slate-300 text-[13px]">${prestamo.monto?.toFixed(0)}</span>
                                         </div>
                                         <div className="flex flex-col">
-                                            <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Cuota</span>
-                                            <span className="font-mono text-slate-300 text-sm">${prestamo.valorCuota?.toFixed(0)}</span>
+                                            <span className="text-[8px] text-slate-500 uppercase font-black tracking-wider mb-0.5">Cuota</span>
+                                            <span className="font-mono text-slate-300 text-[13px]">${prestamo.valorCuota?.toFixed(0)}</span>
                                         </div>
+                                        {/* New Saldo/Any Partial Section */}
+                                        {(prestamo.saldo_cuota_parcial > 0) && (
+                                            <div className="flex flex-col">
+                                                <span className="text-[8px] text-blue-400/70 uppercase font-bold tracking-wider mb-0.5">Saldo</span>
+                                                <span className="font-mono text-blue-400 text-[11px] font-bold animate-pulse">
+                                                    ${prestamo.saldo_cuota_parcial.toFixed(0)}
+                                                </span>
+                                            </div>
+                                        )}
                                         {/* New Mora Section */}
                                         {prestamo.deudaHoy > 0 && (
                                             <div className="flex flex-col">
-                                                <span className="text-[9px] text-red-400/70 uppercase font-bold tracking-wider mb-0.5">Mora</span>
+                                                <span className="text-[8px] text-red-400/70 uppercase font-bold tracking-wider mb-0.5">Mora</span>
                                                 <span className={cn(
-                                                    "font-mono text-sm",
+                                                    "font-mono text-[11px]",
                                                     ['vencido', 'moroso'].includes(prestamo.estado_mora) ? "text-red-500" : "text-amber-500"
                                                 )}>
                                                     ${prestamo.deudaHoy.toFixed(0)}
@@ -1309,9 +1318,9 @@ export function PrestamosTable({
                                         )}
                                         {(userRol === 'admin' || userRol === 'supervisor') && (
                                             <div className="flex flex-col">
-                                                <span className="text-[9px] text-blue-500/70 uppercase font-bold tracking-wider mb-0.5">Asesor</span>
-                                                <span className="text-blue-300 text-sm flex items-center gap-1 truncate w-full">
-                                                    <Users className="w-3 h-3 text-blue-400 shrink-0" />
+                                                <span className="text-[8px] text-blue-500/70 uppercase font-bold tracking-wider mb-0.5">Asesor</span>
+                                                <span className="text-blue-300 text-[11px] flex items-center gap-1 truncate w-full">
+                                                    <Users className="w-2.5 h-2.5 text-blue-400 shrink-0" />
                                                     <span className="truncate">{prestamo.asesor_nombre?.split(' ')[0] || '-'}</span>
                                                 </span>
                                             </div>
@@ -1325,29 +1334,29 @@ export function PrestamosTable({
                                             
                                             if (isFullyPaidMobile) {
                                                 return (
-                                                    <div className="flex items-center gap-1.5 text-emerald-500 font-bold text-[10px] bg-emerald-500/5 px-2 py-1 rounded-md border border-emerald-500/10">
-                                                        <CheckCircle2 className="w-3 h-3" />
+                                                    <div className="flex items-center gap-1.5 text-emerald-500 font-bold text-[9px] bg-emerald-500/5 px-2 py-1 rounded-md border border-emerald-500/10">
+                                                        <CheckCircle2 className="w-2.5 h-2.5" />
                                                         <span>Pagado</span>
                                                     </div>
                                                 )
                                             } else if (prestamo.cuotasAtrasadas > 0) {
                                                 return (
-                                                    <div className="flex items-center gap-1.5 text-amber-500 font-bold text-[10px] bg-amber-500/5 px-2 py-1 rounded-md border border-amber-500/10">
-                                                        <AlertTriangle className="w-3 h-3" />
-                                                        <span>{prestamo.cuotasAtrasadas} atrasadas</span>
+                                                    <div className="flex items-center gap-1.5 text-amber-500 font-bold text-[9px] bg-amber-500/5 px-2 py-1 rounded-md border border-amber-500/10">
+                                                        <AlertTriangle className="w-2.5 h-2.5" />
+                                                        <span>{prestamo.cuotasAtrasadas} ATR</span>
                                                     </div>
                                                 )
                                             } else {
                                                 return (
-                                                    <div className="flex items-center gap-1.5 text-emerald-500 font-bold text-[10px] bg-emerald-500/5 px-2 py-1 rounded-md border border-emerald-500/10">
-                                                        <CheckCircle2 className="w-3 h-3" />
+                                                    <div className="flex items-center gap-1.5 text-emerald-500 font-bold text-[9px] bg-emerald-500/5 px-2 py-1 rounded-md border border-emerald-500/10">
+                                                        <CheckCircle2 className="w-2.5 h-2.5" />
                                                         <span>Al día</span>
                                                     </div>
                                                 )
                                             }
                                         })()}
                                         {!prestamo.isFinalizado && (
-                                            <span className="text-slate-400 text-sm font-bold px-1">
+                                            <span className="text-slate-400 text-[11px] font-bold px-1">
                                                 {prestamo.cuotasPagadas}/{prestamo.totalCuotas}
                                             </span>
                                         )}
@@ -1355,7 +1364,7 @@ export function PrestamosTable({
                                 </div>
 
                                 {/* Actions - Bottom Right */}
-                                <div className="col-span-6 flex items-end justify-end gap-1.5 h-full">
+                                <div className="col-span-5 flex items-end justify-end gap-1 h-full">
                                     {(() => {
                                         const isEffectivelyFinalized = prestamo.isFinalizado || prestamo.estado === 'finalizado' || prestamo.estado === 'renovado' || prestamo.saldo_pendiente <= 0;
                                         const canRenew = puedeRenovar(prestamo);
@@ -1367,7 +1376,7 @@ export function PrestamosTable({
                                                     <Button 
                                                         variant="ghost" 
                                                         size="icon" 
-                                                        className="h-8 w-8 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all"
+                                                        className="h-[31px] w-[31px] rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all"
                                                         onClick={(e) => {
                                                             e.preventDefault()
                                                             e.stopPropagation()
@@ -1377,7 +1386,7 @@ export function PrestamosTable({
                                                         }}
                                                         disabled={!prestamo.clientes?.telefono}
                                                     >
-                                                        <MessageCircle className="w-4 h-4" />
+                                                        <MessageCircle className="w-3.5 h-3.5" />
                                                     </Button>
                                                 )}
 
@@ -1412,7 +1421,7 @@ export function PrestamosTable({
                                                                             size="icon" 
                                                                             disabled={!canRequestDueToTime || isBlockedByCuadre}
                                                                             className={cn(
-                                                                                "h-8 w-8 rounded-lg transition-all flex items-center justify-center shrink-0",
+                                                                                "h-[31px] w-[31px] rounded-lg transition-all flex items-center justify-center shrink-0",
                                                                                 (!canRequestDueToTime || isBlockedByCuadre) ? "opacity-40 grayscale pointer-events-none bg-slate-800/50" :
                                                                                 isAdminDirectRefinance 
                                                                                     ? "bg-amber-500 hover:bg-amber-600 text-white shadow-sm border border-amber-400" 
@@ -1421,7 +1430,7 @@ export function PrestamosTable({
                                                                             onClick={(e) => e.stopPropagation()}
                                                                             title={isBlockedByCuadre ? 'Bloqueado por cuadre pendiente' : userRol === 'supervisor' ? 'Ver Evaluación' : (isAdminDirectRefinance ? 'Refinanciar' : 'Renovar')}
                                                                         >
-                                                                            {isBlockedByCuadre ? <Lock className="w-4 h-4 text-rose-500" /> : <RotateCcw className="w-4 h-4" />} 
+                                                                            {isBlockedByCuadre ? <Lock className="w-3.5 h-3.5 text-rose-500" /> : <RotateCcw className="w-3.5 h-3.5" />} 
                                                                         </Button>
                                                                     }
                                                                 />
@@ -1436,7 +1445,7 @@ export function PrestamosTable({
                                                         size="icon" 
                                                         disabled={!canRequestDueToTime || isBlockedForPayments}
                                                         className={cn(
-                                                            "h-8 w-8 rounded-lg transition-all flex items-center justify-center shrink-0 border",
+                                                            "h-[31px] w-[31px] rounded-lg transition-all flex items-center justify-center shrink-0 border",
                                                             isBlockedForPayments 
                                                                 ? "opacity-40 grayscale pointer-events-none text-rose-500 bg-slate-800/50 border-slate-700/50" 
                                                                 : "text-slate-400 bg-slate-800/40 border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/50 hover:border-emerald-700/50"
@@ -1448,7 +1457,7 @@ export function PrestamosTable({
                                                         }}
                                                         title={isBlockedForPayments ? 'Bloqueado por horario/feriado' : 'Cobrar'}
                                                     >
-                                                        {isBlockedForPayments ? <Lock className="w-4 h-4 text-rose-500" /> : <DollarSign className="w-4 h-4" />}
+                                                        {isBlockedForPayments ? <Lock className="w-3.5 h-3.5 text-rose-500" /> : <DollarSign className="w-3.5 h-3.5" />}
                                                     </Button>
                                                 )}
 
@@ -1473,7 +1482,7 @@ export function PrestamosTable({
                                                         clientCoords={clientCoords}
                                                         userLoc={userLoc}
                                                         variant="icon" 
-                                                        className="h-8 w-8" 
+                                                        className="h-[31px] w-[31px]" 
                                                      />;
                                                  })()}
 
@@ -1483,8 +1492,8 @@ export function PrestamosTable({
                                                 {/* Dropdown Menu para opciones extra */}
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-white hover:bg-slate-700 transition-all">
-                                                            <MoreVertical className="w-4 h-4" />
+                                                        <Button variant="ghost" size="icon" className="h-[31px] w-[31px] rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-white hover:bg-slate-700 transition-all">
+                                                            <MoreVertical className="w-3.5 h-3.5" />
                                                         </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end" className="w-48 bg-slate-900 border-slate-700 text-slate-200">
@@ -1529,8 +1538,8 @@ export function PrestamosTable({
                                                                 handleViewContract(prestamo)
                                                             }}
                                                         >
-                                                            <FileText className="w-3.5 h-3.5 mr-2 text-slate-500" />
-                                                            {isLoadingContract && selectedContractLoan?.id === prestamo.id ? 'Cargando...' : 'Ver Contrato'}
+                                                            <Files className="w-3.5 h-3.5 mr-2 text-blue-400" />
+                                                            {isLoadingContract && selectedContractLoan?.id === prestamo.id ? 'Cargando...' : 'Ver Documentos'}
                                                         </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
@@ -1558,11 +1567,12 @@ export function PrestamosTable({
              )}>
                 <div className={cn(viewType === 'table' && "min-w-[1000px]")}>
                  {/* Table Header */}
-                 <div className="grid grid-cols-12 gap-2 px-6 py-4 bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-400">
+                 <div className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-2 px-6 py-4 bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-400">
                     <div className="col-span-2 pl-2">Cliente / Préstamo</div>
                     <div className="col-span-1 text-center">Sector</div>
                     <div className="col-span-1 text-right">Capital</div>
                     <div className="col-span-1 text-right">Cuota</div>
+                    <div className="col-span-1 text-right text-blue-400">Saldo</div>
                     <div className="col-span-1 text-right">Mora</div>
                     <div className="col-span-1 text-center">Prog.</div>
                     <div className="col-span-1 text-center">Pago</div>
@@ -1626,7 +1636,7 @@ export function PrestamosTable({
                                 key={prestamo.id} 
                                 style={{ borderLeftWidth: '6px', borderLeftStyle: 'solid', borderLeftColor: rowStyle.borderLeftColor }}
                                 className={cn(
-                                    "grid grid-cols-12 gap-2 px-6 py-4 hover:bg-slate-800/40 transition-all items-center group relative",
+                                    "grid grid-cols-[repeat(13,minmax(0,1fr))] gap-2 px-6 py-4 hover:bg-slate-800/40 transition-all items-center group relative",
                                     rowStyle.className
                                 )}
                             >
@@ -1719,6 +1729,16 @@ export function PrestamosTable({
                                     ${prestamo.valorCuota?.toFixed(2)}
                                 </div>
 
+                                {/* Saldo (Any Partial Balance) */}
+                                <div className="col-span-1 text-right">
+                                    <span className={cn(
+                                        "font-bold font-mono tracking-tight text-sm",
+                                        (prestamo.saldo_cuota_parcial > 0) ? "text-blue-400" : "text-slate-500"
+                                    )}>
+                                        ${(prestamo.saldo_cuota_parcial || 0).toFixed(2)}
+                                    </span>
+                                </div>
+
                                 {/* Mora */}
                                 <div className="col-span-1 text-right">
                                     <span className={cn(
@@ -1757,7 +1777,7 @@ export function PrestamosTable({
                                                     "font-bold text-[10px] mb-0.5 whitespace-nowrap",
                                                     cuotasAtrasadas > 0 ? "text-amber-400" : "text-emerald-500"
                                                 )}>
-                                                    {cuotasAtrasadas > 0 ? `⚠️ ${cuotasAtrasadas} atr.` : '✅ Al día'}
+                                                    {cuotasAtrasadas > 0 ? `⚠️ ${cuotasAtrasadas} ATR` : '✅ Al día'}
                                                 </span>
                                                 <span className="text-xs font-bold text-slate-400">
                                                     {cuotasPagadas}/{totalCuotas > 0 ? totalCuotas : '-'}
@@ -1985,8 +2005,8 @@ export function PrestamosTable({
                                                     handleViewContract(prestamo)
                                                 }}
                                             >
-                                                <FileText className="w-3.5 h-3.5 mr-2 text-slate-500" />
-                                                {isLoadingContract && selectedContractLoan?.id === prestamo.id ? 'Cargando...' : 'Ver Contrato'}
+                                                <Files className="w-3.5 h-3.5 mr-2 text-blue-400" />
+                                                {isLoadingContract && selectedContractLoan?.id === prestamo.id ? 'Cargando...' : 'Ver Documentos'}
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>

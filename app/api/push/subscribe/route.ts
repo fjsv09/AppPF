@@ -10,29 +10,40 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const subscription = await request.json()
-    const supabaseAdmin = createAdminClient()
+    const subscription = await request.json();
+    const supabaseAdmin = createAdminClient();
 
-    // Guardar o actualizar suscripción
-    // Usamos el endpoint para el usuario autenticado
-    const { error } = await supabaseAdmin
+    // LIMPIEZA ABSOLUTA: Borramos cualquier rastro previo para el usuario
+    const { error: deleteError } = await supabaseAdmin
         .from('push_subscriptions')
-        .upsert({
+        .delete()
+        .eq('usuario_id', user.id);
+
+    if (deleteError) {
+        console.error('[SUBSCRIBE] Error limpiando registros previos:', deleteError);
+    }
+
+    // REGISTRO FRESCO: Insertar la suscripción recibida del navegador actual
+    const { data: sub_res, error } = await supabaseAdmin
+        .from('push_subscriptions')
+        .insert({
             usuario_id: user.id,
             subscription: subscription,
             created_at: new Date().toISOString()
-        }, {
-            onConflict: 'usuario_id, subscription' // Idealmente tendríamos una clave única combinada o solo usuario_id si permitimos 1 dispositivo
         })
+        .select()
+        .single();
 
     if (error) {
-        console.error('Error saving subscription:', error)
+        console.error('[SUBSCRIBE] Error guardando en DB:', error);
         return NextResponse.json({ 
             error: error.message,
             details: error.details,
             hint: error.hint
-        }, { status: 500 })
+        }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true })
+    console.info(`[SUBSCRIBE SUCCESS] Canal único registrado para: ${user.id}`);
+
+    return NextResponse.json({ success: true, data: sub_res });
 }

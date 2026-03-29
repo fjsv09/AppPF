@@ -169,9 +169,13 @@ export function CuadreApproval({ pendingCuadres: initialCuadres, adminId, global
                   </div>
                   <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                       c.tipo_cuadre === 'final' ? 'bg-rose-500/20 text-rose-400' : 'bg-blue-500/20 text-blue-400'
+                       c.tipo_cuadre === 'final' ? 'bg-rose-500/20 text-rose-400' : 
+                       c.tipo_cuadre === 'parcial_mañana' ? 'bg-emerald-500/20 text-emerald-400' :
+                       'bg-blue-500/20 text-blue-400'
                      }`}>
-                       {c.tipo_cuadre === 'final' ? 'CIERRE FINAL' : 'CIERRE PARCIAL'}
+                       {c.tipo_cuadre === 'final' ? 'CIERRE DÍA' : 
+                        c.tipo_cuadre === 'parcial_mañana' ? 'CIERRE MAÑANA' : 
+                        'CUADRE PARCIAL'}
                      </span>
                      {isExpanded ? (
                        <ChevronUp className="w-4 h-4 text-slate-400" />

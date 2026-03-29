@@ -48,8 +48,16 @@ export function LoanTabs({
     const tabParam = searchParams.get('tab')
     
     // Validar el tab de la URL o usar el default
+    const isAdmin = userRole === 'admin'
     const isAdvisor = userRole === 'asesor'
-    const allowedTabs = ["cronograma", "historial", "evidencia", "gestiones"]
+    const allowedTabs = ["historial", "evidencia", "gestiones"]
+    
+    // Solo admin puede ver/gestionar cronograma
+    if (isAdmin) {
+        allowedTabs.push("cronograma")
+    }
+    
+    // Otros roles (supervisor/admin) ven visitas, asesor no.
     if (!isAdvisor) {
         allowedTabs.push("visitas")
     }
@@ -59,7 +67,7 @@ export function LoanTabs({
         if (tabParam && allowedTabs.includes(tabParam)) {
             return tabParam
         }
-        return "cronograma"
+        return "historial"
     })
     
     // Sincronizar estado si la URL cambia (ej: por botones de navegación)
@@ -67,7 +75,7 @@ export function LoanTabs({
         if (tabParam && allowedTabs.includes(tabParam) && tabParam !== activeTab) {
             setActiveTab(tabParam)
         } else if (tabParam && !allowedTabs.includes(tabParam)) {
-            setActiveTab("cronograma")
+            setActiveTab("historial")
             // Opcional: router.replace(...) para limpiar la URL
         }
     }, [tabParam, activeTab, allowedTabs])
@@ -89,12 +97,14 @@ export function LoanTabs({
                     {isPending && (
                         <div className="absolute inset-0 bg-blue-500/5 animate-pulse" />
                     )}
-                    <TabsTrigger value="cronograma" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
-                        <CalendarDays className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Cronograma
-                    </TabsTrigger>
                     <TabsTrigger value="historial" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
                         <History className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Historial
                     </TabsTrigger>
+                    {isAdmin && (
+                        <TabsTrigger value="cronograma" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
+                            <CalendarDays className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Cronograma
+                        </TabsTrigger>
+                    )}
                     {!isAdvisor && (
                         <TabsTrigger value="visitas" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
                             <MapPin className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Visitas
@@ -109,29 +119,6 @@ export function LoanTabs({
                 </TabsList>
             </div>
 
-            <TabsContent value="cronograma" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
-                {isPending ? (
-                    <div className="flex items-center justify-center py-20 bg-slate-900/10 border border-slate-800/50 rounded-2xl animate-in fade-in duration-300">
-                        <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
-                    </div>
-                ) : (
-                    <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
-                        <CardContent className="p-3 md:p-6">
-                            <CronogramaClient 
-                                prestamo={prestamo} 
-                                cronograma={cronograma} 
-                                userRol={userRole} 
-                                systemSchedule={systemSchedule}
-                                isBlockedByCuadre={isBlockedByCuadre}
-                                blockReasonCierre={blockReasonCierre}
-                                systemAccess={systemAccess}
-                                pagos={pagos}
-                            />
-                        </CardContent>
-                    </Card>
-                )}
-            </TabsContent>
-
             <TabsContent value="historial" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
                 {isPending ? (
                     <div className="flex items-center justify-center py-20 bg-slate-900/10 border border-slate-800/50 rounded-2xl animate-in fade-in duration-300">
@@ -140,26 +127,47 @@ export function LoanTabs({
                 ) : (
                     <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
                         <CardContent className="p-3 md:p-6 space-y-8">
-                            {/* Nueva Bitácora de Campo (Evidencia Diaria) */}
                             <DailyCollectorLog 
                                 cronograma={cronograma} 
                                 pagos={pagos} 
                                 prestamo={prestamo} 
                                 cliente={cliente}
                                 userRole={userRole}
+                                systemSchedule={systemSchedule}
+                                isBlockedByCuadre={isBlockedByCuadre}
+                                blockReasonCierre={blockReasonCierre}
+                                systemAccess={systemAccess}
                             />
                             
-                            {/* Historial de Pagos Individuales (Original) */}
-                            <div className="pt-4 border-t border-slate-800/50">
-                                <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                                    <History className="w-3.5 h-3.5" /> Listado Individual de Recibos
-                                </h3>
-                                <PaymentHistory pagos={pagos} prestamo={prestamo} cliente={cliente || prestamo.clientes} cronograma={cronograma} userRole={userRole} />
-                            </div>
+
                         </CardContent>
                     </Card>
                 )}
             </TabsContent>
+            {isAdmin && (
+                <TabsContent value="cronograma" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
+                    {isPending ? (
+                        <div className="flex items-center justify-center py-20 bg-slate-900/10 border border-slate-800/50 rounded-2xl animate-in fade-in duration-300">
+                            <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+                        </div>
+                    ) : (
+                        <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
+                            <CardContent className="p-3 md:p-6">
+                                <CronogramaClient 
+                                    prestamo={prestamo} 
+                                    cronograma={cronograma} 
+                                    userRol={userRole}
+                                    systemSchedule={systemSchedule}
+                                    isBlockedByCuadre={isBlockedByCuadre}
+                                    blockReasonCierre={blockReasonCierre}
+                                    systemAccess={systemAccess}
+                                    pagos={pagos}
+                                />
+                            </CardContent>
+                        </Card>
+                    )}
+                </TabsContent>
+            )}
 
             {!isAdvisor && (
                 <TabsContent value="visitas" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">

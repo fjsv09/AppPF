@@ -94,8 +94,14 @@ export function CuadreHistoryTable({ history }: CuadreHistoryTableProps) {
                         <span className="text-xs md:text-sm font-bold text-white uppercase truncate max-w-[150px] md:max-w-none">
                           {item.perfiles?.nombre_completo}
                         </span>
-                        <span className={`px-1.5 py-0.5 rounded text-[8px] md:text-[9px] font-black uppercase tracking-widest shrink-0 ${item.tipo_cuadre === 'final' ? 'bg-rose-500/20 text-rose-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                          {item.tipo_cuadre === 'final' ? 'FINAL' : 'PARCIAL'}
+                        <span className={`px-1.5 py-0.5 rounded text-[8px] md:text-[9px] font-black uppercase tracking-widest shrink-0 ${
+                          item.tipo_cuadre === 'final' ? 'bg-rose-500/20 text-rose-400' : 
+                          item.tipo_cuadre === 'parcial_mañana' ? 'bg-emerald-500/20 text-emerald-400' :
+                          'bg-blue-500/20 text-blue-400'
+                        }`}>
+                          {item.tipo_cuadre === 'final' ? 'DÍA' : 
+                           item.tipo_cuadre === 'parcial_mañana' ? 'MAÑANA' : 
+                           'PARCIAL'}
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 md:mt-1">

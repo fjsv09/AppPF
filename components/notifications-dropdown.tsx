@@ -307,12 +307,19 @@ export function NotificationsDropdown() {
                                 Test Local
                             </button>
                             <button
-                                onClick={async (e) => {
+                                 onClick={async (e) => {
                                     e.stopPropagation()
                                     try {
                                         const sb = createClient()
                                         const { data: { user } } = await sb.auth.getUser()
-                                        if (!user) return
+                                        if (!user) {
+                                            console.error('[PUSH TEST] No hay usuario logueado.');
+                                            return;
+                                        }
+
+                                        console.log('[PUSH TEST] Iniciando prueba para:', user.id);
+                                        const sub = await registration?.pushManager.getSubscription();
+                                        console.log('[PUSH TEST] Suscripción actual en navegador:', sub ? 'Existe' : 'No existe (null)');
                                         
                                         toast.promise(
                                             fetch('/api/notificaciones/manual', {
@@ -325,14 +332,21 @@ export function NotificationsDropdown() {
                                                     tipo: 'success',
                                                     link: '/dashboard'
                                                 })
+                                            }).then(async (res) => {
+                                                const data = await res.json();
+                                                console.log('[PUSH TEST] Respuesta servidor:', data);
+                                                if (!res.ok) throw new Error(data.error || 'Server error');
+                                                return data;
                                             }),
                                             {
                                                 loading: 'Enviando...',
-                                                success: 'Prueba enviada',
-                                                error: 'Error de envío'
+                                                success: 'Prueba enviada - Revisa la consola si no llega el pop-up',
+                                                error: 'Error de envío (ver consola)'
                                             }
                                         )
-                                    } catch (err) {}
+                                    } catch (err) {
+                                        console.error('[PUSH TEST] Error capturado:', err);
+                                    }
                                 }}
                                 className="flex-1 py-1 px-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-[10px] text-slate-400 hover:bg-slate-800 hover:text-white transition-all flex items-center justify-center gap-1.5"
                             >

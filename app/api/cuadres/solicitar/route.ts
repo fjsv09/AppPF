@@ -101,7 +101,8 @@ export async function POST(request: Request) {
 
         const nombreAsesor = perfilAsesor?.nombre_completo || 'Un asesor'
 
-        if (admins) {
+        if (admins && admins.length > 0) {
+            console.info(`[CUADRE NOTIF] Notifying ${admins.length} active admins about the request from ${nombreAsesor}.`);
             for (const admin of admins) {
                 await createFullNotification(admin.id, {
                     titulo: '📅 Nuevo Cuadre Solicitado',
@@ -110,6 +111,8 @@ export async function POST(request: Request) {
                     tipo: 'warning'
                 })
             }
+        } else {
+            console.warn(`[CUADRE NOTIF] No active administrators found to notify for cuadre request from ${nombreAsesor}. Check that 'rol' is 'admin' and 'activo' is true in perfiles table.`);
         }
 
         return NextResponse.json({ success: true, id: cuadreId })

@@ -213,6 +213,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             dias_sin_pago: metrics.diasSinPago,
             valor_cuota_promedio: metrics.valorCuotaPromedio,
             cuotas_mora_real: metrics.cuotasAtrasadas,
+            saldo_cuota_parcial: metrics.saldoCuotaParcial,
             
             es_renovable: metrics.esRenovable,
             isFinalizado: p.estado === 'finalizado',

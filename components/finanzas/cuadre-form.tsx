@@ -40,7 +40,7 @@ import {
 
 const formSchema = z.object({
   cartera_id: z.string().uuid('Seleccione una cartera'),
-  tipo_cuadre: z.enum(['parcial', 'final']),
+  tipo_cuadre: z.enum(['parcial', 'parcial_mañana', 'final']),
   monto_efectivo: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
     message: 'Monto inválido',
   }),
@@ -71,6 +71,32 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
       monto_digital: '',
     },
   })
+
+  // --- AUTOMATIZACIÓN DE TIPO DE CUADRE (3 NIVELES) ---
+  const mEfectivo = form.watch('monto_efectivo')
+  const mDigital = form.watch('monto_digital')
+
+  useEffect(() => {
+    const total = (parseFloat(mEfectivo || '0')) + (parseFloat(mDigital || '0'))
+    if (total <= 0) return; // No auto-detectar si está vacío
+
+    const isTotal = Math.abs(total - stats.neto) < 1.05
+    const hour = new Date().getHours()
+
+    if (!isTotal) {
+      // 1. Si entrega menos del saldo neto actual, SIEMPRE es "parcial" (Cuadre de Ruta)
+      form.setValue('tipo_cuadre', 'parcial')
+    } else {
+      // Si entrega el TOTAL de lo que hay en caja...
+      // 2. Antes de las 5:00 PM (Turno Mañana Completo)
+      if (hour < 17) {
+        form.setValue('tipo_cuadre', 'parcial_mañana')
+      } else {
+        // 3. Después de las 5:00 PM (Cierre Final de Jornada)
+        form.setValue('tipo_cuadre', 'final')
+      }
+    }
+  }, [mEfectivo, mDigital, stats.neto, form])
 
   // Watch for stats calculation
   const selectedCarteraId = form.watch('cartera_id')
@@ -182,7 +208,7 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
     await processSubmit(mEfectivo, mDigital, values.tipo_cuadre)
   }
 
-  async function processSubmit(mEfectivo: number, mDigital: number, tipoCuadre: 'parcial' | 'final') {
+  async function processSubmit(mEfectivo: number, mDigital: number, tipoCuadre: 'parcial' | 'parcial_mañana' | 'final') {
     setLoading(true)
     setConfirmData(null)
     
@@ -234,8 +260,14 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
                  </div>
               </div>
               <div className="flex sm:block justify-end">
-                  <span className={`text-[9px] md:text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-widest ${form.watch('tipo_cuadre') === 'final' ? 'bg-rose-500/20 text-rose-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                      {form.watch('tipo_cuadre') === 'final' ? 'Cierre del Día' : 'Cierre Parcial'}
+                  <span className={`text-[9px] md:text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-widest ${
+                      form.watch('tipo_cuadre') === 'final' ? 'bg-rose-500/20 text-rose-400' : 
+                      form.watch('tipo_cuadre') === 'parcial_mañana' ? 'bg-emerald-500/20 text-emerald-400' :
+                      'bg-blue-500/20 text-blue-400'
+                  }`}>
+                      {form.watch('tipo_cuadre') === 'final' ? 'Cierre del Día' : 
+                       form.watch('tipo_cuadre') === 'parcial_mañana' ? 'Cierre Mañana' : 
+                       'Cuadre Parcial'}
                   </span>
               </div>
           </div>
@@ -263,7 +295,7 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
                   <p className="text-base md:text-lg font-bold text-white">S/ {stats.neto.toFixed(2)}</p>
               </div>
           </div>
-
+ 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -289,22 +321,23 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
                     </FormItem>
                   )}
                 />
-
+ 
                 <FormField
                   control={form.control}
                   name="tipo_cuadre"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-slate-200">Tipo de Cuadre</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger className="bg-slate-950 border-slate-800 text-white h-12">
                             <SelectValue placeholder="Seleccione momento" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-slate-950 border-slate-800 text-white">
-                          <SelectItem value="parcial">Cierre Parcial (3:00 PM)</SelectItem>
-                          <SelectItem value="final">Cierre del Día (7:00 PM)</SelectItem>
+                          <SelectItem value="parcial">Cuadre Parcial (Ruta)</SelectItem>
+                          <SelectItem value="parcial_mañana">Cierre Mañana (Turno 1)</SelectItem>
+                          <SelectItem value="final">Cierre del Día (Turno 2)</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />

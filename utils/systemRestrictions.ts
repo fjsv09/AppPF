@@ -129,6 +129,67 @@ export async function checkSystemAccess(
         }
     }
 
+    // 7. CUADRE MAÑANA RULE (At the end of Shift 1)
+    if (tNow >= tFinTurno1 && (['solicitud', 'renovacion', 'pago', 'prestamo'].includes(action)) && !isTemporaryUnlocked && userRole !== 'admin') {
+        const { data: firstCuadre } = await supabase
+            .from('cuadres_diarios')
+            .select('created_at')
+            .eq('asesor_id', userId)
+            .eq('fecha', todayStr)
+            .in('tipo_cuadre', ['parcial', 'parcial_mañana'])
+            .eq('estado', 'aprobado') // Solo cuadres ya aceptados por admin
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+        // El punto de corte es la hora límite oficial del Primer Turno.
+        // NO usamos firstCuadre?.created_at porque el asesor debe liquidar TODO lo cobrado hasta la hora oficial
+        // de fin de turno (normalmente 15:00), independientemente de a qué hora hizo su primer intento de cuadre.
+        const timestampMorningCutoff = `${todayStr}T${config.horario_fin_turno_1}:00-05:00`;
+
+        // a) Recaudación Bruta Mañana (todo lo recolectado hoy hasta la hora oficial de corte)
+        const { data: morningPayments } = await supabase
+            .from('pagos')
+            .select('monto_pagado')
+            .eq('registrado_por', userId)
+            .gte('created_at', `${todayStr}T00:00:00-05:00`)
+            .lte('created_at', timestampMorningCutoff);
+        
+        const netMorningDue = morningPayments?.reduce((acc, p) => acc + parseFloat(p.monto_pagado || '0'), 0) || 0;
+
+        // b) Deuda Histórica (Saldo que el asesor trae de días anteriores sin liquidar)
+        const { checkAdvisorBlocked } = await import('./checkAdvisorBlocked');
+        const historicalCheck = await checkAdvisorBlocked(supabase, userId);
+        const leftoverHistorical = historicalCheck.leftover || 0;
+
+        // c) Total liquidado y ACEPTADO hoy
+        const { data: squaredToday } = await supabase
+            .from('cuadres_diarios')
+            .select('saldo_entregado, total_gastos')
+            .eq('asesor_id', userId)
+            .eq('fecha', todayStr)
+            .in('tipo_cuadre', ['parcial', 'parcial_mañana'])
+            .eq('estado', 'aprobado'); // Debe estar aprobado para considerarse "cuadrado"
+        
+        const totalSquaredToday = squaredToday?.reduce((acc, c) => acc + parseFloat(c.saldo_entregado || '0') + parseFloat(c.total_gastos || '0'), 0) || 0;
+
+        // CÁLCULO FINAL: RecaudadoMañana + DeudaHistórica - EntregasHoy
+        // Si Michel debe 40 (ayer) y cobró 98 (hoy), pero entregó 40 (hoy)... 
+        // Aún tiene 98 en su bolsillo procedentes de la mañana de hoy.
+        const totalPendingFromMorning = leftoverHistorical + netMorningDue - totalSquaredToday;
+
+        // Bloqueo obligatorio si el saldo pendiente de lo recaudado en la mañana es significativo
+        if (!firstCuadre || totalPendingFromMorning > 1.05) {
+            return {
+                allowed: false,
+                reason: !firstCuadre 
+                    ? `Al finalizar el Primer Turno (${config.horario_fin_turno_1}), el Administrador debe APROBAR tu CUADRE PARCIAL para que puedas seguir operando.`
+                    : `Para operar en el turno tarde, debes entregar el saldo total pendiente (S/ ${totalPendingFromMorning.toFixed(2)} que incluye deudas anteriores y cobros de esta mañana).`,
+                code: 'MISSING_MORNING_CUADRE'
+            };
+        }
+    }
+
     // 6. GLOBAL HOUR BLOCK
     if (!isTemporaryUnlocked && userRole !== 'admin' && action !== 'cuadre') {
         if (tNow < tApertura || tNow > tCierre) {
@@ -150,57 +211,6 @@ export async function checkSystemAccess(
                 code: 'NIGHT_RESTRICTION'
             };
          }
-    }
-
-    // 7. CUADRE MAÑANA RULE (At the end of Shift 1)
-    if (tNow >= tFinTurno1 && (action === 'solicitud' || action === 'renovacion' || action === 'prestamo') && !isTemporaryUnlocked && userRole !== 'admin') {
-        const { data: firstCuadre } = await supabase
-            .from('cuadres_diarios')
-            .select('created_at')
-            .eq('asesor_id', userId)
-            .eq('fecha', todayStr)
-            .eq('tipo_cuadre', 'parcial')
-            .eq('estado', 'aprobado') // Solo cuadres ya aceptados por admin
-            .order('created_at', { ascending: true })
-            .limit(1)
-            .maybeSingle();
-
-        // El punto de corte es el primer cuadre aprobado, o la hora límite establecida
-        const timestampMorningCutoff = firstCuadre?.created_at || `${todayStr}T${config.horario_fin_turno_1}:00-05:00`;
-
-        // a) Recaudación Bruta Mañana (todo lo recolectado antes del primer cuadre APROBADO)
-        const { data: morningPayments } = await supabase
-            .from('pagos')
-            .select('monto_pagado')
-            .eq('registrado_por', userId)
-            .gte('created_at', `${todayStr}T00:00:00-05:00`)
-            .lte('created_at', timestampMorningCutoff);
-        
-        const netMorningDue = morningPayments?.reduce((acc, p) => acc + parseFloat(p.monto_pagado || '0'), 0) || 0;
-
-        // c) Total liquidado y ACEPTADO hoy
-        const { data: squaredToday } = await supabase
-            .from('cuadres_diarios')
-            .select('saldo_entregado, total_gastos')
-            .eq('asesor_id', userId)
-            .eq('fecha', todayStr)
-            .eq('tipo_cuadre', 'parcial')
-            .eq('estado', 'aprobado'); // Debe estar aprobado para considerarse "cuadrado"
-        
-        const totalSquaredToday = squaredToday?.reduce((acc, c) => acc + parseFloat(c.saldo_entregado || '0') + parseFloat(c.total_gastos || '0'), 0) || 0;
-
-        const morningLeftover = netMorningDue - totalSquaredToday;
-
-        // Bloqueo obligatorio si no hay ningún cuadre parcial APROBADO hoy, o si no cubrió la mañana
-        if (!firstCuadre || morningLeftover > 1.05) {
-            return {
-                allowed: false,
-                reason: !firstCuadre 
-                    ? `Al finalizar el Primer Turno (${config.horario_fin_turno_1}), el Administrador debe APROBAR tu CUADRE PARCIAL para que puedas seguir operando.`
-                    : `Para operar en el turno tarde, debes liquidar el saldo pendiente de tu primera ruta (S/ ${morningLeftover.toFixed(2)} restante).`,
-                code: 'MISSING_MORNING_CUADRE'
-            };
-        }
     }
 
 

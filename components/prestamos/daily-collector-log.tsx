@@ -5,14 +5,76 @@ import { format, isAfter, startOfDay } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Wallet, Calendar, CheckCircle2, XCircle, ArrowRightCircle, Receipt, User, CheckCircle, ShieldAlert, Clock } from 'lucide-react'
+import { Wallet, Calendar, CheckCircle2, XCircle, ArrowRightCircle, Receipt, User, CheckCircle, ShieldAlert, Clock, Lock, DollarSign } from 'lucide-react'
 import { cn, formatDatePeru } from '@/lib/utils'
 import { PaymentVoucher } from './payment-voucher'
+import { QuickPayModal } from './quick-pay-modal'
+import { VisitActionButton } from './visit-action-button'
+import { useRouter } from 'next/navigation'
+import { api } from '@/services/api'
 
-export function DailyCollectorLog({ cronograma, pagos, prestamo, cliente, userRole = 'asesor' }: any) {
+export function DailyCollectorLog({ 
+    cronograma, 
+    pagos, 
+    prestamo, 
+    cliente, 
+    userRole = 'asesor',
+    systemSchedule,
+    isBlockedByCuadre,
+    blockReasonCierre,
+    systemAccess
+}: any) {
+    const router = useRouter()
     const [selectedPayment, setSelectedPayment] = useState<any>(null)
     const [isVoucherOpen, setIsVoucherOpen] = useState(false)
+    const [quickPayOpen, setQuickPayOpen] = useState(false)
     const today = startOfDay(new Date())
+    const todayStr = today.toISOString().split('T')[0]
+
+    // --- LOGICA DE ACCESO (Copiada de CronogramaClient) ---
+    const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK', 'PENDING_SALDO'].includes(systemAccess?.code);
+    const isBlockedForPayments = isBlockedByCuadre && isTotalBlock;
+    const puedeOperar = userRole === 'asesor'
+
+    const now = new Date()
+    const formatter = new Intl.DateTimeFormat('es-PE', {
+        timeZone: 'America/Lima',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    })
+    const currentHourString = formatter.format(now)
+
+    const timeToMinutes = (timeStr: string) => {
+        const [h, m] = timeStr.split(':').map(Number);
+        return h * 60 + m;
+    };
+
+    const apertura = systemSchedule?.horario_apertura || '10:00'
+    const cierre = systemSchedule?.horario_cierre || '19:00'
+    const tNow = timeToMinutes(currentHourString);
+    const tApertura = timeToMinutes(apertura);
+    const tCierre = timeToMinutes(cierre);
+    const tDesbloqueo = systemSchedule?.desbloqueo_hasta ? new Date(systemSchedule.desbloqueo_hasta) : null;
+    const isWithinHours = tNow >= tApertura && tNow < tCierre;
+    const isTemporaryUnlocked = tDesbloqueo && now < tDesbloqueo;
+    const canPayDueToTime = isWithinHours || isTemporaryUnlocked
+    // --- FIN LOGICA DE ACCESO ---
+
+    // --- LOGICA DE CUOTA ACTIVA (Identificar cobro del día) ---
+    const activeQuota = useMemo(() => {
+        if (!cronograma) return null;
+        const sorted = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota)
+        const quotasWithStatus = sorted.map(c => {
+            const montoCuota = parseFloat(c.monto_cuota)
+            const montoPagado = parseFloat(c.monto_pagado || 0)
+            return { ...c, isPaid: (montoCuota - montoPagado) <= 0.01 }
+        })
+        const firstUnpaid = quotasWithStatus.find(q => !q.isPaid)
+        const todayQuota = quotasWithStatus.find(q => !q.isPaid && q.fecha_vencimiento === todayStr)
+        return todayQuota || firstUnpaid
+    }, [cronograma, todayStr])
+    // --- FIN LOGICA CUOTA ACTIVA ---
 
     const allRows = useMemo(() => {
         if (!cronograma) return []
@@ -30,10 +92,80 @@ export function DailyCollectorLog({ cronograma, pagos, prestamo, cliente, userRo
 
     return (
         <div className="space-y-4">
+            {/* Alertas de Bloqueo */}
+            {isBlockedForPayments && puedeOperar && (
+                <div className="bg-rose-500/10 border border-rose-500/20 p-3 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <Lock className="w-4 h-4 text-rose-500" />
+                    <div>
+                        <p className="text-rose-400 font-bold text-[11px]">Registro de Pagos Bloqueado</p>
+                        <p className="text-slate-400 text-[10px]">{blockReasonCierre || "Fuera de horario de operación o día feriado."}</p>
+                    </div>
+                </div>
+            )}
+
+            {!canPayDueToTime && puedeOperar && !isBlockedByCuadre && (
+                <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <Lock className="w-4 h-4 text-amber-500" />
+                    <div>
+                        <p className="text-amber-400 font-bold text-[11px]">Sistema Cerrado por Horario</p>
+                        <p className="text-slate-400 text-[10px]">Opera de {apertura} a {cierre}.</p>
+                    </div>
+                </div>
+            )}
+
             <div className="flex items-center gap-3 bg-blue-500/5 border border-blue-500/10 p-3 rounded-xl">
                 <div className="p-2 rounded-lg bg-blue-500/10"><Wallet className="w-5 h-5 text-blue-400" /></div>
                 <div><h3 className="text-sm font-black text-blue-400 uppercase tracking-tighter">Bitácora de Recaudación Real</h3><p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Trazabilidad de Activos</p></div>
             </div>
+
+            {/* Tarjeta de Acción Rápida (Copiada de Cronograma pero para hoy) */}
+            {puedeOperar && activeQuota && prestamo.bloqueo_cronograma && (
+                <div className={cn(
+                    "rounded-2xl border p-4 shadow-xl transition-all",
+                    activeQuota.fecha_vencimiento < todayStr 
+                    ? 'bg-gradient-to-br from-rose-950/40 to-slate-950 border-rose-500/30 shadow-rose-900/10' 
+                    : 'bg-gradient-to-br from-blue-950/40 to-slate-900 border-blue-500/30 shadow-blue-900/10'
+                )}>
+                    <div className="flex justify-between items-start mb-3">
+                        <div>
+                            <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">Operación del Día</p>
+                            <div className="flex items-center gap-2">
+                                <Badge variant="outline" className={cn(
+                                    "text-[9px] font-black",
+                                    activeQuota.fecha_vencimiento < todayStr ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                )}>
+                                    Cuota #{activeQuota.numero_cuota}
+                                </Badge>
+                                <span className="text-xs font-bold text-white/80">{activeQuota.fecha_vencimiento.split('-').reverse().join('/')}</span>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">Saldo Pendiente</p>
+                            <p className={cn("text-xl font-black", activeQuota.fecha_vencimiento < todayStr ? 'text-rose-400' : 'text-blue-400')}>
+                                S/ {(parseFloat(activeQuota.monto_cuota) - parseFloat(activeQuota.monto_pagado || 0)).toFixed(2)}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                        <Button 
+                            onClick={() => setQuickPayOpen(true)}
+                            size="lg"
+                            className={cn(
+                                "flex-1 font-black shadow-lg h-11 text-sm rounded-xl uppercase tracking-tighter transition-all",
+                                activeQuota.fecha_vencimiento < todayStr ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/20' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20',
+                                (!canPayDueToTime || isBlockedForPayments) && 'opacity-50 cursor-not-allowed grayscale pointer-events-none'
+                            )}
+                            disabled={!canPayDueToTime || isBlockedForPayments}
+                        >
+                            <DollarSign className="w-4 h-4 mr-2" />
+                            {isBlockedForPayments ? 'Sistema Bloqueado' : !canPayDueToTime ? 'Horario Cerrado' : 'Registrar Pago'}
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden shadow-2xl">
                 <div className="overflow-x-auto">
@@ -59,14 +191,14 @@ export function DailyCollectorLog({ cronograma, pagos, prestamo, cliente, userRo
                                 const cVal = cuota ? Number(cuota.monto_cuota || 0) : 0, pVal = cuota ? Number(cuota.monto_pagado || 0) : 0
                                 const isFull = cuota ? (pVal >= (cVal - 0.01)) : false, isPart = cuota ? (pVal > 0 && !isFull) : false
 
-                                let st = { l: "FALLÓ", c: "text-rose-500 bg-rose-500/10", bg: "bg-rose-500/5" }
+                                let st = { l: "NO PAGÓ", c: "text-rose-500 bg-rose-500/10", bg: "bg-rose-500/5" }
                                 if (isVirtual) st = { l: "EXTRA", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
                                 else if (isFull) {
                                   if (totalDay > 0) st = { l: "CUMPLIÓ", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
-                                  else st = { l: "SISTEMA", c: "text-sky-400 bg-sky-500/10", bg: "bg-sky-500/5" }
+                                  else st = { l: "SISTEMA", c: "text-rose-500 bg-rose-500/10", bg: "bg-rose-500/5" }
                                 } else if (isPart) {
                                   if (totalDay > 0) st = { l: "ABONÓ", c: "text-amber-400 bg-amber-500/10", bg: "bg-amber-500/5" }
-                                  else st = { l: "SISTEMA", c: "text-sky-400 bg-sky-500/10", bg: "bg-sky-500/5" }
+                                  else st = { l: "SISTEMA", c: "text-rose-500 bg-rose-500/10", bg: "bg-rose-500/5" }
                                 } else if (isFuture) st = { l: "PENDIENTE", c: "text-slate-500 bg-slate-800/20", bg: "" }
 
                                 return (
@@ -126,6 +258,18 @@ export function DailyCollectorLog({ cronograma, pagos, prestamo, cliente, userRo
                 </div>
             </div>
             <PaymentVoucher open={isVoucherOpen} onOpenChange={setIsVoucherOpen} payment={selectedPayment} allPayments={pagos} loan={prestamo} client={cliente || prestamo.clientes} cronograma={cronograma} userRole={userRole} />
+            
+            <QuickPayModal 
+                open={quickPayOpen}
+                onOpenChange={setQuickPayOpen}
+                prestamo={prestamo}
+                userRol={userRole}
+                systemSchedule={systemSchedule}
+                isBlockedByCuadre={isBlockedByCuadre}
+                blockReasonCierre={blockReasonCierre}
+                systemAccess={systemAccess}
+                onSuccess={() => router.refresh()}
+            />
         </div>
     )
 }

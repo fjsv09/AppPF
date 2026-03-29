@@ -61,9 +61,9 @@ export function QuickPayModal({
     // Calculate Today Peru if not provided
     const today = initialToday || new Date().toLocaleString("en-CA", { timeZone: "America/Lima" }).split(',')[0]
 
-    // Solo se bloquean los pagos si el bloqueo es TOTAL (Horario, Feriado, Noche)
-    // El bloqueo por falta de cuadre (Mañana) PERMITE pagos.
-    const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK', 'PENDING_SALDO'].includes(systemAccess?.code);
+    // Solo se bloquean los pagos si el bloqueo es TOTAL (Horario, Feriado, Noche, Corte Mañana)
+    // El bloqueo por falta de cuadre (Mañana) AHORA TAMBIÉN BLOQUEA pagos (Requerimiento de obligar entrega de dinero).
+    const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK', 'PENDING_SALDO', 'MISSING_MORNING_CUADRE'].includes(systemAccess?.code);
     const isBlockedForPayments = isBlockedByCuadre && isTotalBlock;
 
     // --- LOGICA DE HORARIO SÍNCRONA ---

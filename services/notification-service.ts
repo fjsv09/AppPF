@@ -6,14 +6,18 @@ if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY)
     console.error('CRITICAL: VAPID keys are missing from environment variables.');
 }
 
-webpush.setVapidDetails(
-    'mailto:operaciones@profesional-pf.com', 
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '',
-    process.env.VAPID_PRIVATE_KEY || ''
-);
 
 export async function sendPushNotification(usuarioId: string, payload: { title: string; body: string; url?: string }) {
     const supabaseAdmin = createAdminClient();
+
+    // Configuración robusta de VAPID antes de cada envío
+    if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+        webpush.setVapidDetails(
+            'mailto:operaciones@profesional-pf.com', 
+            process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+            process.env.VAPID_PRIVATE_KEY
+        );
+    }
     
     // Obtener todas las suscripciones de push para el usuario
     const { data: subscriptions, error } = await supabaseAdmin
@@ -21,17 +25,22 @@ export async function sendPushNotification(usuarioId: string, payload: { title: 
         .select('subscription')
         .eq('usuario_id', usuarioId);
 
+    console.log(`[WebPush DEBUG] Usuario: ${usuarioId} | Registros en DB: ${subscriptions?.length || 0}`);
+    if (subscriptions && subscriptions.length > 0) {
+        console.log(`[WebPush DEBUG] Primer endpoint (snippet): ${JSON.stringify(subscriptions[0].subscription).substring(0, 50)}...`);
+    }
+
     if (error) {
         console.error('Error fetching subscriptions from DB:', error);
         return { success: false, error };
     }
 
     if (!subscriptions || subscriptions.length === 0) {
-        console.log(`No active push subscriptions for user ${usuarioId}`);
+        console.warn(`[WebPush] No active push subscriptions found for user ${usuarioId}. The user must activate notifications in the dashboard bell.`);
         return { success: false, message: 'No subscriptions found' };
     }
 
-    console.log(`Sending push to ${subscriptions.length} devices for user ${usuarioId}`);
+    console.info(`[WebPush] Sending push to ${subscriptions.length} devices for user ${usuarioId}`);
 
     const jsonPayload = JSON.stringify({
         title: payload.title,
@@ -40,26 +49,34 @@ export async function sendPushNotification(usuarioId: string, payload: { title: 
     });
 
     const results = await Promise.allSettled(subscriptions.map(async (row: any) => {
+        const sub = typeof row.subscription === 'string' ? JSON.parse(row.subscription) : row.subscription;
         try {
-            // Asegurarnos de que row.subscription es un objeto válido para web-push
-            const sub = typeof row.subscription === 'string' ? JSON.parse(row.subscription) : row.subscription;
-            
-            await webpush.sendNotification(sub, jsonPayload);
-            return { success: true };
+            const res = await webpush.sendNotification(sub, jsonPayload);
+            console.log(`[Push Success] Usuario: ${usuarioId} | Status: ${res.statusCode} | Endpoint: ${sub.endpoint.substring(0, 40)}...`);
+            return { success: true, status: res.statusCode };
         } catch (err: any) {
-            console.error('[WebPush] Send failed:', err.statusCode, err.endpoint);
+            console.error(`[Push Failed] Status: ${err.statusCode} | Usuario: ${usuarioId}`);
             
             if (err.statusCode === 410 || err.statusCode === 404) {
-                console.log('[WebPush] Removing expired subscription');
+                console.warn(`[Push Cleanup] Borrando suscripción caducada (${err.statusCode})`);
                 await supabaseAdmin
                     .from('push_subscriptions')
                     .delete()
                     .eq('usuario_id', usuarioId)
                     .match({ subscription: row.subscription });
+            } else {
+                console.error('[Push Error Critico] Error inesperado:', {
+                    status: err.statusCode,
+                    body: err.body,
+                    message: err.message
+                });
             }
             throw err;
         }
     }));
+
+    const totalSent = results.filter(r => r.status === 'fulfilled').length;
+    console.info(`[Push Summary] Usuario: ${usuarioId} | Enviados con éxito: ${totalSent} de ${subscriptions.length}`);
 
     return results;
 }

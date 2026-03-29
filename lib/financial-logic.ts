@@ -37,6 +37,9 @@ interface LoanMetrics {
   esRenovable: boolean;
   estadoCalculado: 'critico' | 'atrasado' | 'al_dia' | 'finalizado' | 'sin_deuda';
   valorCuotaPromedio: number;
+  saldoCuotaParcial: number; // Balance restante de la primera cuota que tenga pago parcial (>0 y <total)
+  totalCuotas: number;
+  cuotasPagadas: number;
 }
 
 /**
@@ -66,7 +69,10 @@ export function calculateLoanMetrics(
       isAlDia: true,
       esRenovable: false,
       estadoCalculado: loan?.estado === 'finalizado' ? 'finalizado' : 'sin_deuda',
-      valorCuotaPromedio: 0
+      valorCuotaPromedio: 0,
+      saldoCuotaParcial: 0,
+      totalCuotas: (loan.cronograma_cuotas || []).length,
+      cuotasPagadas: (loan.cronograma_cuotas || []).filter((c: any) => c.estado === 'pagado').length
     };
   }
 
@@ -146,10 +152,20 @@ export function calculateLoanMetrics(
     .filter((c: any) => c.fecha_vencimiento <= today && c.estado !== 'pagado' && (c.monto_cuota - (c.monto_pagado || 0)) > 0.5)
     .length;
 
-  // 4.5. Cuotas Mora Real (Incluye HOY si no está pagado)
   const cuotasAtrasadas = cronograma
     .filter((c: any) => c.fecha_vencimiento <= today && c.estado !== 'pagado' && (c.monto_cuota - (c.monto_pagado || 0)) > 0.01)
     .length;
+  
+  // 4.6. Saldo Cuota Parcial (Cualquier cuota con pago > 0 y < monto)
+  const partialPaidQuota = cronograma.find((c: any) => {
+    const pagado = Number(c.monto_pagado) || 0;
+    const monto = Number(c.monto_cuota) || 0;
+    // Se considera parcial si se pagó algo pero falta más de un centavo
+    return pagado > 0.01 && pagado < (monto - 0.01);
+  });
+  const saldoCuotaParcial = partialPaidQuota 
+    ? (Number(partialPaidQuota.monto_cuota) - (Number(partialPaidQuota.monto_pagado) || 0)) 
+    : 0;
 
   // 5. Acumulados
   const totalPagadoAcumulado = cronograma.reduce((sum: number, c: any) => sum + (Number(c.monto_pagado) || 0), 0);
@@ -218,7 +234,10 @@ export function calculateLoanMetrics(
     isAlDia,
     esRenovable,
     estadoCalculado,
-    valorCuotaPromedio
+    valorCuotaPromedio,
+    saldoCuotaParcial,
+    totalCuotas: cronograma.length,
+    cuotasPagadas: cronograma.filter((c: any) => c.estado === 'pagado').length
   };
 }
 /**

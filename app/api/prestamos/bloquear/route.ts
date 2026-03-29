@@ -8,9 +8,22 @@ export async function POST(request: Request) {
         const adminAuthClient = createAdminClient() // Bypass RLS
         
         const { prestamo_id } = await request.json()
-
         if (!prestamo_id) {
             return NextResponse.json({ error: 'prestamo_id is required' }, { status: 400 })
+        }
+
+        // 0. Verify Auth and Role
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (authError || !user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+        const { data: perfil } = await adminAuthClient
+            .from('perfiles')
+            .select('rol')
+            .eq('id', user.id)
+            .single()
+
+        if (!perfil || perfil.rol !== 'admin') {
+            return NextResponse.json({ error: 'Acceso restringido: Solo administradores pueden bloquear el cronograma' }, { status: 403 })
         }
 
         // 1. Verify loan exists (User can read)
@@ -42,10 +55,9 @@ export async function POST(request: Request) {
             throw updateError
         }
 
-        // 3. Create Audit Log (User context matches)
-        const { data: userData } = await supabase.auth.getUser()
+        // 3. Create Audit Log
         await supabase.from('auditoria').insert({
-            usuario_id: userData.user?.id,
+            usuario_id: user.id,
             accion: 'BLOQUEAR_CRONOGRAMA',
             detalles: { prestamo_id },
         })

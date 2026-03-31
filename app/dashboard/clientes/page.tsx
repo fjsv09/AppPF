@@ -9,6 +9,8 @@ import { Users, TrendingUp, CreditCard, Plus, Zap, CheckCircle2, AlertTriangle, 
 import { ClientDirectory } from '@/components/clientes/client-directory'
 import { getTodayPeru, calculateClientSituation, calculateLoanMetrics } from '@/lib/financial-logic'
 import { cn } from '@/lib/utils'
+import { DashboardAlerts } from '@/components/dashboard/dashboard-alerts'
+import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
 
 export const dynamic = 'force-dynamic'
 
@@ -194,6 +196,13 @@ export default async function ClientesPage() {
     // [REFORZADO] Lógica de Acceso al Sistema (Centralizada)
     const { checkSystemAccess } = await import('@/utils/systemRestrictions')
     const accessResult = await checkSystemAccess(supabaseAdmin, user?.id || '', userRole || 'asesor', 'solicitud')
+    
+    // [NUEVO] Obtener información de bloqueos de deuda
+    let blockInfo = null
+    if (userRole === 'asesor' && user?.id) {
+        blockInfo = await checkAdvisorBlocked(supabaseAdmin, user.id)
+    }
+
     const canCreateDueToTime = accessResult.allowed || userRole === 'admin'
     
     // Configuración para prop compatibility
@@ -218,6 +227,11 @@ export default async function ClientesPage() {
 
     return (
         <div className="page-container">
+             <DashboardAlerts 
+                userId={user?.id || ''} 
+                blockInfo={blockInfo} 
+                accessInfo={accessResult} 
+             />
              {/* Header with Action */}
              <div className="page-header">
                 <div>

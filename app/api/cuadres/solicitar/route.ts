@@ -59,7 +59,18 @@ export async function POST(request: Request) {
              }, { status: 400 })
         }
 
-        // 2. Validación: No permitir múltiples cuadres pendientes
+        // 2.5 Validación: No permitir cuadres regulares si hay deuda atrasada (SALDO PENDIENTE)
+        if (p_tipo_cuadre !== 'saldo_pendiente') {
+            const { checkAdvisorBlocked } = await import('@/utils/checkAdvisorBlocked')
+            const blockInfo = await checkAdvisorBlocked(supabaseAdmin, user.id)
+            if (blockInfo.code === 'SALDO_PENDIENTE') {
+                return NextResponse.json({ 
+                    error: blockInfo.reason 
+                }, { status: 403 })
+            }
+        }
+
+        // 3. Validación: No permitir múltiples cuadres pendientes
         const { data: pending, error: pendingError } = await supabaseAdmin
             .from('cuadres_diarios')
             .select('id')

@@ -50,18 +50,49 @@ export function NotificationsDropdown() {
     const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null)
     const [loadingPush, setLoadingPush] = useState(true)
 
-    // PUSH EFFECTS
+    // PUSH EFFECTS - Wait for SW to be fully active before checking subscription
     useEffect(() => {
         if (typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window) {
             navigator.serviceWorker.register('/sw.js')
-                .then(reg => {
+                .then(async (reg) => {
+                    // Wait for the SW to be active (critical for push to work)
+                    if (reg.installing) {
+                        await new Promise<void>(resolve => {
+                            reg.installing!.addEventListener('statechange', function handler() {
+                                if (this.state === 'activated') {
+                                    this.removeEventListener('statechange', handler)
+                                    resolve()
+                                }
+                            })
+                        })
+                    } else if (reg.waiting) {
+                        await new Promise<void>(resolve => {
+                            reg.waiting!.addEventListener('statechange', function handler() {
+                                if (this.state === 'activated') {
+                                    this.removeEventListener('statechange', handler)
+                                    resolve()
+                                }
+                            })
+                        })
+                    }
+                    // If reg.active exists, SW is already active
                     setRegistration(reg)
-                    return reg.pushManager.getSubscription()
-                })
-                .then(sub => {
+                    const sub = await reg.pushManager.getSubscription()
                     if (sub) {
                         setSubscription(sub)
                         setIsSubscribed(true)
+                        // Re-sync subscription to server on each page load
+                        // This ensures the server always has the current subscription
+                        try {
+                            await fetch('/api/push/subscribe', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(sub)
+                            })
+                            console.log('[Push] Re-synced subscription to server')
+                        } catch (e) {
+                            console.warn('[Push] Could not re-sync subscription:', e)
+                        }
                     }
                     setLoadingPush(false)
                 })
@@ -75,8 +106,21 @@ export function NotificationsDropdown() {
     }, [])
 
     const subscribePush = async () => {
-        if (!registration) return
+        if (!registration) {
+            toast.error('Service Worker no disponible. Recarga la página.')
+            return
+        }
         try {
+            // Request permission first
+            const permission = await Notification.requestPermission()
+            if (permission !== 'granted') {
+                toast.error('Permiso de notificaciones denegado por el navegador.')
+                return
+            }
+
+            // Ensure SW is active before subscribing
+            await navigator.serviceWorker.ready
+
             const sub = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
@@ -96,9 +140,9 @@ export function NotificationsDropdown() {
                 const errData = await res.json()
                 toast.error(`Error de servidor: ${errData.error || 'Desconocido'}`)
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('Push subscription failed:', err)
-            toast.error('Error al suscribir. Verifica los permisos del navegador.')
+            toast.error(`Error al suscribir: ${err.message || 'Verifica los permisos del navegador.'}`)
         }
     }
 

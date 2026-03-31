@@ -1,6 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 
-export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: string): Promise<{ isBlocked: boolean, reason: string, leftover: number }> {
+export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: string): Promise<{ isBlocked: boolean, reason: string, leftover: number, code?: string }> {
     // --- 1. CONFIGURACIÓN DE FECHA LIMA ---
     const now = new Date();
     const limaTime = now.toLocaleString('en-US', { timeZone: 'America/Lima' });
@@ -52,7 +52,24 @@ export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: stri
         leftoverHistorical = Math.max(0, saldoActualTotal - deudaNetaHoy);
     }
 
-    // --- 4. REVISIÓN DE INTEGRIDAD ---
+    // --- 4. CALCULAR SALDO PAGADO HOY ---
+    const { data: oldDebtPayments } = await supabase
+        .from('cuadres_diarios')
+        .select('saldo_entregado')
+        .eq('asesor_id', userId)
+        .eq('fecha', todayStr)
+        .eq('tipo_cuadre', 'saldo_pendiente')
+        .eq('estado', 'aprobado');
+    
+    const oldDebtPaidToday = oldDebtPayments?.reduce((acc: number, c: any) => acc + parseFloat(c.saldo_entregado || '0'), 0) || 0;
+    const remainingHistorical = leftoverHistorical - oldDebtPaidToday;
+
+    // Si ya no tiene deuda histórica, está libre para operar
+    if (remainingHistorical <= 1.05) {
+        return { isBlocked: false, reason: '', leftover: remainingHistorical, code: 'OK' };
+    }
+
+    // --- 5. REVISIÓN DE INTEGRIDAD (Para dar mensajes específicos por días) ---
     const { data: history } = await supabase
         .from('cuadres_diarios')
         .select('fecha, tipo_cuadre, estado')
@@ -66,30 +83,25 @@ export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: stri
         for (const record of history) {
             if (!daysEvaluated.has(record.fecha)) {
                 daysEvaluated.add(record.fecha);
-                if ((record.tipo_cuadre !== 'final' && leftoverHistorical > 1.05) || record.estado !== 'aprobado') {
+                if ((record.tipo_cuadre !== 'final' && remainingHistorical > 1.05) || record.estado !== 'aprobado') {
                     const statusMsg = record.estado === 'pendiente' ? 'está PENDIENTE' : (record.estado === 'rechazado' ? 'fue RECHAZADO' : 'está INCOMPLETO');
-                    const amountStr = leftoverHistorical > 1 
-                        ? `. Saldo pendiente: S/ ${leftoverHistorical.toLocaleString('es-PE', { minimumFractionDigits: 2 })}` 
-                        : '';
-
+                    
                     return {
                         isBlocked: true,
-                        reason: `El cierre del día ${record.fecha} ${statusMsg}${amountStr}. Debes regularizarlo con el administrador para operar hoy.`,
-                        leftover: leftoverHistorical
+                        reason: `El cierre del día ${record.fecha} ${statusMsg}. Debes regularizarlo con el administrador para operar hoy.`,
+                        leftover: remainingHistorical,
+                        code: 'SALDO_PENDIENTE'
                     };
                 }
             }
         }
     }
 
-    // --- 5. BLOQUEO POR SALDO ACUMULADO ---
-    if (leftoverHistorical > 1.05) {
-        return {
-            isBlocked: true,
-            reason: `Tienes un SALDO PENDIENTE de S/ ${leftoverHistorical.toLocaleString('es-PE', { minimumFractionDigits: 2 })} de días anteriores. Debes liquidar para continuar.`,
-            leftover: leftoverHistorical
-        };
-    }
-
-    return { isBlocked: false, reason: '', leftover: leftoverHistorical };
+    // --- 6. BLOQUEO GENÉRICO POR SALDO ACUMULADO ---
+    return {
+        isBlocked: true,
+        reason: `Tienes un SALDO PENDIENTE de S/ ${remainingHistorical.toLocaleString('es-PE', { minimumFractionDigits: 2 })} de días anteriores. Debes liquidar para continuar.`,
+        leftover: remainingHistorical,
+        code: 'SALDO_PENDIENTE'
+    };
 }

@@ -11,6 +11,8 @@ import { Plus, DollarSign, Calendar, TrendingUp, ArrowUpRight } from 'lucide-rea
 import { TablaCuotasVencidas } from '@/components/pagos/tabla-cuotas-vencidas'
 import { RecentPaymentsList } from '@/components/pagos/recent-payments-list'
 import { BackButton } from '@/components/ui/back-button'
+import { DashboardAlerts } from '@/components/dashboard/dashboard-alerts'
+import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -41,6 +43,15 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
 
     const userRol = (perfil?.rol || 'asesor') as 'admin' | 'supervisor' | 'asesor'
     const userId = user?.id || ''
+
+    // [NUEVO] Lógica de Acceso al Sistema
+    const { checkSystemAccess } = await import('@/utils/systemRestrictions')
+    const access = await checkSystemAccess(supabaseAdmin, userId, userRol, 'pago')
+    
+    let blockInfo = null
+    if (userRol === 'asesor') {
+        blockInfo = await checkAdvisorBlocked(supabaseAdmin, userId)
+    }
 
     // Fetch all perfiles for filters
     const { data: perfiles } = await supabaseAdmin
@@ -223,6 +234,12 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
 
     return (
         <div className="page-container">
+            <DashboardAlerts 
+                userId={userId} 
+                blockInfo={blockInfo} 
+                accessInfo={access} 
+            />
+            {/* Header Section */}
             <div className="page-header">
                 <div>
                     <div className="flex items-center gap-3">

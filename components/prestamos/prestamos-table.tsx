@@ -1572,8 +1572,8 @@ export function PrestamosTable({
                     <div className="col-span-1 text-center">Sector</div>
                     <div className="col-span-1 text-right">Capital</div>
                     <div className="col-span-1 text-right">Cuota</div>
-                    <div className="col-span-1 text-right text-blue-400">Saldo</div>
                     <div className="col-span-1 text-right">Mora</div>
+                    <div className="col-span-1 text-right text-blue-400">Saldo</div>
                     <div className="col-span-1 text-center">Prog.</div>
                     <div className="col-span-1 text-center">Pago</div>
                     <div className="col-span-1 text-center">Fechas</div>
@@ -1729,16 +1729,6 @@ export function PrestamosTable({
                                     ${prestamo.valorCuota?.toFixed(2)}
                                 </div>
 
-                                {/* Saldo (Any Partial Balance) */}
-                                <div className="col-span-1 text-right">
-                                    <span className={cn(
-                                        "font-bold font-mono tracking-tight text-sm",
-                                        (prestamo.saldo_cuota_parcial > 0) ? "text-blue-400" : "text-slate-500"
-                                    )}>
-                                        ${(prestamo.saldo_cuota_parcial || 0).toFixed(2)}
-                                    </span>
-                                </div>
-
                                 {/* Mora */}
                                 <div className="col-span-1 text-right">
                                     <span className={cn(
@@ -1750,6 +1740,16 @@ export function PrestamosTable({
                                         "text-slate-500"
                                     )}>
                                         ${prestamo.deudaHoy.toFixed(2)}
+                                    </span>
+                                </div>
+
+                                {/* Saldo (Any Partial Balance) */}
+                                <div className="col-span-1 text-right">
+                                    <span className={cn(
+                                        "font-bold font-mono tracking-tight text-sm",
+                                        (prestamo.saldo_cuota_parcial > 0) ? "text-blue-400" : "text-slate-500"
+                                    )}>
+                                        ${(prestamo.saldo_cuota_parcial || 0).toFixed(2)}
                                     </span>
                                 </div>
 

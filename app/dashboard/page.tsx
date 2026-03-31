@@ -7,6 +7,9 @@ import { QuickActions } from '@/components/dashboard/quick-actions'
 import { SupervisorEfficiency } from '@/components/dashboard/supervisor-efficiency'
 import { OperationsHub } from '@/components/dashboard/operations-hub'
 import { AdvisorHub } from '@/components/dashboard/advisor-hub'
+import { DashboardAlerts } from '@/components/dashboard/dashboard-alerts'
+import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
+import { checkSystemAccess } from '@/utils/systemRestrictions'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,6 +31,14 @@ export default async function DashboardPage() {
     const isAsesor = perfil?.rol === 'asesor'
     const isSupervisor = perfil?.rol === 'supervisor'
     
+    // 4.5. Bloqueos de Asesor
+    let blockInfo = null;
+    let accessInfo = null;
+    if (isAsesor && user) {
+        blockInfo = await checkAdvisorBlocked(supabaseAdmin, user.id);
+        accessInfo = await checkSystemAccess(supabaseAdmin, user.id, perfil?.rol, 'solicitud');
+    }
+
     // 5. Configuración de consultas por rol
     let clientQuery = supabaseAdmin.from('clientes').select('*', { count: 'exact', head: true })
     let loanQuery = supabaseAdmin.from('prestamos').select('monto').eq('estado', 'activo')
@@ -62,6 +73,8 @@ export default async function DashboardPage() {
 
     return (
         <div className="page-container">
+            <DashboardAlerts userId={user?.id || ''} blockInfo={blockInfo} accessInfo={accessInfo} />
+            
             {/* Welcome Hero - Ultra Compact */}
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-blue-950/30 border border-white/5 shadow-xl p-4 md:p-6 mb-4">
                 <div className="relative z-10">
@@ -93,7 +106,7 @@ export default async function DashboardPage() {
             {perfil?.rol === 'asesor' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in slide-in-from-bottom-4 duration-700">
                     <div className="lg:col-span-2 space-y-8">
-                        <AdvisorHub />
+                        {!(blockInfo?.isBlocked && blockInfo?.code === 'SALDO_PENDIENTE') && <AdvisorHub />}
                     </div>
                     
                     <div className="lg:col-span-1">

@@ -11,6 +11,8 @@ import { AdminLoanActions } from "@/components/prestamos/admin-loan-actions";
 import { BackButton } from "@/components/ui/back-button";
 import { getTodayPeru, calculateLoanMetrics } from "@/lib/financial-logic";
 import { cn } from "@/lib/utils";
+import { DashboardAlerts } from "@/components/dashboard/dashboard-alerts";
+import { checkAdvisorBlocked } from "@/utils/checkAdvisorBlocked";
 
 export const metadata: Metadata = {
     title: 'Panel de Préstamos'
@@ -50,6 +52,12 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     const isBlockedByCuadre = !accessResult.allowed && userRole !== 'admin'
     const blockReasonCierre = accessResult.reason || ''
     const systemAccess = accessResult // Pasa el objeto completo para saber el 'code'
+
+    // [NUEVO] Obtener información de bloqueos de deuda histórica
+    let blockInfo = null
+    if (userRole === 'asesor' && user?.id) {
+        blockInfo = await checkAdvisorBlocked(supabaseAdmin, user.id)
+    }
 
     // Build query based on role - USING DIRECT TABLES (Fallback mechanism)
     
@@ -359,6 +367,12 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
 
     return (
         <div className="page-container">
+            <DashboardAlerts 
+                userId={user?.id || ''} 
+                blockInfo={blockInfo} 
+                accessInfo={accessResult} 
+            />
+
             {/* Header with Title and Action Button */}
             {/* Header with Title and Subtitle */}
             <div className="page-header">

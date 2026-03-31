@@ -10,40 +10,56 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const subscription = await request.json();
+    let subscription: any;
+    try {
+        subscription = await request.json();
+    } catch (parseErr) {
+        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+
+    if (!subscription || !subscription.endpoint) {
+        return NextResponse.json({ error: 'Invalid subscription: missing endpoint' }, { status: 400 })
+    }
+
     const supabaseAdmin = createAdminClient();
 
-    // LIMPIEZA ABSOLUTA: Borramos cualquier rastro previo para el usuario
-    const { error: deleteError } = await supabaseAdmin
-        .from('push_subscriptions')
-        .delete()
-        .eq('usuario_id', user.id);
+    try {
+        // Delete all previous subscriptions for this user
+        const { error: deleteError } = await supabaseAdmin
+            .from('push_subscriptions')
+            .delete()
+            .eq('usuario_id', user.id);
 
-    if (deleteError) {
-        console.error('[SUBSCRIBE] Error limpiando registros previos:', deleteError);
+        if (deleteError) {
+            console.error('[SUBSCRIBE] Error cleaning previous subscriptions:', deleteError);
+            // Continue anyway - we'll try to insert
+        }
+
+        // Insert the fresh subscription
+        const { data: sub_res, error } = await supabaseAdmin
+            .from('push_subscriptions')
+            .insert({
+                usuario_id: user.id,
+                subscription: subscription,
+                created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('[SUBSCRIBE] Error saving to DB:', error);
+            return NextResponse.json({ 
+                error: error.message,
+                details: error.details,
+                hint: error.hint
+            }, { status: 500 });
+        }
+
+        console.info(`[SUBSCRIBE SUCCESS] Push subscription registered for user: ${user.id} | Endpoint: ${subscription.endpoint.substring(0, 50)}...`);
+
+        return NextResponse.json({ success: true, data: sub_res });
+    } catch (err: any) {
+        console.error('[SUBSCRIBE] Unexpected error:', err);
+        return NextResponse.json({ error: err.message }, { status: 500 });
     }
-
-    // REGISTRO FRESCO: Insertar la suscripción recibida del navegador actual
-    const { data: sub_res, error } = await supabaseAdmin
-        .from('push_subscriptions')
-        .insert({
-            usuario_id: user.id,
-            subscription: subscription,
-            created_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-    if (error) {
-        console.error('[SUBSCRIBE] Error guardando en DB:', error);
-        return NextResponse.json({ 
-            error: error.message,
-            details: error.details,
-            hint: error.hint
-        }, { status: 500 });
-    }
-
-    console.info(`[SUBSCRIBE SUCCESS] Canal único registrado para: ${user.id}`);
-
-    return NextResponse.json({ success: true, data: sub_res });
 }

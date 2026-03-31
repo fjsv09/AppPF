@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
+import { DashboardAlerts } from '@/components/dashboard/dashboard-alerts'
 import { AlertTriangle, Lock } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -48,33 +49,37 @@ export default async function CuadrePage() {
     .limit(5)
 
   // Check Block Status
-  let isBlocked = false
-  let blockReason = ''
-  
+  let isDebtBlocked = false
+  let isMorningBlocked = false
+  let blockStatusData = null
+  let access = null
+
   const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single()
   if (perfil?.rol === 'asesor') {
-    const blockStatus = await checkAdvisorBlocked(supabase, user.id)
-    isBlocked = blockStatus.isBlocked
-    blockReason = blockStatus.reason
+    blockStatusData = await checkAdvisorBlocked(supabase, user.id)
+    if (blockStatusData.isBlocked && blockStatusData.code === 'SALDO_PENDIENTE') {
+        isDebtBlocked = true
+    }
+
+    // Verificar si debe un cuadre de mañana
+    const { checkSystemAccess } = await import('@/utils/systemRestrictions')
+    access = await checkSystemAccess(supabase, user.id, perfil.rol, 'solicitud')
+    if (!access.allowed && access.code === 'MISSING_MORNING_CUADRE') {
+        isMorningBlocked = true
+    }
   }
+
+  // Preparamos los objetos para DashboardAlerts
+  const accessInfo = access
+  const blockInfoData = blockStatusData || { isBlocked: false }
 
   return (
     <div className="page-container">
-      {isBlocked && (
-        <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 flex items-start gap-4 shadow-lg shadow-rose-500/5 mx-0.5">
-          <div className="bg-rose-500/20 p-2.5 rounded-full shrink-0">
-            <Lock className="h-6 w-6 text-rose-500" />
-          </div>
-          <div>
-            <h4 className="text-rose-400 font-bold text-base tracking-tight leading-tight">Operaciones Bloqueadas por Diferencia</h4>
-            <p className="text-rose-200/80 text-xs mt-1 leading-snug">
-              {blockReason} 
-              <br className="sm:hidden" />
-              <strong className="text-rose-300"> Todos tus cobros y renovaciones están desactivados hasta que aprueben el saneamiento de este saldo.</strong>
-            </p>
-          </div>
-        </div>
-      )}
+      <DashboardAlerts 
+        userId={user.id} 
+        blockInfo={blockInfoData} 
+        accessInfo={accessInfo} 
+      />
 
       {/* Header Section */}
       <div className="page-header">
@@ -94,7 +99,7 @@ export default async function CuadrePage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Form (Left) */}
         <div className="lg:col-span-12 xl:col-span-7">
-          <CuadreForm carteras={carteras} userId={user.id} />
+          <CuadreForm carteras={carteras} userId={user.id} isDebtBlocked={isDebtBlocked} isMorningBlocked={isMorningBlocked} />
         </div>
 
         {/* History (Right) */}

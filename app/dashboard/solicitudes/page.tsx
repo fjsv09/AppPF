@@ -10,6 +10,8 @@ import { Plus, FileText, Clock, CheckCircle, XCircle, AlertCircle, Eye, Users, C
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
+import { DashboardAlerts } from '@/components/dashboard/dashboard-alerts'
+import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -91,6 +93,12 @@ export default async function SolicitudesPage() {
     const { checkSystemAccess } = await import('@/utils/systemRestrictions')
     const access = await checkSystemAccess(supabaseAdmin, user?.id || '', perfil?.rol || 'asesor', 'solicitud')
     
+    // [NUEVO] Obtener información de bloqueos de deuda
+    let blockInfo = null
+    if (perfil?.rol === 'asesor' && user?.id) {
+        blockInfo = await checkAdvisorBlocked(supabaseAdmin, user.id)
+    }
+
     let canCreateDueToTime = access.allowed || perfil?.rol === 'admin'
     const blockReason = access.reason || 'Acceso restringido'
 
@@ -102,6 +110,12 @@ export default async function SolicitudesPage() {
 
     return (
         <div className="page-container">
+            <DashboardAlerts 
+                userId={user?.id || ''} 
+                blockInfo={blockInfo} 
+                accessInfo={access} 
+            />
+            
             {/* Header with Action */}
             <div className="page-header">
                 <div>
@@ -129,22 +143,6 @@ export default async function SolicitudesPage() {
                                 {canCreateDueToTime ? 'Nueva Solicitud' : 'Bloqueado'}
                             </Button>
                         </Link>
-                        
-                        {!canCreateDueToTime && (
-                            <div className="flex items-center gap-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 backdrop-blur-md max-w-[320px] animate-in fade-in slide-in-from-top-2 duration-500">
-                                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-rose-500/20 flex items-center justify-center border border-rose-500/30">
-                                    <Lock className="w-4 h-4 text-rose-500" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-[11px] font-bold text-rose-400 uppercase tracking-wider leading-none mb-1">
-                                        Restricción Operativa
-                                    </span>
-                                    <span className="text-[10px] text-slate-300 leading-tight">
-                                        {blockReason}
-                                    </span>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 )}
             </div>

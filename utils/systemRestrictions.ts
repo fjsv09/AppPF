@@ -93,7 +93,8 @@ export async function checkSystemAccess(
             'horario_apertura', 
             'horario_cierre', 
             'desbloqueo_hasta', 
-            'horario_fin_turno_1'
+            'horario_fin_turno_1',
+            'tiempo_gracia_post_cuadre'
         ]);
     
     const config = configRows?.reduce((acc: any, curr) => {
@@ -102,10 +103,19 @@ export async function checkSystemAccess(
     }, { 
         horario_apertura: '10:00', 
         horario_cierre: '19:00', 
-        horario_fin_turno_1: '13:00'
+        horario_fin_turno_1: '13:00',
+        tiempo_gracia_post_cuadre: '10'
     });
 
-    const isTemporaryUnlocked = config.desbloqueo_hasta && new Date(config.desbloqueo_hasta) > now;
+    const isUnlockActive = config.desbloqueo_hasta && new Date(config.desbloqueo_hasta) > now;
+    if (isUnlockActive && userRole !== 'admin' && ['solicitud', 'renovacion', 'prestamo'].includes(action)) {
+        return {
+             allowed: false,
+             reason: 'El Desbloqueo Temporal activado por el administrador SOLO permite registrar pagos y cuadres.',
+             code: 'TEMPORARY_UNLOCK_RESTRICTION'
+        };
+    }
+    const isTemporaryUnlocked = isUnlockActive && ['pago', 'cuadre', 'otros'].includes(action);
 
     // Helper para comparar horas
     const tNow = timeToMinutes(timePart);
@@ -131,62 +141,51 @@ export async function checkSystemAccess(
 
     // 7. CUADRE MAÑANA RULE (At the end of Shift 1)
     if (tNow >= tFinTurno1 && (['solicitud', 'renovacion', 'pago', 'prestamo'].includes(action)) && !isTemporaryUnlocked && userRole !== 'admin') {
-        const { data: firstCuadre } = await supabase
-            .from('cuadres_diarios')
-            .select('created_at')
-            .eq('asesor_id', userId)
-            .eq('fecha', todayStr)
-            .in('tipo_cuadre', ['parcial', 'parcial_mañana'])
-            .eq('estado', 'aprobado') // Solo cuadres ya aceptados por admin
-            .order('created_at', { ascending: true })
-            .limit(1)
-            .maybeSingle();
-
-        // El punto de corte es la hora límite oficial del Primer Turno.
-        // NO usamos firstCuadre?.created_at porque el asesor debe liquidar TODO lo cobrado hasta la hora oficial
-        // de fin de turno (normalmente 15:00), independientemente de a qué hora hizo su primer intento de cuadre.
-        const timestampMorningCutoff = `${todayStr}T${config.horario_fin_turno_1}:00-05:00`;
-
-        // a) Recaudación Bruta Mañana (todo lo recolectado hoy hasta la hora oficial de corte)
-        const { data: morningPayments } = await supabase
-            .from('pagos')
-            .select('monto_pagado')
-            .eq('registrado_por', userId)
-            .gte('created_at', `${todayStr}T00:00:00-05:00`)
-            .lte('created_at', timestampMorningCutoff);
         
-        const netMorningDue = morningPayments?.reduce((acc, p) => acc + parseFloat(p.monto_pagado || '0'), 0) || 0;
-
-        // b) Deuda Histórica (Saldo que el asesor trae de días anteriores sin liquidar)
-        const { checkAdvisorBlocked } = await import('./checkAdvisorBlocked');
-        const historicalCheck = await checkAdvisorBlocked(supabase, userId);
-        const leftoverHistorical = historicalCheck.leftover || 0;
-
-        // c) Total liquidado y ACEPTADO hoy
-        const { data: squaredToday } = await supabase
-            .from('cuadres_diarios')
-            .select('saldo_entregado, total_gastos')
-            .eq('asesor_id', userId)
-            .eq('fecha', todayStr)
-            .in('tipo_cuadre', ['parcial', 'parcial_mañana'])
-            .eq('estado', 'aprobado'); // Debe estar aprobado para considerarse "cuadrado"
+        // a) Calcular saldo real retenido en este momento
+        const { data: carteras } = await supabase.from('carteras').select('id').eq('asesor_id', userId);
+        const carterIds = carteras?.map((c: any) => c.id) || [];
         
-        const totalSquaredToday = squaredToday?.reduce((acc, c) => acc + parseFloat(c.saldo_entregado || '0') + parseFloat(c.total_gastos || '0'), 0) || 0;
+        const { data: accounts } = await supabase
+            .from('cuentas_financieras')
+            .select('saldo')
+            .in('cartera_id', carterIds)
+            .eq('tipo', 'cobranzas');
+        const currentBalance = accounts?.reduce((acc: any, c: any) => acc + parseFloat(c.saldo || '0'), 0) || 0;
 
-        // CÁLCULO FINAL: RecaudadoMañana + DeudaHistórica - EntregasHoy
-        // Si Michel debe 40 (ayer) y cobró 98 (hoy), pero entregó 40 (hoy)... 
-        // Aún tiene 98 en su bolsillo procedentes de la mañana de hoy.
-        const totalPendingFromMorning = leftoverHistorical + netMorningDue - totalSquaredToday;
+        // Si el asesor tiene 0 efectivo, no tiene sentido bloquearlo y forzar un Cierre Mañana
+        if (currentBalance > 1.05) {
+            
+            // Verificamos si ya hizo legalmente el Cierre Mañana formal
+            const { data: MorningCuadre } = await supabase
+                .from('cuadres_diarios')
+                .select('created_at')
+                .eq('asesor_id', userId)
+                .eq('fecha', todayStr)
+                .in('tipo_cuadre', ['parcial_mañana', 'final']) // Sólo tipo oficial de cierre
+                .eq('estado', 'aprobado')
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .maybeSingle();
 
-        // Bloqueo obligatorio si el saldo pendiente de lo recaudado en la mañana es significativo
-        if (!firstCuadre || totalPendingFromMorning > 1.05) {
-            return {
-                allowed: false,
-                reason: !firstCuadre 
-                    ? `Al finalizar el Primer Turno (${config.horario_fin_turno_1}), el Administrador debe APROBAR tu CUADRE PARCIAL para que puedas seguir operando.`
-                    : `Para operar en el turno tarde, debes entregar el saldo total pendiente (S/ ${totalPendingFromMorning.toFixed(2)} que incluye deudas anteriores y cobros de esta mañana).`,
-                code: 'MISSING_MORNING_CUADRE'
-            };
+            if (!MorningCuadre) {
+                return {
+                    allowed: false,
+                    reason: `Para operar en el turno tarde, debes reportar obligatoriamente la recaudación de hoy haciendo un "Cierre Mañana". (Monto actual retenido: S/ ${currentBalance.toFixed(2)})`,
+                    code: 'MISSING_MORNING_CUADRE'
+                };
+            }
+
+            // Si ya hizo su cierre de turno y fue aceptado, evaluamos el tiempo de gracia (si no lo ha superado)
+            const timeSinceCuadre = Math.floor((now.getTime() - new Date(MorningCuadre.created_at).getTime()) / 60000);
+            const graceTime = parseInt(config.tiempo_gracia_post_cuadre || '10');
+            if (timeSinceCuadre < graceTime) {
+                return {
+                    allowed: false,
+                    reason: `Cierre de turno verificado correctamente. El sistema iniciará el turno tarde automáticamente en ${graceTime - timeSinceCuadre} minuto(s).`,
+                    code: 'GRACE_PERIOD'
+                };
+            }
         }
     }
 

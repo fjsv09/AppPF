@@ -6,6 +6,8 @@ import { RenovacionesSolicitudes } from '@/components/renovaciones/renovaciones-
 
 import { Clock, Eye, AlertCircle, CheckCircle } from 'lucide-react'
 import { BackButton } from '@/components/ui/back-button'
+import { DashboardAlerts } from '@/components/dashboard/dashboard-alerts'
+import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,8 +58,23 @@ export default async function RenovacionesPage() {
 
     const { data: solicitudes } = await query
 
+    // [NUEVO] Lógica de Acceso al Sistema
+    const { checkSystemAccess } = await import('@/utils/systemRestrictions')
+    const access = await checkSystemAccess(supabaseAdmin, user.id, perfil.rol, 'renovacion')
+    
+    let blockInfo = null
+    if (perfil.rol === 'asesor') {
+        blockInfo = await checkAdvisorBlocked(supabaseAdmin, user.id)
+    }
+
     return (
         <div className="page-container">
+            <DashboardAlerts 
+                userId={user.id} 
+                blockInfo={blockInfo} 
+                accessInfo={access} 
+            />
+
             {/* Header */}
             <div className="page-header">
                 <div>

@@ -48,18 +48,47 @@ export default function NotificacionesPage() {
     const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null)
     const [loadingPush, setLoadingPush] = useState(true)
 
-    // PUSH EFFECTS
+    // PUSH EFFECTS - Wait for SW to be fully active
     useEffect(() => {
         if (typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window) {
             navigator.serviceWorker.register('/sw.js')
-                .then(reg => {
+                .then(async (reg) => {
+                    // Wait for the SW to be active (critical for push to work)
+                    if (reg.installing) {
+                        await new Promise<void>(resolve => {
+                            reg.installing!.addEventListener('statechange', function handler() {
+                                if (this.state === 'activated') {
+                                    this.removeEventListener('statechange', handler)
+                                    resolve()
+                                }
+                            })
+                        })
+                    } else if (reg.waiting) {
+                        await new Promise<void>(resolve => {
+                            reg.waiting!.addEventListener('statechange', function handler() {
+                                if (this.state === 'activated') {
+                                    this.removeEventListener('statechange', handler)
+                                    resolve()
+                                }
+                            })
+                        })
+                    }
                     setRegistration(reg)
-                    return reg.pushManager.getSubscription()
-                })
-                .then(sub => {
+                    const sub = await reg.pushManager.getSubscription()
                     if (sub) {
                         setSubscription(sub)
                         setIsSubscribed(true)
+                        // Re-sync subscription to server
+                        try {
+                            await fetch('/api/push/subscribe', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(sub)
+                            })
+                            console.log('[Push] Re-synced subscription to server')
+                        } catch (e) {
+                            console.warn('[Push] Could not re-sync:', e)
+                        }
                     }
                     setLoadingPush(false)
                 })

@@ -40,7 +40,7 @@ import {
 
 const formSchema = z.object({
   cartera_id: z.string().uuid('Seleccione una cartera'),
-  tipo_cuadre: z.enum(['parcial', 'parcial_mañana', 'final']),
+  tipo_cuadre: z.enum(['parcial', 'parcial_mañana', 'final', 'saldo_pendiente']),
   monto_efectivo: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
     message: 'Monto inválido',
   }),
@@ -52,9 +52,11 @@ const formSchema = z.object({
 interface CuadreFormProps {
   carteras: any[]
   userId: string
+  isDebtBlocked?: boolean
+  isMorningBlocked?: boolean
 }
 
-export function CuadreForm({ carteras, userId }: CuadreFormProps) {
+export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked }: CuadreFormProps) {
   const [loading, setLoading] = useState(false)
   const [hasPending, setHasPending] = useState(false)
   const [stats, setStats] = useState({ cobrado: 0, gastos: 0, neto: 0 })
@@ -66,7 +68,7 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
     resolver: zodResolver(formSchema),
     defaultValues: {
       cartera_id: carteras[0]?.id || '',
-      tipo_cuadre: 'parcial',
+      tipo_cuadre: isDebtBlocked ? 'saldo_pendiente' : (isMorningBlocked ? 'parcial_mañana' : 'parcial'),
       monto_efectivo: '',
       monto_digital: '',
     },
@@ -77,6 +79,7 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
   const mDigital = form.watch('monto_digital')
 
   useEffect(() => {
+    if (isDebtBlocked || isMorningBlocked) return;
     const total = (parseFloat(mEfectivo || '0')) + (parseFloat(mDigital || '0'))
     if (total <= 0) return; // No auto-detectar si está vacío
 
@@ -102,69 +105,82 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
   const selectedCarteraId = form.watch('cartera_id')
 
   useEffect(() => {
+    let mounted = true;
     async function fetchStats() {
       if (!selectedCarteraId) return
-
-      // 0. Get the last cuadre of today (to only show incremental stats since the last rendez-vous)
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const todayStr = today.toISOString().split('T')[0]
-
-      const { data: lastCuadre } = await supabase
-        .from('cuadres_diarios')
-        .select('created_at')
-        .eq('asesor_id', userId)
-        .eq('fecha', todayStr)
-        .in('estado', ['pendiente', 'aprobado'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      const statsStartTime = lastCuadre?.created_at || today.toISOString()
-
-      // 1. Get the balance from the 'cobranzas' account
-      const { data: accounts } = await supabase
-        .from('cuentas_financieras')
-        .select('id, saldo')
-        .eq('cartera_id', selectedCarteraId)
-        .eq('tipo', 'cobranzas')
-        .single()
       
-      const currentBalance = parseFloat(accounts?.saldo || '0')
-      const accountId = accounts?.id
+      try {
+        // 0. Get the last cuadre of today
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const todayStr = today.toISOString().split('T')[0]
 
-      // 2. Get today's expenses made from THIS account SINCE the last session marker
-      const { data: gastosMovs } = await supabase
-        .from('movimientos_financieros')
-        .select('monto')
-        .eq('cartera_id', selectedCarteraId)
-        .eq('cuenta_origen_id', accountId)
-        .eq('tipo', 'egreso')
-        .gt('created_at', statsStartTime)
+        const { data: lastCuadre, error: lastCuadreError } = await supabase
+          .from('cuadres_diarios')
+          .select('created_at')
+          .eq('asesor_id', userId)
+          .eq('fecha', todayStr)
+          .in('estado', ['pendiente', 'aprobado'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
 
-      const totalGastos = gastosMovs?.reduce((acc, g) => acc + (parseFloat(g.monto) || 0), 0) || 0
+        if (lastCuadreError) throw lastCuadreError;
+        const statsStartTime = lastCuadre?.created_at || today.toISOString()
 
-      // 3. Check for pending cuadres for this advisor
-      const { data: pending } = await supabase
-        .from('cuadres_diarios')
-        .select('id')
-        .eq('asesor_id', userId)
-        .eq('estado', 'pendiente')
-        .limit(1)
+        // 1. Get the balance
+        const { data: accounts, error: accountError } = await supabase
+          .from('cuentas_financieras')
+          .select('id, saldo')
+          .eq('cartera_id', selectedCarteraId)
+          .eq('tipo', 'cobranzas')
+          .single()
+        
+        if (accountError) throw accountError;
+        const currentBalance = parseFloat(accounts?.saldo || '0')
+        const accountId = accounts?.id
 
-      setHasPending(!!(pending && pending.length > 0))
+        // 2. Get today's expenses
+        const { data: gastosMovs, error: gastosError } = await supabase
+          .from('movimientos_financieros')
+          .select('monto')
+          .eq('cartera_id', selectedCarteraId)
+          .eq('cuenta_origen_id', accountId)
+          .eq('tipo', 'egreso')
+          .gt('created_at', statsStartTime)
 
-      // LOGIC FIX: 
-      // Cobrado (Gross) = Account Balance + Expenses already subtracted
-      // Neto Final = Account Balance
-      setStats({
-        cobrado: currentBalance + totalGastos,
-        gastos: totalGastos,
-        neto: currentBalance
-      })
+        if (gastosError) throw gastosError;
+        const totalGastos = gastosMovs?.reduce((acc, g) => acc + (parseFloat(g.monto) || 0), 0) || 0
+
+        // 3. Check for pending
+        const { data: pending, error: pendingError } = await supabase
+          .from('cuadres_diarios')
+          .select('id')
+          .eq('asesor_id', userId)
+          .eq('estado', 'pendiente')
+          .limit(1)
+
+        if (pendingError) throw pendingError;
+
+        if (mounted) {
+           setHasPending(!!(pending && pending.length > 0))
+           setStats({
+            cobrado: currentBalance + totalGastos,
+            gastos: totalGastos,
+            neto: currentBalance
+          })
+        }
+      } catch (err: any) {
+        if (mounted) {
+          console.error("Error fetching stats:", err);
+          // If it's the abort error, we might want to ignore it or just log it
+          // toast.error("Error al cargar estadísticas: " + err.message);
+        }
+      }
     }
 
     fetchStats()
+    return () => { mounted = false }
   }, [selectedCarteraId, supabase, userId])
 
   const hasMovements = stats.cobrado > 0 || stats.gastos > 0;
@@ -200,7 +216,7 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
     }
 
     // Safety check: Is the amount reported close to the recorded net?
-    if (Math.abs(totalEntregar - stats.neto) > 1) {
+    if (!isDebtBlocked && Math.abs(totalEntregar - stats.neto) > 1) {
        setConfirmData({ mEfectivo, mDigital, totalEntregar })
        return
     }
@@ -208,7 +224,7 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
     await processSubmit(mEfectivo, mDigital, values.tipo_cuadre)
   }
 
-  async function processSubmit(mEfectivo: number, mDigital: number, tipoCuadre: 'parcial' | 'parcial_mañana' | 'final') {
+  async function processSubmit(mEfectivo: number, mDigital: number, tipoCuadre: string) {
     setLoading(true)
     setConfirmData(null)
     
@@ -263,10 +279,12 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
                   <span className={`text-[9px] md:text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-widest ${
                       form.watch('tipo_cuadre') === 'final' ? 'bg-rose-500/20 text-rose-400' : 
                       form.watch('tipo_cuadre') === 'parcial_mañana' ? 'bg-emerald-500/20 text-emerald-400' :
+                      form.watch('tipo_cuadre') === 'saldo_pendiente' ? 'bg-red-500/20 text-red-500' :
                       'bg-blue-500/20 text-blue-400'
                   }`}>
                       {form.watch('tipo_cuadre') === 'final' ? 'Cierre del Día' : 
                        form.watch('tipo_cuadre') === 'parcial_mañana' ? 'Cierre Mañana' : 
+                       form.watch('tipo_cuadre') === 'saldo_pendiente' ? 'PAGO SALDO PENDIENTE' : 
                        'Cuadre Parcial'}
                   </span>
               </div>
@@ -335,9 +353,10 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-slate-950 border-slate-800 text-white">
-                          <SelectItem value="parcial">Cuadre Parcial (Ruta)</SelectItem>
-                          <SelectItem value="parcial_mañana">Cierre Mañana (Turno 1)</SelectItem>
-                          <SelectItem value="final">Cierre del Día (Turno 2)</SelectItem>
+                          <SelectItem value="parcial" disabled={isDebtBlocked || isMorningBlocked}>Cuadre Parcial (Ruta)</SelectItem>
+                          <SelectItem value="parcial_mañana" disabled={isDebtBlocked}>Cierre Mañana (Turno 1)</SelectItem>
+                          <SelectItem value="final" disabled={isDebtBlocked || isMorningBlocked}>Cierre del Día (Turno 2)</SelectItem>
+                          {isDebtBlocked && <SelectItem value="saldo_pendiente">LIQUIDAR SALDO AYER</SelectItem>}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -446,7 +465,7 @@ export function CuadreForm({ carteras, userId }: CuadreFormProps) {
               Corregir Monto
             </AlertDialogCancel>
             <AlertDialogAction 
-              onClick={() => confirmData && processSubmit(confirmData.mEfectivo, confirmData.mDigital, form.getValues('tipo_cuadre') as 'parcial' | 'final')}
+              onClick={() => confirmData && processSubmit(confirmData.mEfectivo, confirmData.mDigital, form.getValues('tipo_cuadre'))}
               className="bg-amber-600 text-white hover:bg-amber-700 font-bold"
             >
               Sí, enviar con diferencia

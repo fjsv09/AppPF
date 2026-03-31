@@ -1,3 +1,18 @@
+// Service Worker v2 - ProFinanzas Push Notifications
+// CRITICAL: install + activate handlers ensure immediate control
+
+self.addEventListener('install', function(event) {
+    console.info('[Service Worker] Installing v2...');
+    // Skip waiting to activate immediately (don't wait for old SW)
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', function(event) {
+    console.info('[Service Worker] Activated v2 - Taking control of all clients');
+    // Claim all open tabs immediately so push events work right away
+    event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener('push', function(event) {
     console.info('[Service Worker] Push Event received.');
 
@@ -5,7 +20,7 @@ self.addEventListener('push', function(event) {
     if (event.data) {
         try {
             data = event.data.json();
-            console.log('[Service Worker] Push Payload:', data);
+            console.log('[Service Worker] Push Payload:', JSON.stringify(data));
         } catch (e) {
             console.error('[Service Worker] Error parsing push data:', e);
             data = {
@@ -20,15 +35,17 @@ self.addEventListener('push', function(event) {
         body: data.body || data.mensaje || 'Tienes una nueva actualización.',
         icon: '/favicon.ico', 
         badge: '/favicon.ico',
-        vibrate: [100, 50, 100],
+        vibrate: [200, 100, 200],
         data: {
             url: data.url || data.link || '/'
         },
         actions: [
             { action: 'open', title: 'Ver detalle' }
         ],
-        tag: 'pf-notification-' + (data.id || Date.now()),
-        renotify: true
+        tag: 'pf-notification-' + Date.now(),
+        renotify: true,
+        requireInteraction: true,
+        silent: false
     };
 
     event.waitUntil(
@@ -45,15 +62,15 @@ self.addEventListener('notificationclick', function(event) {
     const urlToOpen = event.notification.data.url || '/';
 
     event.waitUntil(
-        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(windowClients) {
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(windowClients) {
             for (let i = 0; i < windowClients.length; i++) {
                 const client = windowClients[i];
                 if (client.url.includes(urlToOpen) && 'focus' in client) {
                     return client.focus();
                 }
             }
-            if (clients.openWindow) {
-                return clients.openWindow(urlToOpen);
+            if (self.clients.openWindow) {
+                return self.clients.openWindow(urlToOpen);
             }
         })
     );

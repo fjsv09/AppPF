@@ -17,6 +17,9 @@ export async function sendPushNotification(usuarioId: string, payload: { title: 
             process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
             process.env.VAPID_PRIVATE_KEY
         );
+    } else {
+        console.error('[WebPush] VAPID keys not configured - cannot send push');
+        return { success: false, error: 'VAPID keys missing' };
     }
     
     // Obtener todas las suscripciones de push para el usuario
@@ -26,9 +29,6 @@ export async function sendPushNotification(usuarioId: string, payload: { title: 
         .eq('usuario_id', usuarioId);
 
     console.log(`[WebPush DEBUG] Usuario: ${usuarioId} | Registros en DB: ${subscriptions?.length || 0}`);
-    if (subscriptions && subscriptions.length > 0) {
-        console.log(`[WebPush DEBUG] Primer endpoint (snippet): ${JSON.stringify(subscriptions[0].subscription).substring(0, 50)}...`);
-    }
 
     if (error) {
         console.error('Error fetching subscriptions from DB:', error);
@@ -82,25 +82,42 @@ export async function sendPushNotification(usuarioId: string, payload: { title: 
 }
 
 /**
- * Helper unificado para crear notificación y enviar push
+ * Helper unificado para crear notificación y enviar push.
+ * Uses DIRECT insert instead of RPC for reliability, ensuring the Realtime channel always fires.
  */
 export async function createFullNotification(usuarioId: string, data: { titulo: string; mensaje: string; link?: string; tipo?: string }) {
     const supabaseAdmin = createAdminClient();
     
-    // 1. Crear notificación en DB (llamando al RPC existente)
-    const { data: notifId, error } = await supabaseAdmin.rpc('crear_notificacion', {
-        p_usuario_id: usuarioId,
-        p_titulo: data.titulo,
-        p_mensaje: data.mensaje,
-        p_link: data.link || null,
-        p_tipo: data.tipo || 'info'
-    });
+    // 1. Insert notification directly into the table (more reliable than RPC for Realtime)
+    const { data: notification, error } = await supabaseAdmin
+        .from('notificaciones')
+        .insert({
+            usuario_destino_id: usuarioId,
+            titulo: data.titulo,
+            mensaje: data.mensaje,
+            link_accion: data.link || null,
+            tipo: data.tipo || 'info',
+            leido: false
+        })
+        .select('id')
+        .single();
 
     if (error) {
-        console.error('Error creating database notification:', error);
+        console.error('[createFullNotification] Error inserting notification:', error);
+        // Fallback: try the RPC method
+        const { data: notifId, error: rpcError } = await supabaseAdmin.rpc('crear_notificacion', {
+            p_usuario_id: usuarioId,
+            p_titulo: data.titulo,
+            p_mensaje: data.mensaje,
+            p_link: data.link || null,
+            p_tipo: data.tipo || 'info'
+        });
+        if (rpcError) {
+            console.error('[createFullNotification] RPC fallback also failed:', rpcError);
+        }
     }
 
-    // 2. Intentar enviar push
+    // 2. Send push notification (independent of DB notification)
     try {
         await sendPushNotification(usuarioId, {
             title: data.titulo,
@@ -108,8 +125,8 @@ export async function createFullNotification(usuarioId: string, data: { titulo: 
             url: data.link
         });
     } catch (pushErr) {
-        console.error('Error in sendPushNotification wrapper:', pushErr);
+        console.error('[createFullNotification] Push notification failed:', pushErr);
     }
 
-    return notifId;
+    return notification?.id || null;
 }

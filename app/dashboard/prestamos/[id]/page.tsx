@@ -16,7 +16,7 @@ import Link from "next/link";
 import { LoanTabs } from "@/components/prestamos/loan-tabs";
 import { cn } from "@/lib/utils";
 import { BackButton } from "@/components/ui/back-button";
-import { getTodayPeru, calculateLoanMetrics } from "@/lib/financial-logic";
+import { getTodayPeru, calculateLoanMetrics, getLoanStatusUI } from "@/lib/financial-logic";
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -387,33 +387,33 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                             </div>
                         </div>
 
-                        {/* NUEVO: SALDO PARCIAL */}
+                        {/* SALDO PARCIAL */}
                         <div className="flex flex-col justify-between h-full space-y-1.5 text-right sm:text-left">
                             <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black">Saldo</p>
                             <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-end sm:justify-start">
                                 <p className={cn(
                                     "text-xs md:text-2xl font-black leading-none tracking-tight",
-                                    metrics.saldoCuotaParcial > 0 ? "text-blue-400 animate-pulse" : "text-white/30"
+                                    metrics.saldoCuotaParcial > 0 ? "text-blue-400" : "text-white/30"
                                 )}>
                                     ${metrics.saldoCuotaParcial.toFixed(2)}
                                 </p>
                             </div>
                         </div>
 
-                        {/* NUEVO: PROGRESO (Standardized with Panel) */}
+                        {/* PROGRESO (Standardized with Panel) */}
                         <div className="flex flex-col justify-between h-full space-y-1.5">
                             <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black">Prog.</p>
-                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex flex-col justify-end items-start">
+                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex flex-col justify-end items-start text-left">
                                 {metrics.totalCuotas > 0 && (
                                     <div className="mb-0.5">
                                         {metrics.cuotasPagadas >= metrics.totalCuotas ? (
-                                            <span className="text-[7px] md:text-[10px] text-emerald-500 font-bold whitespace-nowrap">✅ Final</span>
+                                            <span className="text-[7px] md:text-[10px] text-emerald-500 font-bold whitespace-nowrap">✅ FINALIZADO</span>
                                         ) : (
                                             <span className={cn(
                                                 "text-[7px] md:text-[10px] font-bold whitespace-nowrap",
                                                 metrics.cuotasAtrasadas > 0 ? "text-amber-500" : "text-emerald-500"
                                             )}>
-                                                {metrics.cuotasAtrasadas > 0 ? `⚠️ ${metrics.cuotasAtrasadas} atr.` : '✅ Al día'}
+                                                {metrics.cuotasAtrasadas > 0 ? `⚠️ ${metrics.cuotasAtrasadas} ATR` : '✅ AL DÍA'}
                                             </span>
                                         )}
                                     </div>
@@ -429,32 +429,11 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                             <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-center">
                                 <div className="flex items-center gap-1 mb-0.5">
                                     {(() => {
-                                        const isEffectivelyFinalized = prestamo.estado === 'finalizado' || prestamo.estado === 'renovado' || prestamo.estado === 'refinanciado' || prestamo.saldo_pendiente <= 0;
-                                        const statusConfig = {
-                                            refinanciado: { label: 'REF', color: 'text-indigo-400', dot: 'bg-indigo-500' },
-                                            renovado: { label: 'REN', color: 'text-slate-500', dot: 'bg-slate-600' },
-                                            finalizado: { label: 'FIN', color: 'text-slate-500', dot: 'bg-slate-600' },
-                                            vencido: { label: 'VEN', color: 'text-rose-500', dot: 'bg-rose-500' },
-                                            moroso: { label: 'MOR', color: 'text-red-500', dot: 'bg-red-600' },
-                                            cpp: { label: 'CPP', color: 'text-orange-500', dot: 'bg-orange-500' },
-                                            deuda: { label: 'DEU', color: 'text-amber-400', dot: 'bg-amber-400' },
-                                            ok: { label: 'OK', color: 'text-emerald-500', dot: 'bg-emerald-500' }
-                                        };
-                                        const getStatusKey = () => {
-                                            if (prestamo.estado === 'refinanciado') return 'refinanciado';
-                                            if (prestamo.estado === 'renovado') return 'renovado';
-                                            if (isEffectivelyFinalized) return 'finalizado';
-                                            if (prestamo.estado_mora === 'vencido') return 'vencido';
-                                            if (['moroso', 'mora'].includes(prestamo.estado_mora)) return 'moroso';
-                                            if (prestamo.estado_mora === 'cpp') return 'cpp';
-                                            if (prestamo.deuda_exigible_hoy > 0) return 'deuda';
-                                            return 'ok';
-                                        };
-                                        const config = statusConfig[getStatusKey() as keyof typeof statusConfig] || statusConfig.ok;
+                                        const statusUI = getLoanStatusUI({ ...prestamo, metrics, deudaHoy: metrics.deudaExigibleHoy });
                                         return (
                                             <>
-                                                <span className={cn("w-1 h-1 md:w-1.5 md:h-1.5 rounded-full shrink-0 animate-pulse", config.dot)} />
-                                                <span className={cn("text-[9px] md:text-base font-black uppercase tracking-wider", config.color)}>{config.label}</span>
+                                                <span className={cn("w-1 h-1 md:w-1.5 md:h-1.5 rounded-full shrink-0", statusUI.animate && "animate-pulse", statusUI.bg.replace('bg-', 'bg-').replace('/20', ''))} style={{ backgroundColor: statusUI.marker }} />
+                                                <span className={cn("text-[9px] md:text-base font-black uppercase tracking-wider", statusUI.color)}>{statusUI.label}</span>
                                             </>
                                         );
                                     })()}

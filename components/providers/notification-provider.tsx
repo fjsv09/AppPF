@@ -31,48 +31,61 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const showBrowserNotification = async (titulo: string, mensaje: string) => {
         console.log('--- NOTIFICACIÓN NATIVA ---')
         console.log('Título:', titulo)
-        console.log('Estado Permiso:', Notification.permission)
+        console.log('Estado Permiso:', typeof Notification !== 'undefined' ? Notification.permission : 'N/A')
 
-        if (!("Notification" in window)) {
+        if (typeof window === 'undefined' || !("Notification" in window)) {
             console.error('Navegador no soporta notificaciones')
             return
         }
 
-        // Si el permiso es 'default', lo pedimos de nuevo (puede fallar si no es por click, pero intentamos)
+        // Si el permiso es 'default', lo pedimos
         if (Notification.permission === "default") {
             const permission = await Notification.requestPermission()
             if (permission !== "granted") return
         }
 
-        if (Notification.permission === "granted") {
-            try {
-                const options: NotificationOptions = { 
-                    body: mensaje, 
-                    icon: '/favicon.ico',
-                    badge: '/favicon.ico',
-                    tag: 'notif-' + Date.now(),
-                    requireInteraction: true, // Para que no se cierre sola en Chrome
-                    silent: false
-                }
-
-                // Usar Service Worker si está registrado y listo
-                if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
-                    const registration = await navigator.serviceWorker.ready;
-                    if (registration && 'showNotification' in registration) {
-                        await registration.showNotification(titulo, options);
-                        console.log('Enviada vía SW');
-                        return;
-                    }
-                }
-
-                // Fallback tradicional
-                new Notification(titulo, options)
-                console.log('Enviada vía Objeto Notification');
-            } catch (err) {
-                console.error('Error disparando notificación:', err)
-            }
-        } else {
+        if (Notification.permission !== "granted") {
             console.warn('Permisos de notificación denegados o no habilitados')
+            return
+        }
+
+        try {
+            const options: NotificationOptions = { 
+                body: mensaje, 
+                icon: '/favicon.ico',
+                badge: '/favicon.ico',
+                tag: 'realtime-notif-' + Date.now(),
+                requireInteraction: false,
+                silent: false
+            }
+
+            // Try Service Worker first with a timeout
+            let usedSW = false
+            if ('serviceWorker' in navigator) {
+                try {
+                    // Use a timeout to avoid hanging forever on serviceWorker.ready
+                    const swReady = await Promise.race([
+                        navigator.serviceWorker.ready,
+                        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
+                    ])
+                    
+                    if (swReady && 'showNotification' in swReady) {
+                        await swReady.showNotification(titulo, options)
+                        console.log('Enviada vía SW')
+                        usedSW = true
+                    }
+                } catch (swErr) {
+                    console.warn('SW notification failed, using fallback:', swErr)
+                }
+            }
+
+            // Fallback to native Notification API
+            if (!usedSW) {
+                new Notification(titulo, options)
+                console.log('Enviada vía Objeto Notification (fallback)')
+            }
+        } catch (err) {
+            console.error('Error disparando notificación:', err)
         }
     }
 

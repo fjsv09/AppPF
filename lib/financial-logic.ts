@@ -152,9 +152,9 @@ export function calculateLoanMetrics(
     .filter((c: any) => c.fecha_vencimiento <= today && c.estado !== 'pagado' && (c.monto_cuota - (c.monto_pagado || 0)) > 0.5)
     .length;
 
-  const cuotasAtrasadas = cronograma
-    .filter((c: any) => c.fecha_vencimiento <= today && c.estado !== 'pagado' && (c.monto_cuota - (c.monto_pagado || 0)) > 0.01)
-    .length;
+  // Igualando estrictamente al cálculo de UI de la tabla principal
+  const tempValorCuota = cronograma.length > 0 ? cronograma.reduce((s: number, c: any) => s + Number(c.monto_cuota), 0) / cronograma.length : 0;
+  const cuotasAtrasadas = tempValorCuota > 0 ? Math.floor(deudaExigibleHoy / tempValorCuota) : 0;
   
   // 4.6. Saldo Cuota Parcial (Cualquier cuota con pago > 0 y < monto)
   const partialPaidQuota = cronograma.find((c: any) => {
@@ -236,8 +236,8 @@ export function calculateLoanMetrics(
     estadoCalculado,
     valorCuotaPromedio,
     saldoCuotaParcial,
-    totalCuotas: cronograma.length,
-    cuotasPagadas: cronograma.filter((c: any) => c.estado === 'pagado').length
+    totalCuotas: loan.numero_cuotas || loan.cuotas || (valorCuotaPromedio > 0 ? Math.round(totalPagar / valorCuotaPromedio) : 0) || cronograma.length,
+    cuotasPagadas: valorCuotaPromedio > 0 ? Math.floor(totalPagadoAcumulado / valorCuotaPromedio) : 0
   };
 }
 /**

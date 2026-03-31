@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -39,8 +39,41 @@ export function CuadreApproval({ pendingCuadres: initialCuadres, adminId, global
   const [selectedAccounts, setSelectedAccounts] = useState<Record<string, { caja: string, digital: string }>>({})
   const [expandedId, setExpandedId] = useState<string | null>(initialCuadres[0]?.id || null)
   const [rejectionId, setRejectionId] = useState<string | null>(null)
-  const supabase = createClient()
   const router = useRouter()
+  const supabase = createClient()
+
+  // Sincronizar estado local con props del servidor cuando estas cambien
+  useEffect(() => {
+    setCuadres(initialCuadres)
+    // Auto-expandir el primero si no hay ninguno expandido (útil cuando llega el primero)
+    if (initialCuadres.length > 0 && !expandedId) {
+      setExpandedId(initialCuadres[0].id)
+    }
+  }, [initialCuadres])
+
+  // Suscripción en tiempo real para nuevos cuadres
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-cuadres-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Escuchar inserciones, actualizaciones y eliminaciones
+          schema: 'public',
+          table: 'cuadres_diarios'
+        },
+        (payload) => {
+          console.log('Cambio detectado en cuadres_diarios:', payload)
+          // Refrescar los datos del servidor (RSC)
+          router.refresh()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [supabase, router])
 
   async function approveCuadre(cuadreId: string) {
     const selection = selectedAccounts[cuadreId] || {}

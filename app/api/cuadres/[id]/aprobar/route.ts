@@ -47,6 +47,19 @@ export async function POST(
         })
 
         revalidatePath('/dashboard/admin/cuadres')
+
+        // [NUEVO] Broadcast real-time a todos los canales escuchando por actualizaciones
+        const channel = supabaseAdmin.channel('cuadres-sync-global')
+        await channel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await channel.send({
+                    type: 'broadcast',
+                    event: 'cuadre_updated',
+                    payload: { asesor_id: cuadre.asesor_id, action: 'approved' }
+                })
+                supabaseAdmin.removeChannel(channel)
+            }
+        })
         
         return NextResponse.json({ success: true, result })
 

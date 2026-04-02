@@ -10,6 +10,7 @@ import { TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CuadreTabs } from "@/components/admin/cuadre-tabs"
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export const metadata: Metadata = {
   title: 'Gestión de Cuadres'

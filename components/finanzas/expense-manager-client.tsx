@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, type ReactNode } from 'react'
-import { Plus, Receipt } from 'lucide-react'
+import { useState, useTransition, useEffect, type ReactNode } from 'react'
+import { Plus, Receipt, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -13,6 +13,7 @@ import { ExpenseForm } from './expense-form'
 import { ExpenseList } from './expense-list'
 import { BackButton } from '@/components/ui/back-button'
 import { Suspense } from 'react'
+import { ExpenseFilters } from './expense-filters'
 
 interface ExpenseManagerClientProps {
   expenses: any[]
@@ -22,7 +23,6 @@ interface ExpenseManagerClientProps {
   advisors: any[]
   userId: string
   userRole: string
-  filters?: ReactNode
 }
 
 export function ExpenseManagerClient({ 
@@ -32,8 +32,7 @@ export function ExpenseManagerClient({
   categorias, 
   advisors, 
   userId, 
-  userRole,
-  filters
+  userRole
 }: ExpenseManagerClientProps) {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -50,6 +49,8 @@ export function ExpenseManagerClient({
     }
     checkAccess()
   }, [userId, userRole])
+
+  const [isPending, startTransition] = useTransition()
 
   const handleEdit = (expense: any) => {
     setEditingExpense(expense)
@@ -91,20 +92,27 @@ export function ExpenseManagerClient({
         </div>
       </div>
 
-      <div className="space-y-4">
-        {/* Filters Section Moved Down */}
-        <div className="relative z-10">
-          {filters}
+      <div className="space-y-6">
+        {/* Filters Section - Premium Sticky Bar */}
+        <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-800/50 backdrop-blur-xl mb-6 w-full shadow-2xl">
+          <Suspense fallback={<div className="h-12 w-full bg-slate-900/50 animate-pulse rounded-xl" />}>
+            <ExpenseFilters 
+              advisors={advisors} 
+              categories={categorias || []} 
+              userRole={userRole || 'asesor'}
+              isPending={isPending}
+              startTransition={startTransition}
+            />
+          </Suspense>
         </div>
         
-        <div className="grid grid-cols-1 items-start">
-          <div className="space-y-3">
-            <ExpenseList 
-              expenses={expenses} 
-              onEdit={handleEdit}
-              userRole={userRole}
-            />
-          </div>
+        <div className="relative">
+          <ExpenseList 
+            expenses={expenses} 
+            onEdit={handleEdit}
+            userRole={userRole}
+            isPending={isPending}
+          />
         </div>
       </div>
 

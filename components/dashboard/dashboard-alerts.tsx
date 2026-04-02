@@ -3,6 +3,8 @@
 import { useEffect } from 'react'
 import { AlertCircle, AlertTriangle, Clock } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/utils/supabase/client'
 
 interface DashboardAlertsProps {
     userId: string
@@ -11,6 +13,45 @@ interface DashboardAlertsProps {
 }
 
 export function DashboardAlerts({ userId, blockInfo, accessInfo }: DashboardAlertsProps) {
+    const router = useRouter()
+    const supabase = createClient()
+
+    // Suscripción en tiempo real para refrescar alertas si cambia un cuadre (bloqueo/desbloqueo)
+    useEffect(() => {
+        if (!userId) return
+
+        const channel = supabase
+          .channel('cuadres-sync-global')
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'cuadres_diarios',
+              filter: `asesor_id=eq.${userId}`
+            },
+            (payload) => {
+              console.log('🔄 Sincronizando alertas (DB)...', payload)
+              router.refresh()
+            }
+          )
+          .on(
+            'broadcast',
+            { event: 'cuadre_updated' },
+            (payload) => {
+              if (payload.payload?.asesor_id === userId) {
+                console.log('🚀 Sincronizando alertas (BC)...', payload)
+                router.refresh()
+              }
+            }
+          )
+          .subscribe()
+
+        return () => {
+          supabase.removeChannel(channel)
+        }
+    }, [supabase, userId, router])
+
 
     useEffect(() => {
         // Trigger push to admin only once per session/day if blocked by DEBT

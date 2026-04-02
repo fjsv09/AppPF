@@ -45,7 +45,7 @@ export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: stri
         const ingresosHoy = movementsToday?.filter(m => m.cuenta_destino_id && accountIds.includes(m.cuenta_destino_id))
                                           .reduce((acc, m) => acc + parseFloat(m.monto || 0), 0) || 0;
         
-        const gastosHoy = movementsToday?.filter(m => m.tipo === 'egreso' && m.cuenta_origen_id && accountIds.includes(m.cuenta_origen_id))
+        const gastosHoy = movementsToday?.filter(m => m.cuenta_origen_id && accountIds.includes(m.cuenta_origen_id))
                                          .reduce((acc, m) => acc + parseFloat(m.monto || 0), 0) || 0;
 
         const deudaNetaHoy = (ingresosHoy - gastosHoy);

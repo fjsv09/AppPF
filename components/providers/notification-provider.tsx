@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/utils/supabase/client'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
 interface NotificationContextType {
@@ -13,6 +14,7 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
     const [unreadCount, setUnreadCount] = useState(0)
+    const router = useRouter()
     const supabase = React.useMemo(() => createClient(), [])
     const userIdRef = useRef<string | null>(null)
 
@@ -138,6 +140,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                         
                         // 2. Notificación Nativa de Chrome
                         showBrowserNotification(newNotif.titulo, newNotif.mensaje)
+                        
+                        // 3. Refrescar datos de la ruta actual (RSC) para sincronizar UI en tiempo real
+                        router.refresh()
                     }
                 }
             )

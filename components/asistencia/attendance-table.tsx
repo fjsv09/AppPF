@@ -93,110 +93,115 @@ export function AttendanceTable({ initialData, usuarios, currentFilters }: Atten
 
     return (
         <div className="space-y-6">
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="p-4 bg-slate-900/40 border border-slate-800/50 rounded-2xl backdrop-blur-sm">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
-                            <Users className="w-4 h-4" />
+            {/* KPI Cards (2x2 on mobile for less scroll) */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                <div className="p-3 md:p-4 bg-slate-900/40 border border-slate-800/50 rounded-2xl backdrop-blur-sm">
+                    <div className="flex items-center gap-2 md:gap-3 mb-1 md:mb-2">
+                        <div className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+                            <Users className="w-3 h-3 md:w-4 md:h-4" />
                         </div>
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Total Registros</span>
+                        <span className="text-[9px] md:text-xs font-bold text-slate-500 uppercase tracking-widest">Registros</span>
                     </div>
-                    <p className="text-2xl font-black text-white">{stats.total}</p>
+                    <p className="text-lg md:text-2xl font-black text-white">{stats.total}</p>
                 </div>
 
-                <div className="p-4 bg-slate-900/40 border border-slate-800/50 rounded-2xl backdrop-blur-sm">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
-                            <CheckCircle2 className="w-4 h-4" />
+                <div className="p-3 md:p-4 bg-slate-900/40 border border-slate-800/50 rounded-2xl backdrop-blur-sm">
+                    <div className="flex items-center gap-2 md:gap-3 mb-1 md:mb-2">
+                        <div className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                            <CheckCircle2 className="w-3 h-3 md:w-4 md:h-4" />
                         </div>
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Puntuales</span>
+                        <span className="text-[9px] md:text-xs font-bold text-slate-500 uppercase tracking-widest text-emerald-500/80">Puntuales</span>
                     </div>
-                    <div className="flex items-end gap-2">
-                        <p className="text-2xl font-black text-emerald-400">{stats.puntualesNum}</p>
-                        <span className="text-[10px] text-slate-500 mb-1 font-bold">{stats.tasaPuntualidad}% puntuales</span>
+                    <div className="flex items-baseline gap-1.5">
+                        <p className="text-lg md:text-2xl font-black text-emerald-400">{stats.puntualesNum}</p>
+                        <span className="text-[9px] text-slate-500 font-bold hidden sm:inline">{stats.tasaPuntualidad}%</span>
                     </div>
                 </div>
 
-                <div className="p-4 bg-slate-900/40 border border-slate-800/50 rounded-2xl backdrop-blur-sm">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
-                            <AlertTriangle className="w-4 h-4" />
+                <div className="p-3 md:p-4 bg-slate-900/40 border border-slate-800/50 rounded-2xl backdrop-blur-sm">
+                    <div className="flex items-center gap-2 md:gap-3 mb-1 md:mb-2">
+                        <div className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
+                            <AlertTriangle className="w-3 h-3 md:w-4 md:h-4" />
                         </div>
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tardanzas</span>
+                        <span className="text-[9px] md:text-xs font-bold text-slate-500 uppercase tracking-widest text-amber-500/80">Tardanzas</span>
                     </div>
-                    <p className="text-2xl font-black text-amber-500">{stats.tardanzasNum}</p>
+                    <p className="text-lg md:text-2xl font-black text-amber-500">{stats.tardanzasNum}</p>
                 </div>
 
-                <div className="p-4 bg-slate-900/40 border border-slate-800/50 rounded-2xl backdrop-blur-sm">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-400">
-                            <Banknote className="w-4 h-4" />
+                <div className="p-3 md:p-4 bg-slate-900/40 border border-slate-800/50 rounded-2xl backdrop-blur-sm">
+                    <div className="flex items-center gap-2 md:gap-3 mb-1 md:mb-2">
+                        <div className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-400">
+                            <Banknote className="w-3 h-3 md:w-4 md:h-4" />
                         </div>
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Descuento Total</span>
+                        <span className="text-[9px] md:text-xs font-bold text-slate-500 uppercase tracking-widest">Descuento</span>
                     </div>
-                    <p className="text-2xl font-black text-rose-400">S/ {stats.totalDescuentosValue.toFixed(2)}</p>
+                    <p className="text-lg md:text-2xl font-black text-rose-400">S/ {stats.totalDescuentosValue.toFixed(2)}</p>
                 </div>
             </div>
 
             {/* Filter Bar */}
             <div className="bg-slate-900/80 backdrop-blur-xl border border-white/5 rounded-2xl p-4 shadow-xl">
-                <div className="flex flex-col md:flex-row gap-4 items-end">
-                    <div className="flex-1 w-full space-y-2">
-                        <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Buscar Trabajador</label>
+                <div className="flex flex-col gap-3">
+                    <div className="w-full space-y-1.5">
+                        <label className="text-[9px] uppercase font-bold text-slate-500 ml-1">Buscar Trabajador</label>
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                             <Input 
-                                placeholder="Nombre del trabajador..."
+                                placeholder="Nombre..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10 h-10 bg-slate-950/50 border-slate-800 focus:border-blue-500/50 rounded-xl"
+                                className="pl-10 h-9 bg-slate-950/50 border-slate-800 focus:border-blue-500/50 rounded-xl text-sm"
                             />
                         </div>
                     </div>
 
-                    <div className="w-full md:w-48 space-y-2">
-                        <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Fecha</label>
-                        <div className="relative">
-                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 z-10 pointer-events-none" />
-                            <Input 
-                                type="date"
-                                value={dateFilter}
-                                onChange={(e) => setDateFilter(e.target.value)}
-                                className="pl-10 h-10 bg-slate-950/50 border-slate-800 focus:border-blue-500/50 rounded-xl appearance-none"
-                            />
+                    <div className="grid grid-cols-2 gap-3 items-end">
+                        <div className="space-y-1.5">
+                            <label className="text-[9px] uppercase font-bold text-slate-500 ml-1">Fecha</label>
+                            <div className="relative">
+                                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500 z-10 pointer-events-none" />
+                                <Input 
+                                    type="date"
+                                    value={dateFilter}
+                                    onChange={(e) => setDateFilter(e.target.value)}
+                                    className="pl-9 h-9 bg-slate-950/50 border-slate-800 focus:border-blue-500/50 rounded-xl appearance-none text-xs"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-[9px] uppercase font-bold text-slate-500 ml-1">Trabajador</label>
+                            <Select value={userFilter} onValueChange={setUserFilter}>
+                                <SelectTrigger className="h-9 bg-slate-950/50 border-slate-800 rounded-xl text-xs">
+                                    <SelectValue placeholder="Todos" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
+                                    <SelectItem value="todos">Todos los usuarios</SelectItem>
+                                    {usuarios.map(u => (
+                                        <SelectItem key={u.id} value={u.id}>
+                                            {u.nombre_completo}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
 
-                    <div className="w-full md:w-64 space-y-2">
-                        <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Trabajador (Filtro DB)</label>
-                        <Select value={userFilter} onValueChange={setUserFilter}>
-                            <SelectTrigger className="h-10 bg-slate-950/50 border-slate-800 rounded-xl">
-                                <SelectValue placeholder="Todos los usuarios" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
-                                <SelectItem value="todos">Todos los usuarios</SelectItem>
-                                {usuarios.map(u => (
-                                    <SelectItem key={u.id} value={u.id}>
-                                        {u.nombre_completo} ({u.rol})
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                    <div className="w-full">
+                        <Button 
+                            onClick={handleFilter}
+                            className="w-full h-9 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-900/20 text-xs"
+                        >
+                            <Filter className="h-3.5 w-3.5 mr-2" />
+                            Aplicar Filtros
+                        </Button>
                     </div>
-
-                    <Button 
-                        onClick={handleFilter}
-                        className="h-10 px-8 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-900/20"
-                    >
-                        <Filter className="h-4 w-4 mr-2" />
-                        Filtrar
-                    </Button>
                 </div>
             </div>
 
             {/* Main Table */}
-            <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-2xl overflow-hidden">
+            {/* Desktop Table View */}
+            <div className="hidden md:block bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-2xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
@@ -288,16 +293,85 @@ export function AttendanceTable({ initialData, usuarios, currentFilters }: Atten
                 </div>
             </div>
 
-            <div className="flex items-center justify-between px-2">
-                <p className="text-[10px] text-slate-500 font-medium">
-                    Mostrando {filteredData.length} registros de asistencia
+            {/* Mobile Card View (More Compact) */}
+            <div className="md:hidden space-y-3">
+                {filteredData.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500 italic bg-slate-900/40 border border-slate-800/50 rounded-2xl">
+                        No hay registros.
+                    </div>
+                ) : (
+                    filteredData.map((record) => (
+                        <div key={record.id} className="bg-slate-900/60 border border-slate-800/50 rounded-2xl p-3.5 space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-slate-400 text-sm">
+                                        {record.perfil?.nombre_completo?.slice(0, 1) || 'U'}
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-slate-200">
+                                            {record.perfil?.nombre_completo || 'Desconocido'}
+                                        </p>
+                                        <p className="text-[10px] text-slate-500 uppercase tracking-tighter">
+                                            {record.perfil?.rol || 'Trabajador'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="text-right flex flex-col items-end gap-1">
+                                    <div className="flex items-center gap-1.5">
+                                        <Clock className="w-3 h-3 text-slate-500" />
+                                        <span className="text-[13px] font-mono text-slate-300 font-bold">
+                                            {record.hora_entrada}
+                                        </span>
+                                    </div>
+                                    {record.estado === 'puntual' ? (
+                                        <div className="text-[10px] font-black uppercase text-emerald-400/80 tracking-widest bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                            Ok
+                                        </div>
+                                    ) : (
+                                        <div className="text-[10px] font-black uppercase text-amber-500 tracking-widest bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                                            {record.minutos_tardanza}m tardanza
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="pt-2.5 border-t border-slate-800/50 flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                    <MapPin className="w-3 h-3 text-blue-400" />
+                                    <span className="text-[11px] text-slate-300 font-medium">
+                                        {record.distancia_oficina}m de oficina
+                                    </span>
+                                    <a 
+                                        href={`https://www.google.com/maps?q=${record.lat},${record.lon}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-[9px] text-blue-400 font-black uppercase tracking-widest border-b border-blue-400/30 ml-1"
+                                    >
+                                        Mapa
+                                    </a>
+                                </div>
+                                <p className={cn(
+                                    "text-xs font-bold font-mono",
+                                    record.descuento_tardanza > 0 ? "text-rose-400" : "text-emerald-400"
+                                )}>
+                                    {record.descuento_tardanza > 0 ? `-S/${record.descuento_tardanza.toFixed(2)}` : 'S/0.00'}
+                                </p>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            <div className="flex items-center justify-between px-2 pt-2">
+                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                    {filteredData.length} registros
                 </p>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="h-8 text-xs bg-slate-900 border-slate-800 text-slate-400" disabled>
-                        Anterior
+                    <Button variant="outline" size="sm" className="h-7 px-3 text-[10px] bg-slate-900 border-slate-800 text-slate-500" disabled>
+                        Prev
                     </Button>
-                    <Button variant="outline" size="sm" className="h-8 text-xs bg-slate-900 border-slate-800 text-slate-400" disabled>
-                        Siguiente
+                    <Button variant="outline" size="sm" className="h-7 px-3 text-[10px] bg-slate-900 border-slate-800 text-slate-500" disabled>
+                        Next
                     </Button>
                 </div>
             </div>

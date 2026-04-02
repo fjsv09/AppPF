@@ -27,12 +27,24 @@ export async function PATCH(request: Request) {
             return NextResponse.json({ error: 'Clave y valor requeridos' }, { status: 400 })
         }
 
+        let finalValor = valor.toString()
+
+        // Si es desbloqueo, calcular fecha basada en minutos
+        if (clave === 'desbloqueo_hasta') {
+            const minutos = parseInt(valor)
+            if (!isNaN(minutos)) {
+                const targetDate = new Date()
+                targetDate.setMinutes(targetDate.getMinutes() + minutos)
+                finalValor = targetDate.toISOString()
+            }
+        }
+
         // Actualizar o insertar configuración
         const { error } = await supabase
             .from('configuracion_sistema')
             .upsert({ 
                 clave: clave, 
-                valor: valor.toString() 
+                valor: finalValor 
             }, { 
                 onConflict: 'clave' 
             })

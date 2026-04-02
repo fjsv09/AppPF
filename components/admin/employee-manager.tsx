@@ -102,6 +102,7 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
       fecha_nacimiento: formData.get('fecha_nacimiento') as string || null,
       supervisor_id: supervisorId === 'none' ? null : (supervisorId || null),
       rol: formData.get('rol') as string,
+      sesion_unica_activa: formData.get('sesion_unica_activa') === 'true',
     }
 
     if (isNaN(updates.sueldo_base)) updates.sueldo_base = 0
@@ -167,6 +168,32 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
       router.refresh()
     } catch (error: any) {
       toast.error('Error al actualizar: ' + (error.message || 'Error desconocido'))
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  async function handleReleaseDevice() {
+    if (!editingEmployee) return
+    if (!confirm('¿Seguro que deseas liberar el dispositivo vinculado de este usuario? Tendrá que iniciar sesión de nuevo en su equipo.')) return
+    
+    setLoading(editingEmployee.id)
+    try {
+      const { error } = await supabase
+        .from('perfiles')
+        .update({ dispositivo_id: null, sesion_id: null })
+        .eq('id', editingEmployee.id)
+
+      if (error) throw error
+
+      setEmployees(employees.map(emp => 
+        emp.id === editingEmployee.id ? { ...emp, dispositivo_id: null, sesion_id: null } : emp
+      ))
+      setEditingEmployee({ ...editingEmployee, dispositivo_id: null })
+      toast.success('Dispositivo liberado exitosamente')
+      router.refresh()
+    } catch (error: any) {
+      toast.error('Error al liberar dispositivo: ' + error.message)
     } finally {
       setLoading(null)
     }
@@ -452,6 +479,39 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
                       ))}
                    </SelectContent>
                 </Select>
+             </div>
+
+             <div className="grid grid-cols-2 gap-4">
+                 <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
+                       <ShieldAlert className="w-3 h-3" />
+                       Bloquear a 1 Dispositivo
+                    </label>
+                    <Select name="sesion_unica_activa" defaultValue={editingEmployee?.sesion_unica_activa ? "true" : "false"}>
+                       <SelectTrigger className="bg-slate-950 border-slate-800 h-10">
+                          <SelectValue />
+                       </SelectTrigger>
+                       <SelectContent className="bg-slate-950 border-slate-800 text-white">
+                          <SelectItem value="true">Activado (Estricto)</SelectItem>
+                          <SelectItem value="false">Desactivado (Libre)</SelectItem>
+                       </SelectContent>
+                    </Select>
+                 </div>
+
+                 <div className="space-y-1.5 flex flex-col justify-end">
+                    {editingEmployee?.dispositivo_id && (
+                        <Button 
+                            type="button" 
+                            variant="outline" 
+                            className="bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500 flex-1 hover:text-white mb-0.5 mt-auto"
+                            onClick={handleReleaseDevice}
+                            disabled={!!loading}
+                        >
+                            <Power className="mr-2 h-4 w-4" />
+                            Liberar Dispositivo
+                        </Button>
+                    )}
+                 </div>
              </div>
 
              <div className="space-y-1.5">

@@ -122,6 +122,21 @@ export async function POST(request: Request) {
                     tipo: 'warning'
                 })
             }
+
+            // [NUEVO] Broadcast real-time a todos los canales escuchando por actualizaciones
+            const channel = supabaseAdmin.channel('cuadres-sync-global')
+            await channel.subscribe(async (status) => {
+                if (status === 'SUBSCRIBED') {
+                    await channel.send({
+                        type: 'broadcast',
+                        event: 'new_cuadre',
+                        payload: { asesor_id: user.id }
+                    })
+                    console.log('[BROADCAST] Evento de nuevo cuadre enviado.')
+                    // Remover canal después de enviar
+                    supabaseAdmin.removeChannel(channel)
+                }
+            })
         } else {
             console.warn(`[CUADRE NOTIF] No active administrators found to notify for cuadre request from ${nombreAsesor}. Check that 'rol' is 'admin' and 'activo' is true in perfiles table.`);
         }

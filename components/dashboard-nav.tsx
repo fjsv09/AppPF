@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { Home, Users, Banknote, Calendar, ShieldAlert, History, LogOut, Settings, ChartBar, FileText, Menu, RefreshCw, Cog, Briefcase, Camera, Bell, Landmark, Wallet, UserCog, Receipt, CreditCard, Target, Award, Contact, ChevronLeft, ChevronRight, Clock } from 'lucide-react'
+import { Home, Users, Banknote, Calendar, ShieldAlert, History, LogOut, Settings, ChartBar, FileText, Menu, RefreshCw, Cog, Briefcase, Camera, Bell, Landmark, Wallet, UserCog, Receipt, CreditCard, Target, Award, Contact, ChevronLeft, ChevronRight, Clock, Loader2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Button } from './ui/button'
@@ -44,10 +44,26 @@ export function DashboardNav({
     const { isCollapsed, toggleSidebar } = useSidebar()
     const [isSimModalOpen, setIsSimModalOpen] = useState(false)
 
+    const [isPending, startTransition] = useTransition()
+    const [loadingTarget, setLoadingTarget] = useState<string | null>(null)
+
+    // Reset loading target when transition ends
+    useEffect(() => {
+        if (!isPending) setLoadingTarget(null)
+    }, [isPending])
+
     const handleSignOut = async () => {
         await supabase.auth.signOut()
         router.refresh()
         router.push('/login')
+    }
+
+    const handleLinkClick = (href: string) => {
+        if (pathname === href) return
+        setLoadingTarget(href)
+        startTransition(() => {
+            router.push(href)
+        })
     }
 
     const links = [
@@ -73,10 +89,10 @@ export function DashboardNav({
         { href: '/dashboard/pagos', label: 'Pagos', icon: Calendar, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
         
         // --- Gestión y Supervisión ---
-        { href: '/dashboard/asistencia', label: 'Asistencia', icon: Clock, roles: ['admin'], category: 'Gestión' },
         { href: '/dashboard/usuarios', label: 'Gestión de Equipo', icon: UserCog, roles: ['admin'], category: 'Gestión' },
         { href: '/dashboard/supervision', label: 'Supervisión', icon: ChartBar, roles: ['admin', 'supervisor'], category: 'Gestión' },
         { href: '/dashboard/auditoria', label: 'Auditoría', icon: History, roles: ['admin', 'supervisor'], category: 'Gestión' },
+        { href: '/dashboard/asistencia', label: 'Asistencia', icon: Clock, roles: ['admin'], category: 'Gestión' },
         
         // --- Configuración y Admin ---
         { href: '/dashboard/admin/sectores', label: 'Sectores', icon: Briefcase, roles: ['admin'], category: 'Configuración' },
@@ -90,6 +106,13 @@ export function DashboardNav({
 
     return (
         <>
+            {/* Nav Progress Listener (Global feedback) */}
+            {isPending && (
+                <div className="fixed top-0 left-0 right-0 h-0.5 bg-blue-500 z-[9999] animate-pulse">
+                    <div className="h-full bg-white/30 animate-in fade-in duration-500 w-1/3 shadow-[0_0_8px_white]" />
+                </div>
+            )}
+
             {/* Desktop Sidebar */}
             <nav className={cn(
                 "hidden md:flex flex-col border-r border-white/5 bg-slate-950/40 backdrop-blur-xl h-full fixed left-0 top-0 z-[100] transition-all duration-300",
@@ -126,6 +149,7 @@ export function DashboardNav({
                         "flex items-center gap-2 animate-in fade-in duration-300",
                         isCollapsed ? "justify-center" : ""
                     )}>
+                        {isPending && <Loader2 className="w-4 h-4 text-blue-400 animate-spin mr-1" />}
                         <NotificationsDropdown />
                     </div>
                 </div>
@@ -178,18 +202,20 @@ export function DashboardNav({
                                     .map((link) => {
                                         const Icon = link.icon
                                         const isActive = pathname === link.href
+                                        const isThisLoading = loadingTarget === link.href && isPending
                                         
                                         return (
-                                            <Link
+                                            <button
                                                 key={link.href}
-                                                href={link.href}
+                                                onClick={() => handleLinkClick(link.href)}
                                                 title={isCollapsed ? link.label : ""}
                                                 className={cn(
-                                                    "group flex items-center rounded-xl p-2.5 text-sm font-medium transition-all duration-300 relative overflow-hidden",
+                                                    "w-full group flex items-center rounded-xl p-2.5 text-sm font-medium transition-all duration-300 relative overflow-hidden",
                                                     isCollapsed ? "justify-center" : "gap-3 px-4",
                                                     isActive
                                                         ? "text-white shadow-lg shadow-blue-900/20"
-                                                        : "text-slate-400 hover:text-white hover:bg-white/5"
+                                                        : "text-slate-400 hover:text-white hover:bg-white/5",
+                                                    isPending && "pointer-events-none"
                                                 )}
                                             >
                                                 {isActive && (
@@ -205,10 +231,19 @@ export function DashboardNav({
                                                     <span className="relative z-10 animate-in fade-in slide-in-from-left-1 duration-300">{link.label}</span>
                                                 )}
                                                 
-                                                {isActive && !isCollapsed && (
-                                                    <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)]" />
+                                                {!isCollapsed && (
+                                                    <div className="absolute right-3 flex items-center gap-2">
+                                                        {isThisLoading && <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />}
+                                                        {isActive && <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)]" />}
+                                                    </div>
                                                 )}
-                                            </Link>
+                                                
+                                                {isCollapsed && isThisLoading && (
+                                                    <div className="absolute inset-0 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm z-20">
+                                                        <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                                                    </div>
+                                                )}
+                                            </button>
                                         )
                                     })}
                             </div>

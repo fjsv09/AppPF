@@ -51,6 +51,7 @@ export default async function CuadrePage() {
   // Check Block Status
   let isDebtBlocked = false
   let isMorningBlocked = false
+  let isNightBlocked = false
   let blockStatusData = null
   let access = null
 
@@ -61,11 +62,16 @@ export default async function CuadrePage() {
         isDebtBlocked = true
     }
 
-    // Verificar si debe un cuadre de mañana
+    // Verificar si debe un cuadre de mañana o si es cierre nocturno
     const { checkSystemAccess } = await import('@/utils/systemRestrictions')
     access = await checkSystemAccess(supabase, user.id, perfil.rol, 'solicitud')
-    if (!access.allowed && access.code === 'MISSING_MORNING_CUADRE') {
-        isMorningBlocked = true
+    if (!access.allowed) {
+        if (access.code === 'MISSING_MORNING_CUADRE') {
+            isMorningBlocked = true
+        }
+        if (access.code === 'NIGHT_RESTRICTION') {
+            isNightBlocked = true
+        }
     }
   }
 
@@ -99,7 +105,14 @@ export default async function CuadrePage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Form (Left) */}
         <div className="lg:col-span-12 xl:col-span-7">
-          <CuadreForm carteras={carteras} userId={user.id} isDebtBlocked={isDebtBlocked} isMorningBlocked={isMorningBlocked} />
+          <CuadreForm 
+            carteras={carteras} 
+            userId={user.id} 
+            isDebtBlocked={isDebtBlocked} 
+            isMorningBlocked={isMorningBlocked} 
+            isNightBlocked={isNightBlocked}
+            systemConfig={access?.config}
+          />
         </div>
 
         {/* History (Right) */}

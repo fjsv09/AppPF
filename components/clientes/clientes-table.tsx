@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Users, Search, Phone, ChevronLeft, ChevronRight, Calendar, Loader2 } from 'lucide-react'
+import { Users, Search, Phone, ChevronLeft, ChevronRight, Calendar, Loader2, X } from 'lucide-react'
 import { cn } from "@/lib/utils"
 
 const TableSkeleton = () => (
@@ -192,13 +192,36 @@ export function ClientesTable({ clientes, perfiles = [], userRol = 'asesor', use
              <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
                 {/* Search */}
                 <div className="relative w-full md:flex-1 md:max-w-none">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                    {isPending ? (
+                        <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500 animate-spin z-10" />
+                    ) : (
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                    )}
                     <Input
                         placeholder="Buscar cliente..."
                         value={localSearch}
                         onChange={(e) => handleSearchChange(e.target.value)}
-                        className="h-10 pl-9 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 w-full focus:bg-slate-900 transition-colors"
+                        className="h-10 pl-9 pr-8 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 w-full focus:bg-slate-900 transition-colors"
                     />
+                    {(localSearch || activeFilter !== 'todos' || filtroSupervisor !== 'todos' || filtroAsesor !== 'todos') && (
+                        <button 
+                            onClick={() => {
+                                startTransition(() => {
+                                    setLocalSearch('')
+                                    const params = new URLSearchParams(searchParams.toString())
+                                    params.delete('q')
+                                    params.delete('tab')
+                                    params.delete('supervisor')
+                                    params.delete('asesor')
+                                    router.replace(`${pathname}?${params.toString()}`)
+                                })
+                            }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center text-slate-500 hover:text-white hover:bg-slate-800 rounded-full transition-all z-10"
+                            title="Limpiar filtros"
+                        >
+                            <X className="h-3 w-3" />
+                        </button>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
@@ -276,7 +299,17 @@ export function ClientesTable({ clientes, perfiles = [], userRol = 'asesor', use
             </div>
 
             {/* Table View */}
-            <div className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden">
+            <div className="relative bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden min-h-[100px]">
+                
+                {/* Central Loader Overlay */}
+                {isPending && (
+                    <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/5 backdrop-blur-[1px] animate-in fade-in duration-200">
+                        <div className="bg-slate-900/80 p-3 rounded-full border border-white/5 shadow-2xl">
+                            <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+                        </div>
+                    </div>
+                )}
+                
                 {/* Table Header */}
                 <div className="hidden md:grid md:grid-cols-12 gap-4 px-6 py-3 bg-slate-950/50 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500">
                     <div className="col-span-3">Cliente</div>
@@ -288,13 +321,7 @@ export function ClientesTable({ clientes, perfiles = [], userRol = 'asesor', use
                 </div>
 
                 {/* Table Body */}
-                <div className="divide-y divide-slate-800/50">
-                    {isPending ? (
-                        <div className="p-0">
-                            <TableSkeleton />
-                        </div>
-                    ) : (
-                    <>
+                <div className={`divide-y divide-slate-800/50 transition-opacity duration-300 ${isPending ? 'opacity-40 grayscale-[0.2]' : 'opacity-100'}`}>
                     {paginatedClientes.map((cliente) => {
                          const asesorName = (userRol === 'admin' || userRol === 'supervisor') 
                             ? perfiles.find(p => p.id === cliente.asesor_id)?.nombre_completo 
@@ -397,8 +424,6 @@ export function ClientesTable({ clientes, perfiles = [], userRol = 'asesor', use
                             </div>
                         </div>
                     )})}
-                    </>
-                    )}
                 </div>
 
                 {/* Empty State */}

@@ -6,6 +6,7 @@ import { SidebarProvider } from '@/components/providers/sidebar-provider'
 import { DashboardMain } from '@/components/dashboard-main'
 import { AdminTaskSync } from '@/components/dashboard/admin-task-sync'
 import { DashboardProtection } from '@/components/providers/dashboard-protection'
+import { SessionWatcher } from '@/components/providers/session-watcher'
 
 export default async function DashboardLayout({
   children,
@@ -54,6 +55,7 @@ export default async function DashboardLayout({
 
   return (
     <SidebarProvider>
+      <SessionWatcher userId={user.id} />
       <DashboardProtection userRole={userRole} userName={userName}>
         <div className="min-h-screen text-slate-200">
           <DashboardNav 

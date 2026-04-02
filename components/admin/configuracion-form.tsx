@@ -70,9 +70,17 @@ const CONFIG_LABELS: Record<string, { nombre: string; descripcion: string; min?:
         nombre: 'Fin Primer Turno / Límite Cuadre',
         descripcion: 'Hora en la que finaliza el turno y se exige el cuadre parcial (HH:MM)',
     },
+    'tiempo_gracia_post_cuadre': {
+        nombre: 'Tiempo Espera Post-Cuadre (min)',
+        descripcion: 'Minutos que el sistema permanece bloqueado tras aprobarse el Cierre Mañana',
+        min: 0,
+        max: 60
+    },
     'desbloqueo_hasta': {
-        nombre: 'Desbloqueo Temporal',
-        descripcion: 'Fecha y hora hasta la cual el sistema está desbloqueado por excepción (ISO)',
+        nombre: 'Sesión de Emergencia (Minutos)',
+        descripcion: 'Ingresa los minutos que deseas desbloquear el sistema desde ahora',
+        min: 1,
+        max: 480 // Máximo 8 horas
     },
     'nombre_sistema': {
         nombre: 'Nombre del Sistema',
@@ -129,6 +137,14 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
             if ((item.clave.includes('horario') || item.clave.includes('cuadre')) && val && !val.includes(':') && !isNaN(Number(val))) {
                 val = `${val.padStart(2, '0')}:00`;
             }
+            // [NUEVO] Si es desbloqueo, calcular minutos restantes para mostrar
+            if (item.clave === 'desbloqueo_hasta' && val && val.includes('T')) {
+                const target = new Date(val)
+                const now = new Date()
+                const diffMs = target.getTime() - now.getTime()
+                const mins = Math.max(0, Math.ceil(diffMs / 60000))
+                val = mins > 0 ? mins.toString() : ''
+            }
             return { ...acc, [item.clave]: val };
         }, {});
     });
@@ -140,12 +156,18 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
 
     const handleUnlock = async () => {
         setUnlocking(true)
+        const mins = parseInt(config['desbloqueo_hasta']) || 15
+        
         try {
-            const response = await fetch('/api/configuracion/desbloquear', { method: 'POST' })
+            const response = await fetch('/api/configuracion/desbloquear', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ minutos: mins })
+            })
             if (!response.ok) throw new Error('Error al desbloquear')
             
             const data = await response.json()
-            toast.success('Sistema desbloqueado por 15 minutos', {
+            toast.success(`Sistema desbloqueado por ${mins} minutos`, {
                 description: `Habilitado hasta: ${new Date(data.activo_hasta).toLocaleTimeString()}`
             })
             router.refresh()
@@ -282,6 +304,7 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         'horario_apertura',
         'horario_cierre',
         'horario_fin_turno_1',
+        'tiempo_gracia_post_cuadre',
         'desbloqueo_hasta',
         'nombre_sistema',
         'logo_sistema_url',
@@ -369,11 +392,15 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
                                         type={
                                             (item.clave.includes('horario') || item.clave.includes('cuadre') || item.clave.includes('nombre') || item.clave.includes('logo')) 
                                                 ? 'text' 
-                                                : item.clave.includes('desbloqueo') 
-                                                    ? 'text' 
-                                                    : 'number'
+                                                : (item.clave.includes('desbloqueo') || item.clave.includes('umbral') || item.clave.includes('renovacion') || item.clave.includes('visita') || item.clave.includes('radio') || item.clave.includes('asistencia') || item.clave.includes('tolerancia'))
+                                                    ? 'number' 
+                                                    : 'text'
                                         }
-                                        placeholder={item.clave.includes('horario') ? 'HH:MM' : item.clave.includes('nombre') ? 'Ej: Sistema PF' : ''}
+                                        placeholder={
+                                            item.clave.includes('horario') ? 'HH:MM' : 
+                                            item.clave.includes('nombre') ? 'Ej: Sistema PF' : 
+                                            item.clave.includes('desbloqueo') ? 'Ej: 15' : ''
+                                        }
                                         value={
                                             (isEditing) 
                                                 ? currentValue 
@@ -471,7 +498,7 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
                                     className="w-full h-8 bg-purple-600/90 hover:bg-purple-600 text-white text-[10px] font-black uppercase tracking-wider rounded-lg shadow-lg shadow-purple-900/20 group"
                                 >
                                     {unlocking ? <Loader2 className="animate-spin mr-2 h-3 w-3" /> : <Lock className="mr-2 h-3 w-3 group-hover:animate-bounce" />}
-                                    Desbloquear Sistema (15m)
+                                    DESBLOQUEAR SISTEMA ({parseInt(config['desbloqueo_hasta']) || 15}M)
                                 </Button>
                             ) : null}
                         </div>

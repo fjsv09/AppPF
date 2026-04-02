@@ -30,23 +30,82 @@ export function LoginFormContent({
         }
     }, [errorParam])
 
+    const getDeviceFingerprint = () => {
+        let fp = localStorage.getItem('device_fingerprint')
+        if (!fp) {
+            fp = crypto.randomUUID()
+            localStorage.setItem('device_fingerprint', fp)
+        }
+        return fp
+    }
+
+    const getLocalSessionId = () => {
+        let sid = localStorage.getItem('local_session_id')
+        if (!sid) {
+            sid = crypto.randomUUID()
+            localStorage.setItem('local_session_id', sid)
+        }
+        return sid
+    }
+
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault()
         setLoading(true)
 
         try {
-            const { error } = await supabase.auth.signInWithPassword({
+            const { data: authData, error } = await supabase.auth.signInWithPassword({
                 email,
                 password,
             })
 
             if (error) {
                 toast.error('Error de autenticación', { description: error.message })
-            } else {
-                toast.success('Bienvenido', { description: 'Iniciando sesión...' })
-                router.refresh()
-                router.push('/dashboard')
+                setLoading(false)
+                return
             }
+
+            if (authData.user) {
+                // Fetch profile to check session settings
+                const { data: perfil } = await supabase
+                    .from('perfiles')
+                    .select('sesion_unica_activa, dispositivo_id')
+                    .eq('id', authData.user.id)
+                    .single()
+
+                // Generate new session ID for this login instance
+                const newSessionId = crypto.randomUUID()
+                localStorage.setItem('local_session_id', newSessionId)
+
+                if (perfil?.sesion_unica_activa) {
+                    const currentDeviceIp = getDeviceFingerprint()
+                    
+                    if (perfil.dispositivo_id && perfil.dispositivo_id !== currentDeviceIp) {
+                        // Deny access
+                        await supabase.auth.signOut()
+                        toast.error('Acceso Restringido', { 
+                            description: 'Tu cuenta está vinculada a otro dispositivo. Contacta al soporte.',
+                            duration: 5000
+                        })
+                        setLoading(false)
+                        return
+                    }
+
+                    // Update device_id and sesion_id
+                    await supabase.from('perfiles').update({
+                        dispositivo_id: perfil.dispositivo_id ? perfil.dispositivo_id : currentDeviceIp,
+                        sesion_id: newSessionId
+                    }).eq('id', authData.user.id)
+                } else {
+                    // Just update session id
+                    await supabase.from('perfiles').update({
+                        sesion_id: newSessionId
+                    }).eq('id', authData.user.id)
+                }
+            }
+
+            toast.success('Bienvenido', { description: 'Iniciando sesión...' })
+            router.refresh()
+            router.push('/dashboard')
         } catch (err) {
             toast.error('Error inesperado')
         } finally {

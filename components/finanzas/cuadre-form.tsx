@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
@@ -54,134 +54,207 @@ interface CuadreFormProps {
   userId: string
   isDebtBlocked?: boolean
   isMorningBlocked?: boolean
+  isNightBlocked?: boolean
+  systemConfig?: any
 }
 
-export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked }: CuadreFormProps) {
+export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, isNightBlocked, systemConfig }: CuadreFormProps) {
   const [loading, setLoading] = useState(false)
   const [hasPending, setHasPending] = useState(false)
   const [stats, setStats] = useState({ cobrado: 0, gastos: 0, neto: 0 })
+  const [morningDone, setMorningDone] = useState(false)
+  const [nightDone, setNightDone] = useState(false)
   const [confirmData, setConfirmData] = useState<{ mEfectivo: number, mDigital: number, totalEntregar: number } | null>(null)
+  
   const router = useRouter()
   const supabase = createClient()
+
+  // --- HELPERS PARA LÓGICA DE NEGOCIO ---
+  const timeToMinutes = (t: string) => {
+    const [h, m] = t.split(':').map(Number)
+    return (h || 0) * 60 + (m || 0)
+  }
+
+  const getLimaTime = () => {
+    const now = new Date()
+    const formatter = new Intl.DateTimeFormat('es-PE', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit', hour12: false })
+    const [hNow, mNow] = formatter.format(now).split(':').map(Number)
+    return hNow * 60 + mNow
+  }
+
+  const tFinTurno1 = timeToMinutes(systemConfig?.horario_fin_turno_1 || '13:00')
+  const tCierre = timeToMinutes(systemConfig?.horario_cierre || '19:00')
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       cartera_id: carteras[0]?.id || '',
-      tipo_cuadre: isDebtBlocked ? 'saldo_pendiente' : (isMorningBlocked ? 'parcial_mañana' : 'parcial'),
+      tipo_cuadre: isDebtBlocked ? 'saldo_pendiente' : (isMorningBlocked ? 'parcial_mañana' : (isNightBlocked ? 'final' : 'parcial')),
       monto_efectivo: '',
       monto_digital: '',
     },
   })
 
-  // --- AUTOMATIZACIÓN DE TIPO DE CUADRE (3 NIVELES) ---
+  // --- AUTOMATIZACIÓN DE TIPO DE CUADRE ---
   const mEfectivo = form.watch('monto_efectivo')
   const mDigital = form.watch('monto_digital')
 
   useEffect(() => {
-    if (isDebtBlocked || isMorningBlocked) return;
-    const total = (parseFloat(mEfectivo || '0')) + (parseFloat(mDigital || '0'))
-    if (total <= 0) return; // No auto-detectar si está vacío
+    // Si hay bloqueos explícitos, forzar el tipo correspondiente
+    if (isDebtBlocked) {
+      form.setValue('tipo_cuadre', 'saldo_pendiente')
+      return
+    }
+    if (isNightBlocked) {
+      form.setValue('tipo_cuadre', 'final')
+      return
+    }
+    if (isMorningBlocked) {
+      form.setValue('tipo_cuadre', 'parcial_mañana')
+      return
+    }
+    if (nightDone) return;
 
+    const total = (parseFloat(mEfectivo || '0')) + (parseFloat(mDigital || '0'))
+    if (total <= 0) return; 
+
+    const tNow = getLimaTime()
     const isTotal = Math.abs(total - stats.neto) < 1.05
-    const hour = new Date().getHours()
 
     if (!isTotal) {
-      // 1. Si entrega menos del saldo neto actual, SIEMPRE es "parcial" (Cuadre de Ruta)
+      // 1. Si entrega menos del saldo neto, sugerimos parcial si está habilitado
       form.setValue('tipo_cuadre', 'parcial')
     } else {
-      // Si entrega el TOTAL de lo que hay en caja...
-      // 2. Antes de las 5:00 PM (Turno Mañana Completo)
-      if (hour < 17) {
+      // 2. Si entrega el TOTAL...
+      if (tNow < tFinTurno1 + 120 && !morningDone) { 
         form.setValue('tipo_cuadre', 'parcial_mañana')
       } else {
-        // 3. Después de las 5:00 PM (Cierre Final de Jornada)
         form.setValue('tipo_cuadre', 'final')
       }
     }
-  }, [mEfectivo, mDigital, stats.neto, form])
+  }, [mEfectivo, mDigital, stats.neto, form, isDebtBlocked, isMorningBlocked, isNightBlocked, systemConfig, morningDone, nightDone, tFinTurno1])
 
   // Watch for stats calculation
   const selectedCarteraId = form.watch('cartera_id')
 
-  useEffect(() => {
-    let mounted = true;
-    async function fetchStats() {
-      if (!selectedCarteraId) return
+  const fetchStats = useCallback(async () => {
+    if (!selectedCarteraId) return
+    
+    try {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const todayStr = today.toISOString().split('T')[0]
+
+      const { data: lastCuadre, error: lastCuadreError } = await supabase
+        .from('cuadres_diarios')
+        .select('created_at')
+        .eq('asesor_id', userId)
+        .eq('fecha', todayStr)
+        .in('estado', ['pendiente', 'aprobado'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (lastCuadreError) throw lastCuadreError;
+      const statsStartTime = lastCuadre?.created_at || today.toISOString()
+
+      // Check for completed types today
+      const { data: todayCuadres, error: tcError } = await supabase
+        .from('cuadres_diarios')
+        .select('tipo_cuadre')
+        .eq('asesor_id', userId)
+        .eq('fecha', todayStr)
+        .in('estado', ['pendiente', 'aprobado'])
       
-      try {
-        // 0. Get the last cuadre of today
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const todayStr = today.toISOString().split('T')[0]
-
-        const { data: lastCuadre, error: lastCuadreError } = await supabase
-          .from('cuadres_diarios')
-          .select('created_at')
-          .eq('asesor_id', userId)
-          .eq('fecha', todayStr)
-          .in('estado', ['pendiente', 'aprobado'])
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-
-        if (lastCuadreError) throw lastCuadreError;
-        const statsStartTime = lastCuadre?.created_at || today.toISOString()
-
-        // 1. Get the balance
-        const { data: accounts, error: accountError } = await supabase
-          .from('cuentas_financieras')
-          .select('id, saldo')
-          .eq('cartera_id', selectedCarteraId)
-          .eq('tipo', 'cobranzas')
-          .single()
-        
-        if (accountError) throw accountError;
-        const currentBalance = parseFloat(accounts?.saldo || '0')
-        const accountId = accounts?.id
-
-        // 2. Get today's expenses
-        const { data: gastosMovs, error: gastosError } = await supabase
-          .from('movimientos_financieros')
-          .select('monto')
-          .eq('cartera_id', selectedCarteraId)
-          .eq('cuenta_origen_id', accountId)
-          .eq('tipo', 'egreso')
-          .gt('created_at', statsStartTime)
-
-        if (gastosError) throw gastosError;
-        const totalGastos = gastosMovs?.reduce((acc, g) => acc + (parseFloat(g.monto) || 0), 0) || 0
-
-        // 3. Check for pending
-        const { data: pending, error: pendingError } = await supabase
-          .from('cuadres_diarios')
-          .select('id')
-          .eq('asesor_id', userId)
-          .eq('estado', 'pendiente')
-          .limit(1)
-
-        if (pendingError) throw pendingError;
-
-        if (mounted) {
-           setHasPending(!!(pending && pending.length > 0))
-           setStats({
-            cobrado: currentBalance + totalGastos,
-            gastos: totalGastos,
-            neto: currentBalance
-          })
-        }
-      } catch (err: any) {
-        if (mounted) {
-          console.error("Error fetching stats:", err);
-          // If it's the abort error, we might want to ignore it or just log it
-          // toast.error("Error al cargar estadísticas: " + err.message);
-        }
+      if (!tcError && todayCuadres) {
+        setMorningDone(todayCuadres.some(c => c.tipo_cuadre === 'parcial_mañana' || c.tipo_cuadre === 'final'))
+        setNightDone(todayCuadres.some(c => c.tipo_cuadre === 'final'))
       }
-    }
 
-    fetchStats()
-    return () => { mounted = false }
+      // 1. Get the balance
+      const { data: accounts, error: accountError } = await supabase
+        .from('cuentas_financieras')
+        .select('id, saldo')
+        .eq('cartera_id', selectedCarteraId)
+        .eq('tipo', 'cobranzas')
+        .single()
+      
+      if (accountError) throw accountError;
+      const currentBalance = parseFloat(accounts?.saldo || '0')
+      const accountId = accounts?.id
+
+      // 2. Get today's expenses
+      const { data: gastosMovs, error: gastosError } = await supabase
+        .from('movimientos_financieros')
+        .select('monto')
+        .eq('cartera_id', selectedCarteraId)
+        .eq('cuenta_origen_id', accountId)
+        .eq('tipo', 'egreso')
+        .gt('created_at', statsStartTime)
+
+      if (gastosError) throw gastosError;
+      const totalGastos = gastosMovs?.reduce((acc, g) => acc + (parseFloat(g.monto) || 0), 0) || 0
+
+      // 3. Check for pending
+      const { data: pending, error: pendingError } = await supabase
+        .from('cuadres_diarios')
+        .select('id')
+        .eq('asesor_id', userId)
+        .eq('estado', 'pendiente')
+        .limit(1)
+
+      if (pendingError) throw pendingError;
+
+      setHasPending(!!(pending && pending.length > 0))
+      setStats({
+        cobrado: currentBalance + totalGastos,
+        gastos: totalGastos,
+        neto: currentBalance
+      })
+    } catch (err: any) {
+      console.error("Error fetching stats:", err);
+    }
   }, [selectedCarteraId, supabase, userId])
+
+  useEffect(() => {
+    fetchStats()
+  }, [fetchStats])
+
+  // Real-time subscription to catch approval/rejection
+  useEffect(() => {
+    const channel = supabase
+      .channel('cuadres-sync-global')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'cuadres_diarios',
+          filter: `asesor_id=eq.${userId}`
+        },
+        () => {
+          console.log('🔄 Actualizando estado de cuadre (DB)...')
+          fetchStats()
+          router.refresh()
+        }
+      )
+      .on(
+        'broadcast',
+        { event: 'cuadre_updated' },
+        (payload) => {
+          if (payload.payload?.asesor_id === userId) {
+            console.log('🚀 Actualizando estado de cuadre (BC)...')
+            fetchStats()
+            router.refresh()
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [supabase, userId, router, fetchStats])
 
   const hasMovements = stats.cobrado > 0 || stats.gastos > 0;
 
@@ -255,6 +328,7 @@ export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked }
       setLoading(false)
     }
   }
+
 
   return (
     <>
@@ -353,9 +427,24 @@ export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked }
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-slate-950 border-slate-800 text-white">
-                          <SelectItem value="parcial" disabled={isDebtBlocked || isMorningBlocked}>Cuadre Parcial (Ruta)</SelectItem>
-                          <SelectItem value="parcial_mañana" disabled={isDebtBlocked}>Cierre Mañana (Turno 1)</SelectItem>
-                          <SelectItem value="final" disabled={isDebtBlocked || isMorningBlocked}>Cierre del Día (Turno 2)</SelectItem>
+                          <SelectItem 
+                            value="parcial" 
+                            disabled={isDebtBlocked || isMorningBlocked || isNightBlocked || nightDone}
+                          >
+                            Cierre Parcial (Ruta)
+                          </SelectItem>
+                          <SelectItem 
+                            value="parcial_mañana" 
+                            disabled={isDebtBlocked || isNightBlocked || morningDone}
+                          >
+                            Cierre del Primer Turno
+                          </SelectItem>
+                          <SelectItem 
+                            value="final" 
+                            disabled={isDebtBlocked || isMorningBlocked || nightDone || getLimaTime() < tFinTurno1}
+                          >
+                            Cierre del Día
+                          </SelectItem>
                           {isDebtBlocked && <SelectItem value="saldo_pendiente">LIQUIDAR SALDO AYER</SelectItem>}
                         </SelectContent>
                       </Select>

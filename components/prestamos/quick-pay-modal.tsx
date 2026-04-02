@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { DollarSign, AlertCircle, Share2, Loader2, CheckCircle, Lock, CreditCard } from 'lucide-react'
 import { api } from '@/services/api'
 import { toBlob } from 'html-to-image'
+import { cn } from '@/lib/utils'
 
 interface QuickPayModalProps {
     open: boolean
@@ -44,7 +45,7 @@ export function QuickPayModal({
 }: QuickPayModalProps) {
     const [loading, setLoading] = useState(false)
     const [amount, setAmount] = useState('')
-    const [metodoPago, setMetodoPago] = useState('Efectivo')
+    const [metodoPago, setMetodoPago] = useState('')
     const [quota, setQuota] = useState<any>(null)
     const [fetching, setFetching] = useState(false)
     const [result, setResult] = useState<any>(null)
@@ -120,6 +121,7 @@ export function QuickPayModal({
         if (!open) {
             setResult(null)
             setLastPayment(null)
+            setMetodoPago('')
         }
     }, [open])
 
@@ -206,7 +208,10 @@ export function QuickPayModal({
     }
 
     const handlePayment = async () => {
-        if (!quota || !amount || parseFloat(amount) <= 0) return
+        if (!quota || !amount || parseFloat(amount) <= 0 || !metodoPago) {
+            toast.error('Selecciona un método de pago')
+            return
+        }
         setLoading(true)
         try {
             const payAmount = parseFloat(amount)
@@ -258,7 +263,7 @@ export function QuickPayModal({
         onOpenChange(false)
         setResult(null)
         setAmount('')
-        setMetodoPago('Efectivo')
+        setMetodoPago('')
     }
 
     return (
@@ -358,16 +363,36 @@ export function QuickPayModal({
                                                 </div>
                                             </div>
                                             
-                                            <div className="space-y-2 mt-2">
-                                                <Label className="text-slate-300">Método de Pago</Label>
-                                                <select 
-                                                    value={metodoPago}
-                                                    onChange={(e) => setMetodoPago(e.target.value)}
-                                                    className="w-full h-12 px-4 bg-slate-950 border border-slate-700 rounded-xl text-white appearance-none text-sm"
-                                                >
-                                                    <option value="Efectivo">💵 Efectivo</option>
-                                                    <option value="Yape">📱 Yape</option>
-                                                </select>
+                                            <div className="space-y-3 mt-2">
+                                                <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider">Método de Pago</Label>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setMetodoPago('Efectivo')}
+                                                        className={cn(
+                                                            "flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 transition-all duration-200",
+                                                            metodoPago === 'Efectivo' 
+                                                            ? "border-emerald-500 bg-emerald-500/10 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
+                                                            : "border-slate-800 bg-slate-950/50 text-slate-500 hover:border-slate-700 hover:text-slate-400"
+                                                        )}
+                                                    >
+                                                        <span className="text-2xl">💵</span>
+                                                        <span className="font-bold text-xs">Efectivo</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setMetodoPago('Yape')}
+                                                        className={cn(
+                                                            "flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 transition-all duration-200",
+                                                            metodoPago === 'Yape' 
+                                                            ? "border-indigo-500 bg-indigo-500/10 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]" 
+                                                            : "border-slate-800 bg-slate-950/50 text-slate-500 hover:border-slate-700 hover:text-slate-400"
+                                                        )}
+                                                    >
+                                                        <span className="text-2xl">📱</span>
+                                                        <span className="font-bold text-xs">Yape</span>
+                                                    </button>
+                                                </div>
                                             </div>
 
                                             {fullCronograma.filter(c => c.fecha_vencimiento < today && c.estado !== 'pagado').length > 0 && quota?.fecha_vencimiento === today && (
@@ -382,16 +407,34 @@ export function QuickPayModal({
                                     )}
                                 </div>
 
-                                <DialogFooter className="p-6 pt-2 flex flex-col sm:flex-row gap-2">
-                                    <Button variant="ghost" onClick={handleClose} disabled={loading} className="text-slate-400 hover:text-white flex-1">
+                                <DialogFooter className="p-6 pt-2 flex gap-3">
+                                    <Button 
+                                        variant="ghost" 
+                                        onClick={handleClose} 
+                                        disabled={loading} 
+                                        className="text-slate-500 hover:text-white hover:bg-slate-800"
+                                    >
                                         Cancelar
                                     </Button>
                                     <Button 
                                         onClick={handlePayment} 
-                                        disabled={loading || !amount || parseFloat(amount) <= 0}
-                                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex-1 shadow-lg shadow-emerald-900/20"
+                                        disabled={loading || !amount || parseFloat(amount) <= 0 || !metodoPago}
+                                        className={cn(
+                                            "flex-1 h-14 text-lg font-bold shadow-xl transition-all duration-300",
+                                            !metodoPago
+                                            ? "bg-slate-800 text-slate-500 cursor-not-allowed opacity-50"
+                                            : metodoPago === 'Efectivo' 
+                                                ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20 text-white" 
+                                                : "bg-indigo-600 hover:bg-indigo-500 shadow-indigo-900/20 text-white"
+                                        )}
                                     >
-                                        {loading ? <Loader2 className="animate-spin h-4 w-4" /> : 'Confirmar Cobro'}
+                                        {loading ? (
+                                            <Loader2 className="animate-spin h-5 w-5" />
+                                        ) : (
+                                            <div className="flex items-center justify-center gap-2">
+                                                <span>{!metodoPago ? 'Elige Método Pago' : `Confirmar Pago (${metodoPago})`}</span>
+                                            </div>
+                                        )}
                                     </Button>
                                 </DialogFooter>
                             </>

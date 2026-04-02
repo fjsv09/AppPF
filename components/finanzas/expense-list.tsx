@@ -2,10 +2,11 @@
 
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { Receipt, Calendar, Tag, CreditCard, User, History, Camera, ExternalLink, Pencil } from 'lucide-react'
+import { Receipt, Calendar, Tag, CreditCard, User, History, Camera, ExternalLink, Pencil, Loader2 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { PaginationControlled } from '@/components/ui/pagination-controlled'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useTransition, useEffect, type ReactNode } from 'react'
+import { cn } from '@/lib/utils'
 import {
   Table,
   TableBody,
@@ -26,9 +27,10 @@ interface ExpenseListProps {
   expenses: any[]
   onEdit?: (expense: any) => void
   userRole?: string
+  isPending?: boolean
 }
 
-export function ExpenseList({ expenses, onEdit, userRole }: ExpenseListProps) {
+export function ExpenseList({ expenses, onEdit, userRole, isPending }: ExpenseListProps) {
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 10
 
@@ -51,8 +53,16 @@ export function ExpenseList({ expenses, onEdit, userRole }: ExpenseListProps) {
   }
 
   return (
-    <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm overflow-hidden">
-      <CardContent className="p-0">
+    <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm overflow-hidden relative group">
+      {isPending && (
+          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px] z-50 flex items-center justify-center animate-in fade-in duration-300">
+              <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-700/50 shadow-2xl flex flex-col items-center gap-3">
+                  <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sincronizando...</span>
+              </div>
+          </div>
+      )}
+      <CardContent className={cn("p-0 transition-opacity duration-300", isPending ? "opacity-30" : "opacity-100")}>
         {/* Mobile View: Stacked Cards */}
         <div className="md:hidden divide-y divide-slate-800/50">
           {paginatedExpenses.length > 0 ? (
@@ -144,12 +154,12 @@ export function ExpenseList({ expenses, onEdit, userRole }: ExpenseListProps) {
             <TableBody>
               {paginatedExpenses.map((expense) => (
                 <TableRow key={expense.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-                  <TableCell className="text-slate-300 py-2">
+                  <TableCell className="text-slate-300 py-2.5 whitespace-nowrap">
                     <div className="flex flex-col">
-                      <span className="font-medium text-[10px] md:text-xs">
-                        {format(new Date(expense.created_at), 'dd MMM, yy', { locale: es })}
+                      <span className="font-bold text-[11px] text-slate-200">
+                        {format(new Date(expense.created_at), 'dd/MM/yy', { locale: es })}
                       </span>
-                      <span className="text-[9px] text-slate-500 uppercase tracking-tighter">
+                      <span className="text-[9px] text-slate-500 font-medium tracking-tight">
                         {format(new Date(expense.created_at), 'HH:mm', { locale: es })}
                       </span>
                     </div>

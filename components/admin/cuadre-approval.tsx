@@ -54,21 +54,42 @@ export function CuadreApproval({ pendingCuadres: initialCuadres, adminId, global
   // Suscripción en tiempo real para nuevos cuadres
   useEffect(() => {
     const channel = supabase
-      .channel('admin-cuadres-realtime')
+      .channel('cuadres-sync-global')
       .on(
         'postgres_changes',
         {
-          event: '*', // Escuchar inserciones, actualizaciones y eliminaciones
+          event: '*',
           schema: 'public',
           table: 'cuadres_diarios'
         },
         (payload) => {
-          console.log('Cambio detectado en cuadres_diarios:', payload)
-          // Refrescar los datos del servidor (RSC)
+          console.log('🔄 Sincronizando GESTIÓN DE CUADRES (DB):', payload.eventType)
+          if (payload.eventType === 'INSERT') {
+            toast('Nueva solicitud recibida', {
+              description: 'Un asesor ha enviado un nuevo cuadre para revisión.',
+              icon: <Clock className="w-4 h-4 text-blue-400" />,
+              duration: 5000
+            })
+          }
           router.refresh()
         }
       )
-      .subscribe()
+      .on(
+        'broadcast',
+        { event: 'new_cuadre' },
+        (payload) => {
+          console.log('🚀 Sincronizando GESTIÓN DE CUADRES (BC):', payload)
+          toast('Nueva solicitud recibida (BC)', {
+            description: 'Se ha detectado una nueva solicitud de cuadre por canal prioritario.',
+            icon: <Clock className="w-4 h-4 text-blue-400" />,
+            duration: 5000
+          })
+          router.refresh()
+        }
+      )
+      .subscribe((status) => {
+        console.log('Estado suscripción GESTIÓN DE CUADRES:', status)
+      })
 
     return () => {
       supabase.removeChannel(channel)

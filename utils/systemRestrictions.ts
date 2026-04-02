@@ -11,9 +11,9 @@ export interface AccessResult {
 }
 
 export async function checkSystemAccess(
-    supabase: SupabaseClient, 
-    userId: string, 
-    userRole: string, 
+    supabase: SupabaseClient,
+    userId: string,
+    userRole: string,
     action: SystemAction = 'otros'
 ): Promise<AccessResult> {
     // Helper para comparar horas de forma robusta (numérica)
@@ -38,14 +38,14 @@ export async function checkSystemAccess(
         month: '2-digit',
         day: '2-digit'
     });
-    
+
     const parts = formatter.formatToParts(now);
     const day = parts.find(p => p.type === 'day')?.value;
     const month = parts.find(p => p.type === 'month')?.value;
     const year = parts.find(p => p.type === 'year')?.value;
     const hour = parts.find(p => p.type === 'hour')?.value;
     const minute = parts.find(p => p.type === 'minute')?.value;
-    
+
     const todayStr = `${year}-${month}-${day}`;
     const timePart = `${hour}:${minute}`;
 
@@ -90,19 +90,19 @@ export async function checkSystemAccess(
         .from('configuracion_sistema')
         .select('clave, valor')
         .in('clave', [
-            'horario_apertura', 
-            'horario_cierre', 
-            'desbloqueo_hasta', 
+            'horario_apertura',
+            'horario_cierre',
+            'desbloqueo_hasta',
             'horario_fin_turno_1',
             'tiempo_gracia_post_cuadre'
         ]);
-    
+
     const config = configRows?.reduce((acc: any, curr) => {
         acc[curr.clave] = curr.valor;
         return acc;
-    }, { 
-        horario_apertura: '10:00', 
-        horario_cierre: '19:00', 
+    }, {
+        horario_apertura: '10:00',
+        horario_cierre: '19:00',
         horario_fin_turno_1: '13:00',
         tiempo_gracia_post_cuadre: '10'
     });
@@ -110,9 +110,9 @@ export async function checkSystemAccess(
     const isUnlockActive = config.desbloqueo_hasta && new Date(config.desbloqueo_hasta) > now;
     if (isUnlockActive && userRole !== 'admin' && ['solicitud', 'renovacion', 'prestamo'].includes(action)) {
         return {
-             allowed: false,
-             reason: 'El Desbloqueo Temporal activado por el administrador SOLO permite registrar pagos y cuadres.',
-             code: 'TEMPORARY_UNLOCK_RESTRICTION'
+            allowed: false,
+            reason: 'El Desbloqueo Temporal activado por el administrador SOLO permite registrar pagos y cuadres.',
+            code: 'TEMPORARY_UNLOCK_RESTRICTION'
         };
     }
     const isTemporaryUnlocked = isUnlockActive && ['pago', 'cuadre', 'otros'].includes(action);
@@ -141,11 +141,11 @@ export async function checkSystemAccess(
 
     // 7. CUADRE MAÑANA RULE (At the end of Shift 1)
     if (tNow >= tFinTurno1 && (['solicitud', 'renovacion', 'pago', 'prestamo'].includes(action)) && !isTemporaryUnlocked && userRole !== 'admin') {
-        
+
         // a) Calcular saldo real retenido en este momento
         const { data: carteras } = await supabase.from('carteras').select('id').eq('asesor_id', userId);
         const carterIds = carteras?.map((c: any) => c.id) || [];
-        
+
         const { data: accounts } = await supabase
             .from('cuentas_financieras')
             .select('saldo')
@@ -153,32 +153,67 @@ export async function checkSystemAccess(
             .eq('tipo', 'cobranzas');
         const currentBalance = accounts?.reduce((acc: any, c: any) => acc + parseFloat(c.saldo || '0'), 0) || 0;
 
-        // Si el asesor tiene 0 efectivo, no tiene sentido bloquearlo y forzar un Cierre Mañana
-        if (currentBalance > 1.05) {
-            
-            // Verificamos si ya hizo legalmente el Cierre Mañana formal
-            const { data: MorningCuadre } = await supabase
-                .from('cuadres_diarios')
-                .select('created_at')
-                .eq('asesor_id', userId)
-                .eq('fecha', todayStr)
-                .in('tipo_cuadre', ['parcial_mañana', 'final']) // Sólo tipo oficial de cierre
-                .eq('estado', 'aprobado')
-                .order('created_at', { ascending: true })
-                .limit(1)
-                .maybeSingle();
+        // b) Calcular recaudación neta de la mañana (Hoy hasta limite Turno 1)
+        const tFinTurno1ISOString = `${todayStr}T${config.horario_fin_turno_1 || '13:00'}:00-05:00`;
+        const startOfTodayISO = `${todayStr}T00:00:00-05:00`;
 
-            if (!MorningCuadre) {
-                return {
-                    allowed: false,
-                    reason: `Para operar en el turno tarde, debes reportar obligatoriamente la recaudación de hoy haciendo un "Cierre Mañana". (Monto actual retenido: S/ ${currentBalance.toFixed(2)})`,
-                    code: 'MISSING_MORNING_CUADRE'
-                };
-            }
+        // Obtener EL ÚLTIMO cierre oficial (Cierre de Turno o Cierre Final) aprobado hoy
+        const { data: todayCuadres } = await supabase
+            .from('cuadres_diarios')
+            .select('created_at, tipo_cuadre')
+            .eq('asesor_id', userId)
+            .eq('fecha', todayStr)
+            .eq('estado', 'aprobado')
+            .in('tipo_cuadre', ['parcial_mañana', 'final'])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-            // Si ya hizo su cierre de turno y fue aceptado, evaluamos el tiempo de gracia (si no lo ha superado)
-            const timeSinceCuadre = Math.floor((now.getTime() - new Date(MorningCuadre.created_at).getTime()) / 60000);
-            const graceTime = parseInt(config.tiempo_gracia_post_cuadre || '10');
+        const lastOfficial = todayCuadres;
+        
+        // c) Determinar el Checkpoint
+        // El checkpoint es el momento a partir del cual el dinero se considera "de la tarde".
+        // Si no ha hecho cierre oficial todavía, el dinero de la tarde empieza DESPUÉS de su horario límite de turno 1.
+        let checkpointISO = tFinTurno1ISOString;
+        
+        if (lastOfficial && new Date(lastOfficial.created_at).getTime() >= new Date(tFinTurno1ISOString).getTime()) {
+            checkpointISO = lastOfficial.created_at;
+        }
+
+        // d) Calcular la "Recaudación de la Tarde"
+        // Todo ingreso generado estrictamente DESPUÉS del checkpoint.
+        const { data: mvsAfter } = await supabase
+            .from('movimientos_financieros')
+            .select('monto')
+            .in('cartera_id', carterIds)
+            .eq('tipo', 'ingreso')
+            .gt('created_at', checkpointISO);
+        
+        const afternoonIncome = mvsAfter?.reduce((acc, m) => acc + (parseFloat(m.monto) || 0), 0) || 0;
+
+        // e) Calcular el Déficit de la Mañana
+        // Lo que tiene en su bolsillo AHORA, menos lo que pertenece al turno de la tarde.
+        // Lo que quede, es dinero de la mañana (o anterior) que debió ser liquidado.
+        const morningDeficit = Math.max(0, currentBalance - afternoonIncome);
+
+        // f) Validación y Bloqueo
+        // Se bloquea si NUNCA ha hecho un cierre oficial, O si dejó un saldo pendiente de su turno de mañana.
+        if (!lastOfficial || morningDeficit > 1.05) {
+            const reason = !lastOfficial
+                ? `Para operar en el turno tarde, debes realizar obligatoriamente un "Cierre del Primer Turno". (Recaudado a liquidar: S/ ${morningDeficit.toFixed(2)})`
+                : `Tu cierre oficial de mañana fue incompleto. Aún debes liquidar S/ ${morningDeficit.toFixed(2)} que quedó pendiente del primer turno.`;
+
+            return {
+                allowed: false,
+                reason,
+                code: 'MISSING_MORNING_CUADRE'
+            };
+        }
+
+        // g) Tiempo de Gracia
+        if (lastOfficial) {
+            const timeSinceCuadre = Math.floor((now.getTime() - new Date(lastOfficial.created_at).getTime()) / 60000);
+            const graceTime = parseInt(config.tiempo_gracia_post_cuadre || '3');
             if (timeSinceCuadre < graceTime) {
                 return {
                     allowed: false,
@@ -203,13 +238,13 @@ export async function checkSystemAccess(
 
     // 6. NIGHT BLOCK
     if (action !== 'cuadre' && !isTemporaryUnlocked && userRole !== 'admin') {
-         if (tNow >= tCierre) {
+        if (tNow >= tCierre) {
             return {
                 allowed: false,
                 reason: `A partir de las ${config.horario_cierre}, el sistema solo permite realizar el CIERRE FINAL de caja.`,
                 code: 'NIGHT_RESTRICTION'
             };
-         }
+        }
     }
 
 

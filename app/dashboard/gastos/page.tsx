@@ -184,17 +184,6 @@ export default async function GastosPage({ searchParams }: PageProps) {
         advisors={advisors || []}
         userId={user.id}
         userRole={userRole || 'asesor'}
-        filters={
-          <div className="mt-2 text-slate-400">
-            <Suspense fallback={<div className="h-14 bg-slate-900/20 animate-pulse rounded-2xl" />}>
-              <ExpenseFilters 
-                advisors={advisors} 
-                categories={categorias || []} 
-                userRole={userRole || 'asesor'}
-              />
-            </Suspense>
-          </div>
-        }
     />
   )
 }

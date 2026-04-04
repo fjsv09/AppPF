@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Search, ChevronRight, CheckCircle, Smartphone, User, CreditCard, DollarSign, Printer, ArrowRight, FileText, MessageCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { VoucherContent } from '@/components/comunes/voucher-content'
 import { api } from '@/services/api'
 import { Lock, AlertCircle } from 'lucide-react'
 
@@ -18,6 +19,7 @@ interface PaymentWizardProps {
         horario_cierre: string
         desbloqueo_hasta: string
     }
+    onClose?: () => void
 }
 
 interface PaymentResult {
@@ -40,19 +42,20 @@ interface PaymentResult {
     saldo_pendiente_total?: number
 }
 
-export function PaymentWizard({ userRol = 'asesor', systemSchedule }: PaymentWizardProps) {
+export function PaymentWizard({ userRol = 'asesor', systemSchedule, onClose }: PaymentWizardProps) {
     const [step, setStep] = useState(1)
     const [query, setQuery] = useState('')
     const [clients, setClients] = useState<any[]>([])
     const [selectedClient, setSelectedClient] = useState<any>(null)
     const [loans, setLoans] = useState<any[]>([])
     const [selectedLoan, setSelectedLoan] = useState<any>(null)
+    const [historyPayments, setHistoryPayments] = useState<any[]>([])
     const [quotas, setQuotas] = useState<any[]>([])
     const [loading, setLoading] = useState(false)
     const [payingQuota, setPayingQuota] = useState<any>(null)
     const [amount, setAmount] = useState('')
-    const [metodoPago, setMetodoPago] = useState('Efectivo')
-    const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null) // Para voucher
+    const [metodoPago, setMetodoPago] = useState('')
+    const [paymentResult, setPaymentResult] = useState<any>(null) // Para voucher
 
     const supabase = createClient()
     const router = useRouter()
@@ -69,9 +72,18 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule }: PaymentWiz
 
     const apertura = systemSchedule?.horario_apertura || '07:00'
     const cierre = systemSchedule?.horario_cierre || '20:00'
+
+    const timeToMinutes = (timeStr: string) => {
+        const [h, m] = timeStr.split(':').map(Number)
+        return h * 60 + m
+    }
+
+    const tNow = timeToMinutes(currentHourString)
+    const tApertura = timeToMinutes(apertura)
+    const tCierre = timeToMinutes(cierre)
     const desbloqueoHasta = systemSchedule?.desbloqueo_hasta ? new Date(systemSchedule.desbloqueo_hasta) : null
     
-    const isWithinHours = currentHourString >= apertura && currentHourString < cierre
+    const isWithinHours = tNow >= tApertura && tNow < tCierre
     const isTemporaryUnlocked = desbloqueoHasta && now < desbloqueoHasta
     
     // Solo admin se salta el bloqueo de horario
@@ -96,12 +108,28 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule }: PaymentWiz
     const selectLoan = async (loan: any) => {
         setSelectedLoan(loan)
         setStep(3)
-        // Fetch ALL quotas (active and paid) to calculate local stats
-        const { data } = await supabase.from('cronograma_cuotas')
+        // 1. Fetch ALL quotas (active and paid)
+        const { data: qData } = await supabase.from('cronograma_cuotas')
             .select('*')
             .eq('prestamo_id', loan.id)
             .order('numero_cuota', { ascending: true })
-        if (data) setQuotas(data)
+        if (qData) setQuotas(qData)
+
+        // 2. Fetch history payments (for voucher calculations)
+        const { data: hData } = await supabase.from('pagos')
+            .select('*, perfiles(nombre_completo)')
+            .eq('prestamo_id', loan.id)
+            .order('created_at', { ascending: true })
+        if (hData) setHistoryPayments(hData)
+
+        if (qData) {
+            // Lógica de Cuota Inteligente
+            const today = new Date().toLocaleString("en-CA", { timeZone: "America/Lima" }).split(',')[0]
+            const todayQuota = qData.find((c: any) => c.fecha_vencimiento === today && c.estado !== 'pagado')
+            const oldestPending = qData.find((c: any) => c.estado !== 'pagado')
+            const targetQuota = todayQuota || oldestPending
+            if (targetQuota) initiatePayment(targetQuota)
+        }
     }
 
     const initiatePayment = (quota: any) => {
@@ -111,45 +139,59 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule }: PaymentWiz
     }
 
     const confirmPayment = async () => {
-        if (!payingQuota || !amount) return
+        if (!payingQuota || !amount || !selectedLoan) return
         setLoading(true)
 
         try {
-            const apiResult = await api.pagos.registrar({ cuota_id: payingQuota.id, monto: parseFloat(amount), metodo_pago: metodoPago }) as PaymentResult
+            console.log('Confirmando Pago para Préstamo ID:', selectedLoan.id)
             
-            // FORZAR CÁLCULO LOCAL DE MÉTRICAS (Garantiza visualización siempre)
-            // Calculamos estado actualizado con los datos que tenemos en memoria
-            const totalCuotas = quotas.length
-            const prePaid = quotas.filter(q => q.estado === 'pagado').length
+            const apiResult = await api.pagos.registrar({ 
+                cuota_id: payingQuota.id, 
+                monto: parseFloat(amount), 
+                metodo_pago: metodoPago 
+            })
             
-            // Determinamos si la cuota actual se liquidó completamente con este pago
-            const currentQuotaFullPayment = (payingQuota.monto_pagado || 0) + parseFloat(amount) >= payingQuota.monto_cuota - 0.01
-            
-            // Si el backend devolvió cuotas_pagadas (viejo o nuevo), usamos eso como delta, o inferimos 1 si se pagó full
-            const newlyPaid = apiResult.cuotas_pagadas ? apiResult.cuotas_pagadas : (currentQuotaFullPayment ? 1 : 0)
+            // RE-FETCH DATA FROM DB WITH ABSOLUTE CERTAINTY
+            const [qRes, hRes] = await Promise.all([
+                supabase.from('cronograma_cuotas')
+                    .select('*')
+                    .eq('prestamo_id', selectedLoan.id)
+                    .order('numero_cuota', { ascending: true }),
+                supabase.from('pagos')
+                    .select('*, perfiles(nombre_completo)')
+                    .eq('prestamo_id', selectedLoan.id)
+                    .order('created_at', { ascending: true })
+            ])
 
-            const totalPagadas = prePaid + newlyPaid
-            const pendientes = Math.max(0, totalCuotas - totalPagadas)
-            
-            // Calculo aproximado de saldo pendiente total
-            const saldoPendienteTotal = Math.max(0, quotas.reduce((acc, q) => acc + (q.monto_cuota - (q.monto_pagado || 0)), 0) - parseFloat(amount))
+            console.log('Wizard Refetch Results:', { 
+                quotasCount: qRes.data?.length, 
+                historyCount: hRes.data?.length,
+                lastPaymentId: apiResult.pago_id 
+            })
 
-            const finalResult = {
-                ...apiResult,
-                total_cuotas: totalCuotas,
-                total_cuotas_pagadas: totalPagadas,
-                cuotas_pendientes: pendientes,
-                saldo_pendiente_total: saldoPendienteTotal
+            if (qRes.data) setQuotas(qRes.data)
+            if (hRes.data) setHistoryPayments(hRes.data)
+
+            // Buscar el pago específico recién creado en el historial real para el voucher
+            const actualPayment = hRes.data?.find(p => p.id === apiResult.pago_id)
+            
+            if (actualPayment) {
+                setPaymentResult(actualPayment)
+                setStep(4) 
+                toast.success('Pago Registrado Exitosamente')
+            } else {
+                setPaymentResult({
+                    id: apiResult.pago_id,
+                    created_at: new Date().toISOString(),
+                    monto_pagado: parseFloat(amount),
+                    pago_monto: parseFloat(amount),
+                    prestamo_id: selectedLoan.id,
+                    distribucion: apiResult.distribucion || []
+                })
+                setStep(4) 
             }
-
-            console.log('Resultados Voucher (Calculado Localmente):', finalResult)
-
-            // Guardar resultado para mostrar voucher
-            setPaymentResult(finalResult)
-            setStep(4) // Ir al paso del voucher
-            
-            toast.success('Pago Registrado Exitosamente')
         } catch (err: any) {
+            console.error('Wizard Confirm Payment Fatal Error:', err)
             toast.error('Error al registrar pago', { description: err.message })
         } finally {
             setLoading(false)
@@ -185,8 +227,8 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule }: PaymentWiz
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 max-w-2xl mx-auto">
-            {/* Steps Indicator - Premium Progress Bar */}
-            <div className="relative mb-12">
+            {/* Steps Indicator - Premium Progress Bar (Adapted for Mobile) */}
+            <div className="relative mb-10 md:mb-12">
                 <div className="absolute left-0 top-1/2 w-full h-1 bg-slate-800 -z-10 rounded-full" />
                 <div 
                     className={`absolute left-0 top-1/2 h-1 -z-10 rounded-full transition-all duration-500 ${
@@ -203,19 +245,20 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule }: PaymentWiz
                         { id: 4, label: 'Voucher', icon: FileText }
                     ].map((s) => (
                         <div key={s.id} className="flex flex-col items-center gap-2">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-4 transition-all duration-300 ${
+                            <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center border-2 sm:border-4 transition-all duration-300 ${
                                 step >= s.id 
                                 ? step === 4 && s.id === 4
                                     ? 'bg-slate-900 border-emerald-500 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.5)]'
                                     : 'bg-slate-900 border-blue-500 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)]' 
                                 : 'bg-slate-900 border-slate-700 text-slate-600'
                             }`}>
-                                {s.id === 4 && step === 4 ? <CheckCircle className="w-4 h-4" /> : <s.icon className="w-4 h-4" />}
+                                {s.id === 4 && step === 4 ? <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" /> : <s.icon className="w-3 h-3 sm:w-4 sm:h-4" />}
                             </div>
-                            <span className={`text-xs font-bold uppercase tracking-wider ${
+                            <span className={`text-[7px] sm:text-xs font-bold uppercase tracking-wider ${
                                 step >= s.id ? (step === 4 && s.id === 4 ? 'text-emerald-400' : 'text-blue-400') : 'text-slate-600'
                             }`}>
-                                {s.label}
+                                <span className="hidden xs:inline">{s.label}</span>
+                                <span className="xs:hidden">{s.label.charAt(0)}</span>
                             </span>
                         </div>
                     ))}
@@ -228,12 +271,12 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule }: PaymentWiz
                     <div className="relative group">
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl opacity-20 group-hover:opacity-30 blur-xl transition-all" />
                         <div className="relative bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl overflow-hidden shadow-2xl">
-                            <Search className="absolute left-6 top-5 h-6 w-6 text-slate-400" />
+                            <Search className="absolute left-4 xs:left-6 top-4 xs:top-5 h-5 w-5 xs:h-6 xs:w-6 text-slate-400" />
                             <Input
                                 placeholder="Buscar cliente por DNI o Nombre..."
                                 value={query}
                                 onChange={(e) => searchClients(e.target.value)}
-                                className="pl-16 h-16 bg-transparent border-none text-xl text-white placeholder:text-slate-500 focus-visible:ring-0"
+                                className="pl-12 xs:pl-16 h-14 xs:h-16 bg-transparent border-none text-base xs:text-xl text-white placeholder:text-slate-500 focus-visible:ring-0"
                                 autoFocus
                             />
                         </div>
@@ -371,9 +414,10 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule }: PaymentWiz
                                                 <Button 
                                                     size="sm" 
                                                     onClick={() => initiatePayment(quota)} 
-                                                    className="mt-1 h-8 bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white transition-all w-full"
+                                                    disabled={quotas.some(q => q.numero_cuota < quota.numero_cuota && q.estado !== 'pagado')}
+                                                    className="mt-1 h-8 bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white transition-all w-full disabled:opacity-30 disabled:grayscale"
                                                 >
-                                                    Pagar
+                                                    {quotas.some(q => q.numero_cuota < quota.numero_cuota && q.estado !== 'pagado') ? 'Bloqueado' : 'Pagar'}
                                                 </Button>
                                             )}
                                         </div>
@@ -421,38 +465,53 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule }: PaymentWiz
                                         />
                                     </div>
 
-                                    <div className="space-y-2">
-                                        <label className="text-sm text-slate-400 font-medium ml-1 flex items-center gap-2">
-                                            <CreditCard className="w-4 h-4 text-emerald-500" />
-                                            Método de Pago
-                                        </label>
-                                        <select 
-                                            value={metodoPago}
-                                            onChange={(e) => setMetodoPago(e.target.value)}
-                                            className="w-full h-12 px-4 bg-slate-950 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500/50 appearance-none"
-                                        >
-                                            <option value="Efectivo">💵 Efectivo</option>
-                                            <option value="Transferencia">🏦 Transferencia Bancaria</option>
-                                            <option value="Yape">📱 Yape</option>
-                                            <option value="Plin">📱 Plin</option>
-                                        </select>
+                                    <div className="space-y-3">
+                                        <label className="text-slate-300 text-xs font-bold uppercase tracking-wider ml-1">Método de Pago</label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setMetodoPago('Efectivo')}
+                                                className={`flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 transition-all duration-200 ${
+                                                    metodoPago === 'Efectivo' 
+                                                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
+                                                    : "border-slate-800 bg-slate-950/50 text-slate-500 hover:border-slate-700 hover:text-slate-400"
+                                                }`}
+                                            >
+                                                <span className="text-2xl">💵</span>
+                                                <span className="font-bold text-xs">Efectivo</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setMetodoPago('Yape')}
+                                                className={`flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 transition-all duration-200 ${
+                                                    metodoPago === 'Yape' 
+                                                    ? "border-indigo-500 bg-indigo-500/10 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]" 
+                                                    : "border-slate-800 bg-slate-950/50 text-slate-500 hover:border-slate-700 hover:text-slate-400"
+                                                }`}
+                                            >
+                                                <span className="text-2xl">📱</span>
+                                                <span className="font-bold text-xs">Yape</span>
+                                            </button>
+                                        </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 xs:grid-cols-2 gap-3 xs:gap-4">
                                         <Button 
                                             variant="outline" 
-                                            onClick={() => setPayingQuota(null)} 
+                                            onClick={() => onClose ? onClose() : setPayingQuota(null)} 
                                             className="h-12 border-slate-700 bg-transparent hover:bg-slate-800 text-slate-300"
                                         >
                                             Cancelar
                                         </Button>
                                         <Button 
                                             onClick={confirmPayment} 
-                                            disabled={loading || !canPayDueToTime} 
-                                            className={`h-12 font-bold shadow-lg ${
-                                                !canPayDueToTime 
+                                            disabled={loading || !canPayDueToTime || !metodoPago} 
+                                            className={`h-12 font-bold shadow-lg transition-all ${
+                                                !canPayDueToTime || !metodoPago
                                                 ? 'bg-slate-800 text-slate-500 cursor-not-allowed' 
-                                                : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'
+                                                : metodoPago === 'Efectivo'
+                                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'
+                                                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20'
                                             }`}
                                         >
                                             {loading ? (
@@ -461,7 +520,7 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule }: PaymentWiz
                                                     <span>Procesando...</span>
                                                 </div>
                                             ) : (
-                                                !canPayDueToTime ? 'Sistema Cerrado' : 'Confirmar Pago'
+                                                !canPayDueToTime ? 'Sistema Cerrado' : !metodoPago ? 'Elegir Método' : 'Confirmar Pago'
                                             )}
                                         </Button>
                                     </div>
@@ -490,168 +549,67 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule }: PaymentWiz
             {/* Step 4: Voucher */}
             {step === 4 && paymentResult && (
                 <div className="animate-in zoom-in-50 duration-500">
-                    <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-emerald-500/30 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
-                        {/* Background decoration */}
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
-                        <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl -ml-32 -mb-32 pointer-events-none" />
-                        
-                        {/* Header */}
-                        <div className="text-center mb-8 relative">
-                            <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-400 animate-pulse">
-                                <CheckCircle className="w-10 h-10" />
-                            </div>
-                            <h2 className="text-3xl font-bold text-white mb-2">¡Pago Exitoso!</h2>
-                            <p className="text-slate-400">
-                                {new Date().toLocaleDateString('es-PE', { 
-                                    weekday: 'long', 
-                                    year: 'numeric', 
-                                    month: 'long', 
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                })}
-                            </p>
-                        </div>
+                    <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl overflow-hidden shadow-2xl relative">
+                        <VoucherContent 
+                            payment={paymentResult}
+                            loan={selectedLoan}
+                            client={selectedClient}
+                            cronograma={quotas}
+                            allPayments={historyPayments}
+                        />
 
-                        {/* Monto Total */}
-                        <div className="text-center mb-8 py-6 border-y border-slate-800">
-                            <p className="text-slate-500 text-sm font-medium uppercase tracking-wider mb-1">Monto Total Pagado</p>
-                            <p className="text-5xl font-bold text-emerald-400">${parseFloat(amount).toFixed(2)}</p>
-                        </div>
-
-                        {/* Datos del Cliente y Préstamo */}
-                        <div className="grid md:grid-cols-2 gap-4 mb-6">
-                            <div className="bg-slate-800/50 rounded-xl p-4">
-                                <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">Cliente</p>
-                                <p className="text-white font-medium">{selectedClient?.nombres}</p>
-                                <p className="text-slate-400 text-sm font-mono">{selectedClient?.dni}</p>
+                        {/* Acciones del Wizard */}
+                        <div className="p-6 bg-slate-950/50 border-t border-slate-800 space-y-4">
+                            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                                <Button 
+                                    variant="outline" 
+                                    onClick={handleNewPayment}
+                                    className="h-12 border-slate-700 bg-transparent hover:bg-slate-800 text-slate-300"
+                                >
+                                    Nuevo Pago
+                                </Button>
+                                <Button 
+                                    variant="outline"
+                                    onClick={() => {
+                                        router.push('/dashboard/pagos')
+                                        router.refresh()
+                                    }}
+                                    className="h-12 border-slate-700 bg-transparent hover:bg-slate-800 text-slate-300"
+                                >
+                                    <FileText className="w-4 h-4 mr-2" />
+                                    Ver Pagos
+                                </Button>
                             </div>
-                            <div className="bg-slate-800/50 rounded-xl p-4">
-                                <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">Préstamo</p>
-                                <p className="text-white font-medium">${selectedLoan?.monto}</p>
-                                <p className="text-slate-400 text-sm">Cuota #{payingQuota?.numero_cuota}</p>
-                            </div>
-                        </div>
-
-                        {/* Distribución del Pago */}
-                        {paymentResult.distribucion && paymentResult.distribucion.length > 0 && (
-                            <div className="mb-6">
-                                <p className="text-slate-400 text-sm font-bold uppercase tracking-wider mb-3 flex items-center gap-2">
-                                    <ArrowRight className="w-4 h-4" />
-                                    Distribución del Pago
-                                </p>
-                                <div className="space-y-2">
-                                    {paymentResult.distribucion.map((d, idx) => {
-                                        const { text, color } = getTipoLabel(d.tipo)
-                                        return (
-                                            <div 
-                                                key={idx} 
-                                                className="flex justify-between items-center bg-slate-800/50 rounded-lg p-3 border border-slate-700/50"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-white">
-                                                        {d.cuota}
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-white font-medium">Cuota #{d.cuota}</p>
-                                                        <p className={`text-xs ${color}`}>{text}</p>
-                                                    </div>
-                                                </div>
-                                                <p className="text-lg font-bold text-white">${d.monto_aplicado.toFixed(2)}</p>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Desglose Capital/Interés */}
-                        <div className="grid grid-cols-2 gap-4 mb-8">
-                            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-center">
-                                <p className="text-blue-300 text-xs uppercase tracking-wider mb-1">Capital</p>
-                                <p className="text-2xl font-bold text-blue-400">${paymentResult.capital_cobrado.toFixed(2)}</p>
-                            </div>
-                            <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4 text-center">
-                                <p className="text-purple-300 text-xs uppercase tracking-wider mb-1">Interés</p>
-                                <p className="text-2xl font-bold text-purple-400">${paymentResult.interes_cobrado.toFixed(2)}</p>
-                            </div>
-                        </div>
-
-                        {/* Resumen de Deuda Actualizada */}
-                        {paymentResult.cuotas_pendientes !== undefined && (
-                            <div className="bg-slate-800/50 rounded-xl p-4 mb-6 border border-slate-700/50">
-                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Estado Actual del Préstamo</p>
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="text-slate-300">Progreso:</span>
-                                    <span className="text-emerald-400 font-bold">
-                                        Pago {paymentResult.total_cuotas_pagadas} de {paymentResult.total_cuotas} cuotas
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-center text-rose-400">
-                                    <span>Debe aún:</span>
-                                    <span className="font-bold">
-                                        {paymentResult.cuotas_pendientes} cuota{paymentResult.cuotas_pendientes !== 1 ? 's' : ''}
-                                        {paymentResult.saldo_pendiente_total !== undefined && paymentResult.saldo_pendiente_total > 0 && 
-                                            ` ($${paymentResult.saldo_pendiente_total.toFixed(2)})`
-                                        }
-                                    </span>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Resumen */}
-                        <div className="bg-slate-800/30 rounded-xl p-4 mb-8 text-sm">
-                            <div className="flex justify-between py-1">
-                                <span className="text-slate-400">Cuotas Afectadas:</span>
-                                <span className="text-white font-medium">{paymentResult.cuotas_pagadas + (paymentResult.cuotas_abonadas || 0)}</span>
-                            </div>
-                            {paymentResult.monto_sobrante > 0.01 && (
-                                <div className="flex justify-between py-1 text-orange-400">
-                                    <span>Monto Sobrante:</span>
-                                    <span className="font-medium">${paymentResult.monto_sobrante.toFixed(2)}</span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Acciones */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <Button 
-                                variant="outline" 
-                                onClick={handleNewPayment}
-                                className="h-12 border-slate-700 bg-transparent hover:bg-slate-800 text-slate-300"
-                            >
-                                Nuevo Pago
-                            </Button>
-                            <Button 
-                                variant="outline"
-                                onClick={() => {
-                                    router.push('/dashboard/pagos')
-                                    router.refresh()
-                                }}
-                                className="h-12 border-slate-700 bg-transparent hover:bg-slate-800 text-slate-300"
-                            >
-                                <FileText className="w-4 h-4 mr-2" />
-                                Ver Pagos
-                            </Button>
                             
                             {/* BOTÓN WHATSAPP DESTACADO */}
                             <Button 
                                 onClick={() => {
                                     const mensaje = encodeURIComponent(
-                                        `✅ *COMPROBANTE DE PAGO*\n` +
-                                        `Hola *${selectedClient?.nombres}*, hemos registrado tu pago correctamente.\n\n` +
-                                        `💰 *Monto:* $${parseFloat(amount).toFixed(2)}\n` +
-                                        `🔢 *Cuota:* #${payingQuota?.numero_cuota}\n` +
-                                        `📉 *Saldo Restante:* $${paymentResult.saldo_pendiente_total?.toFixed(2) || '0.00'}\n\n` +
-                                        `¡Gracias por tu puntualidad!`
+                                        `💸 *COMPROBANTE DE PAGO*\n\n` +
+                                        `👤 *Cliente:* ${selectedClient.nombres}\n` +
+                                        `💰 *Monto:* S/ ${parseFloat(amount).toFixed(2)}\n` +
+                                        `✅ *Estado:* Pago Registrado\n\n` +
+                                        `¡Gracias por su puntualidad!`
                                     )
-                                    window.open(`https://wa.me/${selectedClient?.telefono}?text=${mensaje}`, '_blank')
+                                    window.open(`https://wa.me/51${selectedClient.telefono || ''}?text=${mensaje}`, '_blank')
                                 }}
-                                className="h-14 col-span-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-lg shadow-lg shadow-emerald-900/30 group mt-2"
+                                className="w-full h-14 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-lg rounded-2xl shadow-lg shadow-emerald-900/40 group transition-all"
                             >
                                 <MessageCircle className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform" />
                                 Enviar Recibo por WhatsApp
                             </Button>
+
+                            {onClose && (
+                                <div className="mt-4 border-t border-slate-800 pt-4">
+                                    <Button 
+                                        onClick={onClose}
+                                        className="w-full h-12 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl border border-slate-700"
+                                    >
+                                        <ArrowRight className="w-4 h-4 mr-2" />
+                                        Finalizar y Cerrar
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

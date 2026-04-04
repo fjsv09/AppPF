@@ -12,6 +12,7 @@ const SidebarContext = createContext<SidebarContextType | undefined>(undefined)
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
 
   // Load preference from localStorage on mount
   useEffect(() => {
@@ -19,12 +20,15 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     if (saved !== null) {
       setIsCollapsed(saved === 'true')
     }
+    setIsMounted(true)
   }, [])
 
-  // Save preference to localStorage when it changes
+  // Save preference to localStorage ONLY when it's already mounted to avoid reset on start
   useEffect(() => {
-    localStorage.setItem('sidebar-collapsed', String(isCollapsed))
-  }, [isCollapsed])
+    if (isMounted) {
+      localStorage.setItem('sidebar-collapsed', String(isCollapsed))
+    }
+  }, [isCollapsed, isMounted])
 
   const toggleSidebar = () => setIsCollapsed(prev => !prev)
 

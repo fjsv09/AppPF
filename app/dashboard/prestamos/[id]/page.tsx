@@ -190,7 +190,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
     const esFlujoRefinanciacionAdmin = esCandidatoRefinanciacionAdmin || esRenovacionParaleloAdmin;
 
     const tieneSolicitudPendiente = !!solicitudRenovacion
-    const puedeRenovar = userRole && (
+    const puedeRenovar = userRole && !prestamo.clientes?.bloqueado_renovacion && (
         (userRole === 'admin') || 
         (userRole === 'asesor' && !esRefinanciado && !esProductoDeRefinanciamiento) ||
         (userRole === 'supervisor' && !esProductoDeRefinanciamiento)
@@ -224,13 +224,25 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
     return (
         <div className="page-container max-w-full overflow-x-hidden">
             {esProductoDeRefinanciamiento && (
-                <div className="bg-amber-900/30 border border-amber-500/30 rounded-xl p-3 md:p-4 flex items-center gap-3 md:gap-4 shadow-lg mx-0.5">
+                <div className="bg-amber-900/30 border border-amber-500/30 rounded-xl p-3 md:p-4 flex items-center gap-3 md:gap-4 shadow-lg mx-0.5 mb-4">
                     <div className="bg-amber-500/20 p-2 rounded-full shrink-0">
                         <AlertTriangle className="h-5 w-5 md:h-6 md:w-6 text-amber-500" />
                     </div>
                     <div>
                         <h4 className="text-amber-400 font-bold text-sm md:text-base tracking-tight leading-tight">Préstamo Refinanciado</h4>
                         <p className="text-amber-200/70 text-[10px] md:text-sm mt-0.5 leading-snug">Este préstamo es el resultado de una refinanciación directa debido a mora o atrasos.</p>
+                    </div>
+                </div>
+            )}
+
+            {prestamo.clientes?.bloqueado_renovacion && (
+                <div className="bg-amber-900/30 border border-amber-500/30 rounded-xl p-3 md:p-4 flex items-center gap-3 md:gap-4 shadow-lg mx-0.5 mb-4">
+                    <div className="bg-amber-500/20 p-2 rounded-full shrink-0">
+                        <Lock className="h-5 w-5 md:h-6 md:w-6 text-amber-500" />
+                    </div>
+                    <div>
+                        <h4 className="text-amber-400 font-bold text-sm md:text-base tracking-tight leading-tight">Cliente Bloqueado para Renovación</h4>
+                        <p className="text-amber-200/70 text-[10px] md:text-sm mt-0.5 leading-snug">Este cliente ha sido bloqueado y no podrá solicitar nuevas renovaciones hasta que un administrador lo desbloquee.</p>
                     </div>
                 </div>
             )}

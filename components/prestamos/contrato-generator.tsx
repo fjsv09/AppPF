@@ -1,11 +1,14 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { toPng } from 'html-to-image'
+import { jsPDF } from 'jspdf'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { FileText, Printer, Scale, ShieldCheck, Files, ScrollText, TableProperties, ChevronLeft, ArrowRight } from 'lucide-react'
+import { FileText, Printer, Scale, ShieldCheck, Files, ScrollText, TableProperties, ChevronLeft, ArrowRight, Share2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { toast } from "sonner"
 
 interface ContratoGeneratorProps {
     prestamo: any
@@ -100,6 +103,87 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
         }, 500)
     }
 
+    const handleShare = async (e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault()
+            e.stopPropagation()
+        }
+        
+        const content = contentRef.current
+        if (!content) return
+
+        // Step 1: Find all pages (they have the .page-break class)
+        const pages = content.querySelectorAll<HTMLElement>('.page-break')
+        if (pages.length === 0) return
+
+        const docTitle = docMode === 'completo' ? 'Contrato Completo' : docMode === 'contrato' ? 'Contrato' : 'Cronograma'
+        const title = `${docTitle} - ${prestamo.clientes?.nombres}`
+        const fileName = `${docTitle.replace(/\s+/g, '_')}_${prestamo.clientes?.nombres.replace(/\s+/g, '_')}.pdf`
+        
+        try {
+            toast.loading("Generando PDF profesional...", { id: "share-pdf" })
+            
+            // Create jsPDF Instance (A4, mm)
+            const pdf = new jsPDF('p', 'mm', 'a4')
+            const pdfWidth = pdf.internal.pageSize.getWidth()
+            const pdfHeight = pdf.internal.pageSize.getHeight()
+
+            for (let i = 0; i < pages.length; i++) {
+                const page = pages[i]
+                
+                // Capture Page as Image (Better fidelity than direct HTML printing sometimes)
+                const dataUrl = await toPng(page, {
+                    backgroundColor: '#fff',
+                    pixelRatio: 2
+                })
+
+                if (i > 0) pdf.addPage()
+
+                // Calculate image dimensions to fit perfectly within A4
+                // Usually documents are already designed for that, but we ensure scaling
+                pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST')
+            }
+
+            // Step 3: Convert to Blob
+            const pdfBlob = pdf.output('blob')
+            const file = new File([pdfBlob], fileName, { type: 'application/pdf' })
+
+            // Share using Web Share API (PDF Support is high on mobile)
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title,
+                    text: `Hola ${prestamo.clientes?.nombres}, aquí tienes tu ${docTitle.toLowerCase()} oficial de ProFinanzas en PDF.`
+                })
+                toast.success("PDF Enviado", { id: "share-pdf" })
+                return
+            } else {
+                // If sharing not supported, we can download it as fallback
+                const link = document.createElement('a')
+                link.href = URL.createObjectURL(pdfBlob)
+                link.download = fileName
+                link.click()
+                toast.success("PDF Descargado", { id: "share-pdf" })
+                return
+            }
+        } catch (err) {
+            if ((err as Error).name !== 'AbortError') {
+                console.error("Error generating/sharing PDF:", err)
+                toast.error("Error al generar PDF", { description: (err as Error).message, id: "share-pdf" })
+            } else {
+                 toast.dismiss("share-pdf")
+                 return
+            }
+        }
+        
+        // Final fallback to WhatsApp (Link only)
+        const text = `Hola ${prestamo.clientes?.nombres}, aquí tienes tu ${docTitle.toLowerCase()} de ProFinanzas.`
+        const url = window.location.href
+        const message = encodeURIComponent(`${text}\n\nPuedes verlo aquí: ${url}`)
+        const phone = prestamo.clientes?.telefono ? `51${prestamo.clientes.telefono}` : ''
+        window.open(`https://wa.me/${phone}?text=${message}`, '_blank')
+    }
+
     // Calculations
     const totalPagar = prestamo.monto * (1 + (prestamo.interes / 100))
     const fechaInicio = prestamo.fecha_inicio ? new Date(prestamo.fecha_inicio + 'T00:00:00') : new Date()
@@ -172,7 +256,21 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                                             <p className="text-[10px] text-slate-500 font-medium">Contrato Legal + Cronograma (2 Páginas)</p>
                                         </div>
                                     </div>
-                                    <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-blue-400 transition-all group-hover:translate-x-1" />
+                                    <div className="flex gap-2 items-center">
+                                        <div 
+                                            onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                setDocMode('completo'); 
+                                                setViewMode('preview');
+                                                setTimeout(() => handleShare(), 500); 
+                                            }}
+                                            className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-all"
+                                            title="Compartir PDF"
+                                        >
+                                            <Share2 className="w-4 h-4" />
+                                        </div>
+                                        <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-blue-400 transition-all group-hover:translate-x-1" />
+                                    </div>
                                 </div>
                             </Button>
 
@@ -192,7 +290,21 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                                             <p className="text-[10px] text-slate-500 font-medium">Documento legal firmado (1 Página)</p>
                                         </div>
                                     </div>
-                                    <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-indigo-400 transition-all group-hover:translate-x-1" />
+                                    <div className="flex gap-2 items-center">
+                                        <div 
+                                            onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                setDocMode('contrato'); 
+                                                setViewMode('preview');
+                                                setTimeout(() => handleShare(), 500); 
+                                            }}
+                                            className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-all"
+                                            title="Compartir PDF"
+                                        >
+                                            <Share2 className="w-3.5 h-3.5" />
+                                        </div>
+                                        <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-indigo-400 transition-all group-hover:translate-x-1" />
+                                    </div>
                                 </div>
                             </Button>
 
@@ -212,7 +324,21 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                                             <p className="text-[10px] text-slate-500 font-medium">Cargo de contrato y fechas de pago (1 Página)</p>
                                         </div>
                                     </div>
-                                    <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-emerald-400 transition-all group-hover:translate-x-1" />
+                                    <div className="flex gap-2 items-center">
+                                        <div 
+                                            onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                setDocMode('cronograma'); 
+                                                setViewMode('preview');
+                                                setTimeout(() => handleShare(), 500); 
+                                            }}
+                                            className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-all"
+                                            title="Compartir PDF"
+                                        >
+                                            <Share2 className="w-3.5 h-3.5" />
+                                        </div>
+                                        <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-emerald-400 transition-all group-hover:translate-x-1" />
+                                    </div>
                                 </div>
                             </Button>
                         </div>
@@ -232,9 +358,14 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                                     {docMode === 'completo' ? 'Contrato Completo' : docMode === 'contrato' ? 'Contrato Legal' : 'Cronograma / Cargo'}
                                 </h3>
                             </div>
-                            <div className="flex gap-2">
+                             <div className="flex gap-2">
                                 <Button variant="outline" size="sm" onClick={() => setOpen(false)} className="border-slate-700 text-slate-300 hover:bg-slate-800 bg-transparent h-8">
                                     Cerrar
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={handleShare} className="border-emerald-700/50 text-emerald-500 hover:bg-emerald-900/20 bg-emerald-500/10 h-8 font-bold gap-2">
+                                    <Share2 className="w-3.5 h-3.5" />
+                                    <span className="hidden sm:inline">Compartir PDF</span>
+                                    <span className="sm:hidden">Compartir</span>
                                 </Button>
                                 <Button size="sm" onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 font-bold h-8 px-4 shadow-lg shadow-blue-900/40">
                                     <Printer className="w-4 h-4" />
@@ -243,23 +374,29 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                             </div>
                         </div>
 
-                        {/* Scrollable Content Preview */}
                         <div className="flex-1 overflow-y-auto bg-slate-950 p-4 md:p-12 flex justify-center items-start">
                             <div 
                                 ref={contentRef} 
-                                className="bg-white shadow-[0_20px_50px_rgba(0,0,0,0.5)] p-[12mm] md:p-[20mm] h-fit" 
+                                className="bg-white shadow-[0_20px_50px_rgba(0,0,0,0.5)] h-fit" 
                                 style={{ 
                                     width: '210mm', 
                                     minHeight: '297mm', 
                                     backgroundColor: 'white', 
                                     ...styles.container,
-                                    color: 'black'
+                                    color: 'black',
+                                    padding: '0' // Remove parent padding
                                 }}
                             >
                                 
                                 {/* ---------------- PAGE 1: CONTRATO LEGAL ---------------- */}
                                 {(docMode === 'completo' || docMode === 'contrato') && (
-                                    <div className="page-break" style={{ marginBottom: docMode === 'completo' ? '50px' : '0' }}>
+                                    <div className="page-break" style={{ 
+                                        marginBottom: docMode === 'completo' ? '50px' : '0',
+                                        padding: '15mm',
+                                        minHeight: '297mm',
+                                        backgroundColor: 'white',
+                                        boxSizing: 'border-box'
+                                    }}>
                                         {/* Header */}
                                         <div style={styles.header}>
                                             <div style={styles.headerGroup}>
@@ -333,7 +470,13 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
 
                                 {/* ---------------- PAGE 2: CARGO / CRONOGRAMA ---------------- */}
                                 {(docMode === 'completo' || docMode === 'cronograma') && (
-                                    <div style={{ pageBreakBefore: docMode === 'completo' ? 'always' : 'auto' }} className="page-break">
+                                    <div style={{ 
+                                        pageBreakBefore: docMode === 'completo' ? 'always' : 'auto',
+                                        padding: '15mm',
+                                        minHeight: '297mm',
+                                        backgroundColor: 'white',
+                                        boxSizing: 'border-box'
+                                    }} className="page-break">
                                         {/* Header Repeated */}
                                         <div style={styles.header}>
                                             <div style={styles.headerGroup}>

@@ -41,7 +41,7 @@ export async function PATCH(
             return NextResponse.json({ error: 'Solicitud no encontrada' }, { status: 404 })
         }
 
-        if (solicitud.estado_solicitud !== 'pendiente_supervision') {
+        if (!['pendiente_supervision', 'pre_aprobado'].includes(solicitud.estado_solicitud)) {
             return NextResponse.json({ 
                 error: `No se puede observar una solicitud en estado "${solicitud.estado_solicitud}"` 
             }, { status: 400 })

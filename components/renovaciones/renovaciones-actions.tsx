@@ -47,7 +47,7 @@ export function RenovacionesActions({ solicitud, userRole, userId, cuentasAdmin 
                 }
             } else if (actionDialog === 'aprobar') {
                 if (!cuentaOrigenId && cuentasAdmin && cuentasAdmin.length > 0) {
-                    throw new Error('Debe seleccionar una cuenta de origen (Renovaciones).')
+                    throw new Error('Debe seleccionar una cuenta para el desembolso.')
                 }
                 body.cuentaOrigenId = cuentaOrigenId
             }
@@ -239,9 +239,9 @@ export function RenovacionesActions({ solicitud, userRole, userId, cuentasAdmin 
                             {cuentasAdmin && cuentasAdmin.length > 0 ? (
                                 <div className="space-y-2 p-3 bg-slate-950/50 border border-slate-800 rounded-lg text-left">
                                     <label className="text-xs font-semibold text-slate-400 uppercase">
-                                        Seleccionar cuenta origen (Renovaciones): <span className="text-rose-500">*</span>
+                                        Seleccionar cuenta de desembolso (Salida de dinero): <span className="text-rose-500">*</span>
                                     </label>
-                                    <Select value={cuentaOrigenId} onValueChange={setCuentaOrigenId}>
+                                    <Select value={cuentaOrigenId} onValueChange={setCuentaOrigenId} required>
                                         <SelectTrigger className="w-full bg-slate-900 border-slate-700 text-slate-200">
                                             <SelectValue placeholder="Seleccione una cuenta" />
                                         </SelectTrigger>

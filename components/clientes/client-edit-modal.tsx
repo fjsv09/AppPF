@@ -44,6 +44,7 @@ const clientSchema = z.object({
 interface ClientEditModalProps {
   cliente: any
   isOpen: boolean
+  userRol?: 'admin' | 'supervisor' | 'asesor'
   onClose: () => void
   onSuccess: (updatedClient: any) => void
 }
@@ -59,7 +60,8 @@ const DOCUMENTOS_REQUERIDOS = [
   { key: 'filtro_sentinel', label: 'Reporte Sentinel' }
 ]
 
-export function ClientEditModal({ cliente, isOpen, onClose, onSuccess }: ClientEditModalProps) {
+export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }: ClientEditModalProps) {
+  const isSuper = userRol === 'supervisor'
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -199,7 +201,7 @@ export function ClientEditModal({ cliente, isOpen, onClose, onSuccess }: ClientE
                             {...register("nombres")}
                             className="bg-slate-900 border-slate-800 focus:border-blue-500/50"
                             placeholder="Nombre del cliente"
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || isSuper}
                         />
                         {errors.nombres && <p className="text-[10px] text-red-400">{errors.nombres.message as string}</p>}
                     </div>
@@ -210,7 +212,7 @@ export function ClientEditModal({ cliente, isOpen, onClose, onSuccess }: ClientE
                                 {...register("dni")}
                                 className="bg-slate-900 border-slate-800 focus:border-blue-500/50"
                                 placeholder="DNI"
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || isSuper}
                             />
                             {errors.dni && <p className="text-[10px] text-red-400">{errors.dni.message as string}</p>}
                         </div>
@@ -275,8 +277,9 @@ export function ClientEditModal({ cliente, isOpen, onClose, onSuccess }: ClientE
                         <Select 
                             defaultValue={cliente?.estado || "activo"}
                             onValueChange={(val: any) => setValue("estado", val)}
+                            disabled={isSubmitting || isSuper}
                         >
-                            <SelectTrigger className="bg-slate-900 border-slate-800">
+                            <SelectTrigger className="bg-slate-900 border-slate-800 h-10">
                                 <SelectValue placeholder="Estado del cliente" />
                             </SelectTrigger>
                             <SelectContent className="bg-slate-900 border-slate-800">
@@ -290,8 +293,9 @@ export function ClientEditModal({ cliente, isOpen, onClose, onSuccess }: ClientE
                         <Select 
                             value={String(cliente?.excepcion_voucher || false)}
                             onValueChange={(val) => setValue("excepcion_voucher", val === "true")}
+                            disabled={isSubmitting || isSuper}
                         >
-                            <SelectTrigger className="bg-slate-900 border-slate-800">
+                            <SelectTrigger className="bg-slate-900 border-slate-800 h-10">
                                 <SelectValue placeholder="¿Exento de recibo?" />
                             </SelectTrigger>
                             <SelectContent className="bg-slate-900 border-slate-800">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { MetasProgress } from '@/components/metas/metas-progress'
 import { Users, ChevronDown, User } from 'lucide-react'
 
@@ -13,6 +13,23 @@ interface MetasPageClientProps {
 export function MetasPageClient({ asesores, defaultUserId, userRole }: MetasPageClientProps) {
   const [selectedAsesorId, setSelectedAsesorId] = useState<string>(asesores[0]?.id || defaultUserId)
   const [isOpen, setIsOpen] = useState(false)
+  const [isLoaded, setIsLoaded] = useState(false)
+
+  // Load saved advisor on mount
+  useEffect(() => {
+    const savedId = localStorage.getItem('metas-selected-asesor')
+    if (savedId && asesores.some(a => a.id === savedId)) {
+      setSelectedAsesorId(savedId)
+    }
+    setIsLoaded(true)
+  }, [asesores])
+
+  // Save advisor on change
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem('metas-selected-asesor', selectedAsesorId)
+    }
+  }, [selectedAsesorId, isLoaded])
 
   const selectedAsesor = asesores.find(a => a.id === selectedAsesorId)
 

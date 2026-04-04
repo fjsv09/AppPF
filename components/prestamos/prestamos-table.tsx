@@ -215,6 +215,10 @@ export function PrestamosTable({
         const mgmt = loanManagementMap[clienteId]
         if (!mgmt) return false
 
+        // 0. RULE: Admin Blocked Client
+        const isClientBlocked = !!prestamo.clientes?.bloqueado_renovacion
+        if (isClientBlocked) return true // Let it be true for rendering, handle visual lock later
+
         // 1. FUNDAMENTAL DISQUALIFIERS (Must not have pending request)
         const tieneSolicitudPendiente = prestamoIdsConSolicitudPendiente.includes(prestamo.id)
         if (tieneSolicitudPendiente) return false
@@ -1419,18 +1423,26 @@ export function PrestamosTable({
                                                                         <Button 
                                                                             variant={isAdminDirectRefinance ? "default" : "ghost"}
                                                                             size="icon" 
-                                                                            disabled={!canRequestDueToTime || isBlockedByCuadre}
+                                                                            disabled={!canRequestDueToTime || isBlockedByCuadre || !!prestamo.clientes?.bloqueado_renovacion}
                                                                             className={cn(
                                                                                 "h-[31px] w-[31px] rounded-lg transition-all flex items-center justify-center shrink-0",
-                                                                                (!canRequestDueToTime || isBlockedByCuadre) ? "opacity-40 grayscale pointer-events-none bg-slate-800/50" :
+                                                                                (!canRequestDueToTime || isBlockedByCuadre || !!prestamo.clientes?.bloqueado_renovacion) ? "opacity-40 grayscale pointer-events-none bg-slate-800/50" :
                                                                                 isAdminDirectRefinance 
                                                                                     ? "bg-amber-500 hover:bg-amber-600 text-white shadow-sm border border-amber-400" 
                                                                                     : "text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50"
                                                                             )}
                                                                             onClick={(e) => e.stopPropagation()}
-                                                                            title={isBlockedByCuadre ? 'Bloqueado por cuadre pendiente' : userRol === 'supervisor' ? 'Ver Evaluación' : (isAdminDirectRefinance ? 'Refinanciar' : 'Renovar')}
+                                                                            title={
+                                                                                !!prestamo.clientes?.bloqueado_renovacion ? 'Cliente Bloqueado para Renovación' :
+                                                                                isBlockedByCuadre ? 'Bloqueado por cuadre pendiente' : 
+                                                                                userRol === 'supervisor' ? 'Ver Evaluación' : 
+                                                                                (isAdminDirectRefinance ? 'Refinanciar' : 'Renovar')
+                                                                            }
                                                                         >
-                                                                            {isBlockedByCuadre ? <Lock className="w-3.5 h-3.5 text-rose-500" /> : <RotateCcw className="w-3.5 h-3.5" />} 
+                                                                            { (isBlockedByCuadre || !!prestamo.clientes?.bloqueado_renovacion) ? 
+                                                                                <Lock className={cn("w-3.5 h-3.5", !!prestamo.clientes?.bloqueado_renovacion ? "text-amber-500" : "text-rose-500")} /> : 
+                                                                                <RotateCcw className="w-3.5 h-3.5" />
+                                                                            } 
                                                                         </Button>
                                                                     }
                                                                 />
@@ -1515,8 +1527,8 @@ export function PrestamosTable({
                                                                     handleOpenAsignarTarea(prestamo, e)
                                                                 }}
                                                             >
-                                                                <ClipboardList className="w-3.5 h-3.5 mr-2 text-slate-500" />
-                                                                Asignar Tarea
+                                                                <ClipboardList className="w-3.5 h-3.5 mr-2 text-amber-500" />
+                                                                Asignar Gestión
                                                             </DropdownMenuItem>
                                                          )}
                                                         <DropdownMenuItem 
@@ -1908,17 +1920,25 @@ export function PrestamosTable({
                                                             <Button 
                                                                 variant={isAdminDirectRefinance ? "default" : "ghost"}
                                                                 size="icon" 
-                                                                disabled={!canRequestDueToTime || isBlockedByCuadre}
+                                                                disabled={!canRequestDueToTime || isBlockedByCuadre || !!prestamo.clientes?.bloqueado_renovacion}
                                                                className={cn(
                                                                    "h-full w-full p-0 shrink-0 rounded-lg transition-all flex items-center justify-center border font-bold",
-                                                                   (!canRequestDueToTime || isBlockedByCuadre) ? "opacity-40 grayscale pointer-events-none bg-slate-800/50 border-slate-700/50" :
+                                                                   (!canRequestDueToTime || isBlockedByCuadre || !!prestamo.clientes?.bloqueado_renovacion) ? "opacity-40 grayscale pointer-events-none bg-slate-800/50 border-slate-700/50" :
                                                                    isAdminDirectRefinance 
                                                                        ? "bg-amber-500/80 hover:bg-amber-600 text-white border-amber-400" 
                                                                        : "text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50"
                                                                )}
-                                                               title={isBlockedByCuadre ? 'Bloqueado por cuadre pendiente' : userRol === 'supervisor' ? 'Ver Evaluación' : (isAdminDirectRefinance ? 'Refinanciar' : 'Renovar')}
+                                                               title={
+                                                                   !!prestamo.clientes?.bloqueado_renovacion ? 'Cliente Bloqueado para Renovación' :
+                                                                   isBlockedByCuadre ? 'Bloqueado por cuadre pendiente' : 
+                                                                   userRol === 'supervisor' ? 'Ver Evaluación' : 
+                                                                   (isAdminDirectRefinance ? 'Refinanciar' : 'Renovar')
+                                                               }
                                                            >
-                                                               {isBlockedByCuadre ? <Lock className="w-4 h-4 text-rose-500" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                                                               { (isBlockedByCuadre || !!prestamo.clientes?.bloqueado_renovacion) ? 
+                                                                   <Lock className={cn("w-4 h-4", !!prestamo.clientes?.bloqueado_renovacion ? "text-amber-500" : "text-rose-500")} /> : 
+                                                                   <RotateCcw className="w-3.5 h-3.5" />
+                                                               }
                                                            </Button>
                                                         }
                                                     />
@@ -1950,18 +1970,7 @@ export function PrestamosTable({
                                     )}
 
 
-                                    {/* Asignar Tarea - Solo Admin en PC */}
-                                    {userRol === 'admin' && (
-                                        <Button 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            className="h-8 w-8 p-0 shrink-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-amber-400 hover:bg-amber-900/40 transition-all font-bold"
-                                            onClick={(e) => handleOpenAsignarTarea(prestamo, e)}
-                                            title="Asignar Tarea"
-                                        >
-                                            <ClipboardList className="w-3.5 h-3.5" />
-                                        </Button>
-                                    )}
+
 
                                     {/* Dropdown Menu */}
                                     <DropdownMenu>
@@ -1982,6 +1991,18 @@ export function PrestamosTable({
                                                 <MessageSquare className="w-3.5 h-3.5 mr-2" />
                                                 Registrar Gestión
                                             </DropdownMenuItem>
+
+                                            {userRol === 'admin' && (
+                                                <DropdownMenuItem 
+                                                    className="hover:bg-slate-800 cursor-pointer text-xs text-amber-500 font-bold"
+                                                    onClick={(e) => {
+                                                        handleOpenAsignarTarea(prestamo, e)
+                                                    }}
+                                                >
+                                                    <ClipboardList className="w-3.5 h-3.5 mr-2" />
+                                                    Asignar Gestión
+                                                </DropdownMenuItem>
+                                            )}
                                             <DropdownMenuItem 
                                                 className="hover:bg-slate-800 cursor-pointer text-xs"
                                                 onClick={(e) => {

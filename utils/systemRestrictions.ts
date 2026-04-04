@@ -64,7 +64,7 @@ export async function checkSystemAccess(
         .maybeSingle();
 
     if (isSunday || holiday) {
-        if (userRole === 'admin') {
+        if (userRole === 'admin' || userRole === 'supervisor') {
             console.log(`[SYSTEM ACCESS] Role ${userRole} allowed on ${isSunday ? 'Sunday' : 'Holiday'}`);
         } else {
             // Check for Temporary Unlock
@@ -108,7 +108,7 @@ export async function checkSystemAccess(
     });
 
     const isUnlockActive = config.desbloqueo_hasta && new Date(config.desbloqueo_hasta) > now;
-    if (isUnlockActive && userRole !== 'admin' && ['solicitud', 'renovacion', 'prestamo'].includes(action)) {
+    if (isUnlockActive && userRole !== 'admin' && userRole !== 'supervisor' && ['solicitud', 'renovacion', 'prestamo'].includes(action)) {
         return {
             allowed: false,
             reason: 'El Desbloqueo Temporal activado por el administrador SOLO permite registrar pagos y cuadres.',
@@ -140,7 +140,7 @@ export async function checkSystemAccess(
     }
 
     // 7. CUADRE MAÑANA RULE (At the end of Shift 1)
-    if (tNow >= tFinTurno1 && (['solicitud', 'renovacion', 'pago', 'prestamo'].includes(action)) && !isTemporaryUnlocked && userRole !== 'admin') {
+    if (tNow >= tFinTurno1 && (['solicitud', 'renovacion', 'pago', 'prestamo'].includes(action)) && !isTemporaryUnlocked && userRole !== 'admin' && userRole !== 'supervisor') {
 
         // a) Calcular saldo real retenido en este momento
         const { data: carteras } = await supabase.from('carteras').select('id').eq('asesor_id', userId);
@@ -225,7 +225,7 @@ export async function checkSystemAccess(
     }
 
     // 6. GLOBAL HOUR BLOCK
-    if (!isTemporaryUnlocked && userRole !== 'admin' && action !== 'cuadre') {
+    if (!isTemporaryUnlocked && userRole !== 'admin' && userRole !== 'supervisor' && action !== 'cuadre') {
         if (tNow < tApertura || tNow > tCierre) {
             console.warn(`[SYSTEM ACCESS] Blocked by hours: ${timePart} outside ${config.horario_apertura} - ${config.horario_cierre}`);
             return {
@@ -237,7 +237,7 @@ export async function checkSystemAccess(
     }
 
     // 6. NIGHT BLOCK
-    if (action !== 'cuadre' && !isTemporaryUnlocked && userRole !== 'admin') {
+    if (action !== 'cuadre' && !isTemporaryUnlocked && userRole !== 'admin' && userRole !== 'supervisor') {
         if (tNow >= tCierre) {
             return {
                 allowed: false,

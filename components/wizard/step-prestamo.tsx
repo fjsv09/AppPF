@@ -84,11 +84,21 @@ export function StepPrestamo({ initialData, onNext, onBack, isSubmitting = false
     // Verificar horario antes de permitir submit
     if (systemSchedule) {
       const now = new Date()
-      const peruTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }))
-      const currentTimeString = peruTime.getHours().toString().padStart(2, '0') + ':' + peruTime.getMinutes().toString().padStart(2, '0')
+      const formatter = new Intl.DateTimeFormat('es-PE', {
+        timeZone: 'America/Lima',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      })
+      const currentTimeString = formatter.format(now)
+      
+      const padTime = (t: string) => t.split(':').map(p => p.padStart(2, '0')).join(':')
+      const opening = padTime(systemSchedule.horario_apertura)
+      const closing = padTime(systemSchedule.horario_cierre)
+      
       const isUnlocked = systemSchedule.desbloqueo_hasta ? (new Date(systemSchedule.desbloqueo_hasta) > now) : false
       
-      if (!isUnlocked && (currentTimeString < systemSchedule.horario_apertura || currentTimeString > systemSchedule.horario_cierre)) {
+      if (!isUnlocked && (currentTimeString < opening || currentTimeString > closing)) {
         alert(`Sistema cerrado. El horario de operación es de ${systemSchedule.horario_apertura} a ${systemSchedule.horario_cierre}.`)
         return
       }
@@ -281,14 +291,23 @@ export function StepPrestamo({ initialData, onNext, onBack, isSubmitting = false
         </Button>
       </div>
 
-      {/* Alerta Horario si está cerrado */}
       {(() => {
         if (!systemSchedule) return null
         const now = new Date()
-        const peruTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }))
-        const currentTimeString = peruTime.getHours().toString().padStart(2, '0') + ':' + peruTime.getMinutes().toString().padStart(2, '0')
+        const formatter = new Intl.DateTimeFormat('es-PE', {
+          timeZone: 'America/Lima',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        })
+        const currentTimeString = formatter.format(now)
+
+        const padTime = (t: string) => t.split(':').map(p => p.padStart(2, '0')).join(':')
+        const opening = padTime(systemSchedule.horario_apertura)
+        const closing = padTime(systemSchedule.horario_cierre)
+        
         const isUnlocked = systemSchedule.desbloqueo_hasta ? (new Date(systemSchedule.desbloqueo_hasta) > now) : false
-        const isClosed = !isUnlocked && (currentTimeString < systemSchedule.horario_apertura || currentTimeString > systemSchedule.horario_cierre)
+        const isClosed = !isUnlocked && (currentTimeString < opening || currentTimeString > closing)
         
         if (!isClosed) return null
         

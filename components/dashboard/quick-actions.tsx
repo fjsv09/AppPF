@@ -36,8 +36,8 @@ export function QuickActions({ rol }: QuickActionsProps) {
     return (
         <div className="space-y-4">
             <div className="flex items-center gap-2 px-1">
-                <Zap className="w-4 h-4 md:w-5 md:h-5 text-amber-400" />
-                <h2 className="text-sm md:text-lg font-bold text-white tracking-tight">Acciones Rápidas</h2>
+                <Zap className="w-4 h-4 text-amber-400" />
+                <h2 className="text-sm md:text-base font-bold text-white tracking-tight">Acciones Rápidas</h2>
             </div>
             
             <div className="bg-slate-950/20 border border-slate-800 rounded-xl md:rounded-2xl overflow-hidden divide-y divide-slate-800/50 shadow-2xl">
@@ -67,13 +67,13 @@ export function QuickActions({ rol }: QuickActionsProps) {
                         ) : data.solicitudes.length === 0 ? (
                             <div className="px-5 py-4 text-center text-slate-600 text-[10px] italic">Sin pendientes</div>
                         ) : data.solicitudes.map((sol: any) => (
-                            <div key={sol.id} className="px-4 py-2.5 hover:bg-white/5 transition-colors group flex items-center gap-3">
+                            <div key={sol.id} className="px-3 py-2 hover:bg-white/5 transition-colors group flex items-center gap-3">
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-[10px] md:text-[11px] font-bold text-white truncate uppercase">
+                                    <p className="text-[9px] md:text-[10px] font-bold text-white truncate uppercase">
                                         {sol.cliente?.nombres || sol.prospecto_nombres || 'Cliente'}
                                     </p>
                                     <div className="flex items-center gap-2 mt-0.5">
-                                        <p className="text-[9px] text-slate-500 font-bold">{formatMoney(sol.monto_solicitado)}</p>
+                                        <p className="text-[8px] text-slate-500 font-bold">{formatMoney(sol.monto_solicitado)}</p>
                                         <span className="text-[7px] px-1 bg-blue-500/10 text-blue-400 rounded border border-blue-500/10 uppercase font-black">
                                             {sol.estado_solicitud?.replace('_', ' ')}
                                         </span>
@@ -100,13 +100,13 @@ export function QuickActions({ rol }: QuickActionsProps) {
                         ) : data.renovaciones.length === 0 ? (
                             <div className="px-5 py-4 text-center text-slate-600 text-[10px] italic">Sin pendientes</div>
                         ) : data.renovaciones.map((ren: any) => (
-                            <div key={ren.id} className="px-4 py-2.5 hover:bg-white/5 transition-colors group flex items-center gap-3">
+                            <div key={ren.id} className="px-3 py-2 hover:bg-white/5 transition-colors group flex items-center gap-3">
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-[10px] md:text-[11px] font-bold text-white group-hover:text-purple-400 transition-colors truncate uppercase">
+                                    <p className="text-[9px] md:text-[10px] font-bold text-white group-hover:text-purple-400 transition-colors truncate uppercase">
                                         {ren.cliente?.nombres || 'Cliente'}
                                     </p>
                                     <div className="flex items-center gap-2 mt-0.5">
-                                        <p className="text-[9px] text-slate-500 font-bold">{formatMoney(ren.monto_nuevo)}</p>
+                                        <p className="text-[8px] text-slate-500 font-bold">{formatMoney(ren.monto_nuevo)}</p>
                                         <span className="text-[7px] px-1 bg-purple-500/10 text-purple-400 rounded border border-purple-500/20 uppercase font-black text-center">
                                             RENOV.
                                         </span>

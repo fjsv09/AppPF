@@ -30,7 +30,7 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
         try {
             if (action === 'aprobar') {
                 if (!cuentaOrigenId && cuentasAdmin && cuentasAdmin.length > 0) {
-                    throw new Error('Debe seleccionar una cuenta de origen (Caja o Banco).')
+                    throw new Error('Debe seleccionar una cuenta de origen para el desembolso.')
                 }
                 body.cuentaOrigenId = cuentaOrigenId
             }
@@ -197,9 +197,9 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
                 {cuentasAdmin && cuentasAdmin.length > 0 && !showRechazo && (
                     <div className="space-y-2 p-3 bg-slate-950/50 border border-slate-800 rounded-lg">
                         <label className="text-xs font-semibold text-slate-400 uppercase">
-                            Seleccionar cuenta origen (Renovaciones):
+                            Seleccionar cuenta de desembolso (Salida de dinero): <span className="text-rose-500">*</span>
                         </label>
-                        <Select value={cuentaOrigenId} onValueChange={setCuentaOrigenId}>
+                        <Select value={cuentaOrigenId} onValueChange={setCuentaOrigenId} required>
                             <SelectTrigger className="w-full bg-slate-900 border-slate-700 text-slate-200">
                                 <SelectValue placeholder="Seleccione una cuenta" />
                             </SelectTrigger>
@@ -217,7 +217,30 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
                     </div>
                 )}
 
-                {showRechazo ? (
+                {showObservacion ? (
+                    <div className="space-y-3">
+                        <textarea
+                            value={observacion}
+                            onChange={(e) => setObservacion(e.target.value)}
+                            placeholder="Escriba la observación para el asesor..."
+                            className="w-full p-3 rounded-lg bg-slate-950 border border-slate-700 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                            rows={3}
+                        />
+                        <div className="flex gap-2">
+                            <Button
+                                onClick={() => handleAction('observar', { observacion })}
+                                disabled={!observacion || loading === 'observar'}
+                                className="bg-orange-600 hover:bg-orange-700 font-bold"
+                            >
+                                {loading === 'observar' ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4 mr-2" />}
+                                Enviar a Corrección (Asesor)
+                            </Button>
+                            <Button variant="ghost" onClick={() => setShowObservacion(false)}>
+                                Cancelar
+                            </Button>
+                        </div>
+                    </div>
+                ) : showRechazo ? (
                     <div className="space-y-3">
                         <textarea
                             value={motivoRechazo}
@@ -231,6 +254,7 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
                                 onClick={() => handleAction('rechazar', { motivo: motivoRechazo })}
                                 disabled={!motivoRechazo || loading === 'rechazar'}
                                 variant="destructive"
+                                className="font-bold"
                             >
                                 {loading === 'rechazar' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4 mr-2" />}
                                 Confirmar Rechazo
@@ -245,15 +269,23 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
                         <Button
                             onClick={() => handleAction('aprobar')}
                             disabled={loading === 'aprobar'}
-                            className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500"
+                            className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 font-bold"
                         >
                             {loading === 'aprobar' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}
                             Aprobar y Crear Préstamo
                         </Button>
                         <Button
+                            onClick={() => setShowObservacion(true)}
+                            variant="outline"
+                            className="border-orange-500/50 text-orange-400 hover:bg-orange-950 font-bold"
+                        >
+                            <MessageSquare className="w-4 h-4 mr-2" />
+                            Observar / Devolver
+                        </Button>
+                        <Button
                             onClick={() => setShowRechazo(true)}
                             variant="outline"
-                            className="border-red-500/50 text-red-400 hover:bg-red-950"
+                            className="border-red-500/50 text-red-400 hover:bg-red-950 font-bold"
                         >
                             <XCircle className="w-4 h-4 mr-2" />
                             Rechazar

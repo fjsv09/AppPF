@@ -122,12 +122,21 @@ export async function POST(request: Request) {
         // NUEVA VALIDACIÓN: Verificar estado del préstamo para restricciones de rol
         const { data: prestamoInfo } = await supabaseAdmin
             .from('prestamos')
-            .select('cliente_id, estado')
+            .select('cliente_id, estado, cliente:clientes(bloqueado_renovacion)')
             .eq('id', prestamo_id)
             .single()
 
         if (!prestamoInfo) {
             return NextResponse.json({ error: 'Préstamo no encontrado' }, { status: 404 })
+        }
+        
+        // VALIDACIÓN: Cliente bloqueado para renovación
+        const clienteInfo = prestamoInfo.cliente as any
+        if (clienteInfo && clienteInfo.bloqueado_renovacion) {
+            return NextResponse.json({ 
+                error: 'Este cliente ha sido bloqueado y no se le puede renovar.',
+                tipo_error: 'cliente_bloqueado'
+            }, { status: 403 })
         }
         
         // REGLA DE NEGOCIO: Solo el administrador puede renovar préstamos que ya fueron refinanciados por mora

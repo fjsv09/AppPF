@@ -264,7 +264,7 @@ export function NotificationsDropdown() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setOpen(!open)}
-                className={`relative h-10 w-10 rounded-xl transition-all border ${
+                className={`relative h-9 w-9 rounded-xl transition-all border ${
                     open 
                         ? "bg-purple-500/10 text-purple-400 border-purple-500/30" 
                         : "bg-slate-800/40 text-slate-300 border-slate-700/50 hover:bg-slate-800"

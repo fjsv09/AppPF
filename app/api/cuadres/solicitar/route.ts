@@ -26,9 +26,10 @@ export async function POST(request: Request) {
 
         const totalEntregar = (parseFloat(p_monto_efectivo) || 0) + (parseFloat(p_monto_digital) || 0)
 
-        // 1. Validación: No permitir cuadres en 0
-        if (totalEntregar <= 0) {
-            return NextResponse.json({ error: 'No se puede enviar un cuadre con monto total de 0.00' }, { status: 400 })
+        // 1. Validación: No permitir cuadres en 0, a menos que sea obligatorio
+        const isObligatorio = p_tipo_cuadre === 'parcial_mañana' || p_tipo_cuadre === 'final' || p_tipo_cuadre === 'saldo_pendiente';
+        if (totalEntregar <= 0 && !isObligatorio) {
+            return NextResponse.json({ error: 'No se puede enviar un cuadre opcional con monto total de 0.00' }, { status: 400 })
         }
 
         // 2. Validación: No permitir entregar más de lo cobrado

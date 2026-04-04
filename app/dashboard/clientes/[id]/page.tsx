@@ -194,7 +194,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                             </div>
                         </div>
                          
-                         {userRole === 'admin' && (
+                         {(userRole === 'admin' || userRole === 'supervisor') && (
                              <div className="w-full">
                                 <ClientProfileActions 
                                     cliente={{

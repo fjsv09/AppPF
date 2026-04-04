@@ -5,13 +5,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { LightboxModal } from "@/components/ui/image-lightbox"
-import { Phone, MessageCircle, MapPin, Calendar, Clock, FileText, CheckCircle, AlertTriangle, X, Send, Users, Edit } from "lucide-react"
+import { Phone, MessageCircle, MapPin, Calendar, Clock, FileText, CheckCircle, AlertTriangle, X, Send, Users, Edit, Lock, Unlock } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { ClientGestiones } from "./client-gestiones"
 import { ClientExpediente } from "./client-expediente"
 import { ClientEditModal } from "./client-edit-modal"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
 interface ClientDetailDrawerProps {
   cliente: any | null
@@ -24,11 +26,40 @@ interface ClientDetailDrawerProps {
 export function ClientDetailDrawer({ cliente, isOpen, onClose, userRol = "asesor", onUpdate }: ClientDetailDrawerProps) {
   const [profileImageOpen, setProfileImageOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isBlocking, setIsBlocking] = useState(false)
+  const router = useRouter()
 
   // Safe navigation logic
   if (!cliente) return null
 
   const formatMoney = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })
+
+  const handleToggleBlock = async () => {
+        const isBlocked = !!cliente.bloqueado_renovacion
+        const action = isBlocked ? 'unblock' : 'block'
+        if (action === 'block' && !confirm('¿Está seguro que desea BLOQUEAR a este cliente? El cliente no podrá renovar préstamos.')) return;
+        if (action === 'unblock' && !confirm('¿Confirma que desea DESBLOQUEAR a este cliente?')) return;
+        
+        setIsBlocking(true)
+        try {
+            const response = await fetch('/api/clientes/bloquear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cliente_id: cliente.id, action })
+            })
+
+            const data = await response.json()
+            if (!response.ok) throw new Error(data.error || 'Error al actualizar')
+            
+            toast.success(action === 'block' ? 'Cliente bloqueado para renovar' : 'Cliente desbloqueado')
+            if (onUpdate) onUpdate(data.cliente)
+            router.refresh()
+        } catch (error: any) {
+            toast.error(error.message || 'Error al bloquear/desbloquear cliente')
+        } finally {
+            setIsBlocking(false)
+        }
+  }
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -94,7 +125,7 @@ export function ClientDetailDrawer({ cliente, isOpen, onClose, userRol = "asesor
             </div>
            
            {/* Quick Actions */}
-           <div className="grid grid-cols-2 gap-3">
+           <div className="grid grid-cols-2 gap-3 mb-3">
               <Button className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20" onClick={() => window.open(`https://wa.me/${cliente.telefono}`, '_blank')}>
                  <MessageCircle className="w-4 h-4 mr-2" /> WhatsApp
               </Button>
@@ -102,6 +133,23 @@ export function ClientDetailDrawer({ cliente, isOpen, onClose, userRol = "asesor
                  <Phone className="w-4 h-4 mr-2" /> Llamar
               </Button>
            </div>
+           
+           {(userRol === 'admin' || (userRol === 'asesor' && !cliente.bloqueado_renovacion)) && (
+               <Button 
+                   variant="outline" 
+                   className={cn(
+                       "w-full font-bold",
+                       cliente.bloqueado_renovacion 
+                           ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white" 
+                           : "bg-amber-950/30 border-amber-900/50 text-amber-400 hover:bg-amber-900/40 hover:text-amber-300"
+                   )} 
+                   onClick={handleToggleBlock}
+                   disabled={isBlocking}
+               >
+                   {cliente.bloqueado_renovacion ? <Unlock className="w-4 h-4 mr-2" /> : <Lock className="w-4 h-4 mr-2" />}
+                   {isBlocking ? "Procesando..." : (cliente.bloqueado_renovacion ? 'Desbloquear Renovación' : 'Bloquear para Renovación')}
+               </Button>
+           )}
         </div>
 
         {/* Content Tabs */}

@@ -14,7 +14,7 @@ import { NominaPageClient } from '@/components/nomina/nomina-page-client'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-    title: 'Nómina y Sueldos'
+  title: 'Nómina y Sueldos'
 }
 
 export default async function NominaPage() {
@@ -58,7 +58,7 @@ export default async function NominaPage() {
             <div>
               <h1 className="page-title">Nómina y Sueldos</h1>
               <p className="page-subtitle uppercase tracking-widest font-semibold">
-                 {format(new Date(), 'MMMM yyyy', { locale: es })}
+                {format(new Date(), 'MMMM yyyy', { locale: es })}
               </p>
             </div>
           </div>
@@ -72,7 +72,7 @@ export default async function NominaPage() {
 
 async function NominaDirecta({ userId }: { userId: string }) {
   const supabase = await createClient()
-  
+
   const today = new Date()
   const currentMonth = today.getMonth() + 1
   const currentYear = today.getFullYear()
@@ -99,10 +99,10 @@ async function NominaDirecta({ userId }: { userId: string }) {
     .order('mes', { ascending: false })
     .limit(6)
 
-  const totalCalculated = (currentPayroll?.sueldo_base || perfil?.sueldo_base || 0) + 
-                          (currentPayroll?.bonos || 0) - 
-                          (currentPayroll?.descuentos || 0) - 
-                          (currentPayroll?.adelantos || 0)
+  const totalCalculated = (currentPayroll?.sueldo_base || perfil?.sueldo_base || 0) +
+    (currentPayroll?.bonos || 0) -
+    (currentPayroll?.descuentos || 0) -
+    (currentPayroll?.adelantos || 0)
 
   return (
     <div className="page-container">
@@ -115,17 +115,17 @@ async function NominaDirecta({ userId }: { userId: string }) {
             </h1>
           </div>
           <p className="page-subtitle">
-             {format(today, 'MMMM yyyy', { locale: es })}
+            {format(today, 'MMMM yyyy', { locale: es })}
           </p>
         </div>
       </div>
 
-      <NominaContent 
-        currentPayroll={currentPayroll} 
-        perfil={perfil} 
-        payrollHistory={payrollHistory} 
-        totalCalculated={totalCalculated} 
-        today={today} 
+      <NominaContent
+        currentPayroll={currentPayroll}
+        perfil={perfil}
+        payrollHistory={payrollHistory}
+        totalCalculated={totalCalculated}
+        today={today}
       />
     </div>
   )
@@ -133,102 +133,101 @@ async function NominaDirecta({ userId }: { userId: string }) {
 
 function NominaContent({ currentPayroll, perfil, payrollHistory, totalCalculated, today, nombreTrabajador }: any) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-      <div className="lg:col-span-12 xl:col-span-8 space-y-6">
-         <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm overflow-hidden border-t-4 border-t-blue-500">
-            <CardHeader className="bg-slate-800/20 border-b border-slate-800">
-               <div className="flex justify-between items-center">
-                  <div>
-                     <CardTitle className="text-xl font-bold text-white">
-                       Resumen de Pago {nombreTrabajador && <span className="text-blue-400">— {nombreTrabajador}</span>}
-                     </CardTitle>
-                     <CardDescription>Corte al {format(today, 'dd/MM/yyyy')}</CardDescription>
-                  </div>
-                  <div className="text-right">
-                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                       currentPayroll?.estado === 'pagado' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-500'
-                     }`}>
-                       {currentPayroll?.estado === 'pagado' ? 'PAGO REALIZADO' : 'CÁLCULO EN CURSO'}
-                     </span>
-                  </div>
-               </div>
-            </CardHeader>
-            <CardContent className="p-6">
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <PayItem label="Sueldo Base" amount={currentPayroll?.sueldo_base || perfil?.sueldo_base || 0} icon={<Calculator className="w-4 h-4 text-slate-400" />} />
-                  <PayItem label="Bonos Ganados" amount={currentPayroll?.bonos || 0} icon={<BadgePercent className="w-4 h-4 text-emerald-400" />} plus />
-                  <PayItem label="Descuentos" amount={currentPayroll?.descuentos || 0} icon={<AlertCircle className="w-4 h-4 text-rose-500" />} minus />
-                  <PayItem label="Adelantos" amount={currentPayroll?.adelantos || 0} icon={<TrendingUp className="w-4 h-4 text-blue-400" />} minus />
-               </div>
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <div className="lg:col-span-12 xl:col-span-8 space-y-5">
+        <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm overflow-hidden border-t-4 border-t-blue-500">
+          <CardHeader className="bg-slate-800/20 border-b border-slate-800">
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle className="text-xl font-bold text-white">
+                  Resumen de Pago {nombreTrabajador && <span className="text-blue-400">— {nombreTrabajador}</span>}
+                </CardTitle>
+                <CardDescription>Corte al {format(today, 'dd/MM/yyyy')}</CardDescription>
+              </div>
+              <div className="text-right">
+                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${currentPayroll?.estado === 'pagado' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-500'
+                  }`}>
+                  {currentPayroll?.estado === 'pagado' ? 'PAGO REALIZADO' : 'CÁLCULO EN CURSO'}
+                </span>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-3 md:p-5">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
+              <PayItem label="Sueldo Base" amount={currentPayroll?.sueldo_base || perfil?.sueldo_base || 0} icon={<Calculator className="w-4 h-4 text-slate-400" />} />
+              <PayItem label="Bonos Ganados" amount={currentPayroll?.bonos || 0} icon={<BadgePercent className="w-4 h-4 text-emerald-400" />} plus />
+              <PayItem label="Descuentos" amount={currentPayroll?.descuentos || 0} icon={<AlertCircle className="w-4 h-4 text-rose-500" />} minus />
+              <PayItem label="Adelantos" amount={currentPayroll?.adelantos || 0} icon={<TrendingUp className="w-4 h-4 text-blue-400" />} minus />
+            </div>
 
-               <div className="mt-8 pt-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
-                  <div className="text-center md:text-left">
-                     <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Total Neto a Recibir</p>
-                     <h2 className="text-4xl font-black text-white">S/ {totalCalculated.toFixed(2)}</h2>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-slate-950/50 border border-slate-800 inline-flex items-center gap-3">
-                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                     <p className="text-xs text-slate-400">Los bonos se actualizan según tu progreso de metas.</p>
-                  </div>
-               </div>
-            </CardContent>
-         </Card>
+            <div className="mt-6 pt-6 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="text-center md:text-left">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Neto a Recibir</p>
+                <h2 className="text-3xl font-black text-white">S/ {totalCalculated.toFixed(2)}</h2>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-950/50 border border-slate-800 inline-flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <p className="text-xs text-slate-400">Los bonos se actualizan según tu progreso de metas.</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-         <div className="p-6 rounded-2xl bg-blue-600/5 border border-blue-500/10">
-            <h4 className="text-blue-400 font-bold mb-2 flex items-center gap-2">
-               <AlertCircle className="w-4 h-4" />
-               Nota Importante
-            </h4>
-            <p className="text-xs text-slate-500 leading-relaxed">
-               Las tardanzas y faltas se descuentan semanalmente. Asegúrate de registrar tu asistencia correctamente. Si tienes dudas sobre un bono, consulta tu <Link href="/dashboard/metas" className="text-blue-400 underline">panel de metas</Link>.
-            </p>
-         </div>
+        <div className="p-4 rounded-xl bg-blue-600/5 border border-blue-500/10">
+          <h4 className="text-blue-400 font-bold mb-2 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            Nota Importante
+          </h4>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Asegúrate de registrar tu asistencia correctamente. Si tienes dudas sobre un bono, consulta tu <Link href="/dashboard/metas" className="text-blue-400 underline">panel de metas</Link>.
+          </p>
+        </div>
       </div>
 
       <div className="lg:col-span-12 xl:col-span-4">
-         <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm overflow-hidden">
-           <CardHeader className="bg-slate-800/30 border-b border-slate-800/50">
-             <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-               <History className="w-5 h-5 text-slate-400" />
-               Historial de Boletas
-             </CardTitle>
-           </CardHeader>
-           <CardContent className="p-0">
-              <div className="divide-y divide-slate-800">
-                 {payrollHistory?.map((p: any) => (
-                    <div key={p.id} className="p-4 hover:bg-slate-800/30 transition-colors flex items-center justify-between">
-                       <div>
-                          <p className="text-sm font-bold text-white uppercase">{format(new Date(p.anio, p.mes - 1), 'MMMM yyyy', { locale: es })}</p>
-                          <p className="text-[10px] text-slate-500">Monto Final: S/ {(p.sueldo_base + p.bonos - p.descuentos - p.adelantos).toFixed(2)}</p>
-                       </div>
-                       <Badge variant="outline" className={p.estado === 'pagado' ? 'text-emerald-400 border-emerald-900/50' : 'text-amber-500 border-amber-900/50'}>
-                          {p.estado}
-                       </Badge>
-                    </div>
-                 ))}
-                 {(!payrollHistory || payrollHistory.length === 0) && (
-                    <div className="p-10 text-center">
-                       <p className="text-slate-600 text-sm">Sin historial disponible.</p>
-                    </div>
-                 )}
-              </div>
-           </CardContent>
-         </Card>
+        <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm overflow-hidden">
+          <CardHeader className="bg-slate-800/30 border-b border-slate-800/50">
+            <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
+              <History className="w-5 h-5 text-slate-400" />
+              Historial de Boletas
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-slate-800">
+              {payrollHistory?.map((p: any) => (
+                <div key={p.id} className="p-3 hover:bg-slate-800/30 transition-colors flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-white uppercase">{format(new Date(p.anio, p.mes - 1), 'MMMM yyyy', { locale: es })}</p>
+                    <p className="text-[9px] text-slate-500">Monto Final: S/ {(p.sueldo_base + p.bonos - p.descuentos - p.adelantos).toFixed(2)}</p>
+                  </div>
+                  <Badge variant="outline" className={p.estado === 'pagado' ? 'text-emerald-400 border-emerald-900/50' : 'text-amber-500 border-amber-900/50'}>
+                    {p.estado}
+                  </Badge>
+                </div>
+              ))}
+              {(!payrollHistory || payrollHistory.length === 0) && (
+                <div className="p-10 text-center">
+                  <p className="text-slate-600 text-sm">Sin historial disponible.</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
 }
 
 function PayItem({ label, amount, icon, plus, minus }: any) {
-   return (
-      <div className="p-4 rounded-2xl bg-slate-950/50 border border-slate-800/50 space-y-3">
-         <div className="flex items-center gap-2">
-            <span className="p-1 bg-slate-900 rounded">{icon}</span>
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{label}</span>
-         </div>
-         <p className={`text-xl font-bold ${plus ? 'text-emerald-400' : minus ? 'text-rose-400' : 'text-slate-200'}`}>
-            {plus && '+ '} {minus && '- '} S/ {amount.toFixed(2)}
-         </p>
+  return (
+    <div className="p-2 md:p-3 rounded-xl bg-slate-950/50 border border-slate-800/50 space-y-1 md:space-y-2">
+      <div className="flex items-center gap-1.5 md:gap-2">
+        <span className="p-0.5 md:p-1 bg-slate-900 rounded">{icon}</span>
+        <span className="text-[8px] md:text-[9px] font-bold text-slate-500 uppercase tracking-widest">{label}</span>
       </div>
-   )
+      <p className={`text-base md:text-lg font-bold ${plus ? 'text-emerald-400' : minus ? 'text-rose-400' : 'text-slate-200'}`}>
+        {plus && '+ '} {minus && '- '} S/ {amount.toFixed(2)}
+      </p>
+    </div>
+  )
 }

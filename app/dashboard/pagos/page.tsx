@@ -7,7 +7,8 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
-import { Plus, DollarSign, TrendingUp } from 'lucide-react'
+import { DollarSign, TrendingUp } from 'lucide-react'
+import { PaymentModal } from '@/components/pagos/payment-modal'
 import { RecentPaymentsList } from '@/components/pagos/recent-payments-list'
 import { BackButton } from '@/components/ui/back-button'
 import { DashboardAlerts } from '@/components/dashboard/dashboard-alerts'
@@ -258,12 +259,8 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
                         </div>
                     </div>
                 </div>
-                <Link href="/dashboard/pagos/registrar" className="w-full md:w-auto">
-                    <Button className="w-full md:w-auto btn-action bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20 hover:scale-105 active:scale-95">
-                        <Plus className="mr-2 h-5 w-5" />
-                        Registrar Nuevo Pago
-                    </Button>
-                </Link>
+                <PaymentModal userRol={userRol} />
+
             </div>
 
             {/* Daily Stats Grid */}

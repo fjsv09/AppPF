@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ClientDetailDrawer } from '@/components/clientes/client-detail-drawer'
-import { Users, Search, Phone, ChevronLeft, ChevronRight, Calendar, Loader2, Link as LinkIcon, Eye, Download, CheckSquare, Square, ChevronDown, Trash2, CalendarHeart, HandCoins, ExternalLink, ListFilter, MoreVertical, MessageCircle, MapPin, X, Map, ShieldCheck, Receipt } from 'lucide-react'
+import { Users, Search, Phone, ChevronLeft, ChevronRight, Calendar, Loader2, Link as LinkIcon, Eye, Download, CheckSquare, Square, ChevronDown, Trash2, CalendarHeart, HandCoins, ExternalLink, ListFilter, MoreVertical, MessageCircle, MapPin, X, Map, ShieldCheck, Receipt, Lock, Unlock } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import dynamic from 'next/dynamic'
@@ -80,7 +80,7 @@ interface ClientDirectoryProps {
     userId?: string
 }
 
-type FilterTab = 'todos' | 'activos' | 'con_deuda' | 'sin_prestamos' | 'inactivos' | 'al_dia' | 'mora' | 'recaptables' | 'reasignados' | 'recibos'
+type FilterTab = 'todos' | 'activos' | 'con_deuda' | 'sin_prestamos' | 'inactivos' | 'al_dia' | 'mora' | 'recaptables' | 'reasignados' | 'recibos' | 'bloqueados'
 
 const ITEMS_PER_PAGE = 10
 
@@ -131,6 +131,10 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     const [gestionOpen, setGestionOpen] = useState(false)
     const [selectedClientForGestion, setSelectedClientForGestion] = useState<any>(null)
 
+    // Block/Unblock State
+    const [confirmBlockOpen, setConfirmBlockOpen] = useState(false)
+    const [pendingBlockClient, setPendingBlockClient] = useState<any>(null)
+
     const handleOpenGestion = (cliente: any, e?: React.MouseEvent) => {
         if (e) {
             e.preventDefault()
@@ -174,6 +178,35 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         } finally {
             setConfirmExcepcionOpen(false)
             setPendingExcepcionClient(null)
+        }
+    }
+
+    const processToggleBlock = async () => {
+        if (!pendingBlockClient) return
+        
+        const isBlocked = !!pendingBlockClient.bloqueado_renovacion
+        const action = isBlocked ? 'unblock' : 'block'
+        
+        try {
+            const response = await fetch('/api/clientes/bloquear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cliente_id: pendingBlockClient.id,
+                    action
+                })
+            })
+
+            const data = await response.json()
+            if (!response.ok) throw new Error(data.error || 'Error al actualizar')
+            
+            toast.success(action === 'block' ? 'Cliente bloqueado para renovar' : 'Cliente desbloqueado')
+            router.refresh()
+        } catch (error: any) {
+            toast.error(error.message || 'Error al bloquear o desbloquear cliente')
+        } finally {
+            setConfirmBlockOpen(false)
+            setPendingBlockClient(null)
         }
     }
 
@@ -247,7 +280,8 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         { id: 'inactivos' as FilterTab, label: 'Inactivos', count: clientes.filter(c => c.estado !== 'activo').length },
         ...(userRol === 'admin' ? [{ id: 'reasignados' as FilterTab, label: 'Reasignados', count: clientes.filter(c => c.wasReassigned).length }] : []),
         ...((userRol === 'admin' || userRol === 'supervisor') ? [
-            { id: 'recibos' as FilterTab, label: 'Control de Recibos', count: clientes.filter(c => c.stats.activeLoansCount > 0).length }
+            { id: 'recibos' as FilterTab, label: 'Control de Recibos', count: clientes.filter(c => c.stats.activeLoansCount > 0).length },
+            { id: 'bloqueados' as FilterTab, label: 'Bloqueados', count: clientes.filter(c => !!c.bloqueado_renovacion).length }
         ] : []),
     ], [clientes, userRol])
 
@@ -284,6 +318,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             case 'recaptables': result = result.filter(c => c.isRecaptable); break;
             case 'reasignados': result = result.filter(c => c.wasReassigned); break;
             case 'recibos': result = result.filter(c => c.stats.activeLoansCount > 0); break;
+            case 'bloqueados': result = result.filter(c => !!c.bloqueado_renovacion); break;
         }
 
         // Search
@@ -643,22 +678,6 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                             <MapPin className="w-4 h-4 text-slate-500" />
                                         </Button>
                                     )}
-                                    {userRol === 'admin' && (
-                                        <Button 
-                                            size="sm" 
-                                            variant="outline" 
-                                            className={cn(
-                                                "flex-1 h-8 transition-all px-0 rounded-lg",
-                                                cliente.excepcion_voucher 
-                                                    ? "bg-purple-900/40 border-purple-700/50 text-purple-400" 
-                                                    : "bg-slate-900/40 border-slate-800 text-slate-400"
-                                            )}
-                                            onClick={(e) => handleToggleExcepcion(cliente, e)}
-                                            title={cliente.excepcion_voucher ? "Omitir requerimiento de recibo (Activo)" : "Exonerar de recibo"}
-                                        >
-                                            {cliente.excepcion_voucher ? <ShieldCheck className="w-4 h-4" /> : <Receipt className="w-4 h-4" />}
-                                        </Button>
-                                    )}
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
                                             <Button size="sm" variant="ghost" className="px-2 h-8 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-white hover:bg-slate-700 transition-all data-[state=open]:bg-slate-700">
@@ -669,6 +688,30 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                             <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                                             <DropdownMenuSeparator className="bg-slate-800" />
                                             {userRol === 'admin' && (
+                                                <DropdownMenuItem 
+                                                    onClick={(e) => handleToggleExcepcion(cliente, e)}
+                                                    className={cn(
+                                                        "cursor-pointer hover:bg-slate-800 focus:bg-slate-800",
+                                                        cliente.excepcion_voucher ? "text-purple-400" : "text-emerald-400"
+                                                    )}
+                                                >
+                                                    {cliente.excepcion_voucher ? <ShieldCheck className="w-4 h-4 mr-2" /> : <Receipt className="w-4 h-4 mr-2" />}
+                                                    {cliente.excepcion_voucher ? "Requerir Recibos" : "Exonerar Recibos"}
+                                                </DropdownMenuItem>
+                                            )}
+                                            {(userRol === 'admin' || (userRol === 'supervisor' && !cliente.bloqueado_renovacion)) && (
+                                                <DropdownMenuItem 
+                                                    onClick={() => {
+                                                        setPendingBlockClient(cliente)
+                                                        setConfirmBlockOpen(true)
+                                                    }} 
+                                                    className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-amber-400"
+                                                >
+                                                    {cliente.bloqueado_renovacion ? <Unlock className="w-4 h-4 mr-2" /> : <Lock className="w-4 h-4 mr-2" />} 
+                                                    {cliente.bloqueado_renovacion ? 'Desbloquear Renovación' : 'Bloquear Renovación'}
+                                                </DropdownMenuItem>
+                                            )}
+                                            {(userRol === 'admin' || userRol === 'supervisor') && (
                                                 <DropdownMenuItem 
                                                     onClick={() => {
                                                         setPendingEditClient(cliente)
@@ -804,7 +847,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all" onClick={() => window.open(`https://wa.me/${cliente.telefono}`, '_blank')}>
                                         <MessageCircle className="w-4 h-4" />
                                     </Button>
-                                    {userRol === 'admin' && (
+                                    {(userRol === 'admin' || userRol === 'supervisor') && (
                                         <Button 
                                             size="sm" 
                                             variant="ghost" 
@@ -828,25 +871,6 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                         <MessageSquare className="w-4 h-4" />
                                     </Button>
 
-                                    {/* Excepcion Recibo Toggle - Only Admin */}
-                                    {userRol === 'admin' && (
-                                        <Button 
-                                            size="sm" 
-                                            variant="ghost" 
-                                            className={cn(
-                                                "h-8 w-8 p-0 rounded-lg border transition-all font-bold",
-                                                cliente.excepcion_voucher 
-                                                    ? "text-purple-400 bg-purple-900/40 border-purple-700/50 hover:bg-purple-800/60" 
-                                                    : "text-slate-400 bg-slate-800/40 border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40"
-                                            )}
-                                            onClick={(e) => handleToggleExcepcion(cliente, e)}
-                                            title={cliente.excepcion_voucher ? "Omitir requerimiento de recibo (Activo)" : "Exonerar de recibo"}
-                                        >
-                                            {cliente.excepcion_voucher ? <ShieldCheck className="w-4 h-4" /> : <Receipt className="w-4 h-4" />}
-                                        </Button>
-                                    )}
-
-
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
                                             <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-white hover:bg-slate-700 transition-all data-[state=open]:bg-slate-700">
@@ -856,6 +880,30 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                         <DropdownMenuContent align="end" className="w-48 bg-slate-900 border-slate-800 text-slate-200">
                                             <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                                             <DropdownMenuSeparator className="bg-slate-800" />
+                                            {userRol === 'admin' && (
+                                                <DropdownMenuItem 
+                                                    onClick={(e) => handleToggleExcepcion(cliente, e)}
+                                                    className={cn(
+                                                        "cursor-pointer hover:bg-slate-800 focus:bg-slate-800",
+                                                        cliente.excepcion_voucher ? "text-purple-400" : "text-emerald-400"
+                                                    )}
+                                                >
+                                                    {cliente.excepcion_voucher ? <ShieldCheck className="w-4 h-4 mr-2" /> : <Receipt className="w-4 h-4 mr-2" />}
+                                                    {cliente.excepcion_voucher ? "Requerir Recibos" : "Exonerar Recibos"}
+                                                </DropdownMenuItem>
+                                            )}
+                                            {(userRol === 'admin' || (userRol === 'supervisor' && !cliente.bloqueado_renovacion)) && (
+                                                <DropdownMenuItem 
+                                                    onClick={() => {
+                                                        setPendingBlockClient(cliente)
+                                                        setConfirmBlockOpen(true)
+                                                    }} 
+                                                    className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-amber-400"
+                                                >
+                                                    {cliente.bloqueado_renovacion ? <Unlock className="w-4 h-4 mr-2" /> : <Lock className="w-4 h-4 mr-2" />} 
+                                                    {cliente.bloqueado_renovacion ? 'Desbloquear Renovación' : 'Bloquear Renovación'}
+                                                </DropdownMenuItem>
+                                            )}
                                             <DropdownMenuItem onClick={() => router.push(`?client=${cliente.id}`)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
                                                 <Eye className="w-4 h-4 mr-2" /> Ver Detalle Rápido
                                             </DropdownMenuItem>
@@ -954,6 +1002,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                 <ClientEditModal
                     cliente={editingCliente}
                     isOpen={!!editingCliente}
+                    userRol={userRol}
                     onClose={() => setEditingCliente(null)}
                     onSuccess={() => {
                         setEditingCliente(null)
@@ -1042,6 +1091,45 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                 className="h-9 px-4 text-[10px] font-black uppercase tracking-tight text-white bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-900/20 transition-all"
                             >
                                 Sí, editar
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </div>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={confirmBlockOpen} onOpenChange={setConfirmBlockOpen}>
+                <AlertDialogContent className="bg-slate-900 border-slate-800 border-l-4 border-l-amber-500 max-w-[400px] p-0 overflow-hidden shadow-2xl shadow-amber-900/10">
+                    <div className="p-6">
+                        <AlertDialogHeader>
+                            <div className="mx-auto p-3 bg-amber-500/10 rounded-full w-fit mb-3 border border-amber-500/20">
+                                {pendingBlockClient?.bloqueado_renovacion ? <Unlock className="w-6 h-6 text-amber-500" /> : <Lock className="w-6 h-6 text-amber-500" />}
+                            </div>
+                            <AlertDialogTitle className="text-white text-center text-lg font-bold">
+                                {pendingBlockClient?.bloqueado_renovacion 
+                                    ? 'Desbloquear Renovación' 
+                                    : 'Bloquear Renovación'}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-slate-400 text-center text-[11px] leading-relaxed mt-2 px-2">
+                                {pendingBlockClient?.bloqueado_renovacion 
+                                    ? `¿Confirma que desea habilitar a "${pendingBlockClient?.nombres}" para solicitar nuevas renovaciones? Solo administradores pueden revertir esta acción.`
+                                    : `¿Está seguro que desea BLOQUEAR a "${pendingBlockClient?.nombres}"? El cliente no podrá renovar préstamos. Solo un administrador puede desbloquearlo.`
+                                }
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter className="sm:justify-center gap-3 mt-6">
+                            <AlertDialogCancel className="bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white h-9 px-4 text-[10px] font-bold uppercase tracking-tight transition-all">
+                                Cancelar
+                            </AlertDialogCancel>
+                            <AlertDialogAction 
+                                onClick={processToggleBlock}
+                                className={cn(
+                                    "h-9 px-4 text-[10px] font-black uppercase tracking-tight text-white shadow-lg transition-all",
+                                    pendingBlockClient?.bloqueado_renovacion
+                                        ? "bg-slate-700 hover:bg-slate-600"
+                                        : "bg-amber-600 hover:bg-amber-500 shadow-amber-900/20"
+                                )}
+                            >
+                                {pendingBlockClient?.bloqueado_renovacion ? 'Sí, Desbloquear' : 'Sí, Bloquear'}
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </div>

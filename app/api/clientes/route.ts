@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { checkSystemAccess } from '@/utils/systemRestrictions'
+import { createFullNotification } from '@/services/notification-service'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const supabaseAdmin = createAdminClient()
-    const { data: perfil } = await supabaseAdmin.from('perfiles').select('rol').eq('id', user.id).single()
+    const { data: perfil } = await supabaseAdmin.from('perfiles').select('rol, nombre_completo').eq('id', user.id).single()
     if (!perfil) return NextResponse.json({ error: 'No profile' }, { status: 403 })
 
     // VALIDACIÓN DE ACCESO Y HORARIO
@@ -105,20 +106,106 @@ export async function PATCH(request: Request) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const supabaseAdmin = createAdminClient()
-    const { data: perfil } = await supabaseAdmin.from('perfiles').select('rol').eq('id', user.id).single()
-    if (perfil?.rol !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const { data: perfil } = await supabaseAdmin.from('perfiles').select('rol, nombre_completo').eq('id', user.id).single()
+    
+    if (perfil?.rol !== 'admin' && perfil?.rol !== 'supervisor') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const body = await request.json()
     const { id, ...updateData } = body
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
 
-    const { data: updated, error } = await supabaseAdmin
+    // Split fields into Client and Solicitation tables
+    const clientFields = ['nombres', 'dni', 'telefono', 'direccion', 'referencia', 'sector_id', 'estado', 'excepcion_voucher', 'foto_perfil']
+    const solicitationFields = ['giro_negocio', 'fuentes_ingresos', 'ingresos_mensuales', 'motivo_prestamo', 'gps_coordenadas', 'documentos']
+    
+    const clientPayload: any = {}
+    const solicitationPayload: any = {}
+    
+    Object.keys(updateData).forEach(key => {
+        if (clientFields.includes(key)) clientPayload[key] = updateData[key]
+        if (solicitationFields.includes(key)) {
+            if (key === 'documentos') solicitationPayload['documentos_evaluacion'] = updateData[key]
+            else solicitationPayload[key] = updateData[key]
+        }
+    })
+
+    // Obtenemos datos previos para auditoría
+    const { data: oldClient } = await supabaseAdmin
       .from('clientes')
-      .update({ ...updateData, updated_at: new Date().toISOString() })
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    // 1. Update Cliente table
+    const { data: updated, error: clientError } = await supabaseAdmin
+      .from('clientes')
+      .update({ ...clientPayload, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select().single()
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (clientError) return NextResponse.json({ error: clientError.message }, { status: 500 })
+
+    // 2. Update Latest Solicitation if needed
+    if (Object.keys(solicitationPayload).length > 0) {
+        const { data: latest } = await supabaseAdmin
+            .from('solicitudes')
+            .select('id')
+            .eq('cliente_id', id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single()
+            
+        if (latest) {
+             await supabaseAdmin
+                .from('solicitudes')
+                .update(solicitationPayload)
+                .eq('id', latest.id)
+        }
+    }
+
+    // Registro en auditoría para Supervisor (o Admin opcionalmente)
+    if (perfil.rol === 'supervisor') {
+        // Detectar exactamente qué campos cambiaron
+        const changes = Object.keys(updateData).filter(key => 
+            String(updateData[key]) !== String(oldClient[key])
+        )
+
+        // Registrar en tabla de auditoría
+        await supabaseAdmin.from('auditoria').insert({
+            usuario_id: user.id,
+            accion: 'editar_cliente',
+            tabla_afectada: 'clientes',
+            registro_id: id,
+            detalle: { 
+                antes: oldClient, 
+                despues: updated,
+                campos_cambiados: changes
+            }
+        })
+
+        // Notificar a todos los administradores
+        const { data: admins } = await supabaseAdmin
+            .from('perfiles')
+            .select('id')
+            .eq('rol', 'admin')
+
+        if (admins && admins.length > 0) {
+            const docTitle = updated.nombres || 'Cliente'
+            const supervisorName = perfil.nombre_completo || 'Supervisor'
+            
+            for (const admin of admins) {
+                await createFullNotification(admin.id, {
+                    titulo: '🛡️ Edición de Supervisor',
+                    mensaje: `${supervisorName} modificó los datos de ${docTitle}: ${changes.join(', ')}`,
+                    link: `/dashboard/clientes/${id}`,
+                    tipo: 'alerta'
+                })
+            }
+        }
+    }
+
     return NextResponse.json(updated)
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })

@@ -17,6 +17,7 @@ interface CreateMetaFormProps {
 
 const TIPOS_META = [
     { value: 'cobro', label: 'Cobranza (%)', desc: 'Porcentaje de cobranza diaria/semanal/mensual', icon: Percent },
+    { value: 'recaudacion', label: 'Recaudación Total (S/)', desc: 'Suma de dinero cobrada en el periodo (cuotas, mora, etc)', icon: DollarSign },
     { value: 'colocacion', label: 'Colocación (S/)', desc: 'Monto total de colocación', icon: TrendingUp },
     { value: 'mora', label: 'Morosidad Máxima (%)', desc: 'Porcentaje máximo de mora permitido', icon: ShieldAlert },
     { value: 'clientes', label: 'Nuevos Clientes (Meta)', desc: 'Lograr un mínimo de clientes nuevos en el periodo', icon: Users },
@@ -31,42 +32,103 @@ export function CreateMetaForm({ onSuccess, onCancel, initialData }: CreateMetaF
     const [fetchingUsers, setFetchingUsers] = useState(true)
     const supabase = createClient()
 
+    const [formData, setFormData] = useState(() => {
+        const base = {
+            asesor_id: '',
+            rol_seleccionado: '',
+            tipo_meta: 'cobro',
+            periodo: 'mensual',
+            valor_objetivo: '',
+            bono_monto: '',
+            bono_por_cliente: '',
+            monto_minimo_prestamo: '500',
+            escalones: [
+                { mora: '5', bono: '500' },
+                { mora: '7', bono: '250' },
+                { mora: '9', bono: '150' }
+            ]
+        }
+
+        if (!initialData) return base
+
+        let tipo = 'cobro'
+        let valor = ''
+        
+        if (initialData.meta_cobro !== null && initialData.meta_cobro !== undefined) { tipo = 'cobro'; valor = initialData.meta_cobro.toString(); }
+        else if (initialData.meta_recaudacion_total !== null && initialData.meta_recaudacion_total !== undefined) { tipo = 'recaudacion'; valor = initialData.meta_recaudacion_total.toString(); }
+        else if (initialData.meta_colocacion !== null && initialData.meta_colocacion !== undefined) { tipo = 'colocacion'; valor = initialData.meta_colocacion.toString(); }
+        else if (initialData.meta_morosidad_max !== null && initialData.meta_morosidad_max !== undefined) { tipo = 'mora'; valor = initialData.meta_morosidad_max.toString(); }
+        else if (initialData.escalones_mora) { tipo = 'mora'; valor = ''; }
+        else if (initialData.meta_cantidad_clientes !== null && initialData.meta_cantidad_clientes !== undefined) { tipo = 'clientes'; valor = initialData.meta_cantidad_clientes.toString(); }
+        else if (initialData.meta_retencion_clientes !== null && initialData.meta_retencion_clientes !== undefined) { tipo = 'retencion'; valor = initialData.meta_retencion_clientes.toString(); }
+        else if (initialData.meta_colocacion_clientes) { tipo = 'colocacion_clientes'; valor = ''; }
+        else if (initialData.meta_capital_cartera !== null && initialData.meta_capital_cartera !== undefined) { tipo = 'capital'; valor = initialData.meta_capital_cartera.toString(); }
+
+        return {
+            asesor_id: initialData.asesor_id || '',
+            rol_seleccionado: initialData.perfiles?.rol || '',
+            tipo_meta: tipo,
+            periodo: (initialData.periodo || 'mensual').toLowerCase().trim(),
+            valor_objetivo: valor,
+            bono_monto: initialData.bono_monto?.toString() || '',
+            bono_por_cliente: initialData.bono_por_cliente?.toString() || '',
+            monto_minimo_prestamo: initialData.monto_minimo_prestamo?.toString() || '500',
+            escalones: initialData.escalones_mora ? (typeof initialData.escalones_mora === 'string' ? JSON.parse(initialData.escalones_mora) : initialData.escalones_mora) : [
+                { mora: '5', bono: '500' },
+                { mora: '7', bono: '250' },
+                { mora: '9', bono: '150' }
+            ]
+        }
+    })
+
     useEffect(() => {
         if (initialData) {
             let tipo = 'cobro'
             let valor = ''
             
-            if (initialData.meta_cobro) { tipo = 'cobro'; valor = initialData.meta_cobro.toString(); }
-            else if (initialData.meta_colocacion) { tipo = 'colocacion'; valor = initialData.meta_colocacion.toString(); }
-            else if (initialData.meta_morosidad_max) { tipo = 'mora'; valor = initialData.meta_morosidad_max.toString(); }
-            else if (initialData.meta_cantidad_clientes) { tipo = 'clientes'; valor = initialData.meta_cantidad_clientes.toString(); }
-            else if (initialData.meta_retencion_clientes) { tipo = 'retencion'; valor = initialData.meta_retencion_clientes.toString(); }
+            if (initialData.meta_cobro !== null && initialData.meta_cobro !== undefined) { tipo = 'cobro'; valor = initialData.meta_cobro.toString(); }
+            else if (initialData.meta_recaudacion_total !== null && initialData.meta_recaudacion_total !== undefined) { tipo = 'recaudacion'; valor = initialData.meta_recaudacion_total.toString(); }
+            else if (initialData.meta_colocacion !== null && initialData.meta_colocacion !== undefined) { tipo = 'colocacion'; valor = initialData.meta_colocacion.toString(); }
+            else if (initialData.meta_morosidad_max !== null && initialData.meta_morosidad_max !== undefined) { tipo = 'mora'; valor = initialData.meta_morosidad_max.toString(); }
+            else if (initialData.escalones_mora) { tipo = 'mora'; valor = ''; }
+            else if (initialData.meta_cantidad_clientes !== null && initialData.meta_cantidad_clientes !== undefined) { tipo = 'clientes'; valor = initialData.meta_cantidad_clientes.toString(); }
+            else if (initialData.meta_retencion_clientes !== null && initialData.meta_retencion_clientes !== undefined) { tipo = 'retencion'; valor = initialData.meta_retencion_clientes.toString(); }
             else if (initialData.meta_colocacion_clientes) { tipo = 'colocacion_clientes'; valor = ''; }
-            else if (initialData.meta_capital_cartera) { tipo = 'capital'; valor = initialData.meta_capital_cartera.toString(); }
+            else if (initialData.meta_capital_cartera !== null && initialData.meta_capital_cartera !== undefined) { tipo = 'capital'; valor = initialData.meta_capital_cartera.toString(); }
 
             setFormData({
                 asesor_id: initialData.asesor_id || '',
                 rol_seleccionado: initialData.perfiles?.rol || '',
                 tipo_meta: tipo,
-                periodo: initialData.periodo || 'mensual',
+                periodo: (initialData.periodo || 'mensual').toLowerCase().trim(),
                 valor_objetivo: valor,
                 bono_monto: initialData.bono_monto?.toString() || '',
                 bono_por_cliente: initialData.bono_por_cliente?.toString() || '',
-                monto_minimo_prestamo: initialData.monto_minimo_prestamo?.toString() || '500'
+                monto_minimo_prestamo: initialData.monto_minimo_prestamo?.toString() || '500',
+                escalones: initialData.escalones_mora ? (typeof initialData.escalones_mora === 'string' ? JSON.parse(initialData.escalones_mora) : initialData.escalones_mora) : [
+                    { mora: '5', bono: '500' },
+                    { mora: '7', bono: '250' },
+                    { mora: '9', bono: '150' }
+                ]
+            })
+        } else {
+            setFormData({
+                asesor_id: '',
+                rol_seleccionado: '',
+                tipo_meta: 'cobro',
+                periodo: 'mensual',
+                valor_objetivo: '',
+                bono_monto: '',
+                bono_por_cliente: '',
+                monto_minimo_prestamo: '500',
+                escalones: [
+                    { mora: '5', bono: '500' },
+                    { mora: '7', bono: '250' },
+                    { mora: '9', bono: '150' }
+                ]
             })
         }
     }, [initialData])
-
-    const [formData, setFormData] = useState({
-        asesor_id: initialData?.asesor_id || '',
-        rol_seleccionado: initialData?.perfiles?.rol || '',
-        tipo_meta: 'cobro', // Overridden in effect
-        periodo: initialData?.periodo || 'mensual',
-        valor_objetivo: '', // Overridden in effect
-        bono_monto: initialData?.bono_monto?.toString() || '',
-        bono_por_cliente: initialData?.bono_por_cliente?.toString() || '',
-        monto_minimo_prestamo: initialData?.monto_minimo_prestamo?.toString() || '500'
-    })
 
     useEffect(() => {
         async function fetchUsers() {
@@ -100,7 +162,7 @@ export function CreateMetaForm({ onSuccess, onCancel, initialData }: CreateMetaF
                 toast.error('Ingresa el bono por cliente')
                 return
             }
-        } else if (!formData.valor_objetivo) {
+        } else if (!formData.valor_objetivo && formData.tipo_meta !== 'mora') {
             toast.error('Complete el campo de objetivo')
             return
         }
@@ -110,12 +172,14 @@ export function CreateMetaForm({ onSuccess, onCancel, initialData }: CreateMetaF
             const dataToInsert: any = {
                 asesor_id: formData.asesor_id,
                 periodo: formData.periodo as any,
-                bono_monto: formData.bono_monto ? parseFloat(formData.bono_monto) : 0
+                bono_monto: formData.bono_monto ? parseFloat(formData.bono_monto) : 0,
+                activo: true
             }
 
             // Ensure null for resetting fields
             dataToInsert.meta_cobro = null;
             dataToInsert.meta_colocacion = null;
+            dataToInsert.meta_recaudacion_total = null;
             dataToInsert.meta_morosidad_max = null;
             dataToInsert.meta_cantidad_clientes = null;
             dataToInsert.meta_retencion_clientes = null;
@@ -123,10 +187,18 @@ export function CreateMetaForm({ onSuccess, onCancel, initialData }: CreateMetaF
             dataToInsert.meta_capital_cartera = null;
             dataToInsert.bono_por_cliente = null;
             dataToInsert.monto_minimo_prestamo = null;
+            dataToInsert.escalones_mora = null;
+
+            if (formData.tipo_meta === 'mora') {
+                dataToInsert.escalones_mora = JSON.stringify(formData.escalones);
+            }
 
             switch (formData.tipo_meta) {
                 case 'cobro': 
                     dataToInsert.meta_cobro = parseFloat(formData.valor_objetivo); 
+                    break;
+                case 'recaudacion':
+                    dataToInsert.meta_recaudacion_total = parseFloat(formData.valor_objetivo);
                     break;
                 case 'colocacion': 
                     dataToInsert.meta_colocacion = parseFloat(formData.valor_objetivo); 
@@ -193,7 +265,7 @@ export function CreateMetaForm({ onSuccess, onCancel, initialData }: CreateMetaF
                         <SelectTrigger className="bg-slate-800/50 border-slate-700 text-white">
                             <SelectValue placeholder="Seleccionar..." />
                         </SelectTrigger>
-                        <SelectContent className="bg-slate-900 border-slate-700">
+                        <SelectContent className="bg-slate-900 border-slate-700 text-white">
                             {usuarios.map((u) => (
                                 <SelectItem key={u.id} value={u.id}>
                                     {u.nombre_completo} ({u.rol})
@@ -253,8 +325,8 @@ export function CreateMetaForm({ onSuccess, onCancel, initialData }: CreateMetaF
                     </Select>
                 </div>
 
-                {/* Valor Objetivo - solo si NO es colocación por cliente */}
-                {!esColocacionClientes && (
+                {/* Valor Objetivo - solo si NO es colocación por cliente ni mora por escalones */}
+                {!esColocacionClientes && formData.tipo_meta !== 'mora' && (
                     <div className="space-y-2">
                         <Label className="text-slate-300">
                             {formData.tipo_meta === 'retencion' ? 'Clientes a mantener' : 'Objetivo'}
@@ -263,6 +335,7 @@ export function CreateMetaForm({ onSuccess, onCancel, initialData }: CreateMetaF
                             type="number"
                             placeholder={
                                 formData.tipo_meta === 'cobro' ? 'Ej. 90 (%)' :
+                                formData.tipo_meta === 'recaudacion' ? 'Ej. 5000 (S/)' :
                                 formData.tipo_meta === 'retencion' ? 'Ej. 15 clientes' :
                                 formData.tipo_meta === 'clientes' ? 'Ej. 5 clientes' :
                                 'Ej. 5000'
@@ -274,6 +347,49 @@ export function CreateMetaForm({ onSuccess, onCancel, initialData }: CreateMetaF
                     </div>
                 )}
             </div>
+
+            {/* Escalones de Morosidad */}
+            {formData.tipo_meta === 'mora' && (
+                <div className="space-y-4 p-4 rounded-xl bg-orange-500/5 border border-orange-500/20">
+                    <h4 className="text-sm font-bold text-orange-400 flex items-center gap-2">
+                        <ShieldAlert className="w-4 h-4" />
+                        Escalones de Morosidad
+                    </h4>
+                    <div className="space-y-3">
+                        {formData.escalones.map((esc: any, idx: number) => (
+                            <div key={idx} className="grid grid-cols-2 gap-4 items-end bg-slate-900/30 p-2 rounded-lg border border-slate-800">
+                                <div className="space-y-1.5">
+                                    <Label className="text-[10px] text-slate-500 uppercase">Mora Máxima % (E{idx+1})</Label>
+                                    <Input
+                                        type="number"
+                                        value={esc.mora}
+                                        onChange={(e) => {
+                                            const newEsc = [...formData.escalones]
+                                            newEsc[idx].mora = e.target.value
+                                            setFormData({ ...formData, escalones: newEsc })
+                                        }}
+                                        className="h-9 bg-slate-800 border-slate-700"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label className="text-[10px] text-slate-500 uppercase">Bono S/ (E{idx+1})</Label>
+                                    <Input
+                                        type="number"
+                                        value={esc.bono}
+                                        onChange={(e) => {
+                                            const newEsc = [...formData.escalones]
+                                            newEsc[idx].bono = e.target.value
+                                            setFormData({ ...formData, escalones: newEsc })
+                                        }}
+                                        className="h-9 bg-slate-800 border-slate-700"
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <p className="text-[10px] text-slate-500 italic">El bono se asigna automáticamente al mejor escalón que cumpla el asesor.</p>
+                </div>
+            )}
 
             {/* Campos específicos para Colocación por Cliente */}
             {esColocacionClientes && (
@@ -309,8 +425,8 @@ export function CreateMetaForm({ onSuccess, onCancel, initialData }: CreateMetaF
                 </div>
             )}
 
-            {/* Bono fijo (solo si NO es colocación por cliente) */}
-            {!esColocacionClientes && (
+            {/* Bono fijo (solo si NO es colocación ni mora escalonada) */}
+            {!esColocacionClientes && formData.tipo_meta !== 'mora' && (
                 <div className="space-y-2">
                     <Label className="text-slate-300 flex items-center gap-2">
                         <Award className="w-3.5 h-3.5 text-yellow-400" />

@@ -116,12 +116,12 @@ export function DashboardNav({
             {/* Desktop Sidebar */}
             <nav className={cn(
                 "hidden md:flex flex-col border-r border-white/5 bg-slate-950/40 backdrop-blur-xl h-full fixed left-0 top-0 z-[100] transition-all duration-300",
-                isCollapsed ? "w-20 p-2" : "w-72 p-6"
+                isCollapsed ? "w-16 p-2" : "w-64 p-4"
             )}>
                 {/* Brand / Logo */}
                 <div className={cn(
-                    "mb-8 flex items-center px-2",
-                    isCollapsed ? "flex-col gap-4 px-0" : "justify-between"
+                    "mb-10 flex items-center px-2",
+                    isCollapsed ? "flex-col gap-6 px-0" : "justify-between"
                 )}>
                     <div className="flex items-center gap-3 overflow-hidden">
                         {systemLogo ? (
@@ -135,7 +135,7 @@ export function DashboardNav({
                         )}
                         {!isCollapsed && (
                             <div className="animate-in fade-in slide-in-from-left-2 duration-300">
-                                <h1 className="text-xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent truncate w-32" title={systemName}>
+                                <h1 className="text-lg font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent truncate w-28" title={systemName}>
                                     {systemName}
                                 </h1>
                                 <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold border-t border-slate-800/50 pt-0.5 mt-0.5 block">
@@ -144,12 +144,12 @@ export function DashboardNav({
                             </div>
                         )}
                     </div>
-                    {/* Top Actions */}
+                    {/* Notifications (Restored) */}
                     <div className={cn(
-                        "flex items-center gap-2 animate-in fade-in duration-300",
-                        isCollapsed ? "justify-center" : ""
+                        "flex items-center gap-2 ml-auto pl-4",
+                        isCollapsed ? "justify-center mt-2 ml-0 pl-0" : ""
                     )}>
-                        {isPending && <Loader2 className="w-4 h-4 text-blue-400 animate-spin mr-1" />}
+                        {isPending && <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />}
                         <NotificationsDropdown />
                     </div>
                 </div>
@@ -188,11 +188,11 @@ export function DashboardNav({
                     {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
                 </button>
 
-                <div className="flex-1 space-y-6 overflow-y-auto custom-scrollbar pr-2 -mr-2">
+                <div className="flex-1 space-y-5 overflow-y-auto custom-scrollbar pr-2 -mr-2">
                     {categories.map((category) => (
                         <div key={category} className="space-y-2">
                             {!isCollapsed && (
-                                <h2 className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-500/70 animate-in fade-in duration-300">
+                                <h2 className="px-4 text-[9px] font-bold uppercase tracking-widest text-slate-500/70 animate-in fade-in duration-300">
                                     {category}
                                 </h2>
                             )}

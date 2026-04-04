@@ -131,13 +131,13 @@ export default async function CuadrePage() {
                        <div className="space-y-1">
                           <div className="flex items-center gap-2">
                              <span className="text-sm font-bold text-white">
-                                {format(new Date(c.created_at), 'dd/MM/yyyy')}
+                                {format(new Date(c.created_at), 'dd/MM/yyyy hh:mm a')}
                              </span>
                              <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-bold uppercase">
                                 {c.tipo_cuadre}
                              </span>
                           </div>
-                          <p className="text-xs text-slate-500">Monto total entegado: S/ {c.saldo_entregado}</p>
+                          <p className="text-xs text-slate-500">Monto total entregado: S/ {c.saldo_entregado}</p>
                        </div>
                        <div>
                           <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg ${
@@ -159,17 +159,6 @@ export default async function CuadrePage() {
                 </div>
              </CardContent>
            </Card>
-
-           {/* Help Card */}
-           <div className="p-6 rounded-2xl bg-gradient-to-br from-blue-600/10 to-transparent border border-blue-500/20 shadow-xl">
-              <h4 className="text-blue-400 font-bold mb-2">Instrucciones de Cierre</h4>
-              <ul className="text-xs text-slate-400 space-y-3 list-disc pl-4">
-                 <li>Reporta el cierre parcial entre las <span className="text-blue-200">2:00 PM y 4:00 PM</span>.</li>
-                 <li>El cierre final debe realizarse al finalizar la ruta de cobranza.</li>
-                 <li>Asegúrate de que el dinero coincida con el reporte de tu celular.</li>
-                 <li>Cualquier diferencia será notificada al supervisor.</li>
-              </ul>
-           </div>
         </div>
       </div>
     </div>

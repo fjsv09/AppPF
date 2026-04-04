@@ -61,23 +61,14 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
     const config = estadoConfig[solicitud.estado_solicitud] || estadoConfig['pendiente_supervision']
     const IconComponent = config.icon
 
-    // Obtener cuentas administrativas (Cartera Global) si es admin y está pre-aprobado
+    // Obtener cuentas administrativas (Caja/Banco) si es admin y está pre-aprobado
     let cuentasAdmin: any[] = []
     if (perfil?.rol === 'admin' && solicitud.estado_solicitud === 'pre_aprobado') {
-        const { data: globalCartera } = await supabaseAdmin
-            .from('carteras')
-            .select('id')
-            .is('asesor_id', null)
-            .limit(1)
-            .single()
-
-        if (globalCartera) {
-            const { data: cuentas } = await supabaseAdmin
-                .from('cuentas_financieras')
-                .select('id, nombre, saldo, tipo')
-                .eq('cartera_id', globalCartera.id)
-            cuentasAdmin = cuentas || []
-        }
+        const { data: cuentas } = await supabaseAdmin
+            .from('cuentas_financieras')
+            .select('id, nombre, saldo, tipo')
+            .order('nombre')
+        cuentasAdmin = cuentas || []
     }
 
     // Calcular total estimado

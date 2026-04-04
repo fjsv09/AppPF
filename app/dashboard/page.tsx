@@ -106,7 +106,7 @@ export default async function DashboardPage() {
             {perfil?.rol === 'asesor' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in slide-in-from-bottom-4 duration-700">
                     <div className="lg:col-span-2 space-y-8">
-                        {!(blockInfo?.isBlocked && blockInfo?.code === 'SALDO_PENDIENTE') && <AdvisorHub />}
+                        {!(blockInfo?.isBlocked && blockInfo?.code === 'SALDO_PENDIENTE') && <AdvisorHub userId={user?.id || ''} />}
                     </div>
                     
                     <div className="lg:col-span-1">

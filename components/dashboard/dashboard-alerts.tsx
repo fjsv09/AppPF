@@ -5,6 +5,7 @@ import { AlertCircle, AlertTriangle, Clock } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { CuadreModal } from '@/components/finanzas/cuadre-modal'
 
 interface DashboardAlertsProps {
     userId: string
@@ -90,12 +91,16 @@ export function DashboardAlerts({ userId, blockInfo, accessInfo }: DashboardAler
                         <h2 className="text-xl font-black text-red-400 uppercase tracking-tight mb-2">Jornada Bloqueada por Deuda</h2>
                         <p className="text-sm text-red-200/80 max-w-2xl">{blockInfo.reason}</p>
                     </div>
-                    <Link 
-                        href="/dashboard/cuadre?modo=saldo_pendiente"
-                        className="w-full md:w-auto px-8 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-colors text-center whitespace-nowrap shadow-[0_0_20px_rgba(220,38,38,0.4)]"
-                    >
-                        Liquidar Saldo Pendiente
-                    </Link>
+                    <CuadreModal 
+                        userId={userId}
+                        isDebtBlocked={true}
+                        systemConfig={accessInfo?.config}
+                        trigger={
+                            <button className="w-full md:w-auto px-8 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-colors text-center whitespace-nowrap shadow-[0_0_20px_rgba(220,38,38,0.4)]">
+                                Liquidar Saldo Pendiente
+                            </button>
+                        }
+                    />
                 </div>
             )}
 
@@ -109,12 +114,16 @@ export function DashboardAlerts({ userId, blockInfo, accessInfo }: DashboardAler
                         <h2 className="text-xl font-black text-amber-400 uppercase tracking-tight mb-2">Cierre Parcial Requerido</h2>
                         <p className="text-sm text-amber-200/80 max-w-2xl">{accessInfo.reason}</p>
                     </div>
-                    <Link 
-                        href="/dashboard/cuadre"
-                        className="w-full md:w-auto px-8 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl transition-colors text-center whitespace-nowrap"
-                    >
-                        Realizar Cierre Parcial
-                    </Link>
+                    <CuadreModal 
+                        userId={userId}
+                        isMorningBlocked={true}
+                        systemConfig={accessInfo?.config}
+                        trigger={
+                            <button className="w-full md:w-auto px-8 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl transition-colors text-center whitespace-nowrap">
+                                Realizar Cierre Parcial
+                            </button>
+                        }
+                    />
                 </div>
             )}
 

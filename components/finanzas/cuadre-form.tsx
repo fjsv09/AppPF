@@ -265,19 +265,21 @@ export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, 
         return
     }
 
-    // Validation: Si no hay saldo ni movimientos previos, no hay nada que cuadrar
-    if (stats.neto <= 0 && !hasMovements) {
-        toast.error('No hay saldo recaudado ni movimientos que liquidar.')
-        return
-    }
-
     const mEfectivo = parseFloat(values.monto_efectivo) || 0
     const mDigital = parseFloat(values.monto_digital) || 0
     const totalEntregar = mEfectivo + mDigital
     
-    // Validation: Total cannot be 0
-    // Validación: El monto debe ser mayor a 0, a menos que haya gastos/cobros que liquidar
-    if (totalEntregar <= 0 && !hasMovements) {
+    // ¿Es un cierre que requiere sí o sí reportarse (mañana o noche)?
+    const isObligatorio = isMorningBlocked || isNightBlocked || values.tipo_cuadre === 'parcial_mañana' || values.tipo_cuadre === 'final';
+
+    // Validation: Si no hay saldo ni movimientos previos, y no es obligatorio, no hay nada que cuadrar
+    if (stats.neto <= 0 && !hasMovements && !isObligatorio) {
+        toast.error('No hay saldo recaudado ni movimientos que liquidar.')
+        return
+    }
+
+    // Validación: El monto debe ser mayor a 0, a menos que haya gastos/cobros que liquidar o sea un cuadre obligatorio
+    if (totalEntregar <= 0 && !hasMovements && !isObligatorio) {
         toast.error('No hay movimientos ni saldo por liquidar.')
         return
     }
@@ -340,10 +342,10 @@ export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, 
                     <Clock className="w-5 h-5 text-blue-400" />
                  </div>
                  <div>
-                    <CardTitle className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-                      <Clock className="w-5 h-5 text-blue-400 hidden sm:block" />
-                      Realizar Cuadre Diario
-                    </CardTitle>
+                     <CardTitle className="text-base xs:text-lg md:text-xl font-bold text-white flex items-center gap-2">
+                       <Clock className="w-4 h-4 xs:w-5 xs:h-5 text-blue-400 hidden sm:block" />
+                       Realizar Cuadre Diario
+                     </CardTitle>
                     <CardDescription className="text-slate-400 text-xs md:text-sm mt-0.5">
                       Reporta la recaudación del día.
                     </CardDescription>
@@ -516,17 +518,25 @@ export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, 
                   </div>
               </div>
 
-              <Button
-                type="submit"
-                disabled={loading || hasPending || (stats.neto <= 0 && !hasMovements)}
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold h-14 rounded-xl transition-all shadow-xl shadow-blue-500/10 disabled:opacity-50 disabled:grayscale"
-              >
-                {loading ? 'Procesando...' : 
-                 hasPending ? 'Esperando Validación' : 
-                 (stats.neto <= 0 && hasMovements) ? 'Liquidar Movimientos/Gastos' :
-                 stats.neto <= 0 ? 'Sin Movimientos por Cuadrar' : 
-                 'Enviar Solicitud de Cuadre'}
-              </Button>
+              {(() => {
+                const isObligatorioForm = isMorningBlocked || isNightBlocked || form.watch('tipo_cuadre') === 'parcial_mañana' || form.watch('tipo_cuadre') === 'final';
+                const isZeroDisabled = stats.neto <= 0 && !hasMovements && !isObligatorioForm;
+                
+                return (
+                  <Button
+                    type="submit"
+                    disabled={loading || hasPending || isZeroDisabled}
+                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold h-14 rounded-xl transition-all shadow-xl shadow-blue-500/10 disabled:opacity-50 disabled:grayscale"
+                  >
+                    {loading ? 'Procesando...' : 
+                     hasPending ? 'Esperando Validación' : 
+                     (stats.neto <= 0 && hasMovements) ? 'Liquidar Movimientos/Gastos' :
+                     isZeroDisabled ? 'Sin Movimientos por Cuadrar' : 
+                     (stats.neto <= 0 && isObligatorioForm) ? 'Reportar Cierre en Cero' :
+                     'Enviar Solicitud de Cuadre'}
+                  </Button>
+                );
+              })()}
               
               <p className="text-[10px] text-center text-slate-500 italic">
                  * El Admin recibirá una notificación para validar y autorizar el movimiento de los fondos.

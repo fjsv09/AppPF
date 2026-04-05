@@ -22,6 +22,7 @@ import {
 import { format, startOfDay, endOfDay, subDays, startOfWeek } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
@@ -44,7 +45,9 @@ interface AdvisorMetrics {
 }
 
 export function AuditoriaVisitasPanel({ userRol, userId, perfiles }: AuditoriaVisitasPanelProps) {
-    const [dateRange, setDateRange] = useState<'hoy' | 'ayer' | 'semana'>('hoy')
+    const [dateRange, setDateRange] = useState<'hoy' | 'ayer' | 'semana' | 'personalizado'>('hoy')
+    const [fromDate, setFromDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
+    const [toDate, setToDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
     const [loading, setLoading] = useState(true)
     const [metrics, setMetrics] = useState<AdvisorMetrics[]>([])
     const [selectedAdvisor, setSelectedAdvisor] = useState<AdvisorMetrics | null>(null)
@@ -62,12 +65,18 @@ export function AuditoriaVisitasPanel({ userRol, userId, perfiles }: AuditoriaVi
             const yesterday = subDays(now, 1)
             start = startOfDay(yesterday).toISOString()
             end = endOfDay(yesterday).toISOString()
-        } else {
+        } else if (dateRange === 'semana') {
             start = startOfWeek(now, { weekStartsOn: 1 }).toISOString()
+            end = endOfDay(now).toISOString()
+        } else if (dateRange === 'personalizado' && fromDate && toDate) {
+            start = startOfDay(new Date(fromDate + 'T00:00:00')).toISOString()
+            end = endOfDay(new Date(toDate + 'T23:59:59')).toISOString()
+        } else {
+            start = startOfDay(now).toISOString()
             end = endOfDay(now).toISOString()
         }
         return { start, end };
-    }, [dateRange])
+    }, [dateRange, fromDate, toDate])
 
     // Filtrar asesores bajo mando
     const myAdvisors = useMemo(() => {
@@ -193,35 +202,59 @@ export function AuditoriaVisitasPanel({ userRol, userId, perfiles }: AuditoriaVi
     return (
         <>
             <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
-                <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-4">
-                    <div>
-                        <CardTitle className="text-lg font-bold flex items-center gap-2">
-                            <ShieldAlert className="w-5 h-5 text-red-500" />
-                            Auditoría de Visitas en Terreno
-                        </CardTitle>
-                        <p className="text-xs text-slate-500 mt-1">Control de integridad, tiempos y geolocalización de asesores.</p>
+                <CardHeader className="flex flex-col gap-4 border-b border-white/5 px-4 py-5 sm:px-6 sm:gap-5">
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-white tracking-tight">
+                                <ShieldAlert className="w-5 h-5 text-red-500" />
+                                Auditoría de Visitas en Terreno
+                            </CardTitle>
+                            <p className="text-xs text-slate-500 mt-1">Control de integridad, tiempos y geolocalización de asesores.</p>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <Select value={dateRange} onValueChange={(val: any) => setDateRange(val)}>
-                            <SelectTrigger className="w-[150px] bg-slate-950/50 border-slate-700 h-9 text-xs">
-                                <CalendarDays className="w-3.5 h-3.5 mr-2" />
-                                <SelectValue placeholder="Periodo" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-slate-800">
-                                <SelectItem value="hoy">Hoy</SelectItem>
-                                <SelectItem value="ayer">Ayer</SelectItem>
-                                <SelectItem value="semana">Esta Semana</SelectItem>
-                            </SelectContent>
-                        </Select>
+                    
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-2.5 p-2.5 bg-slate-950/30 rounded-xl border border-white/5 w-full">
+                        <div className="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
+                            <Select value={dateRange} onValueChange={(val: any) => setDateRange(val)}>
+                                <SelectTrigger className="w-full sm:w-[180px] bg-slate-950/50 border-slate-700/50 h-10 text-[10px] uppercase font-bold tracking-wider hover:border-slate-600 transition-all">
+                                    <CalendarDays className="w-3.5 h-3.5 mr-2 text-blue-400" />
+                                    <SelectValue placeholder="Periodo" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-900 border-slate-800 text-slate-300">
+                                    <SelectItem value="hoy">Hoy</SelectItem>
+                                    <SelectItem value="ayer">Ayer</SelectItem>
+                                    <SelectItem value="semana">Esta Semana</SelectItem>
+                                    <SelectItem value="personalizado">Personalizado</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            {dateRange === 'personalizado' && (
+                                <div className="flex items-center gap-2 w-full sm:w-auto animate-in slide-in-from-top-1 duration-300">
+                                    <Input 
+                                        type="date" 
+                                        value={fromDate} 
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFromDate(e.target.value)}
+                                        className="h-10 flex-1 sm:w-32 bg-slate-950/50 border-slate-700/50 text-slate-300 text-[10px] rounded-lg focus:border-blue-500/50 [&::-webkit-calendar-picker-indicator]:invert"
+                                    />
+                                    <Input 
+                                        type="date" 
+                                        value={toDate} 
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToDate(e.target.value)}
+                                        className="h-10 flex-1 sm:w-32 bg-slate-950/50 border-slate-700/50 text-slate-300 text-[10px] rounded-lg focus:border-blue-500/50 [&::-webkit-calendar-picker-indicator]:invert"
+                                    />
+                                </div>
+                            )}
+                        </div>
+
                         <Button 
                             variant="outline" 
                             size="sm" 
                             onClick={exportToCSV}
-                            className="bg-slate-950/50 border-slate-700 h-9 text-xs gap-2"
+                            className="w-full sm:w-auto bg-slate-950/50 border-slate-700/50 h-10 text-[10px] font-bold uppercase tracking-wider gap-2 rounded-lg hover:bg-slate-900 transition-all"
                             disabled={loading || metrics.length === 0}
                         >
                             <Download className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Exportar</span>
+                            <span>Exportar Reporte</span>
                         </Button>
                     </div>
                 </CardHeader>

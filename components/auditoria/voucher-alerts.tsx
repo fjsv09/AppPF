@@ -122,57 +122,63 @@ export function VoucherAlerts() {
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             <Card className="bg-[#0a0a0c]/80 border-slate-800 shadow-2xl overflow-hidden backdrop-blur-xl">
-                <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-4">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-amber-500/10 rounded-xl border border-amber-500/20">
-                            <Receipt className="w-5 h-5 text-amber-500" />
-                        </div>
-                        <div>
-                            <CardTitle className="text-lg font-bold text-white tracking-tight">Monitor de Vouchers</CardTitle>
-                            <p className="text-xs text-slate-500 mt-0.5">Auditoría de cumplimiento por asesor en entrega de recibos.</p>
+                <CardHeader className="flex flex-col gap-4 border-b border-white/5 px-4 py-5 sm:px-6 sm:gap-5">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-amber-500/10 rounded-xl border border-amber-500/20 sm:p-2.5">
+                                <Receipt className="w-5 h-5 text-amber-500" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-lg font-bold text-white tracking-tight">Monitor de Vouchers</CardTitle>
+                                <p className="text-xs text-slate-500 mt-0.5">Auditoría de cumplimiento por asesor en entrega de recibos.</p>
+                            </div>
                         </div>
                     </div>
                     
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div className="relative w-full sm:w-48">
-                            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-3 p-2.5 bg-slate-950/30 rounded-xl border border-white/5 w-full">
+                        {/* Buscador - Full width en móviles */}
+                        <div className="relative w-full lg:w-72 group">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500 group-focus-within:text-amber-500 transition-colors" />
                             <Input 
-                                placeholder="Buscar asesor..." 
+                                placeholder="Buscar asesor por nombre..." 
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-9 h-9 text-[11px] bg-slate-950/50 border-slate-700/50 text-slate-300 rounded-lg placeholder:text-slate-600 focus:border-amber-500/50 transition-colors"
+                                className="pl-10 h-10 text-[12px] bg-slate-950/50 border-slate-800/80 text-slate-300 rounded-lg placeholder:text-slate-600 focus:border-amber-500/50 transition-colors shadow-inner w-full"
                             />
                         </div>
                         
-                        <Select value={dateRangeType} onValueChange={(val: DateRangeType) => setDateRangeType(val)}>
-                            <SelectTrigger className="w-[140px] h-9 bg-slate-950/50 border-slate-700/50 text-slate-300 rounded-lg text-[10px] uppercase font-bold tracking-wider">
-                                <CalendarIcon className="w-3.5 h-3.5 mr-2 text-amber-500" />
-                                <SelectValue placeholder="Periodo" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-slate-800 text-slate-300">
-                                <SelectItem value="today">Hoy</SelectItem>
-                                <SelectItem value="7days">7 Días</SelectItem>
-                                <SelectItem value="month">Este Mes</SelectItem>
-                                <SelectItem value="custom">Personalizado</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        {/* Controles de Fecha - Full width en móviles */}
+                        <div className="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
+                            <Select value={dateRangeType} onValueChange={(val: DateRangeType) => setDateRangeType(val)}>
+                                <SelectTrigger className="w-full sm:w-[180px] h-10 bg-slate-950/50 border-slate-800/80 text-slate-300 rounded-lg text-[10px] uppercase font-bold tracking-wider hover:border-slate-700 transition-all">
+                                    <CalendarIcon className="w-3.5 h-3.5 mr-2 text-amber-500" />
+                                    <SelectValue placeholder="Periodo" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-900 border-slate-800 text-slate-300">
+                                    <SelectItem value="today">Hoy</SelectItem>
+                                    <SelectItem value="7days">7 Días</SelectItem>
+                                    <SelectItem value="month">Este Mes</SelectItem>
+                                    <SelectItem value="custom">Personalizado</SelectItem>
+                                </SelectContent>
+                            </Select>
 
-                        {dateRangeType === 'custom' && (
-                            <div className="flex items-center gap-1.5 animate-in slide-in-from-right-2">
-                                <Input 
-                                    type="date" 
-                                    value={fromDate} 
-                                    onChange={(e) => setFromDate(e.target.value)}
-                                    className="h-9 w-32 bg-slate-950/50 border-slate-700/50 text-slate-300 text-[10px] rounded-lg"
-                                />
-                                <Input 
-                                    type="date" 
-                                    value={toDate} 
-                                    onChange={(e) => setToDate(e.target.value)}
-                                    className="h-9 w-32 bg-slate-950/50 border-slate-700/50 text-slate-300 text-[10px] rounded-lg"
-                                />
-                            </div>
-                        )}
+                            {dateRangeType === 'custom' && (
+                                <div className="flex items-center gap-2 w-full sm:w-auto animate-in slide-in-from-top-1 duration-300">
+                                    <Input 
+                                        type="date" 
+                                        value={fromDate} 
+                                        onChange={(e) => setFromDate(e.target.value)}
+                                        className="h-10 flex-1 sm:w-32 bg-slate-950/50 border-slate-800/80 text-slate-300 text-[10px] rounded-lg focus:border-amber-500/50 [&::-webkit-calendar-picker-indicator]:invert"
+                                    />
+                                    <Input 
+                                        type="date" 
+                                        value={toDate} 
+                                        onChange={(e) => setToDate(e.target.value)}
+                                        className="h-10 flex-1 sm:w-32 bg-slate-950/50 border-slate-800/80 text-slate-300 text-[10px] rounded-lg focus:border-amber-500/50 [&::-webkit-calendar-picker-indicator]:invert"
+                                    />
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </CardHeader>
 

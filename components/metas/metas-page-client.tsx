@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import { MetasProgress } from '@/components/metas/metas-progress'
 import { Users, ChevronDown, User } from 'lucide-react'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 
 interface MetasPageClientProps {
   asesores: { id: string; nombre_completo: string; rol?: string }[]
@@ -11,25 +12,37 @@ interface MetasPageClientProps {
 }
 
 export function MetasPageClient({ asesores, defaultUserId, userRole }: MetasPageClientProps) {
-  const [selectedAsesorId, setSelectedAsesorId] = useState<string>(asesores[0]?.id || defaultUserId)
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [isPending, startTransition] = useTransition()
+
+  // Initialize selectedId from URL or default
+  const urlSelectedId = searchParams.get('u')
+  const [selectedAsesorId, setSelectedAsesorId] = useState<string>(
+    urlSelectedId && asesores.some(a => a.id === urlSelectedId) ? urlSelectedId : (asesores[0]?.id || defaultUserId)
+  )
   const [isOpen, setIsOpen] = useState(false)
-  const [isLoaded, setIsLoaded] = useState(false)
 
-  // Load saved advisor on mount
+  // Sync state with URL when selection changes
   useEffect(() => {
-    const savedId = localStorage.getItem('metas-selected-asesor')
-    if (savedId && asesores.some(a => a.id === savedId)) {
-      setSelectedAsesorId(savedId)
+    const currentUrlId = searchParams.get('u')
+    if (selectedAsesorId && selectedAsesorId !== currentUrlId) {
+      startTransition(() => {
+        const params = new URLSearchParams(searchParams.toString())
+        params.set('u', selectedAsesorId)
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+      })
     }
-    setIsLoaded(true)
-  }, [asesores])
+  }, [selectedAsesorId, pathname, router, searchParams])
 
-  // Save advisor on change
+  // Sync state if URL changes externally
   useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem('metas-selected-asesor', selectedAsesorId)
+    const u = searchParams.get('u')
+    if (u && u !== selectedAsesorId && asesores.some(a => a.id === u)) {
+      setSelectedAsesorId(u)
     }
-  }, [selectedAsesorId, isLoaded])
+  }, [searchParams, asesores])
 
   const selectedAsesor = asesores.find(a => a.id === selectedAsesorId)
 

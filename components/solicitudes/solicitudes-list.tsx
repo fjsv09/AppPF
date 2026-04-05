@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useTransition } from 'react'
 import { FileText, Clock, CheckCircle, XCircle, AlertCircle, Eye, Users, Calendar, DollarSign, Search, X, Filter, ArrowUp, ArrowDown, MapPin, Activity } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import Link from 'next/link'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
 const estadoConfig: Record<string, { label: string, color: string, icon: any }> = {
@@ -18,10 +19,49 @@ const estadoConfig: Record<string, { label: string, color: string, icon: any }> 
 }
 
 export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicitudes: any[], perfil: any }) {
-    const [searchTerm, setSearchTerm] = useState('')
-    const [statusFilter, setStatusFilter] = useState('todos')
-    const [sortField, setSortField] = useState<'created_at' | 'fecha_aprobacion' | 'fecha_inicio'>('created_at')
-    const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
+    const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
+    const [isPending, startTransition] = useTransition()
+
+    // --- URL STATE MANAGEMENT ---
+    const searchTerm = searchParams.get('search') || ''
+    const statusFilter = searchParams.get('status') || 'todos'
+    const sortField = (searchParams.get('sortBy') as 'created_at' | 'fecha_aprobacion' | 'fecha_inicio') || 'created_at'
+    const sortOrder = (searchParams.get('order') as 'desc' | 'asc') || 'desc'
+
+    // Debounce State for Search
+    const [localSearch, setLocalSearch] = useState(searchTerm)
+
+    // Sync local search with URL if it changes externally
+    useEffect(() => {
+        setLocalSearch(searchParams.get('search') || '')
+    }, [searchParams])
+
+    // Debounce Search Effect
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            const current = searchParams.get('search') || ''
+            if (localSearch !== current) {
+                updateParams({ search: localSearch || null })
+            }
+        }, 500)
+        return () => clearTimeout(timer)
+    }, [localSearch])
+
+    const updateParams = (updates: Record<string, string | null>) => {
+        startTransition(() => {
+            const params = new URLSearchParams(searchParams.toString())
+            Object.entries(updates).forEach(([key, value]) => {
+                if (value === null || value === 'todos') {
+                    params.delete(key)
+                } else {
+                    params.set(key, value)
+                }
+            })
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+        })
+    }
 
     const filteredSolicitudes = useMemo(() => {
         return initialSolicitudes?.filter(solicitud => {
@@ -60,15 +100,15 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <Input
                         placeholder="Buscar cliente, DNI..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        value={localSearch}
+                        onChange={(e) => setLocalSearch(e.target.value)}
                         className="h-10 pl-9 pr-8 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:bg-slate-900 transition-colors w-full"
                     />
-                    {searchTerm && (
+                    {localSearch && (
                          <Button 
                              variant="ghost" 
                              size="icon" 
-                             onClick={() => setSearchTerm('')}
+                             onClick={() => setLocalSearch('')}
                              className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-slate-500 hover:text-white hover:bg-slate-800 rounded-full"
                              title="Restablecer búsqueda"
                          >
@@ -78,7 +118,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <Select value={statusFilter} onValueChange={(val) => updateParams({ status: val })}>
                         <SelectTrigger className="h-10 w-auto min-w-[140px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3">
                             <Activity className="w-3 h-3 mr-2 text-emerald-400 shrink-0" />
                             <SelectValue placeholder="Estado" />
@@ -94,7 +134,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                     </Select>
 
                     <div className="flex gap-1 shrink-0 bg-slate-950/30 p-1 rounded-lg border border-slate-800/50 w-auto">
-                        <Select value={sortField} onValueChange={(val) => setSortField(val as 'created_at' | 'fecha_aprobacion' | 'fecha_inicio')}>
+                        <Select value={sortField} onValueChange={(val) => updateParams({ sortBy: val })}>
                             <SelectTrigger className="h-10 w-auto min-w-[110px] bg-transparent border-0 text-slate-300 focus:ring-0 text-xs px-2 shrink-0">
                                 <span className="text-slate-500 mr-1 hidden sm:inline">Ordenar:</span>
                                 <SelectValue placeholder="Ordenar" />
@@ -112,7 +152,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setSortOrder('asc')}
+                                onClick={() => updateParams({ order: 'asc' })}
                                 className={cn("h-8 w-8 rounded hover:bg-slate-800 shrink-0", sortOrder === 'asc' ? "text-blue-400 bg-blue-950/20" : "text-slate-500")}
                                 title="Ascendente (Más antiguos primero)"
                                 type="button"
@@ -122,7 +162,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setSortOrder('desc')}
+                                onClick={() => updateParams({ order: 'desc' })}
                                 className={cn("h-8 w-8 rounded hover:bg-slate-800 shrink-0", sortOrder === 'desc' ? "text-blue-400 bg-blue-950/20" : "text-slate-500")}
                                 title="Descendente (Más recientes primero)"
                                 type="button"
@@ -147,15 +187,18 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                 </Button>
                             </Link>
                         )}
-                        {(searchTerm !== '' || statusFilter !== 'todos') && (
+                        {(localSearch !== '' || statusFilter !== 'todos') && (
                             <Button 
                                 variant="outline" 
                                 className="mt-2 text-slate-400 border-slate-700 hover:text-white"
                                 onClick={() => {
-                                    setSearchTerm('')
-                                    setStatusFilter('todos')
-                                    setSortField('created_at')
-                                    setSortOrder('desc')
+                                    setLocalSearch('')
+                                    updateParams({
+                                        search: null,
+                                        status: 'todos',
+                                        sortBy: 'created_at',
+                                        order: 'desc'
+                                    })
                                 }}
                             >
                                 Limpiar filtros

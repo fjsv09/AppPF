@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { UserPlus, Loader2, Users, Shield, User, Eye, EyeOff, Wallet, Calendar } from 'lucide-react'
+import { UserPlus, Loader2, Users, Shield, User, Eye, EyeOff, Wallet, Calendar, Clock } from 'lucide-react'
 
 interface Supervisor {
     id: string
@@ -28,7 +28,9 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
         rol: 'asesor' as 'admin' | 'supervisor' | 'asesor',
         supervisor_id: '' as string,
         sueldo_base: '' as string,
-        fecha_nacimiento: '' as string
+        fecha_nacimiento: '' as string,
+        fecha_ingreso: '' as string,
+        frecuencia_pago: 'mensual' as string
     })
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -59,7 +61,9 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
                     ...formData,
                     supervisor_id: formData.rol === 'asesor' ? formData.supervisor_id : null,
                     sueldo_base: formData.sueldo_base ? parseFloat(formData.sueldo_base) : 0,
-                    fecha_nacimiento: formData.fecha_nacimiento || null
+                    fecha_nacimiento: formData.fecha_nacimiento || null,
+                    fecha_ingreso: formData.fecha_ingreso || null,
+                    frecuencia_pago: formData.frecuencia_pago || 'mensual'
                 })
             })
 
@@ -70,7 +74,7 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
             }
 
             toast.success(`Usuario ${formData.nombre} creado exitosamente`)
-            setFormData({ email: '', password: '', nombre: '', rol: 'asesor', supervisor_id: '', sueldo_base: '', fecha_nacimiento: '' })
+            setFormData({ email: '', password: '', nombre: '', rol: 'asesor', supervisor_id: '', sueldo_base: '', fecha_nacimiento: '', fecha_ingreso: '', frecuencia_pago: 'mensual' })
             onSuccess?.()
         } catch (error: any) {
             toast.error(error.message)
@@ -168,6 +172,44 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
                             onChange={(e) => setFormData({ ...formData, fecha_nacimiento: e.target.value })}
                             className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
                         />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    {/* Fecha de Ingreso */}
+                    <div className="space-y-2">
+                        <Label htmlFor="fecha_ingreso" className="text-slate-300 flex items-center gap-2">
+                            <Calendar className="w-3.5 h-3.5" />
+                            Fecha de Ingreso
+                        </Label>
+                        <Input
+                            id="fecha_ingreso"
+                            type="date"
+                            value={formData.fecha_ingreso}
+                            onChange={(e) => setFormData({ ...formData, fecha_ingreso: e.target.value })}
+                            className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
+                        />
+                    </div>
+
+                    {/* Frecuencia de Pago */}
+                    <div className="space-y-2">
+                        <Label className="text-slate-300 flex items-center gap-2">
+                            <Clock className="w-3.5 h-3.5" />
+                            Frecuencia Pago
+                        </Label>
+                        <Select 
+                            value={formData.frecuencia_pago} 
+                            onValueChange={(value) => setFormData({ ...formData, frecuencia_pago: value })}
+                        >
+                            <SelectTrigger className="bg-slate-800/50 border-slate-700 text-white">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-slate-700">
+                                <SelectItem value="semanal" className="text-white hover:bg-slate-800">Semanal</SelectItem>
+                                <SelectItem value="quincenal" className="text-white hover:bg-slate-800">Quincenal</SelectItem>
+                                <SelectItem value="mensual" className="text-white hover:bg-slate-800">Mensual</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
 

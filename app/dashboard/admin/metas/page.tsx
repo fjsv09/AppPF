@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useTransition, Fragment } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { BackButton } from '@/components/ui/back-button'
 import { 
@@ -27,6 +27,7 @@ import { CreateMetaForm } from '@/components/admin/create-meta-form'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
     Dialog,
     DialogContent,
@@ -42,6 +43,11 @@ import {
 } from "@/components/ui/tabs"
 
 export default function AdminMetasPage() {
+    const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
+    const [isPending, startTransition] = useTransition()
+
     const [metas, setMetas] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [showCreate, setShowCreate] = useState(false)
@@ -51,27 +57,22 @@ export default function AdminMetasPage() {
     const [pendingBonos, setPendingBonos] = useState<any[]>([])
     const [loadingBonos, setLoadingBonos] = useState(false)
     const supabase = createClient()
-    const [activeTab, setActiveTab] = useState('configuracion')
-    const [isMounted, setIsMounted] = useState(false)
+
+    // Sync tab with URL
+    const activeTab = searchParams.get('tab') || 'configuracion'
+    const setActiveTab = (tab: string) => {
+        startTransition(() => {
+            const params = new URLSearchParams(searchParams.toString())
+            params.set('tab', tab)
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+        })
+    }
+
     const [showRejectModal, setShowRejectModal] = useState(false)
     const [rejectReason, setRejectReason] = useState('')
     const [bonoToReject, setBonoToReject] = useState<any | null>(null)
     const [historyBonos, setHistoryBonos] = useState<any[]>([])
     const [loadingHistory, setLoadingHistory] = useState(false)
-
-    // Cargar pestaña guardada
-    useEffect(() => {
-        const savedTab = localStorage.getItem('admin-metas-tab')
-        if (savedTab) setActiveTab(savedTab)
-        setIsMounted(true)
-    }, [])
-
-    // Guardar pestaña cuando cambie
-    useEffect(() => {
-        if (isMounted) {
-            localStorage.setItem('admin-metas-tab', activeTab)
-        }
-    }, [activeTab, isMounted])
 
     async function fetchMetas() {
         setLoading(true)

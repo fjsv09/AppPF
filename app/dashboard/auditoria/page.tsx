@@ -285,73 +285,82 @@ export default function AuditoriaPage() {
 
                             <CardContent className="p-0">
                                 {/* Dedicated Filter Bar - Standardized with Loans Panel */}
-                                <div className="p-3 border-b border-white/5 bg-white/[0.02]">
-                                    <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
-                                        <div className="shrink-0">
-                                            <Button 
-                                                onClick={fetchLogs}
-                                                disabled={loading}
-                                                className="h-10 w-auto min-w-[120px] bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 rounded-xl font-black text-[10px] uppercase tracking-widest gap-2 transition-all px-4"
-                                            >
-                                                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                                                Actualizar
-                                            </Button>
-                                        </div>
+                                <div className="p-4 border-b border-white/5 bg-white/[0.02]">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Button 
+                                            onClick={fetchLogs}
+                                            disabled={loading}
+                                            className="h-10 w-full sm:w-auto min-w-[120px] bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 rounded-xl font-black text-[10px] uppercase tracking-widest gap-2 transition-all px-4"
+                                        >
+                                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+                                            Actualizar
+                                        </Button>
 
-                                        <div className="shrink-0">
-                                            <Select value={filterUser} onValueChange={setFilterUser}>
-                                                <SelectTrigger className="h-10 w-auto min-w-[160px] shrink-0 bg-slate-950/50 border-white/5 text-[10px] font-black uppercase text-slate-400 rounded-xl px-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <User size={12} className="text-blue-500/50 shrink-0" />
-                                                        <SelectValue placeholder="Responsable" />
-                                                    </div>
-                                                </SelectTrigger>
-                                                <SelectContent className="bg-slate-900 border-white/10 text-slate-300">
-                                                    <SelectItem value="all">TODOS LOS USUARIOS</SelectItem>
-                                                    {allAdvisors.map(a => (
-                                                        <SelectItem key={a.id} value={a.id}>{a.nombre_completo?.toUpperCase()}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
+                                        <Select value={filterUser} onValueChange={setFilterUser}>
+                                            <SelectTrigger className="h-10 w-full sm:w-auto min-w-[160px] bg-slate-950/50 border-white/5 text-[10px] font-black uppercase text-slate-400 rounded-xl px-3">
+                                                <div className="flex items-center gap-2">
+                                                    <User size={12} className="text-blue-500/50 shrink-0" />
+                                                    <SelectValue placeholder="Responsable" />
+                                                </div>
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-slate-900 border-white/10 text-slate-300">
+                                                <SelectItem value="all">TODOS LOS USUARIOS</SelectItem>
+                                                {allAdvisors.map(a => (
+                                                    <SelectItem key={a.id} value={a.id}>{a.nombre_completo?.toUpperCase()}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
 
-                                        <div className="shrink-0">
-                                            <Select value={filterTable} onValueChange={setFilterTable}>
-                                                <SelectTrigger className="h-10 w-auto min-w-[150px] shrink-0 bg-slate-950/50 border-white/5 text-[10px] font-black uppercase text-slate-400 rounded-xl px-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <ScrollText size={12} className="text-purple-500/50 shrink-0" />
-                                                        <SelectValue placeholder="Módulo" />
-                                                    </div>
-                                                </SelectTrigger>
-                                                <SelectContent className="bg-slate-900 border-white/10 text-slate-300">
-                                                    <SelectItem value="all">TODOS LOS MÓDULOS</SelectItem>
-                                                    <SelectItem value="pagos">PAGOS</SelectItem>
-                                                    <SelectItem value="prestamos">PRÉSTAMOS</SelectItem>
-                                                    <SelectItem value="cronograma_cuotas">CRONOGRAMAS</SelectItem>
-                                                    <SelectItem value="tareas_evidencia">TAREAS DE EVIDENCIA</SelectItem>
-                                                    <SelectItem value="gestiones">GESTIONES</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
+                                        <Select value={filterTable} onValueChange={setFilterTable}>
+                                            <SelectTrigger className="h-10 w-full sm:w-auto min-w-[150px] bg-slate-950/50 border-white/5 text-[10px] font-black uppercase text-slate-400 rounded-xl px-3">
+                                                <div className="flex items-center gap-2">
+                                                    <ScrollText size={12} className="text-purple-500/50 shrink-0" />
+                                                    <SelectValue placeholder="Módulo" />
+                                                </div>
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-slate-900 border-white/10 text-slate-300">
+                                                <SelectItem value="all">TODOS LOS MÓDULOS</SelectItem>
+                                                <SelectItem value="pagos">PAGOS</SelectItem>
+                                                <SelectItem value="prestamos">PRÉSTAMOS</SelectItem>
+                                                <SelectItem value="cronograma_cuotas">CRONOGRAMAS</SelectItem>
+                                                <SelectItem value="tareas_evidencia">TAREAS DE EVIDENCIA</SelectItem>
+                                                <SelectItem value="gestiones">GESTIONES</SelectItem>
+                                            </SelectContent>
+                                        </Select>
 
-                                        <div className="shrink-0">
-                                            <Select value={dateRangeType} onValueChange={setDateRangeType}>
-                                                <SelectTrigger className="h-10 w-auto min-w-[140px] shrink-0 bg-slate-950/50 border-white/5 text-[10px] font-black uppercase text-slate-400 rounded-xl px-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <Clock size={12} className="text-amber-500/50 shrink-0" />
-                                                        <SelectValue placeholder="Periodo" />
-                                                    </div>
-                                                </SelectTrigger>
-                                                <SelectContent className="bg-slate-900 border-white/10 text-slate-300">
-                                                    <SelectItem value="all">TODO EL HISTORIAL</SelectItem>
-                                                    <SelectItem value="today">HOY</SelectItem>
-                                                    <SelectItem value="yesterday">AYER</SelectItem>
-                                                    <SelectItem value="week">ÚLTIMA SEMANA</SelectItem>
-                                                    <SelectItem value="month">ESTE MES</SelectItem>
-                                                    <SelectItem value="custom">PERSONALIZADO</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
+                                        <Select value={dateRangeType} onValueChange={setDateRangeType}>
+                                            <SelectTrigger className="h-10 w-full sm:w-auto min-w-[140px] bg-slate-950/50 border-white/5 text-[10px] font-black uppercase text-slate-400 rounded-xl px-3">
+                                                <div className="flex items-center gap-2">
+                                                    <Clock size={12} className="text-amber-500/50 shrink-0" />
+                                                    <SelectValue placeholder="Periodo" />
+                                                </div>
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-slate-900 border-white/10 text-slate-300">
+                                                <SelectItem value="all">TODO EL HISTORIAL</SelectItem>
+                                                <SelectItem value="today">HOY</SelectItem>
+                                                <SelectItem value="yesterday">AYER</SelectItem>
+                                                <SelectItem value="week">ÚLTIMA SEMANA</SelectItem>
+                                                <SelectItem value="month">ESTE MES</SelectItem>
+                                                <SelectItem value="custom">PERSONALIZADO</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+
+                                        {dateRangeType === 'custom' && (
+                                            <div className="flex items-center gap-1.5 animate-in slide-in-from-left-1 duration-300 bg-slate-950/30 p-1.5 rounded-xl border border-white/5 h-10">
+                                                <Input 
+                                                    type="date" 
+                                                    value={fromDate} 
+                                                    onChange={(e) => setFromDate(e.target.value)}
+                                                    className="h-7 w-32 sm:w-32 bg-slate-950/50 border-white/5 text-slate-300 text-[10px] rounded-lg focus:border-blue-500/50 [&::-webkit-calendar-picker-indicator]:invert"
+                                                />
+                                                <Input 
+                                                    type="date" 
+                                                    value={toDate} 
+                                                    onChange={(e) => setToDate(e.target.value)}
+                                                    className="h-7 w-32 sm:w-32 bg-slate-950/50 border-white/5 text-slate-300 text-[10px] rounded-lg focus:border-blue-500/50 [&::-webkit-calendar-picker-indicator]:invert"
+                                                />
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 

@@ -9,13 +9,18 @@ interface AttendanceConfig {
     radio_metros: number
     descuento_por_minuto: number
     hora_limite: string
+    hora_fin_1: string
+    hora_cierre: string
+    tolerancia: number
     oficina_lat: number
     oficina_lon: number
 }
 
 interface AttendanceRecord {
     id: string
-    hora_entrada: string
+    hora_entrada?: string
+    hora_turno_tarde?: string
+    hora_cierre?: string
     estado: string
     minutos_tardanza: number
     descuento_tardanza: number
@@ -31,6 +36,7 @@ export function AttendanceGate({ children, userRole }: AttendanceGateProps) {
     const [checking, setChecking] = useState(true)
     const [isMarked, setIsMarked] = useState(false)
     const [required, setRequired] = useState(true)
+    const [currentEvent, setCurrentEvent] = useState<'entrada' | 'fin_turno_1' | 'cierre'>('entrada')
     const [config, setConfig] = useState<AttendanceConfig | null>(null)
     const [record, setRecord] = useState<AttendanceRecord | null>(null)
 
@@ -54,6 +60,7 @@ export function AttendanceGate({ children, userRole }: AttendanceGateProps) {
 
             setRequired(data.required)
             setIsMarked(data.marked)
+            setCurrentEvent(data.event || 'entrada')
             setConfig(data.config || null)
             setRecord(data.record || null)
         } catch (error) {
@@ -199,10 +206,17 @@ export function AttendanceGate({ children, userRole }: AttendanceGateProps) {
 
                         {/* Title */}
                         <div className="text-center mb-6">
-                            <h2 className="text-2xl font-bold text-white mb-2">Registro de Asistencia</h2>
-                            <p className="text-sm text-slate-400">
-                                Debes marcar tu asistencia para acceder al sistema.
-                                {config && (
+                            <h2 className="text-2xl font-bold text-white mb-2">
+                                {currentEvent === 'entrada' ? 'Registro de Entrada' : 
+                                 currentEvent === 'fin_turno_1' ? 'Inicio Turno Tarde' : 
+                                 'Cierre Final del Día'}
+                            </h2>
+                            <p className="text-sm text-slate-400 px-4">
+                                {currentEvent === 'entrada' 
+                                    ? 'Debes marcar tu asistencia para acceder al sistema.'
+                                    : `Es hora de registrar tu ${currentEvent === 'fin_turno_1' ? 'inicio del turno tarde' : 'cierre de jornada'} desde la oficina.`
+                                }
+                                {config && currentEvent === 'entrada' && (
                                     <span className="block mt-1 text-slate-500 text-xs">
                                         Hora puntual: {config.hora_limite} • Radio: {config.radio_metros}m
                                     </span>
@@ -226,14 +240,16 @@ export function AttendanceGate({ children, userRole }: AttendanceGateProps) {
                                         )}
                                         <div>
                                             <p className="font-bold text-white text-sm">
-                                                {successRecord.estado === 'puntual' ? '¡Asistencia Puntual!' : 'Asistencia con Tardanza'}
+                                                {successRecord.estado === 'tardanza' ? 'Asistencia con Tardanza' : '¡Registro Exitoso!'}
                                             </p>
                                             <p className="text-[10px] text-slate-400">
-                                                Entrada: {successRecord.hora_entrada}
+                                                Hora: {currentEvent === 'entrada' ? successRecord.hora_entrada : 
+                                                       currentEvent === 'fin_turno_1' ? successRecord.hora_turno_tarde : 
+                                                       successRecord.hora_cierre}
                                             </p>
                                         </div>
                                     </div>
-                                    {successRecord.minutos_tardanza > 0 && (
+                                    {successRecord.minutos_tardanza > 0 && currentEvent === 'entrada' && (
                                         <div className="grid grid-cols-2 gap-3 mt-3">
                                             <div className="bg-slate-900/50 rounded-xl p-3 text-center">
                                                 <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Tardanza</p>
@@ -337,11 +353,26 @@ export function AttendanceGate({ children, userRole }: AttendanceGateProps) {
 
                                 {/* Info box */}
                                 <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/10">
-                                    <p className="text-[10px] text-slate-500 leading-relaxed text-center">
+                                    <p className="text-[10px] text-slate-500 leading-relaxed text-center px-4">
                                         📍 Debes estar dentro de <strong className="text-slate-300">{config?.radio_metros || 150}m</strong> de la oficina.
-                                        El descuento por tardanza es <strong className="text-slate-300">S/ {config?.descuento_por_minuto || '0.15'}</strong> por minuto después de las <strong className="text-slate-300">{config?.hora_limite || '08:00'}</strong>.
+                                        {currentEvent === 'entrada' && (
+                                            <> Tol: <strong className="text-slate-300">{config?.tolerancia || '15'}m</strong> después de las <strong className="text-slate-300">{config?.hora_limite || '08:00'}</strong>.</>
+                                        )}
                                     </p>
                                 </div>
+
+                                {/* Admin skip option */}
+                                {userRole === 'admin' && (
+                                    <div className="pt-2">
+                                        <Button
+                                            variant="ghost"
+                                            onClick={() => setIsMarked(true)}
+                                            className="w-full h-10 text-slate-500 hover:text-slate-300 text-xs font-bold uppercase tracking-widest border border-slate-800/30 hover:bg-slate-800/50 rounded-xl"
+                                        >
+                                            Ingresar sin marcar (Administrador)
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

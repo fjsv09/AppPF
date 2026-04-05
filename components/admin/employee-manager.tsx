@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/dialog'
 import { createClient } from '@/utils/supabase/client'
 import { toast } from 'sonner'
-import { User, Shield, ShieldAlert, Edit, Power, Calendar, Wallet, Users, UserPlus, Eye, EyeOff } from 'lucide-react'
+import { User, Shield, ShieldAlert, Edit, Power, Calendar, Wallet, Users, UserPlus, Eye, EyeOff, Clock } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { CreateUserForm } from './create-user-form'
 
@@ -100,6 +100,8 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
       nombre_completo: formData.get('nombre_completo') as string,
       sueldo_base: rawSueldo ? parseFloat(rawSueldo as string) : 0,
       fecha_nacimiento: formData.get('fecha_nacimiento') as string || null,
+      fecha_ingreso: formData.get('fecha_ingreso') as string || null,
+      frecuencia_pago: formData.get('frecuencia_pago') as string || 'mensual',
       supervisor_id: supervisorId === 'none' ? null : (supervisorId || null),
       rol: formData.get('rol') as string,
       sesion_unica_activa: formData.get('sesion_unica_activa') === 'true',
@@ -514,17 +516,48 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
                  </div>
              </div>
 
+             <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                   <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
+                      <Calendar className="w-3 h-3" />
+                      Fecha de Nacimiento
+                   </label>
+                   <Input 
+                      name="fecha_nacimiento" 
+                      type="date" 
+                      defaultValue={editingEmployee?.fecha_nacimiento} 
+                      className="bg-slate-950 border-slate-800 h-10"
+                   />
+                </div>
+                <div className="space-y-1.5">
+                   <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
+                      <Calendar className="w-3 h-3" />
+                      Fecha de Ingreso
+                   </label>
+                   <Input 
+                      name="fecha_ingreso" 
+                      type="date" 
+                      defaultValue={editingEmployee?.fecha_ingreso} 
+                      className="bg-slate-950 border-slate-800 h-10"
+                   />
+                </div>
+             </div>
+
              <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
-                   <Calendar className="w-3 h-3" />
-                   Fecha de Nacimiento
+                   <Clock className="w-3 h-3" />
+                   Frecuencia de Pago
                 </label>
-                <Input 
-                   name="fecha_nacimiento" 
-                   type="date" 
-                   defaultValue={editingEmployee?.fecha_nacimiento} 
-                   className="bg-slate-950 border-slate-800 h-10"
-                />
+                <Select name="frecuencia_pago" defaultValue={editingEmployee?.frecuencia_pago || 'mensual'}>
+                   <SelectTrigger className="bg-slate-950 border-slate-800 h-10">
+                      <SelectValue />
+                   </SelectTrigger>
+                   <SelectContent className="bg-slate-950 border-slate-800 text-white">
+                      <SelectItem value="semanal">Semanal</SelectItem>
+                      <SelectItem value="quincenal">Quincenal</SelectItem>
+                      <SelectItem value="mensual">Mensual</SelectItem>
+                   </SelectContent>
+                </Select>
              </div>
 
              <DialogFooter className="pt-4">

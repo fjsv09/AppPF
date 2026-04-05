@@ -3,11 +3,42 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { User, Users, ChevronDown, Calculator, BadgePercent, AlertCircle, TrendingUp, History, Wallet } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { 
+    Calendar, 
+    ArrowLeft, 
+    TrendingUp, 
+    TrendingDown, 
+    DollarSign, 
+    History, 
+    RotateCcw, 
+    CheckCircle, 
+    AlertCircle, 
+    PlusCircle, 
+    Search,
+    BellRing,
+    Loader2,
+    ChevronLeft,
+    ChevronRight,
+    Calculator,
+    BadgePercent,
+    Wallet,
+    Banknote,
+    UserMinus,
+    FileText,
+    User,
+    Users,
+    ChevronDown
+} from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Link from 'next/link'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { PagoModal } from './pago-modal'
+import { LiquidacionModal } from './liquidacion-modal'
+import { AdelantoModal } from './adelanto-modal'
+import { BoletaPDF } from './boleta-pdf'
 
 interface NominaPageClientProps {
   trabajadores: { id: string; nombre_completo: string; rol: string }[]
@@ -15,59 +46,149 @@ interface NominaPageClientProps {
 }
 
 export function NominaPageClient({ trabajadores, defaultUserId }: NominaPageClientProps) {
-  const [selectedId, setSelectedId] = useState<string>(trabajadores[0]?.id || defaultUserId)
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  
+  const paramId = searchParams.get('u')
+  const [selectedId, setSelectedId] = useState<string>(paramId || trabajadores[0]?.id || defaultUserId)
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [payrollData, setPayrollData] = useState<any>(null)
   const [perfil, setPerfil] = useState<any>(null)
   const [history, setHistory] = useState<any[]>([])
+  const [actividad, setActividad] = useState<any[]>([])
+
+  // Estados de Modales (Unificados)
+  const [showPagoModal, setShowPagoModal] = useState(false)
+  const [showAdelantoModal, setShowAdelantoModal] = useState(false)
+  const [showLiquidacionModal, setShowLiquidacionModal] = useState(false)
+  const [showBoletaPDF, setShowBoletaPDF] = useState(false)
+  const [selectedBoleta, setSelectedBoleta] = useState<any>(null)
+
+  // Paginación
+  const [currentPageActividad, setCurrentPageActividad] = useState(1)
+  const [currentPageBoletas, setCurrentPageBoletas] = useState(1)
+  const itemsPerPage = 5
   
   const supabase = createClient()
   const selectedTrabajador = trabajadores.find(t => t.id === selectedId)
   const today = new Date()
 
+  const viewBoleta = (boleta: any) => {
+    setSelectedBoleta(boleta)
+    setShowBoletaPDF(true)
+  }
+
+  const [feriados, setFeriados] = useState<any[]>([])
+
+  // Detección de Último Día Hábil con Feriados
+  const isClosingDay = () => {
+      const today = new Date()
+      // 1. Obtener último día del mes
+      let lastWorkDay = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+      
+      // 2. Retroceder hasta encontrar un día HÁBIL (No domingo y no feriado)
+      while (lastWorkDay.getMonth() === today.getMonth()) {
+          const isSunday = lastWorkDay.getDay() === 0
+          const isHoliday = feriados.some(f => {
+              const fDate = new Date(f.fecha)
+              return fDate.getDate() === lastWorkDay.getDate() && 
+                     fDate.getMonth() === lastWorkDay.getMonth()
+          })
+
+          if (!isSunday && !isHoliday) {
+              // Este es el último día hábil real
+              break
+          }
+          // Seguir retrocediendo
+          lastWorkDay.setDate(lastWorkDay.getDate() - 1)
+      }
+
+      // 3. Hoy es el día de cierre si coincide con ese último día hábil
+      return today.getDate() === lastWorkDay.getDate() && 
+             today.getMonth() === lastWorkDay.getMonth()
+  }
+
+  const showClosingAlert = isClosingDay()
+
+  async function fetchNomina() {
+    setLoading(true)
+
+    const [payrollRes, perfilRes, historyRes, auditRes, feriadosRes] = await Promise.all([
+      supabase
+        .from('nomina_personal')
+        .select('*')
+        .eq('trabajador_id', selectedId)
+        .eq('mes', today.getMonth() + 1)
+        .eq('anio', today.getFullYear())
+        .maybeSingle(),
+      supabase
+        .from('perfiles')
+        .select('*')
+        .eq('id', selectedId)
+        .single(),
+      supabase
+        .from('nomina_personal')
+        .select('*')
+        .eq('trabajador_id', selectedId)
+        .order('anio', { ascending: false })
+        .order('mes', { ascending: false })
+        .limit(12),
+       supabase
+        .from('auditoria')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200),
+       supabase
+        .from('feriados')
+        .select('*')
+        .gte('fecha', new Date(today.getFullYear(), today.getMonth(), 1).toISOString())
+        .lte('fecha', new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString())
+    ])
+
+    // Solo mostrar movimientos de nómina del trabajador seleccionado
+    const filteredAudit = (auditRes.data || []).filter((a: any) => {
+        if (a.tabla_afectada !== 'nomina_personal') return false
+        const detalleStr = JSON.stringify(a.detalle || {})
+        return detalleStr.includes(selectedId)
+    })
+
+    setFeriados(feriadosRes.data || [])
+    setPayrollData(payrollRes.data)
+    setPerfil(perfilRes.data)
+    setHistory(historyRes.data || [])
+    setActividad(filteredAudit)
+    setLoading(false)
+  }
+
   useEffect(() => {
-    async function fetchNomina() {
-      setLoading(true)
-
-      const currentMonth = today.getMonth() + 1
-      const currentYear = today.getFullYear()
-
-      const [payrollRes, perfilRes, historyRes] = await Promise.all([
-        supabase
-          .from('nomina_personal')
-          .select('*')
-          .eq('trabajador_id', selectedId)
-          .eq('mes', currentMonth)
-          .eq('anio', currentYear)
-          .single(),
-        supabase
-          .from('perfiles')
-          .select('sueldo_base, nombre_completo')
-          .eq('id', selectedId)
-          .single(),
-        supabase
-          .from('nomina_personal')
-          .select('*')
-          .eq('trabajador_id', selectedId)
-          .order('anio', { ascending: false })
-          .order('mes', { ascending: false })
-          .limit(6)
-      ])
-
-      setPayrollData(payrollRes.data)
-      setPerfil(perfilRes.data)
-      setHistory(historyRes.data || [])
-      setLoading(false)
-    }
-
     fetchNomina()
+    
+    // Persistir en URL
+    const params = new URLSearchParams(searchParams.toString())
+    if (selectedId) {
+      params.set('u', selectedId)
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    }
   }, [selectedId])
 
-  const totalCalculated = (payrollData?.sueldo_base || perfil?.sueldo_base || 0) + 
-                          (payrollData?.bonos || 0) - 
-                          (payrollData?.descuentos || 0) - 
-                          (payrollData?.adelantos || 0)
+  const frecuencia = perfil?.frecuencia_pago || 'mensual'
+  const divisor = frecuencia === 'semanal' ? 4 : frecuencia === 'quincenal' ? 2 : 1
+  const sueldoBaseProporcional = (payrollData?.sueldo_base || perfil?.sueldo_base || 0) / divisor
+  
+  // Pagos completados: lectura directa de la tabla
+  const pagosCompletados = payrollData?.pagos_completados || 0
+
+  // Total pagado este mes (sumado desde auditoría para visualización)
+  const totalPagadoAcumulado = actividad
+    .filter((a: any) => a.accion === 'pago_nomina')
+    .reduce((acc: number, curr: any) => acc + parseFloat(curr.detalle?.monto || 0), 0)
+
+  const totalCalculated = sueldoBaseProporcional + 
+    ((pagosCompletados + 1) === divisor ? (payrollData?.bonos || 0) : 0) - 
+    (payrollData?.descuentos || 0) - 
+    (payrollData?.adelantos || 0)
 
   const rolLabel = (rol: string) => {
     switch(rol) {
@@ -75,6 +196,15 @@ export function NominaPageClient({ trabajadores, defaultUserId }: NominaPageClie
       case 'supervisor': return 'Supervisor'
       case 'asesor': return 'Asesor'
       default: return rol
+    }
+  }
+
+  const frecuenciaLabel = (f: string) => {
+    switch(f) {
+      case 'semanal': return 'Semanal'
+      case 'quincenal': return 'Quincenal'
+      case 'mensual': return 'Mensual'
+      default: return 'Mensual'
     }
   }
 
@@ -137,13 +267,6 @@ export function NominaPageClient({ trabajadores, defaultUserId }: NominaPageClie
                       {t.nombre_completo}
                     </span>
                   </div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
-                    t.rol === 'admin' ? 'bg-purple-500/20 text-purple-400' :
-                    t.rol === 'supervisor' ? 'bg-amber-500/20 text-amber-400' :
-                    'bg-slate-800 text-slate-500'
-                  }`}>
-                    {rolLabel(t.rol)}
-                  </span>
                 </button>
               ))}
             </div>
@@ -160,6 +283,20 @@ export function NominaPageClient({ trabajadores, defaultUserId }: NominaPageClie
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <div className="lg:col-span-12 xl:col-span-8 space-y-6">
+            
+            {/* Alerta de Cierre de Mes */}
+            {showClosingAlert && (
+                <div className="bg-gradient-to-r from-blue-600/20 via-indigo-600/20 to-blue-600/20 border border-blue-500/30 rounded-2xl p-4 backdrop-blur-md flex items-center gap-4 animate-pulse">
+                    <div className="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center shadow-lg shadow-blue-500/40">
+                        <BellRing className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-bold text-white tracking-tight">¡Día de Cierre de Nómina Detectado!</h4>
+                        <p className="text-xs text-blue-200/80 font-medium">Hoy es el último día hábil del mes. No olvides liquidar la cuota final y los bonos de producción.</p>
+                    </div>
+                </div>
+            )}
+
             <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm overflow-hidden border-t-4 border-t-blue-500">
               <CardHeader className="bg-slate-800/20 border-b border-slate-800">
                 <div className="flex justify-between items-center">
@@ -167,81 +304,288 @@ export function NominaPageClient({ trabajadores, defaultUserId }: NominaPageClie
                     <CardTitle className="text-xl font-bold text-white">
                       Resumen de Pago <span className="text-blue-400">— {selectedTrabajador?.nombre_completo}</span>
                     </CardTitle>
-                    <CardDescription>Corte al {format(today, 'dd/MM/yyyy')}</CardDescription>
+                    <CardDescription>
+                      Corte al {format(today, 'dd/MM/yyyy')}
+                      {perfil?.frecuencia_pago && (
+                        <span className="ml-2 text-blue-400 font-bold uppercase">· {frecuenciaLabel(perfil.frecuencia_pago)}</span>
+                      )}
+                    </CardDescription>
                   </div>
                   <div className="text-right">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                      payrollData?.estado === 'pagado' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-500'
-                    }`}>
-                      {payrollData?.estado === 'pagado' ? 'PAGO REALIZADO' : 'CÁLCULO EN CURSO'}
-                    </span>
+                    {payrollData?.estado === 'pagado' ? (
+                       <Badge className="bg-emerald-500/20 text-emerald-400 border-none font-black text-[10px] tracking-widest px-4 py-1.5">
+                        MES PAGADO TOTALMENTE
+                       </Badge>
+                    ) : (
+                       <div className="inline-flex flex-col items-end">
+                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Pagos completados</span>
+                         <div className="flex gap-1">
+                           {[...Array(divisor)].map((_, i) => (
+                             <div key={i} className={`w-6 h-1.5 rounded-full ${i < pagosCompletados ? 'bg-emerald-500' : 'bg-slate-800'}`} />
+                           ))}
+                         </div>
+                         <p className="text-[9px] font-bold text-emerald-400 mt-1 uppercase tracking-widest">
+                           {pagosCompletados} DE {divisor} PAGADOS
+                         </p>
+                       </div>
+                    )}
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <PayItem label="Sueldo Base" amount={payrollData?.sueldo_base || perfil?.sueldo_base || 0} icon={<Calculator className="w-4 h-4 text-slate-400" />} />
-                  <PayItem label="Bonos Ganados" amount={payrollData?.bonos || 0} icon={<BadgePercent className="w-4 h-4 text-emerald-400" />} plus />
-                  <PayItem label="Descuentos" amount={payrollData?.descuentos || 0} icon={<AlertCircle className="w-4 h-4 text-rose-500" />} minus />
-                  <PayItem label="Adelantos" amount={payrollData?.adelantos || 0} icon={<TrendingUp className="w-4 h-4 text-blue-400" />} minus />
+              <CardContent className="p-4 md:p-6">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                  <PayItem label="Sueldo Base" amount={payrollData?.sueldo_base || perfil?.sueldo_base || 0} icon={<Calculator className="w-3.5 h-3.5 text-blue-400" />} />
+                  <PayItem label="Bonos" amount={payrollData?.bonos || 0} icon={<BadgePercent className="w-3.5 h-3.5 text-emerald-400" />} plus />
+                  <PayItem label="Descuentos" amount={payrollData?.descuentos || 0} icon={<AlertCircle className="w-3.5 h-3.5 text-rose-500" />} minus />
+                  <PayItem label="Adelantos" amount={payrollData?.adelantos || 0} icon={<TrendingUp className="w-3.5 h-3.5 text-amber-500" />} minus />
                 </div>
 
-                <div className="mt-8 pt-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="mt-6 pt-6 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
                   <div className="text-center md:text-left">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Total Neto a Recibir</p>
-                    <h2 className="text-4xl font-black text-white">S/ {totalCalculated.toFixed(2)}</h2>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Total Neto Próximo Pago</p>
+                    <h2 className="text-4xl font-black text-white">S/ {Math.max(0, totalCalculated).toFixed(2)}</h2>
                   </div>
                   <div className="p-4 rounded-2xl bg-slate-950/50 border border-slate-800 inline-flex items-center gap-3">
                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <p className="text-xs text-slate-400">Los bonos se actualizan según el progreso de metas.</p>
+                    <p className="text-xs text-slate-400">El sistema restará los adelantos automáticamente de tu próximo pago.</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <div className="p-6 rounded-2xl bg-blue-600/5 border border-blue-500/10">
-              <h4 className="text-blue-400 font-bold mb-2 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" />
-                Nota Importante
-              </h4>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Las tardanzas y faltas se descuentan semanalmente. Los bonos se abonan automáticamente al cumplir metas. Consulta el <Link href="/dashboard/metas" className="text-blue-400 underline">panel de metas</Link> para más detalles.
-              </p>
+            {/* Botones de Acción (Solo Admin/Supervisor) */}
+            <div className="grid grid-cols-3 gap-3">
+              <button
+                onClick={() => setShowPagoModal(true)}
+                disabled={payrollData?.estado === 'pagado'}
+                className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all group disabled:opacity-40 text-center"
+              >
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Banknote className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <p className="font-bold text-emerald-400 text-xs">Realizar Pago</p>
+                  <p className="text-[9px] text-slate-500 hidden sm:block">Cuota {pagosCompletados + 1}</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setShowAdelantoModal(true)}
+                className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 hover:bg-amber-500/10 hover:border-amber-500/30 transition-all group text-center"
+              >
+                <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <PlusCircle className="w-4 h-4 text-amber-400" />
+                </div>
+                <div>
+                  <p className="font-bold text-amber-400 text-xs">Registrar Adelanto</p>
+                  <p className="text-[9px] text-slate-500 hidden sm:block">Desembolso extraordinario</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setShowLiquidacionModal(true)}
+                className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-rose-500/5 border border-rose-500/10 hover:bg-rose-500/10 hover:border-rose-500/30 transition-all group text-center"
+              >
+                <div className="w-8 h-8 rounded-lg bg-rose-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <UserMinus className="w-4 h-4 text-rose-400" />
+                </div>
+                <div>
+                  <p className="font-bold text-rose-400 text-xs">Liquidación</p>
+                  <p className="text-[9px] text-slate-500 hidden sm:block">Baja de personal</p>
+                </div>
+              </button>
             </div>
+
+            {/* Monto pagado acumulado */}
+            {totalPagadoAcumulado > 0 && (
+              <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                    <Wallet className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-emerald-400">Total Pagado este Mes</p>
+                    <p className="text-[10px] text-slate-500">Suma de cuotas depositadas en Abril</p>
+                  </div>
+                </div>
+                <span className="text-lg font-black text-emerald-400">S/ {totalPagadoAcumulado.toFixed(2)}</span>
+              </div>
+            )}
+
+            {/* Historial Detallado de Actividad */}
+            <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm overflow-hidden">
+                <div className="p-4 border-b border-slate-800 bg-slate-800/20">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <History className="w-4 h-4 text-blue-400" />
+                        Historial Detallado de Actividad (Mes Actual)
+                    </h3>
+                </div>
+                <CardContent className="p-0">
+                    <div className="divide-y divide-slate-800/50">
+                        {actividad.length > 0 ? actividad.slice((currentPageActividad - 1) * itemsPerPage, currentPageActividad * itemsPerPage).map((item: any, idx: number) => (
+                            <div key={item.id} className="p-4 flex items-start gap-4 hover:bg-slate-800/20 transition-colors">
+                                <div className="mt-1">
+                                    <div className={`w-2 h-2 rounded-full ${
+                                        item.accion === 'pago_nomina' ? 'bg-emerald-500' : 
+                                        item.accion === 'registro_adelanto' ? 'bg-amber-500' :
+                                        item.accion === 'descuento_nomina' ? 'bg-rose-500' :
+                                        item.accion === 'descuento_adelanto' ? 'bg-orange-500' : 'bg-blue-500'
+                                    }`} />
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                    <div className="flex justify-between">
+                                        <p className="text-xs font-bold text-white capitalize">
+                                            {item.accion === 'pago_nomina' ? 'Pago Realizado' : 
+                                             item.accion === 'registro_adelanto' ? 'Adelanto de Sueldo' :
+                                             item.accion === 'descuento_nomina' ? 'Descuento por Tardanza' :
+                                             item.accion === 'descuento_adelanto' ? 'Adelanto Descontado' :
+                                             item.accion?.replace(/_/g, ' ')}
+                                        </p>
+                                        <span className="text-[10px] text-slate-500 font-medium">
+                                            {format(new Date(item.created_at), "PPP p", { locale: es })}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        <span className="text-[11px] text-slate-400">
+                                            Monto: <strong className={`${
+                                                item.accion === 'descuento_nomina' || item.accion === 'descuento_adelanto' 
+                                                    ? 'text-rose-400' : 'text-slate-200'
+                                            }`}>
+                                                {item.accion === 'descuento_nomina' || item.accion === 'descuento_adelanto' ? '- ' : ''}S/ {parseFloat(item.detalle?.monto || 0).toFixed(2)}
+                                            </strong>
+                                        </span>
+                                        {item.detalle?.cuenta && (
+                                            <span className="text-[11px] text-slate-500 italic">
+                                                — vía {item.detalle.cuenta}
+                                            </span>
+                                        )}
+                                        {item.detalle?.cuota && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-bold">
+                                                Cuota {item.detalle.cuota}
+                                            </span>
+                                        )}
+                                        {item.accion === 'pago_nomina' && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold">
+                                                Confirmado
+                                            </span>
+                                        )}
+                                        {item.accion === 'descuento_nomina' && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 font-bold">
+                                                Tardanza
+                                            </span>
+                                        )}
+                                        {item.accion === 'descuento_adelanto' && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 font-bold">
+                                                Descontado
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )) : (
+                            <div className="p-8 text-center bg-slate-900/30">
+                                <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mx-auto mb-3">
+                                    <History className="w-6 h-6 text-slate-600" />
+                                </div>
+                                <p className="text-sm text-slate-500 font-medium tracking-tight">No se registran movimientos para este trabajador en el mes actual.</p>
+                            </div>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
           </div>
 
-          <div className="lg:col-span-12 xl:col-span-4">
-            <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm overflow-hidden">
-              <CardHeader className="bg-slate-800/30 border-b border-slate-800/50">
-                <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-                  <History className="w-5 h-5 text-slate-400" />
+          <div className="lg:col-span-12 xl:col-span-4 h-full">
+            <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm overflow-hidden flex flex-col min-h-[500px]">
+              <CardHeader className="p-4 border-b border-slate-800 bg-slate-800/10">
+                <CardTitle className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-tight">
+                  <History className="w-4 h-4 text-blue-500" />
                   Historial de Boletas
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y divide-slate-800">
-                  {history.map((p: any) => (
-                    <div key={p.id} className="p-4 hover:bg-slate-800/30 transition-colors flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-bold text-white uppercase">{format(new Date(p.anio, p.mes - 1), 'MMMM yyyy', { locale: es })}</p>
-                        <p className="text-[10px] text-slate-500">Monto Final: S/ {(p.sueldo_base + p.bonos - p.descuentos - p.adelantos).toFixed(2)}</p>
+              <CardContent className="p-0 flex-1 overflow-y-auto">
+                <div className="divide-y divide-white/5">
+                  {history.slice((currentPageBoletas - 1) * itemsPerPage, currentPageBoletas * itemsPerPage).map((p: any) => (
+                    <div key={p.id} className="p-4 hover:bg-slate-800/30 transition-colors flex items-center justify-between group">
+                      <div className="flex-1 cursor-pointer" onClick={() => viewBoleta(p)}>
+                        <p className="text-sm font-bold text-white uppercase tracking-tight">
+                          {new Date(p.anio, p.mes - 1, 1).toLocaleString('es-ES', { month: 'long' }).toUpperCase()} {p.anio}
+                        </p>
+                        <p className="text-[10px] text-slate-500">Sueldo Base: S/ {(p.sueldo_base || 0).toFixed(2)}</p>
                       </div>
-                      <Badge variant="outline" className={p.estado === 'pagado' ? 'text-emerald-400 border-emerald-900/50' : 'text-amber-500 border-amber-900/50'}>
-                        {p.estado}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => viewBoleta(p)}
+                          className="p-1.5 hover:bg-blue-500/20 rounded-lg text-blue-400 opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                        </button>
+                        <Badge variant="outline" className={`${p.estado === 'pagado' ? 'text-emerald-400 border-emerald-900/50 bg-emerald-500/5' : 'text-amber-500 border-amber-900/50 bg-amber-500/5'} text-[9px] font-bold px-2 py-0.5`}>
+                          {p.estado}
+                        </Badge>
+                      </div>
                     </div>
                   ))}
                   {history.length === 0 && (
-                    <div className="p-10 text-center">
-                      <p className="text-slate-600 text-sm">Sin historial disponible.</p>
-                    </div>
+                    <div className="p-8 text-center text-slate-600 italic text-[10px]">No hay historial registrado</div>
                   )}
                 </div>
               </CardContent>
+
+              {history.length > itemsPerPage && (
+                <div className="p-3 border-t border-slate-800 flex items-center justify-between mt-auto bg-slate-800/10">
+                   <span className="text-[10px] text-slate-500 uppercase font-bold pl-2 tracking-widest">
+                     PÁG {currentPageBoletas} / {Math.ceil(history.length / itemsPerPage)}
+                   </span>
+                   <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-800" disabled={currentPageBoletas === 1} onClick={() => setCurrentPageBoletas(prev => prev - 1)}>
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-800" disabled={currentPageBoletas === Math.ceil(history.length / itemsPerPage)} onClick={() => setCurrentPageBoletas(prev => prev + 1)}>
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                   </div>
+                </div>
+              )}
             </Card>
           </div>
         </div>
       )}
+
+      {/* Modales */}
+      <PagoModal
+        open={showPagoModal}
+        onOpenChange={setShowPagoModal}
+        nomina={payrollData}
+        trabajador={{ 
+            id: selectedId, 
+            nombre_completo: selectedTrabajador?.nombre_completo || '', 
+            frecuencia_pago: perfil?.frecuencia_pago 
+        }}
+        onSuccess={fetchNomina}
+      />
+
+      <AdelantoModal
+        open={showAdelantoModal}
+        onOpenChange={setShowAdelantoModal}
+        trabajador={selectedTrabajador ? { id: selectedId, nombre_completo: selectedTrabajador.nombre_completo } : { id: '', nombre_completo: '' }}
+        onSuccess={fetchNomina}
+      />
+
+      <LiquidacionModal
+        open={showLiquidacionModal}
+        onOpenChange={setShowLiquidacionModal}
+        trabajador={perfil ? { id: selectedId, ...perfil } : null}
+        nominaActual={payrollData}
+        onSuccess={fetchNomina}
+      />
+
+      <BoletaPDF
+        open={showBoletaPDF}
+        onOpenChange={setShowBoletaPDF}
+        nomina={selectedBoleta}
+        trabajador={{ nombre_completo: selectedTrabajador?.nombre_completo || '', rol: selectedTrabajador?.rol }}
+      />
     </div>
   )
 }

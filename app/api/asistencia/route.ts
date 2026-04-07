@@ -17,6 +17,22 @@ export async function GET() {
         const now = new Date()
         const limaDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }))
         const todayStr = `${limaDate.getFullYear()}-${String(limaDate.getMonth() + 1).padStart(2, '0')}-${String(limaDate.getDate()).padStart(2, '0')}`
+        const isSunday = limaDate.getDay() === 0
+
+        // 1. Verificar si hoy es feriado o domingo
+        const { data: holiday } = await supabaseAdmin
+            .from('feriados')
+            .select('id, descripcion')
+            .eq('fecha', todayStr)
+            .maybeSingle()
+
+        if (isSunday || holiday) {
+            return NextResponse.json({
+                required: false,
+                marked: true,
+                reason: `Hoy es ${isSunday ? 'Domingo' : 'Feriado'}${holiday ? ': ' + holiday.descripcion : ''}`
+            })
+        }
 
         // Verificar rol del usuario
         const { data: perfil } = await supabaseAdmin

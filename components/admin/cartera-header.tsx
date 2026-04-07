@@ -139,19 +139,12 @@ export function CarteraHeader({ asesores }: CarteraHeaderProps) {
           <Button 
             className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold h-12 shadow-lg shadow-blue-900/20 group transition-all duration-300" 
             onClick={createCartera}
-            disabled={loading}
+            loading={loading}
           >
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                Creando Cartera...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                Crear Cartera
-                <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
-              </span>
-            )}
+            <span className="flex items-center gap-2">
+              {loading ? 'Creando Cartera...' : 'Crear Cartera'}
+              {!loading && <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />}
+            </span>
           </Button>
           <p className="text-[10px] text-center text-slate-600 italic">
             * Se crearán automáticamente las cuentas de Caja, Yape y Cobranzas.

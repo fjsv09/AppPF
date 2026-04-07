@@ -13,7 +13,7 @@ const supabaseAdmin = createClient(
     }
 )
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<NextResponse> {
     try {
         const { email, password, nombre, rol, supervisor_id, sueldo_base, fecha_nacimiento, fecha_ingreso, frecuencia_pago } = await request.json()
 

@@ -18,6 +18,8 @@ import { ClientEditModal } from './client-edit-modal'
 import { RegistrarGestionModal } from '../gestiones/registrar-gestion-modal'
 import { Edit, MessageSquare, DollarSign } from 'lucide-react'
 import { QuickPayModal } from '../prestamos/quick-pay-modal'
+import { BulkImportModal } from './bulk-import-modal'
+import { FileUp } from 'lucide-react'
 
 const ClientesMapa = dynamic(() => import('./clientes-mapa'), { 
     ssr: false,
@@ -130,6 +132,9 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     // Registrar Gestión State
     const [gestionOpen, setGestionOpen] = useState(false)
     const [selectedClientForGestion, setSelectedClientForGestion] = useState<any>(null)
+
+    // Import Modal State
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false)
 
     // Block/Unblock State
     const [confirmBlockOpen, setConfirmBlockOpen] = useState(false)
@@ -351,6 +356,14 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     const handlePageChange = (page: number) => updateParams({ page: String(page) })
 
     // Bulk Actions Logic
+    const selectedClientsCurrentAsesorIds = useMemo(() => {
+        return Array.from(new Set(
+            clientes
+                .filter(c => selectedClients.includes(c.id))
+                .map(c => c.asesor_id)
+        ))
+    }, [clientes, selectedClients])
+
     const toggleSelectClient = (id: string) => {
         setSelectedClients(prev => 
             prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
@@ -418,12 +431,27 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                             Reasignar ({selectedClients.length})
                         </Button>
                     )}
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="bg-slate-900 border-slate-700 text-blue-400 hover:text-blue-300 hover:bg-slate-800"
+                        onClick={() => setIsImportModalOpen(true)}
+                    >
+                        <FileUp className="w-4 h-4 mr-2" />
+                        Importar Lote
+                    </Button>
                     <Button variant="outline" size="sm" className="bg-slate-900 border-slate-700 text-slate-300 hover:text-white">
                         <Download className="w-4 h-4 mr-2" />
                         Exportar CSV
                     </Button>
                 </div>
              )}
+
+             <BulkImportModal 
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onSuccess={() => router.refresh()}
+             />
 
              {/* Main Filter Bar - Responsive & Clean */}
              <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
@@ -957,9 +985,12 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                 <SelectValue placeholder="Elegir asesor..." />
                             </SelectTrigger>
                             <SelectContent className="bg-slate-900 border-slate-700">
-                                {asesores.map(a => (
-                                    <SelectItem key={a.id} value={a.id}>{a.nombre_completo}</SelectItem>
-                                ))}
+                                {asesores
+                                    .filter(a => !selectedClientsCurrentAsesorIds.includes(a.id))
+                                    .map(a => (
+                                        <SelectItem key={a.id} value={a.id}>{a.nombre_completo}</SelectItem>
+                                    ))
+                                }
                             </SelectContent>
                         </Select>
                     </div>

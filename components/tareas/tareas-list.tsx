@@ -284,7 +284,7 @@ export function TareasList({ initialTareas, userId, userRol }: { initialTareas: 
                                                         <span className="text-[10px] text-slate-400 font-mono bg-slate-950/50 px-1.5 py-0.5 rounded border border-slate-800/50 truncate max-w-[80px]">
                                                             #{tarea.prestamo_id.split('-')[0]}
                                                         </span>
-                                                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                                        <span className="text-[10px] text-slate-400 flex items-center gap-1" suppressHydrationWarning>
                                                             <Calendar className="w-3 h-3 text-slate-500" />
                                                             {new Date(tarea.created_at).toLocaleDateString()}
                                                         </span>

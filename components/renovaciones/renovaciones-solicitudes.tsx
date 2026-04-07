@@ -335,7 +335,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                                         <Badge className={cn('text-[10px] py-0 h-5 border px-1.5', estado.bg, estado.color)}>
                                             {estado.label}
                                         </Badge>
-                                        <span className="text-[9px] text-slate-500 font-mono">
+                                        <span className="text-[9px] text-slate-500 font-mono" suppressHydrationWarning>
                                             {new Date(sol.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                                         </span>
                                         {sol.requiere_excepcion && (
@@ -465,7 +465,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                                     <span className="text-xs font-medium text-slate-300">
                                         {new Date(sol.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                     </span>
-                                    <span className="text-[10px] text-slate-500 font-mono">
+                                    <span className="text-[10px] text-slate-500 font-mono" suppressHydrationWarning>
                                         {new Date(sol.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
                                     </span>
                                 </div>

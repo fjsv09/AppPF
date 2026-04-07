@@ -30,14 +30,22 @@ interface AttendanceRecord {
 interface AttendanceGateProps {
     children: React.ReactNode
     userRole: string
+    initialData?: {
+        required: boolean
+        marked: boolean
+        event: 'entrada' | 'fin_turno_1' | 'cierre' | string
+        config: any
+    }
 }
 
-export function AttendanceGate({ children, userRole }: AttendanceGateProps) {
-    const [checking, setChecking] = useState(true)
-    const [isMarked, setIsMarked] = useState(false)
-    const [required, setRequired] = useState(true)
-    const [currentEvent, setCurrentEvent] = useState<'entrada' | 'fin_turno_1' | 'cierre'>('entrada')
-    const [config, setConfig] = useState<AttendanceConfig | null>(null)
+export function AttendanceGate({ children, userRole, initialData }: AttendanceGateProps) {
+    const [checking, setChecking] = useState(!initialData)
+    const [isMarked, setIsMarked] = useState(initialData?.marked ?? false)
+    const [required, setRequired] = useState(initialData?.required ?? true)
+    const [currentEvent, setCurrentEvent] = useState<'entrada' | 'fin_turno_1' | 'cierre'>(
+        (initialData?.event as any) || 'entrada'
+    )
+    const [config, setConfig] = useState<AttendanceConfig | null>(initialData?.config || null)
     const [record, setRecord] = useState<AttendanceRecord | null>(null)
 
     // GPS state
@@ -50,6 +58,7 @@ export function AttendanceGate({ children, userRole }: AttendanceGateProps) {
 
     // Check attendance status on mount
     useEffect(() => {
+        // We only do the background sync, the initial state is already set by the server
         checkAttendance()
     }, [])
 
@@ -57,6 +66,16 @@ export function AttendanceGate({ children, userRole }: AttendanceGateProps) {
         try {
             const res = await fetch('/api/asistencia')
             const data = await res.json()
+
+            // Update cache (for when clicking refresh manually via browser)
+            const today = new Date().toLocaleDateString('sv-SE')
+            sessionStorage.setItem('attendance_status', JSON.stringify({
+                date: today,
+                marked: data.marked,
+                required: data.required,
+                event: data.event,
+                config: data.config
+            }))
 
             setRequired(data.required)
             setIsMarked(data.marked)
@@ -136,6 +155,15 @@ export function AttendanceGate({ children, userRole }: AttendanceGateProps) {
             }
 
             setSuccessRecord(data.record)
+
+            // Update cache immediately on success
+            const today = new Date().toLocaleDateString('sv-SE')
+            sessionStorage.setItem('attendance_status', JSON.stringify({
+                date: today,
+                marked: true,
+                required: true,
+                event: currentEvent
+            }))
 
             if (data.record?.estado === 'puntual') {
                 toast.success('¡Llegaste puntual! 🎉', {
@@ -366,7 +394,16 @@ export function AttendanceGate({ children, userRole }: AttendanceGateProps) {
                                     <div className="pt-2">
                                         <Button
                                             variant="ghost"
-                                            onClick={() => setIsMarked(true)}
+                                            onClick={() => {
+                                                const today = new Date().toLocaleDateString('sv-SE')
+                                                sessionStorage.setItem('attendance_status', JSON.stringify({
+                                                    date: today,
+                                                    marked: true,
+                                                    required: false,
+                                                    event: currentEvent
+                                                }))
+                                                setIsMarked(true)
+                                            }}
                                             className="w-full h-10 text-slate-500 hover:text-slate-300 text-xs font-bold uppercase tracking-widest border border-slate-800/30 hover:bg-slate-800/50 rounded-xl"
                                         >
                                             Ingresar sin marcar (Administrador)

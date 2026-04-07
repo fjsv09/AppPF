@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useTransition } from 'react'
-import { FileText, Clock, CheckCircle, XCircle, AlertCircle, Eye, Users, Calendar, DollarSign, Search, X, Filter, ArrowUp, ArrowDown, MapPin, Activity } from 'lucide-react'
+import { FileText, Clock, CheckCircle, XCircle, AlertCircle, Eye, Users, Calendar, DollarSign, Search, X, Filter, ArrowUp, ArrowDown, MapPin, Activity, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -174,8 +174,20 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                 </div>
             </div>
 
-            {/* Table / List View */}
-            <div className="md:bg-slate-900/50 md:border md:border-slate-800 md:rounded-2xl md:overflow-hidden bg-transparent border-0 space-y-4 md:space-y-0">
+            <div className="relative min-h-[400px]">
+                {/* Loader centralizado */}
+                {isPending && (
+                    <div className="absolute inset-x-0 top-20 z-50 flex items-center justify-center animate-in fade-in duration-300">
+                        <div className="bg-slate-950/40 backdrop-blur-md p-4 rounded-full border border-white/5 shadow-2xl">
+                            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                        </div>
+                    </div>
+                )}
+
+                <div className={cn(
+                    "md:bg-slate-900/50 md:border md:border-slate-800 md:rounded-2xl md:overflow-hidden bg-transparent border-0 space-y-4 md:space-y-0 transition-all duration-300",
+                    isPending ? "opacity-40 blur-[1px] pointer-events-none" : "opacity-100 placeholder-blur-0"
+                )}>
                 {filteredSolicitudes.length === 0 ? (
                     <div className="text-center py-16 rounded-2xl border border-dashed border-slate-800 bg-slate-900/40">
                         <FileText className="w-16 h-16 mx-auto text-slate-600 mb-4" />
@@ -262,7 +274,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                              <IconComponent className="w-3 h-3" />
                                                              {config.label}
                                                          </Badge>
-                                                          <span className="text-[9px] text-slate-500 font-mono">
+                                                          <span className="text-[9px] text-slate-500 font-mono" suppressHydrationWarning>
                                                               {new Date(solicitud.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                                                           </span>
                                                     </div>
@@ -353,7 +365,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                 <span className="text-xs font-medium text-slate-300">
                                                     {new Date(solicitud.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                                 </span>
-                                                <span className="text-[10px] text-slate-500 font-mono">
+                                                <span className="text-[10px] text-slate-500 font-mono" suppressHydrationWarning>
                                                     {new Date(solicitud.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
                                                 </span>
                                             </div>
@@ -397,6 +409,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                         </div>
                     </>
                 )}
+            </div>
             </div>
         </div>
     )

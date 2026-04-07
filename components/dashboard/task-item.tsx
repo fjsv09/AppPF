@@ -92,7 +92,7 @@ export function TaskItem({ tarea, variant, userId, onSelect, onAction }: TaskIte
                     <Badge className={cn("h-4 px-2 py-0 text-[8px] font-black uppercase tracking-widest border-none shadow-sm", typeLabel.color)}>
                         {typeLabel.full}
                     </Badge>
-                    <div className="text-[9px] font-bold text-slate-500 flex items-center gap-1 uppercase tracking-tighter">
+                    <div className="text-[9px] font-bold text-slate-500 flex items-center gap-1 uppercase tracking-tighter" suppressHydrationWarning>
                         <Clock className="w-3 h-3" />
                         {new Date(tarea.created_at).toLocaleDateString()}
                     </div>

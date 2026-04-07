@@ -22,7 +22,7 @@ import { BackButton } from '@/components/ui/back-button'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { CarteraAdvisorAssign } from '@/components/admin/cartera-advisor-assign'
-import { CarteraTransferModal } from '@/components/admin/cartera-transfer-modal'
+import { CarteraNavButtons } from '@/components/admin/cartera-nav-buttons'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,20 +56,20 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
 
   if (!user) return <div className="p-10 text-red-500 font-bold text-center">Sesión expirada.</div>
 
+  // OPTIMIZATION: Start independent queries in parallel
+  const [perfilRes, carterasRes, asesoresRes] = await Promise.all([
+    adminClient.from('perfiles').select('rol').eq('id', user.id).single(),
+    supabase.from('carteras').select('*, perfiles(id, nombre_completo)').eq('id', id).maybeSingle(),
+    adminClient.from('perfiles').select('id, nombre_completo').eq('activo', true).order('nombre_completo')
+  ])
 
-  // Premium View Logic
-  const { data: perfil } = await adminClient.from('perfiles').select('rol').eq('id', user.id).single()
+  const perfil = perfilRes.data
+  const asesores = asesoresRes.data
+  let cartera = carterasRes.data
+  
   if (perfil?.rol !== 'admin') return <div className="p-10 text-red-500 font-bold text-center">No autorizado.</div>
 
-  // Fetch Cartera alone first to ensure it loads
-  let { data: cartera, error: cError } = await supabase
-    .from('carteras')
-    .select('*, perfiles(id, nombre_completo)')
-    .eq('id', id)
-    .maybeSingle()
-    
   if (!cartera) {
-    // Check if it's the virtual global portfolio
     if (id === '00000000-0000-0000-0000-000000000000') {
       cartera = {
         id: '00000000-0000-0000-0000-000000000000',
@@ -79,20 +79,44 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
         perfiles: null
       } as any
     } else {
-      return <div className="p-10 text-center text-red-500 font-mono text-xs">
-          Cartera no encontrada. 
-      </div>
+      return <div className="p-10 text-center text-red-500 font-mono text-xs">Cartera no encontrada.</div>
     }
   }
 
-  // Fetch advisors
-  const { data: asesores } = await adminClient.from('perfiles').select('id, nombre_completo').eq('activo', true)
+  // Dynamic loan fetching based on role and charge
+  const fetchLoans = async () => {
+    // Global Portfolio case: always fetch everything
+    if (id === '00000000-0000-0000-0000-000000000000') {
+       return adminClient.from('prestamos')
+        .select(`id, monto, interes, estado, clientes!inner(asesor_id), cronograma_cuotas(monto_cuota, monto_pagado)`)
+        .neq('estado', 'anulado')
+    }
+    if (!cartera?.asesor_id) return { data: [] }
+    
+    const resp = (cartera as any).perfiles
+    let query = adminClient.from('prestamos')
+      .select(`id, monto, interes, estado, clientes!inner(asesor_id), cronograma_cuotas(monto_cuota, monto_pagado)`)
+      .neq('estado', 'anulado')
+      
+    // 1. ADMIN: Can see everything global if they are the responsible of this "Admin Portfolio"
+    if (resp?.rol === 'admin') return query 
+
+    // 2. SUPERVISOR: See theirs + advisors at their charge
+    if (resp?.rol === 'supervisor') {
+        const { data: sups } = await adminClient.from('perfiles').select('id').eq('supervisor_id', (cartera as any).asesor_id)
+        const ids = [cartera.asesor_id, ...(sups || []).map(s => s.id)]
+        return query.in('clientes.asesor_id', ids)
+    }
+
+    // 3. ASESOR: Normal restricted view
+    return query.eq('clientes.asesor_id', (cartera as any).asesor_id)
+  }
 
   const [resCuentas, resLoans] = await Promise.all([
-    adminClient.from('cuentas_financieras').select('*').eq('cartera_id', id),
-    cartera?.asesor_id ? adminClient.from('prestamos').select('monto, estado, id, clientes!inner(asesor_id)').eq('clientes.asesor_id', (cartera as any).asesor_id).neq('estado', 'anulado') : Promise.resolve({ data: [] })
+    adminClient.from('cuentas_financieras').select('*').eq('cartera_id', id).order('nombre'),
+    fetchLoans()
   ])
-
+ 
   const responsable = (cartera as any).perfiles
   const accounts = resCuentas.data || []
   const loans = resLoans.data || []
@@ -102,6 +126,11 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
   const totalBalance = accounts.reduce((sum, acc) => sum + (parseFloat(acc.saldo) || 0), 0)
   const activeLoans = loans.filter((l: any) => l.estado === 'activo')
   const totalLent = activeLoans.reduce((sum: number, l: any) => sum + (parseFloat(l.monto) || 0), 0)
+  const totalPending = activeLoans.reduce((sum, loan: any) => {
+    const loanPending = (loan.cronograma_cuotas || []).reduce((acc: number, c: any) => 
+        acc + (parseFloat(c.monto_cuota) || 0) - (parseFloat(c.monto_pagado) || 0), 0)
+    return sum + loanPending
+  }, 0)
 
   return (
     <div className="page-container">
@@ -154,113 +183,108 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
         </div>
       </div>
 
-      {/* KPI COMMAND CENTER (Compact) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Main Balanced Metrics */}
-        <div className="lg:col-span-8 grid grid-cols-2 gap-3">
-            {/* Balance Card */}
+      {/* KPI COMMAND CENTER (Compact) */}      <div className="space-y-4">
+        {/* TOP METRICS ROW: 3 Equal Columns */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* 1. BALANCE CARD */}
             <Card className="bg-slate-950 border-slate-800 relative overflow-hidden group">
-                <CardContent className="p-2 md:p-4 space-y-1.5 md:space-y-3">
-                    <div className="flex items-center gap-1 md:gap-2">
-                        <div className="p-1 md:p-1.5 bg-blue-500/10 rounded-lg text-blue-400">
-                           <Wallet className="w-2.5 md:w-3 h-2.5 md:h-3" />
+                <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 blur-[40px] -mr-12 -mt-12" />
+                <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-400">
+                               <Wallet className="w-4 h-4" />
+                            </div>
+                            <span className="text-[9px] text-slate-500 font-black tracking-widest uppercase">Balance</span>
                         </div>
-                        <span className="text-[7px] md:text-[9px] text-slate-500 font-black tracking-widest uppercase truncate">Balance</span>
+                        <Badge className="bg-blue-600/5 text-blue-400/60 border-none px-1 text-[7px] font-bold">TOTAL</Badge>
                     </div>
                     <div>
-                        <div className="flex items-baseline gap-0.5 md:gap-1">
-                            <span className="text-[10px] md:text-sm font-medium text-slate-600">S/</span>
-                            <h2 className="text-base md:text-xl font-black text-white tracking-tighter">
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-sm font-bold text-slate-600">S/</span>
+                            <h2 className="text-2xl font-black text-white tracking-tighter">
                                {formatMoney(totalBalance)}
                             </h2>
                         </div>
-                        <p className="text-[7px] md:text-[9px] text-slate-600 mt-0.5 font-medium">{accounts.length} Cuentas</p>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* In The Street Card */}
-            <Card className="bg-slate-950 border-slate-800 relative overflow-hidden group">
-                <CardContent className="p-2 md:p-4 space-y-1.5 md:space-y-3">
-                    <div className="flex items-center gap-1 md:gap-2">
-                        <div className="p-1 md:p-1.5 bg-emerald-500/10 rounded-lg text-emerald-400">
-                           <Activity className="w-2.5 md:w-3 h-2.5 md:h-3" />
-                        </div>
-                        <span className="text-[7px] md:text-[9px] text-slate-500 font-black tracking-widest uppercase truncate">En Calle</span>
-                    </div>
-                    <div>
-                        <div className="flex items-baseline gap-0.5 md:gap-1">
-                            <span className="text-[10px] md:text-sm font-medium text-slate-600">S/</span>
-                            <h2 className="text-base md:text-xl font-black text-emerald-400 tracking-tighter">
-                               {formatMoney(totalLent)}
-                            </h2>
-                        </div>
-                        <p className="text-[7px] md:text-[9px] text-slate-600 mt-0.5 font-medium">
-                           {activeLoans.length} Préstamos
+                        <p className="text-[9px] text-slate-500 mt-1 font-bold uppercase tracking-tight">
+                           {accounts.length} Cuentas <span className="text-slate-700 mx-1">|</span> {activeLoans.length} Préstamos
                         </p>
                     </div>
                 </CardContent>
             </Card>
 
-            {/* History Action Row */}
-            <Card className="col-span-2 bg-gradient-to-r from-blue-900/5 to-indigo-900/5 border-blue-500/10 p-0.5 rounded-xl overflow-hidden">
-                <div className="bg-slate-900/60 backdrop-blur-md rounded-lg p-2 md:p-3 flex items-center justify-between gap-4 border border-white/5">
-                    <div className="flex items-center gap-2 md:gap-3">
-                        <div className="p-1 md:p-1.5 bg-blue-500/10 rounded-lg text-blue-400">
-                           <History className="w-3 md:w-3.5 h-3 md:h-3.5" />
+            {/* 2. CAPITAL COLOCADO CARD */}
+            <Card className="bg-slate-950 border-slate-800 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 blur-[40px] -mr-12 -mt-12" />
+                <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-400">
+                               <DollarSign className="w-4 h-4" />
+                            </div>
+                            <span className="text-[9px] text-slate-500 font-black tracking-widest uppercase">Capital en Calle</span>
                         </div>
-                        <div>
-                           <h3 className="text-[10px] md:text-xs font-bold text-white leading-none">Gestión Caja</h3>
-                           <p className="text-[7px] md:text-[8px] text-slate-500 mt-0.5">Auditoría completa.</p>
+                        <Badge className="bg-emerald-600/5 text-emerald-400/60 border-none px-1 text-[7px] font-bold">ACTIVO</Badge>
+                    </div>
+                    <div>
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-sm font-bold text-slate-600">S/</span>
+                            <h2 className="text-2xl font-black text-emerald-400 tracking-tighter">
+                               {formatMoney(totalLent)}
+                            </h2>
                         </div>
+                        <p className="text-[9px] text-slate-500 mt-1 font-bold uppercase tracking-tight">
+                            Dinero Principal Lent
+                        </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <CarteraTransferModal carteraId={id} accounts={accounts} />
-                        <Button asChild size="sm" className="h-7 md:h-8 px-3 md:px-5 bg-blue-600 hover:bg-blue-500 text-white text-[9px] md:text-[10px] font-black rounded-lg shadow-lg shadow-blue-900/20 group">
-                            <Link href={`/dashboard/admin/carteras/${id}/movimientos`}>
-                               HISTORIAL
-                               <ArrowRightCircle className="ml-1.5 w-3 md:w-3.5 h-3 md:h-3.5 group-hover:translate-x-1 transition-transform" />
-                            </Link>
-                        </Button>
-                    </div>
-                </div>
+                </CardContent>
             </Card>
-        </div>
 
-        {/* Status Center */}
-        <div className="lg:col-span-4 flex flex-col gap-3">
-            <Card className="bg-slate-950 border-slate-800 flex-1 overflow-hidden">
-                <CardContent className="p-3 md:p-4 space-y-4">
-                    <div className="flex items-center justify-between mb-1">
-                        <h3 className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Estado</h3>
-                        <Badge className="bg-blue-600/10 text-blue-400 border-none px-1.5 py-0 text-[7px] font-bold">READY</Badge>
+            {/* 3. TOTAL COBRANZA CARD */}
+            <Card className="bg-slate-950 border-blue-500/10 relative overflow-hidden group shadow-2xl shadow-blue-500/5 border-l-2 border-l-blue-500/20">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 blur-[40px] -mr-12 -mt-12" />
+                <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="p-1.5 bg-blue-500/20 rounded-lg text-blue-400">
+                               <TrendingUp className="w-4 h-4" />
+                            </div>
+                            <span className="text-[9px] text-blue-400 font-black tracking-widest uppercase">Cobranza Total</span>
+                        </div>
+                        <Badge className="bg-blue-600/20 text-blue-400 border-none px-1 text-[7px] font-bold">PROYECTADO</Badge>
                     </div>
-
-                    <div className="space-y-2">
-                        <div className="p-2 rounded-lg bg-slate-900/30 border border-slate-800/50">
-                            <div className="flex justify-between text-[8px] font-black text-slate-600 uppercase mb-1">
-                                <span>Salud</span>
-                                <span className="text-blue-500">100%</span>
-                            </div>
-                            <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
-                                <div className="bg-blue-500 h-full w-full rounded-full" />
-                            </div>
+                    <div>
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-sm font-bold text-slate-600">S/</span>
+                            <h2 className="text-2xl font-black text-white tracking-tighter">
+                               {formatMoney(totalPending)}
+                            </h2>
                         </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                             <div className="p-2 rounded-lg bg-slate-900/20 border border-slate-800/40 text-center">
-                                 <p className="text-[7px] text-slate-600 font-black uppercase mb-0.5">Cuentas</p>
-                                 <p className="text-sm font-black text-white leading-none">{accounts.length}</p>
-                             </div>
-                             <div className="p-2 rounded-lg bg-slate-900/20 border border-slate-800/40 text-center">
-                                 <p className="text-[7px] text-slate-600 font-black uppercase mb-0.5">Activos</p>
-                                 <p className="text-sm font-black text-emerald-400 leading-none">{activeLoans.length}</p>
-                             </div>
-                        </div>
+                        <p className="text-[9px] text-slate-500 mt-1 font-bold uppercase tracking-tight">
+                           Capital + Intereses por Cobrar
+                        </p>
                     </div>
                 </CardContent>
             </Card>
         </div>
+
+        {/* FULL WIDTH ACTION BAR */}
+        <Card className="bg-slate-950 border-slate-800 p-0.5 rounded-xl">
+            <div className="bg-slate-900/40 rounded-lg p-3 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="p-1.5 bg-slate-800 rounded-lg text-slate-400">
+                       <History className="w-4 h-4" />
+                    </div>
+                    <div>
+                       <h3 className="text-xs font-bold text-white leading-none uppercase tracking-tight">Gestión Operativa</h3>
+                       <p className="text-[10px] text-slate-500 mt-0.5">Control de cuentas y movimientos financieros.</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    <CarteraNavButtons carteraId={id} accounts={accounts} />
+                </div>
+            </div>
+        </Card>
       </div>
 
       {/* ACCOUNTS AREA */}

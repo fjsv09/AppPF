@@ -9,9 +9,9 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       {children}
       <Suspense fallback={null}>
         <ProgressBar
-          height="3px"
-          color="#8b5cf6" 
-          options={{ showSpinner: true }}
+          height="4px"
+          color="#3b82f6" 
+          options={{ showSpinner: false }}
           shallowRouting
         />
       </Suspense>

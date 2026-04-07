@@ -60,14 +60,22 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
 
   if (!user) return <div className="p-10 text-red-500 text-center font-bold">Sesión expirada.</div>
 
-  const { data: perfil } = await adminClient.from('perfiles').select('rol').eq('id', user.id).single()
+  if (!user) return <div className="p-10 text-red-500 text-center font-bold">Sesión expirada.</div>
+
+  // OPTIMIZATION: Start all queries in parallel
+  const [perfilRes, carteraRes, accountsRes] = await Promise.all([
+    adminClient.from('perfiles').select('rol').eq('id', user.id).single(),
+    adminClient.from('carteras').select('nombre').eq('id', id).single(),
+    adminClient.from('cuentas_financieras').select('*').eq('cartera_id', id).order('nombre')
+  ])
+
+  const perfil = perfilRes.data
+  const cartera = carteraRes.data
+  const accounts = accountsRes.data || []
+
   if (perfil?.rol !== 'admin') return <div className="p-10 text-red-500 text-center font-bold">Acceso administrativo denegado.</div>
 
-  // 1. Fetch Cartera and Source Accounts
-  const { data: cartera } = await adminClient.from('carteras').select('nombre').eq('id', id).single()
-  const { data: accounts } = await adminClient.from('cuentas_financieras').select('*').eq('cartera_id', id)
-  
-  // 2. Fetch Movements with Filters
+  // Separate query for movements (could also be part of Promise.all but depends on filters)
   let query = adminClient
     .from('movimientos_financieros')
     .select(`

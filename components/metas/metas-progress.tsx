@@ -9,6 +9,7 @@ import { createClient } from '@/utils/supabase/client'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { esDiaHabil } from '@/lib/financial-logic'
 
 interface MetasProgressProps {
   userId: string
@@ -48,14 +49,17 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
   })
   const [bonosPendientes, setBonosPendientes] = useState<any[]>([])
   const [bonosPagadosHoy, setBonosPagadosHoy] = useState<string[]>([])
+  const [bonosPagadosSemana, setBonosPagadosSemana] = useState<string[]>([])
   const [bonosPagadosMes, setBonosPagadosMes] = useState<string[]>([])
   const [historialBonos, setHistorialBonos] = useState<any[]>([])
   const [historialDescuentos, setHistorialDescuentos] = useState<any[]>([])
   const [asesoresInfo, setAsesoresInfo] = useState<any[]>([])
+  const [feriadosSet, setFeriadosSet] = useState<Set<string>>(new Set())
   const processingMetas = useRef(new Set<string>())
 
   const supabase = createClient()
   const esSupervisorOAdmin = userRole === 'supervisor' || userRole === 'admin'
+  const hoyPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
 
   const fetchStats = useCallback(async () => {
     try {
@@ -70,6 +74,17 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
       const hoyPeruStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
       const mesActualStr = hoyPeruStr.slice(0, 7)
 
+      // Cargar Feriados
+      try {
+        const resFer = await fetch('/api/feriados')
+        if (resFer.ok) {
+          const fers = await resFer.json()
+          setFeriadosSet(new Set(fers.map((f: any) => f.fecha)))
+        }
+      } catch (e) {
+        console.error('Error fetching feriados:', e)
+      }
+
       const { data: todosBonosMes } = await supabase
         .from('bonos_pagados')
         .select('*')
@@ -77,10 +92,19 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
         .gte('fecha', `${mesActualStr}-01`)
 
       const pagadosHoy = todosBonosMes?.filter(p => p.fecha === hoyPeruStr && p.estado === 'aprobado').map(p => p.meta_id) || []
+      
+      // Calcular Lunes de esta semana para filtrado semanal
+      const d = new Date(hoyPeruStr + 'T12:00:00')
+      const day = d.getDay()
+      const diffLunes = d.getDate() - day + (day === 0 ? -6 : 1)
+      const lunesActual = new Date(d.setDate(diffLunes)).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+      
+      const pagadosSemana = todosBonosMes?.filter(p => p.fecha >= lunesActual && p.estado === 'aprobado').map(p => p.meta_id) || []
       const pagadosMes = todosBonosMes?.filter(p => p.estado === 'aprobado').map(p => p.meta_id) || []
       const pendientesORechazados = todosBonosMes?.filter(p => ['pendiente', 'rechazado'].includes(p.estado)) || []
 
       setBonosPagadosHoy(pagadosHoy)
+      setBonosPagadosSemana(pagadosSemana)
       setBonosPagadosMes(pagadosMes)
       setBonosPendientes(pendientesORechazados)
 
@@ -389,9 +413,13 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
     const isSaturday = today.getDay() === 6
     if (meta.periodo === 'semanal' && !isSaturday) return
     if (meta.periodo === 'diario' && bonosPagadosHoy.includes(meta.id)) return
+    if (meta.periodo === 'semanal' && bonosPagadosSemana.includes(meta.id)) return
     if (meta.periodo === 'mensual' && bonosPagadosMes.includes(meta.id)) return
     if (bonosPendientes.some(p => p.meta_id === meta.id)) return
     if (processingMetas.current.has(meta.id)) return
+
+    // --- REGLA DE DOMINGOS Y FERIADOS ---
+    if (!esDiaHabil(hoyPeru, feriadosSet)) return
 
     let cumplida = false
     let montoBonoFinal = meta.bono_monto || 0
@@ -432,24 +460,32 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
     if (cumplida && montoBonoFinal > 0) {
       processingMetas.current.add(meta.id)
       try {
-        const { error } = await supabase.from('bonos_pagados').insert({
-          meta_id: meta.id,
-          asesor_id: userId,
-          monto: montoBonoFinal,
-          fecha: hoyPeru,
-          estado: 'pendiente',
-          detalles_calculo: {
-            retencion: realTimeStats.detalles_retencion,
-            colocacion: realTimeStats.detalles_colocacion,
-            formula: meta.meta_retencion_clientes ? 'Retencion - Bloqueados' : meta.meta_colocacion_clientes ? 'Capital Neto Tras Parche' : 'General'
-          }
+        // --- ENVÍO SEGURO VÍA API (RLS FIX) ---
+        const response = await fetch('/api/metas/bono', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            meta_id: meta.id,
+            monto: montoBonoFinal,
+            fecha: hoyPeru,
+            detalles_calculo: {
+              formula: meta.meta_retencion_clientes ? 'RETENCIÓN' : meta.meta_colocacion_clientes ? 'COLOCACIÓN' : 'KPI',
+              valor: montoBonoFinal
+            }
+          })
         })
-        if (error) {
-          toast.error(`Error al enviar bono: ${error.message}.`)
+
+        const result = await response.json()
+
+        if (!response.ok) {
+          toast.error(`Error al enviar bono: ${result.error || 'Error desconocido'}`)
           processingMetas.current.delete(meta.id)
           return
         }
-        toast.success(`Meta alcanzada. El bono de S/ ${montoBonoFinal} ha sido enviado al Administrador.`, { icon: <Clock className="w-5 h-5 text-amber-500" /> })
+
+        toast.success(`Meta alcanzada. El bono de S/ ${montoBonoFinal} ha sido enviado al Administrador.`, { 
+          icon: <Clock className="w-5 h-5 text-amber-500" /> 
+        })
         setBonosPendientes(prev => [...prev, { meta_id: meta.id, monto: montoBonoFinal, estado: 'pendiente' }])
       } catch (err: any) {
         toast.error('Error de conexión al enviar el bono.')
@@ -458,7 +494,7 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
         setTimeout(() => processingMetas.current.delete(meta.id), 5000)
       }
     }
-  }, [loading, userId, bonosPagadosHoy, bonosPagadosMes, bonosPendientes, realTimeStats, supabase])
+  }, [loading, userId, bonosPagadosHoy, bonosPagadosSemana, bonosPagadosMes, bonosPendientes, realTimeStats, supabase])
 
   useEffect(() => {
     if (loading) return
@@ -639,38 +675,52 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-2">
             {metas.length > 0 ? metas.map((m, idx) => {
+              const isPaidToday = bonosPagadosHoy.includes(m.id)
+              const isPaidWeek = bonosPagadosSemana.includes(m.id)
+              const isPaidMonth = bonosPagadosMes.includes(m.id)
+              
+              const isPaid = m.periodo === 'diario' ? isPaidToday : 
+                            m.periodo === 'semanal' ? isPaidWeek : 
+                            isPaidMonth
+
               const bonoInfo = bonosPendientes.find(p => p.meta_id === m.id)
-              const isPaid = bonosPagadosMes.includes(m.id)
               const isPending = bonoInfo?.estado === 'pendiente'
               const isRejected = bonoInfo?.estado === 'rechazado'
               const rejectionReason = bonoInfo?.motivo_rechazo
+              
+              // --- EVALUACIÓN DE META ---
+              let label = 'Meta'
               let isReached = false
               let bonoDisplay = `S/ ${m.bono_monto || 0}`
-              let label = 'Bono Gestión'
+              
+              const isWorkingDay = esDiaHabil(hoyPeru, feriadosSet)
 
-              if (m.meta_cobro !== null && m.meta_cobro !== undefined) {
-                label = 'Bono Cobranza'
-                isReached = realTimeStats.porcentaje_cobro >= m.meta_cobro
-              } else if (m.meta_retencion_clientes !== null && m.meta_retencion_clientes !== undefined) {
-                label = 'Bono Retención'
-                isReached = realTimeStats.clientes_en_cartera >= m.meta_retencion_clientes
-              } else if (m.meta_cantidad_clientes !== null && m.meta_cantidad_clientes !== undefined) {
-                label = 'Bono Nuevos Clientes'
-                isReached = realTimeStats.nuevos_clientes >= m.meta_cantidad_clientes
-              } else if (m.meta_colocacion_clientes) {
-                label = 'Bono por Cliente'
-                isReached = realTimeStats.clientes_colocados_mes > 0
-                bonoDisplay = `S/ ${(m.bono_por_cliente || 0) * realTimeStats.clientes_colocados_mes}`
-              } else if (m.meta_colocacion !== null && m.meta_colocacion !== undefined) {
-                label = 'Bono Colocación'
-                isReached = false
-              } else if (m.escalones_mora) {
-                label = 'Bono Morosidad'
-                const escalones = typeof m.escalones_mora === 'string' ? JSON.parse(m.escalones_mora) : m.escalones_mora
-                const sortedEsc = [...escalones].sort((a,b) => parseFloat(a.mora) - parseFloat(b.mora))
-                const esc = sortedEsc.find(e => realTimeStats.morosidad_actual <= parseFloat(e.mora))
-                isReached = !!esc
-                bonoDisplay = esc ? `S/ ${esc.bono}` : 'S/ 0'
+              if (isWorkingDay) {
+                if (m.meta_cobro !== null && m.meta_cobro !== undefined) {
+                  label = 'Bono Cobranza'
+                  isReached = realTimeStats.porcentaje_cobro >= m.meta_cobro && realTimeStats.porcentaje_cobro > 0
+                } else if (m.meta_retencion_clientes !== null && m.meta_retencion_clientes !== undefined) {
+                  label = 'Bono Retención'
+                  isReached = realTimeStats.clientes_en_cartera >= m.meta_retencion_clientes && realTimeStats.porcentaje_cobro > 0
+                } else if (m.meta_cantidad_clientes !== null && m.meta_cantidad_clientes !== undefined) {
+                  label = 'Bono Nuevos Clientes'
+                  isReached = realTimeStats.nuevos_clientes >= m.meta_cantidad_clientes && realTimeStats.nuevos_clientes > 0
+                } else if (m.meta_colocacion_clientes) {
+                  label = 'Bono por Cliente'
+                  const montoMin = m.monto_minimo_prestamo || 500
+                  isReached = realTimeStats.clientes_colocados_mes > 0 && realTimeStats.promedio_colocacion >= montoMin
+                  bonoDisplay = `S/ ${(m.bono_por_cliente || 0) * realTimeStats.clientes_colocados_mes}`
+                } else if (m.meta_morosidad_max !== null && m.meta_morosidad_max !== undefined) {
+                  label = 'Bono Morosidad'
+                  isReached = realTimeStats.morosidad_actual <= m.meta_morosidad_max && realTimeStats.porcentaje_cobro > 0
+                } else if (m.escalones_mora) {
+                  label = 'Bono Morosidad'
+                  const escalones = typeof m.escalones_mora === 'string' ? JSON.parse(m.escalones_mora) : m.escalones_mora
+                  const sortedEsc = [...escalones].sort((a,b) => parseFloat(a.mora) - parseFloat(b.mora))
+                  const esc = sortedEsc.find(e => realTimeStats.morosidad_actual <= parseFloat(e.mora))
+                  isReached = !!esc && realTimeStats.porcentaje_cobro > 0
+                  bonoDisplay = esc ? `S/ ${esc.bono}` : 'S/ 0'
+                }
               }
 
               return (

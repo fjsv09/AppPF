@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -35,8 +35,10 @@ export function CarteraManager({ asesores, initialCarteras }: CarteraManagerProp
   const [loading, setLoading] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingCartera, setEditingCartera] = useState<any>(null)
+  const [navigatingId, setNavigatingId] = useState<string | null>(null)
   const supabase = createClient()
   const router = useRouter()
+  const [isNavigating, startNavigation] = useTransition()
 
   async function updateCartera() {
     if (!editingCartera.nombre || !editingCartera.asesor_id) {
@@ -141,19 +143,12 @@ export function CarteraManager({ asesores, initialCarteras }: CarteraManagerProp
               <Button 
                 className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold h-12 shadow-lg shadow-amber-900/20 group transition-all duration-300" 
                 onClick={updateCartera}
-                disabled={loading}
+                loading={loading}
               >
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                    Guardando...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    Guardar Cambios
-                    <Edit2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                  </span>
-                )}
+                <span className="flex items-center gap-2">
+                  {loading ? 'Guardando...' : 'Guardar Cambios'}
+                  {!loading && <Edit2 className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />}
+                </span>
               </Button>
             </div>
           </DialogContent>
@@ -216,12 +211,16 @@ export function CarteraManager({ asesores, initialCarteras }: CarteraManagerProp
                       </div>
 
                       <div className="p-3 bg-slate-950/30 border-t border-slate-800/50 flex justify-center">
-                          <Button 
+                            <Button 
                             variant="default" 
                             className="w-full bg-slate-800/50 hover:bg-blue-600 text-slate-400 hover:text-white border-slate-700/50 hover:border-blue-500 group/btn transition-all flex h-8 gap-2 items-center justify-center shadow-lg font-bold text-[10px] uppercase tracking-wider"
+                            loading={isNavigating && navigatingId === c.id}
                             onClick={(e) => {
                               e.preventDefault();
-                              router.push(`/dashboard/admin/carteras/${c.id}`);
+                              setNavigatingId(c.id);
+                              startNavigation(() => {
+                                router.push(`/dashboard/admin/carteras/${c.id}`);
+                              });
                             }}
                           >
                              Gestionar

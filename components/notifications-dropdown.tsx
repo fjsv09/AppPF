@@ -442,7 +442,7 @@ export function NotificationsDropdown() {
                                                 {n.mensaje}
                                             </p>
                                             <div className="flex items-center gap-3 mt-2">
-                                                <span className="text-[10px] font-mono text-slate-600">
+                                                <span className="text-[10px] font-mono text-slate-600" suppressHydrationWarning>
                                                     {formatTime(n.created_at)}
                                                 </span>
                                                 {n.link_accion && (

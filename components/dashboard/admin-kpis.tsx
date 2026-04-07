@@ -273,7 +273,7 @@ export function AdminKPIs() {
                                             <Phone className="w-3 h-3 text-cyan-500/50 shrink-0" />
                                             <span className="truncate">{cliente.telefono}</span>
                                         </div>
-                                        <div className="text-slate-500 flex items-center gap-2 text-[10px] font-bold uppercase">
+                                        <div className="text-slate-500 flex items-center gap-2 text-[10px] font-bold uppercase" suppressHydrationWarning>
                                             <Calendar className="w-3 h-3 text-slate-600 shrink-0" />
                                             {cliente.ultimo_pago 
                                                 ? new Date(cliente.ultimo_pago).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })

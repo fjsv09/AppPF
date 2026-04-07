@@ -136,7 +136,7 @@ export default function ClientesMapa({ clientes }: ClientesMapaProps) {
                 attributionControl={false}
             >
                 <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
                 />
                 
                 <BoundsAutoFitter markers={markersList} />

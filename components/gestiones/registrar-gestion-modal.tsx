@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useEffect } from "react"
+import { useState, useTransition, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { 
@@ -58,17 +58,42 @@ export function RegistrarGestionModal({
     const [gpsLoading, setGpsLoading] = useState(false)
     const [gpsError, setGpsError] = useState<string | null>(null)
 
+    // Pre-calculate relevant loans
+    const relevantLoans = useMemo(() => {
+        return (prestamos || []).filter((l: any) => {
+            // Un préstamo es relevante si está activo O tiene deuda pendiente real
+            const pendingBalance = l.cronograma_cuotas?.reduce((acc: number, c: any) => 
+                acc + (c.monto_cuota - (c.monto_pagado || 0)), 0) || 0
+            
+            const isActive = l.estado === 'activo'
+            const hasDebt = pendingBalance > 0.01
+
+            // Excluir específicamente los que ya están anulados o rechazados
+            const isInvalid = ['anulado', 'rechazado'].includes(l.estado?.toLowerCase())
+            
+            if (isInvalid) return false
+            
+            // Si es 'renovado', solo dejarlo si excepcionalmente tuviera saldo pendiente (0.01+)
+            return isActive || hasDebt
+        })
+    }, [prestamos])
+
     // Reset when open/close or default changes
     useEffect(() => {
         if (open) {
-            setSelectedPrestamoId(defaultPrestamoId)
+            // If multiple loans, don't pick one automatically to force the user to choose
+            if (relevantLoans.length > 1) {
+                setSelectedPrestamoId("")
+            } else {
+                setSelectedPrestamoId(defaultPrestamoId)
+            }
             setTipoGestion('Llamada')
             setResultado(RESULTADO_OPCIONES['Llamada'][0])
             setNotas('')
             setCoordenadas(null)
             setGpsError(null)
         }
-    }, [open, defaultPrestamoId])
+    }, [open, defaultPrestamoId, relevantLoans.length])
 
     const handleChangeTipo = (tipo: TipoGestion) => {
         setTipoGestion(tipo)
@@ -155,33 +180,37 @@ export function RegistrarGestionModal({
                 <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
                     {/* Loan Selector (if multiple relevant) */}
                     {(() => {
-                        const relevantLoans = prestamos.filter(l => 
-                            l.estado === 'activo' || 
-                            (['vencido', 'moroso', 'cpp'].includes(l.estado_mora?.toLowerCase()) && 
-                             l.estado !== 'refinanciado' && 
-                             l.estado !== 'finalizado')
-                        )
-                        
                         if (relevantLoans.length <= 1) return null
 
                         return (
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Asociar a Préstamo</label>
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                                    <span>Asociar a Préstamo</span>
+                                    {!selectedPrestamoId && <span className="text-[10px] text-amber-500 font-black animate-pulse">SELECCIONE UNO</span>}
+                                </label>
                                 <div className="grid grid-cols-1 gap-1.5">
-                                    {relevantLoans.map((loan) => (
+                                    {relevantLoans.map((loan: any) => (
                                     <button
                                         key={loan.id}
                                         type="button"
                                         onClick={() => setSelectedPrestamoId(loan.id)}
                                         className={cn(
-                                            "w-full text-left px-3 py-2 rounded-lg border text-[11px] transition-all flex items-center justify-between",
+                                            "w-full text-left px-3 py-2 rounded-lg border text-[11px] transition-all flex items-center justify-between group",
                                             selectedPrestamoId === loan.id
                                                 ? "bg-blue-600/20 border-blue-500/40 text-blue-200 font-medium"
-                                                : "bg-slate-900/40 border-slate-800 text-slate-500 hover:border-slate-700 hover:text-slate-400"
+                                                : "bg-slate-900/40 border-slate-800 text-slate-500 hover:border-slate-700 hover:text-slate-300"
                                         )}
                                     >
-                                        <span>${loan.monto} ({loan.estado})</span>
-                                        {loan.estado_mora && <span className="uppercase text-[9px] px-1.5 rounded bg-slate-800">{loan.estado_mora}</span>}
+                                        <div className="flex items-center gap-2">
+                                            <span className={cn(
+                                                "w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0",
+                                                selectedPrestamoId === loan.id ? "border-blue-500 bg-blue-500" : "border-slate-800 bg-transparent group-hover:border-slate-700"
+                                            )}>
+                                                {selectedPrestamoId === loan.id && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                            </span>
+                                            <span>${loan.monto} ({loan.estado})</span>
+                                        </div>
+                                        {loan.estado_mora && <span className="uppercase text-[9px] px-1.5 rounded bg-slate-800 font-bold">{loan.estado_mora}</span>}
                                     </button>
                                 ))}
                             </div>
@@ -348,7 +377,7 @@ export function RegistrarGestionModal({
                     <UIButton
                         type="button"
                         onClick={handleGuardar}
-                        disabled={isPending || !resultado || (tipoGestion === 'Visita' && !coordenadas)}
+                        disabled={isPending || !resultado || (tipoGestion === 'Visita' && !coordenadas) || (relevantLoans.length > 0 && !selectedPrestamoId)}
                         className="flex-1 bg-blue-600 hover:bg-blue-500 text-white"
                     >
                         {isPending ? (

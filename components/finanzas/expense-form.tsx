@@ -89,13 +89,8 @@ export function ExpenseForm({ carteras, cuentas, categorias, advisors, userId, u
     return true
   })
 
-  const filteredCategorias = categorias.filter(cat => {
-    // Supervisor can only see 'Gasto' categories
-    if (userRole === 'supervisor') {
-      return cat.nombre.toLowerCase().includes('gasto')
-    }
-    return true
-  })
+  const filteredCategorias = categorias
+
 
   // Pre-fill account/category if only one is available or editing
   useEffect(() => {

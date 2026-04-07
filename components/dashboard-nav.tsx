@@ -43,9 +43,33 @@ export function DashboardNav({
     const { unreadCount } = useNotifications()
     const { isCollapsed, toggleSidebar } = useSidebar()
     const [isSimModalOpen, setIsSimModalOpen] = useState(false)
+    const [pendingBonosCount, setPendingBonosCount] = useState(0)
 
     const [isPending, startTransition] = useTransition()
     const [loadingTarget, setLoadingTarget] = useState<string | null>(null)
+    
+    // Fetch pending bonuses count for Admin
+    useEffect(() => {
+        if (role !== 'admin') return
+
+        const fetchCount = async () => {
+            const { count, error } = await supabase
+                .from('bonos_pagados')
+                .select('*', { count: 'exact', head: true })
+                .eq('estado', 'pendiente')
+            
+            if (!error && count !== null) setPendingBonosCount(count)
+        }
+
+        fetchCount()
+
+        const channel = supabase
+            .channel('pending-bonos')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'bonos_pagados' }, fetchCount)
+            .subscribe()
+
+        return () => { supabase.removeChannel(channel) }
+    }, [role, supabase])
 
     // Reset loading target when transition ends
     useEffect(() => {
@@ -234,6 +258,11 @@ export function DashboardNav({
                                                 {!isCollapsed && (
                                                     <div className="absolute right-3 flex items-center gap-2">
                                                         {isThisLoading && <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />}
+                                                        {link.href === '/dashboard/admin/metas' && pendingBonosCount > 0 && (
+                                                            <span className="h-4 min-w-[16px] px-1 rounded-full bg-blue-500 text-[9px] font-black text-white flex items-center justify-center border border-slate-900 shadow-[0_0_10px_rgba(59,130,246,0.6)]">
+                                                                {pendingBonosCount}
+                                                            </span>
+                                                        )}
                                                         {isActive && <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)]" />}
                                                     </div>
                                                 )}

@@ -14,7 +14,7 @@ async function test() {
   console.log('perfiles:', data ? Object.keys(data[0]) : error)
 
   const { data: configData, error: configError } = await supabase.from('configuracion_sistema').select('*')
-  console.log('configuracion_sistema keys:', configData ? configData.map(c => c.clave) : configError)
+  console.log('configuracion_sistema:', configData ? configData.map(c => ({ [c.clave]: c.valor })) : configError)
 }
 
 test()

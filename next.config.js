@@ -9,7 +9,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' *.supabase.co *.vercel.app; connect-src 'self' *.supabase.co *.sentry.io; img-src 'self' data: *.supabase.co; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src 'self' fonts.gstatic.com; frame-ancestors 'none';",
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' *.supabase.co *.vercel.app; connect-src 'self' *.supabase.co *.sentry.io; img-src 'self' data: *.supabase.co *.basemaps.cartocdn.com *.tile.openstreetmap.org cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src 'self' fonts.gstatic.com; frame-ancestors 'none';",
           },
           {
             key: 'X-Frame-Options',

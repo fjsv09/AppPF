@@ -39,6 +39,7 @@ const clientSchema = z.object({
   sector_id: z.string().min(1, "Sector es requerido"),
   estado: z.enum(["activo", "inactivo"]),
   excepcion_voucher: z.boolean().default(false),
+  limite_prestamo: z.number().min(0, "El límite debe ser mayor o igual a 0"),
 })
 
 interface ClientEditModalProps {
@@ -89,8 +90,9 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
       sector_id: cliente?.sector_id || "",
       estado: cliente?.estado || "activo",
       excepcion_voucher: cliente?.excepcion_voucher || false,
+      limite_prestamo: cliente?.limite_prestamo || 0,
     }
-  })
+})
 
   // Coordenadas GPS separadas (no en react-hook-form para facilitar GpsInput)
   const [gpsCoords, setGpsCoords] = useState(cliente?.gps_coordenadas || "")
@@ -114,6 +116,7 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
         setValue("sector_id", cliente.sector_id || "")
         setValue("estado", cliente.estado || "activo")
         setValue("excepcion_voucher", cliente.excepcion_voucher || false)
+        setValue("limite_prestamo", cliente.limite_prestamo || 0)
     }
   }, [cliente, setValue])
 
@@ -365,6 +368,28 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
                             disabled={isSubmitting}
                         />
                         {errors.motivo_prestamo && <p className="text-[10px] text-red-400">{errors.motivo_prestamo.message as string}</p>}
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-xs text-slate-400 ml-1 flex items-center gap-2">
+                            <DollarSign className="w-3 h-3 text-emerald-400" /> Monto Límite de Préstamo (S/)
+                        </label>
+                        <Input 
+                            type="number"
+                            step="0.01"
+                            {...register("limite_prestamo", { valueAsNumber: true })}
+                            className="bg-slate-900 border-slate-800 focus:border-emerald-500/50 font-bold text-emerald-400"
+                            placeholder="500.00"
+                            disabled={
+                                isSubmitting || 
+                                userRol === 'asesor' || 
+                                (userRol === 'supervisor' && (cliente?.limite_prestamo || 0) > 0)
+                            }
+                        />
+                        {userRol === 'supervisor' && (cliente?.limite_prestamo || 0) > 0 && (
+                            <p className="text-[10px] text-slate-500 italic pl-1">Solo el administrador puede editar un límite ya establecido.</p>
+                        )}
+                        {errors.limite_prestamo && <p className="text-[10px] text-red-400">{errors.limite_prestamo.message as string}</p>}
                     </div>
 
                     <div className="space-y-2">

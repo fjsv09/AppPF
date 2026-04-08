@@ -41,6 +41,7 @@ export interface WizardState {
   evaluacion: Partial<EvaluacionData>
   prestamo: Partial<PrestamoData>
   clienteExistenteId?: string
+  clienteLimit?: number
 }
 
 export type WizardStep = 1 | 2 | 3  

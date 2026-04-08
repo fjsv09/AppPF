@@ -103,6 +103,7 @@ export default async function AsistenciaPage({
                 initialData={asistencias || []} 
                 usuarios={usuarios || []}
                 currentFilters={{ startDate, endDate, user_id: filterUser }}
+                userRole={perfil.rol}
             />
         </div>
     )

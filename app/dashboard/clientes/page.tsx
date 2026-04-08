@@ -5,7 +5,7 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { BackButton } from '@/components/ui/back-button'
-import { Users, TrendingUp, CreditCard, Plus, Zap, CheckCircle2, AlertTriangle, Lock } from 'lucide-react'
+import { Users, TrendingUp, CreditCard, Plus, Zap, CheckCircle2, AlertTriangle, Lock, HandCoins } from 'lucide-react'
 import { ClientDirectory } from '@/components/clientes/client-directory'
 import { getTodayPeru, calculateClientSituation, calculateLoanMetrics } from '@/lib/financial-logic'
 import { cn } from '@/lib/utils'
@@ -190,9 +190,11 @@ export default async function ClientesPage() {
 
     // Calc Header Stats
     const totalClients = clients.length
-    const clientsAlDia = clients.filter((c: any) => c.situacion === 'ok' || c.situacion === 'deuda').length
-    const clientsMora = clients.filter((c: any) => ['cpp', 'moroso', 'vencido'].includes(c.situacion)).length
-    const recaptablesCount = clients.filter((c: any) => c.isRecaptable).length
+    const clientsConDeuda = clients.filter((c: any) => c.stats.totalDebt > 0).length
+    const clientsSinPrestamos = clients.filter((c: any) => c.stats.activeLoansCount === 0).length
+    const reasignadosCount = clients.filter((c: any) => c.wasReassigned).length
+    const bloqueadosCount = clients.filter((c: any) => !!c.bloqueado_renovacion).length
+    const controlRecibosCount = clients.filter((c: any) => !!c.excepcion_voucher).length
     // [REFORZADO] Lógica de Acceso al Sistema (Centralizada)
     const { checkSystemAccess } = await import('@/utils/systemRestrictions')
     const accessResult = await checkSystemAccess(supabaseAdmin, user?.id || '', userRole || 'asesor', 'solicitud')
@@ -277,51 +279,75 @@ export default async function ClientesPage() {
                      </div>
                  </Link>
 
-                 {/* Card 2: Al Día */}
-                 <Link href="?tab=al_dia" className="block h-full">
-                     <div className="kpi-card group hover:border-emerald-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                 {/* Card 2: Con Deuda */}
+                 <Link href="?tab=con_deuda" className="block h-full">
+                     <div className="kpi-card group hover:border-amber-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
                         <div className="kpi-card-icon">
-                            <CheckCircle2 className="w-16 h-16 text-emerald-500" />
+                            <HandCoins className="w-16 h-16 text-amber-500" />
                         </div>
-                        <p className="kpi-label">Clientes al Día</p>
-                        <h2 className="kpi-value">{clientsAlDia}</h2>
-                        <div className="mt-2 text-emerald-400 flex items-center gap-1">
-                            <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                            </span>
-                            <span className="kpi-badge bg-transparent p-0 mt-0">AL CORRIENTE</span>
+                        <p className="kpi-label">Con Deuda</p>
+                        <h2 className="kpi-value">{clientsConDeuda}</h2>
+                        <div className="mt-2 text-amber-400 flex items-center gap-1">
+                            <span className="kpi-badge bg-amber-950/50 text-amber-400 border border-amber-900/50">SALDO PENDIENTE</span>
                         </div>
                      </div>
                  </Link>
 
-                 {/* Card 3: En Mora */}
-                 <Link href="?tab=mora" className="block h-full">
-                     <div className="kpi-card group hover:border-rose-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                 {/* Card 3: Sin Préstamos */}
+                 <Link href="?tab=sin_prestamos" className="block h-full">
+                     <div className="kpi-card group hover:border-slate-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
                         <div className="kpi-card-icon">
-                            <AlertTriangle className="w-16 h-16 text-rose-500" />
+                            <Zap className="w-16 h-16 text-slate-500 opacity-50" />
                         </div>
-                        <p className="kpi-label">En Mora / Riesgo</p>
-                        <h2 className="kpi-value">{clientsMora}</h2>
-                        <div className="mt-2 text-rose-400 flex items-center gap-1">
-                            <span className="kpi-badge bg-rose-950/50 text-rose-400 border border-rose-900/50">POR GESTIONAR</span>
+                        <p className="kpi-label">Sin Préstamos</p>
+                        <h2 className="kpi-value">{clientsSinPrestamos}</h2>
+                        <div className="mt-2 text-slate-400 flex items-center gap-1">
+                            <span className="kpi-badge bg-slate-900/50 text-slate-500 border border-slate-800">SIN ACTIVIDAD</span>
                         </div>
                      </div>
                  </Link>
 
-                 {/* Card 4: Recaptables */}
-                 <Link href="?tab=recaptables" className="block h-full">
-                     <div className="kpi-card group hover:border-purple-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
-                        <div className="kpi-card-icon">
-                            <Zap className="w-16 h-16 text-purple-500" />
+                 {/* Card 4: Control / Reasignados */}
+                 {userRole === 'admin' ? (
+                     <Link href="?tab=reasignados" className="block h-full">
+                         <div className="kpi-card group hover:border-purple-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                            <div className="kpi-card-icon">
+                                <Users className="w-16 h-16 text-purple-500" />
+                            </div>
+                            <p className="kpi-label">Reasignados</p>
+                            <h2 className="kpi-value">{reasignadosCount}</h2>
+                            <div className="mt-2 text-purple-400 flex items-center gap-1">
+                                 <span className="kpi-badge bg-purple-950/50 text-purple-400 border border-purple-900/50">CAMBIO ASESOR</span>
+                            </div>
+                         </div>
+                     </Link>
+                 ) : (userRole === 'supervisor' ? (
+                    <Link href="?tab=bloqueados" className="block h-full">
+                        <div className="kpi-card group hover:border-rose-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                           <div className="kpi-card-icon">
+                               <Lock className="w-16 h-16 text-rose-500" />
+                           </div>
+                           <p className="kpi-label">Bloqueados</p>
+                           <h2 className="kpi-value">{bloqueadosCount}</h2>
+                           <div className="mt-2 text-rose-400 flex items-center gap-1">
+                                <span className="kpi-badge bg-rose-950/50 text-rose-400 border border-rose-900/50">RESTRICCIÓN</span>
+                           </div>
                         </div>
-                        <p className="kpi-label">Clientes Recaptables</p>
-                        <h2 className="kpi-value">{recaptablesCount}</h2>
-                        <div className="mt-2 text-purple-400 flex items-center gap-1">
-                             <span className="kpi-badge bg-purple-950/50 text-purple-400 border border-purple-900/50">APTOS RENOVACIÓN</span>
+                    </Link>
+                 ) : (
+                    <Link href="?tab=todos" className="block h-full">
+                        <div className="kpi-card group hover:border-blue-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                           <div className="kpi-card-icon">
+                               <TrendingUp className="w-16 h-16 text-blue-500" />
+                           </div>
+                           <p className="kpi-label">Crecimiento</p>
+                           <h2 className="kpi-value">{totalClients}</h2>
+                           <div className="mt-2 text-blue-400 flex items-center gap-1">
+                                <span className="kpi-badge bg-blue-950/50 text-blue-400 border border-blue-900/50">CLIENTES TOTAL</span>
+                           </div>
                         </div>
-                     </div>
-                 </Link>
+                    </Link>
+                 ))}
              </div>
 
              {/* Client Directory with Detail View */}

@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
+import { createFullNotification } from '@/services/notification-service'
 
 export async function POST(request: Request) {
     try {
@@ -53,16 +54,20 @@ export async function POST(request: Request) {
 
         // --- NOTIFICAR A ADMINISTRADORES ---
         try {
+            // Conseguir nombre del asesor
+            const { data: perfil } = await supabaseAdmin.from('perfiles').select('nombre_completo').eq('id', user.id).single()
+            const asesorNombre = perfil?.nombre_completo || 'Un asesor'
+
             const { data: admins } = await supabaseAdmin.from('perfiles').select('id').eq('rol', 'admin')
             if (admins && admins.length > 0) {
-                const notifications = admins.map(admin => ({
-                    usuario_destino_id: admin.id,
-                    titulo: 'NUEVO BONO PENDIENTE',
-                    mensaje: `El asesor ha alcanzado un bono de S/ ${monto}. Requiere aprobación.`,
-                    link_accion: '/dashboard/admin/metas?tab=liquidaciones',
-                    leido: false
-                }))
-                await supabaseAdmin.from('notificaciones').insert(notifications)
+                await Promise.all(admins.map(admin => 
+                    createFullNotification(admin.id, {
+                        titulo: '🏆 Bono Pendiente de Aprobación',
+                        mensaje: `${asesorNombre} ha alcanzado un bono de S/ ${monto}. Requiere revisión en liquidaciones.`,
+                        link: '/dashboard/admin/metas?tab=liquidaciones',
+                        tipo: 'success'
+                    })
+                ))
             }
         } catch (notifErr) {
             console.error('[BONO_API] Error enviando notificaciones:', notifErr)

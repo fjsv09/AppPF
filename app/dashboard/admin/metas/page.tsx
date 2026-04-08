@@ -196,8 +196,25 @@ export default function AdminMetasPage() {
                         estado: 'pendiente'
                     })
             }
-
             toast.success('Bono aprobado y sumado a nómina')
+
+            // Notificar al asesor
+            try {
+                fetch('/api/notificaciones/manual', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        usuario_id: userId,
+                        titulo: '✅ Bono Aprobado',
+                        mensaje: `¡Felicidades! Tu liquidación de bono por S/ ${monto} ha sido aprobada y se sumó a tu nómina.`,
+                        link: '/dashboard/metas',
+                        tipo: 'success'
+                    })
+                });
+            } catch (err) {
+                console.error('Error notificando al asesor:', err);
+            }
+
             fetchPendingBonos()
             fetchHistoryBonos()
         } catch (error: any) {
@@ -221,6 +238,26 @@ export default function AdminMetasPage() {
             if (error) throw error
 
             toast.success('Bono rechazado correctamente')
+
+            // Notificar al asesor
+            if (bonoToReject?.asesor_id) {
+                try {
+                    fetch('/api/notificaciones/manual', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            usuario_id: bonoToReject.asesor_id,
+                            titulo: '❌ Bono Rechazado',
+                            mensaje: `Tu liquidación de bono ha sido rechazada. Motivo: ${motivo}`,
+                            link: '/dashboard/metas',
+                            tipo: 'error'
+                        })
+                    });
+                } catch (err) {
+                    console.error('Error notificando al asesor:', err);
+                }
+            }
+
             fetchPendingBonos()
             fetchHistoryBonos()
         } catch (error: any) {

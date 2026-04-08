@@ -117,26 +117,43 @@ export async function PATCH(request: Request) {
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
 
     // Split fields into Client and Solicitation tables
-    const clientFields = ['nombres', 'dni', 'telefono', 'direccion', 'referencia', 'sector_id', 'estado', 'excepcion_voucher', 'foto_perfil']
+    const clientFields = ['nombres', 'dni', 'telefono', 'direccion', 'referencia', 'sector_id', 'estado', 'excepcion_voucher', 'foto_perfil', 'limite_prestamo']
     const solicitationFields = ['giro_negocio', 'fuentes_ingresos', 'ingresos_mensuales', 'motivo_prestamo', 'gps_coordenadas', 'documentos']
     
-    const clientPayload: any = {}
-    const solicitationPayload: any = {}
-    
-    Object.keys(updateData).forEach(key => {
-        if (clientFields.includes(key)) clientPayload[key] = updateData[key]
-        if (solicitationFields.includes(key)) {
-            if (key === 'documentos') solicitationPayload['documentos_evaluacion'] = updateData[key]
-            else solicitationPayload[key] = updateData[key]
-        }
-    })
-
-    // Obtenemos datos previos para auditoría
+    // Obtenemos datos previos para validación de permisos y auditoría
     const { data: oldClient } = await supabaseAdmin
       .from('clientes')
       .select('*')
       .eq('id', id)
       .single()
+
+    if (!oldClient) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+
+    const clientPayload: any = {}
+    const solicitationPayload: any = {}
+    
+    Object.keys(updateData).forEach(key => {
+        if (clientFields.includes(key)) {
+            // REGLA: Solo Admin puede editar limite_prestamo si ya existe. 
+            // Supervisor solo puede asignarlo si es 0.
+            if (key === 'limite_prestamo') {
+                const newLimit = parseFloat(updateData[key])
+                const oldLimit = parseFloat(oldClient.limite_prestamo || 0)
+                
+                if (perfil.rol === 'supervisor' && oldLimit > 0 && newLimit !== oldLimit) {
+                    // Ignorar el cambio si el supervisor intenta editar un límite ya establecido
+                    return 
+                }
+                clientPayload[key] = newLimit
+            } else {
+                clientPayload[key] = updateData[key]
+            }
+        }
+        if (solicitationFields.includes(key)) {
+            if (key === 'documentos') solicitationPayload['documentos_evaluacion'] = updateData[key]
+            else solicitationPayload[key] = updateData[key]
+        }
+    })
 
     // 1. Update Cliente table
     const { data: updated, error: clientError } = await supabaseAdmin
@@ -165,14 +182,13 @@ export async function PATCH(request: Request) {
         }
     }
 
-    // Registro en auditoría para Supervisor (o Admin opcionalmente)
-    if (perfil.rol === 'supervisor') {
-        // Detectar exactamente qué campos cambiaron
-        const changes = Object.keys(updateData).filter(key => 
-            String(updateData[key]) !== String(oldClient[key])
-        )
+    // Detectar exactamente qué campos cambiaron
+    const changes = Object.keys(updateData).filter(key => 
+        String(updateData[key]) !== String(oldClient[key])
+    )
 
-        // Registrar en tabla de auditoría
+    if (changes.length > 0) {
+        // Registrar en tabla de auditoría para todos los cambios
         await supabaseAdmin.from('auditoria').insert({
             usuario_id: user.id,
             accion: 'editar_cliente',
@@ -185,23 +201,41 @@ export async function PATCH(request: Request) {
             }
         })
 
-        // Notificar a todos los administradores
-        const { data: admins } = await supabaseAdmin
-            .from('perfiles')
-            .select('id')
-            .eq('rol', 'admin')
+        // Notificaciones especiales
+        if (perfil.rol === 'supervisor') {
+            const { data: admins } = await supabaseAdmin
+                .from('perfiles')
+                .select('id')
+                .eq('rol', 'admin')
 
-        if (admins && admins.length > 0) {
-            const docTitle = updated.nombres || 'Cliente'
-            const supervisorName = perfil.nombre_completo || 'Supervisor'
-            
-            for (const admin of admins) {
-                await createFullNotification(admin.id, {
-                    titulo: '🛡️ Edición de Supervisor',
-                    mensaje: `${supervisorName} modificó los datos de ${docTitle}: ${changes.join(', ')}`,
-                    link: `/dashboard/clientes/${id}`,
-                    tipo: 'alerta'
-                })
+            if (admins && admins.length > 0) {
+                const docTitle = updated.nombres || 'Cliente'
+                const supervisorName = perfil.nombre_completo || 'Supervisor'
+                
+                // Caso A: Supervisor cambia el límite por primera vez (de 0 a >0)
+                const oldLimit = parseFloat(oldClient.limite_prestamo || 0)
+                const newLimit = parseFloat(updated.limite_prestamo || 0)
+                
+                if (oldLimit === 0 && newLimit > 0) {
+                    for (const admin of admins) {
+                        await createFullNotification(admin.id, {
+                            titulo: '🎯 Nuevo Límite Asignado',
+                            mensaje: `${supervisorName} asignó un límite de S/ ${newLimit} a ${docTitle}.`,
+                            link: `/dashboard/clientes/${id}`,
+                            tipo: 'info'
+                        })
+                    }
+                } else {
+                    // Caso B: Edición normal de supervisor
+                    for (const admin of admins) {
+                        await createFullNotification(admin.id, {
+                            titulo: '🛡️ Edición de Supervisor',
+                            mensaje: `${supervisorName} modificó los datos de ${docTitle}: ${changes.join(', ')}`,
+                            link: `/dashboard/clientes/${id}`,
+                            tipo: 'alerta'
+                        })
+                    }
+                }
             }
         }
     }

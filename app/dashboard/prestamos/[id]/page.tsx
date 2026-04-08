@@ -160,6 +160,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
             esElegibleParaRenovar = false; // El botón "Renovar" desaparece si no cumple el %, forzando "Refinanciar" si aplica
         }
     } else if (userRole === 'asesor') {
+        // El asesor NO puede renovar préstamos paralelos.
         if (!esParalelo) {
             if (prestamo.estado === 'activo' && cumpleLimiteRenovacion) {
                 esElegibleParaRenovar = true
@@ -169,6 +170,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
             }
         }
     }
+    // Si es supervisor, esElegibleParaRenovar se mantiene en false.
     
     const esUltimoPrestamo = esElegibleParaRenovar
 
@@ -192,7 +194,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
     const tieneSolicitudPendiente = !!solicitudRenovacion
     const puedeRenovar = userRole && !prestamo.clientes?.bloqueado_renovacion && (
         (userRole === 'admin') || 
-        (userRole === 'asesor' && !esRefinanciado && !esProductoDeRefinanciamiento) ||
+        (userRole === 'asesor' && !esParalelo && !esRefinanciado && !esProductoDeRefinanciamiento) ||
         (userRole === 'supervisor' && !esProductoDeRefinanciamiento)
     )
     
@@ -345,7 +347,10 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                                                     >
                                                         {(canOperateDueToTime && !isBlockedByCuadre) ? <Calendar className="w-3.5 h-3.5 shrink-0" /> : <Lock className="w-3.5 h-3.5 shrink-0" />}
                                                         <span className="font-bold uppercase tracking-tight">
-                                                            {isBlockedByCuadre ? 'Bloqueado' : canOperateDueToTime ? (esFlujoRefinanciacionAdmin ? (esRenovacionParaleloAdmin ? 'Renovar Paralelo' : 'Refinanciar') : 'Renovar') : 'Cerrado'}
+                                                            {isBlockedByCuadre ? 'Bloqueado' : 
+                                                             !canOperateDueToTime ? 'Cerrado' :
+                                                             userRole === 'supervisor' ? 'Ver Evaluación' :
+                                                             (esFlujoRefinanciacionAdmin ? (esRenovacionParaleloAdmin ? 'Renovar Paralelo' : 'Refinanciar') : 'Renovar')}
                                                         </span>
                                                     </Button>
                                                 }

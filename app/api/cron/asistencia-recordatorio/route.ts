@@ -152,10 +152,11 @@ export async function GET(request: Request) {
             })
         }
 
-        // 10. Enviar notificaciones
+        // 10. Enviar notificaciones (Push y Sistema)
         const results = {
-            success: 0,
-            failure: 0,
+            push_success: 0,
+            push_failure: 0,
+            system_success: 0,
             details: [] as any[]
         }
 
@@ -165,6 +166,26 @@ export async function GET(request: Request) {
             url: '/dashboard'
         })
 
+        // Notificaciones por SISTEMA (para ver en el dashboard / campanita)
+        // Insertar para cada persona que falta marcar
+        for (const p of faltanMarcar) {
+            try {
+                await supabaseAdmin.from('notificaciones').insert({
+                    usuario_destino_id: p.id,
+                    titulo: '⏰ Recordatorio de Asistencia',
+                    mensaje: `Es hora de registrar tu ${eventLabel}. Por favor hazlo pronto.`,
+                    link_accion: '/dashboard',
+                    tipo: 'warning',
+                    leido: false
+                })
+                results.system_success++
+            } catch (err: any) {
+                console.error(`[CRON] Error insertando notif sistema para ${p.id}:`, err.message)
+            }
+        }
+
+        // Notificaciones por PUSH (Chrome)
+        // Nota: Un usuario puede tener múltiples suscripciones o ninguna
         await Promise.all(subscriptions.map(async (subRow) => {
             try {
                 const sub = typeof subRow.subscription === 'string' 
@@ -172,10 +193,10 @@ export async function GET(request: Request) {
                     : subRow.subscription
                 
                 await webpush.sendNotification(sub, payload)
-                results.success++
+                results.push_success++
             } catch (err: any) {
-                results.failure++
-                // Si la suscripción ya no es válida, podríamos eliminarla
+                results.push_failure++
+                // Si la suscripción ya no es válida (410 Gone), eliminarla
                 if (err.statusCode === 410 || err.statusCode === 404) {
                     await supabaseAdmin.from('push_subscriptions').delete().eq('id', subRow.id)
                 }
@@ -190,14 +211,15 @@ export async function GET(request: Request) {
             detalles: {
                 evento: eventLabel,
                 fecha: todayStr,
-                enviados: results.success,
-                fallidos: results.failure,
-                usuarios_notificados: subscriptions.length
+                notif_push_enviadas: results.push_success,
+                notif_sistema_enviadas: results.system_success,
+                fallidos_push: results.push_failure,
+                usuarios_evaluados: faltanMarcar.length
             }
         })
 
         return NextResponse.json({
-            message: `Recordatorios de ${eventLabel} enviados.`,
+            message: `Recordatorios de ${eventLabel} procesados.`,
             stats: results
         })
 

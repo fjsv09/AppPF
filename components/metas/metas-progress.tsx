@@ -101,7 +101,15 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
       
       const pagadosSemana = todosBonosMes?.filter(p => p.fecha >= lunesActual && p.estado === 'aprobado').map(p => p.meta_id) || []
       const pagadosMes = todosBonosMes?.filter(p => p.estado === 'aprobado').map(p => p.meta_id) || []
-      const pendientesORechazados = todosBonosMes?.filter(p => ['pendiente', 'rechazado'].includes(p.estado)) || []
+      const pendientesORechazados = todosBonosMes?.filter(p => {
+        if (!['pendiente', 'rechazado'].includes(p.estado)) return false;
+        const meta = metasData?.find(m => m.id === p.meta_id);
+        if (!meta) return false;
+        
+        if (meta.periodo === 'diario') return p.fecha === hoyPeruStr;
+        if (meta.periodo === 'semanal') return p.fecha >= lunesActual;
+        return true;
+      }) || []
 
       setBonosPagadosHoy(pagadosHoy)
       setBonosPagadosSemana(pagadosSemana)

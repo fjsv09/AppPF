@@ -171,10 +171,12 @@ export async function POST(request: Request) {
             }, { status: 409 })
         }
 
-        // REGLA DE NEGOCIO: Solo asesor y admin pueden crear solicitudes de renovación
+        // REGLA DE NEGOCIO: Solo asesor y admin pueden crear solicitudes de renovación. El SUPERVISOR no puede renovar.
         if (perfil.rol !== 'asesor' && perfil.rol !== 'admin') {
             return NextResponse.json({ 
-                error: 'Solo asesores y administradores pueden solicitar renovaciones',
+                error: (perfil.rol === 'supervisor') 
+                    ? 'Los supervisores no tienen permisos para realizar renovaciones de préstamo.' 
+                    : 'Solo asesores y administradores pueden solicitar renovaciones',
                 tipo_error: 'rol_insuficiente'
             }, { status: 403 })
         }
@@ -189,12 +191,17 @@ export async function POST(request: Request) {
         }
 
         if (!elegibilidad.elegible) {
-            return NextResponse.json({ 
-                error: elegibilidad.razon_bloqueo || 'No elegible para renovación',
-                elegibilidad,
-                es_refinanciado: elegibilidad.es_refinanciado,
-                es_ultimo_prestamo: elegibilidad.es_ultimo_prestamo
-            }, { status: 400 })
+            // EXCEPCIÓN ADMIN: Permitir renovar aunque sea paralelo
+            if (perfil.rol === 'admin' && elegibilidad.razon_bloqueo?.toLowerCase().includes('paralelo')) {
+                 console.log('✅ Admin bypass for paralelo loan renewal eligibility');
+            } else {
+                return NextResponse.json({ 
+                    error: elegibilidad.razon_bloqueo || 'No elegible para renovación',
+                    elegibilidad,
+                    es_refinanciado: elegibilidad.es_refinanciado,
+                    es_ultimo_prestamo: elegibilidad.es_ultimo_prestamo
+                }, { status: 400 })
+            }
         }
 
         // VALIDACIÓN ADICIONAL: Advertir si requiere excepción de admin

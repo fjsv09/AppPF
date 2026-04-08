@@ -53,7 +53,7 @@ interface ClientesTableProps {
     userId?: string
 }
 
-type FilterTab = 'todos' | 'activos' | 'con_deuda' | 'sin_prestamos' | 'inactivos'
+type FilterTab = 'todos' | 'con_deuda' | 'sin_prestamos'
 
 const ITEMS_PER_PAGE = 10
 
@@ -127,10 +127,8 @@ export function ClientesTable({ clientes, perfiles = [], userRol = 'asesor', use
     // Tabs
     const tabs = useMemo(() => [
         { id: 'todos' as FilterTab, label: 'Todos', count: clientes.length },
-        { id: 'activos' as FilterTab, label: 'Activos', count: clientes.filter(c => c.estado === 'activo').length },
         { id: 'con_deuda' as FilterTab, label: 'Con Deuda', count: clientes.filter(c => c.stats.totalDebt > 0).length },
         { id: 'sin_prestamos' as FilterTab, label: 'Sin Préstamos', count: clientes.filter(c => c.stats.activeLoansCount === 0).length },
-        { id: 'inactivos' as FilterTab, label: 'Inactivos', count: clientes.filter(c => c.estado !== 'activo').length },
     ], [clientes])
 
     // Filtering Logic
@@ -152,10 +150,8 @@ export function ClientesTable({ clientes, perfiles = [], userRol = 'asesor', use
 
         // Tabs
         switch (activeFilter) {
-            case 'activos': result = result.filter(c => c.estado === 'activo'); break;
             case 'con_deuda': result = result.filter(c => c.stats.totalDebt > 0); break;
             case 'sin_prestamos': result = result.filter(c => c.stats.activeLoansCount === 0); break;
-            case 'inactivos': result = result.filter(c => c.estado !== 'activo'); break;
         }
 
         // Search

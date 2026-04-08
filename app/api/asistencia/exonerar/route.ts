@@ -21,7 +21,7 @@ export async function POST(request: Request) {
             .eq('id', user.id)
             .single()
         
-        if (perfilRequester?.rol !== 'admin' && perfilRequester?.rol !== 'supervisor') {
+        if (perfilRequester?.rol !== 'admin') {
             return NextResponse.json({ error: 'No tienes permisos para exonerar tardanzas' }, { status: 403 })
         }
 

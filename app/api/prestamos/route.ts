@@ -59,6 +59,20 @@ export async function POST(request: Request) {
     const numCuotas = parseInt(cuotas)
     const freqNormal = frecuencia.toLowerCase().trim()
 
+    // 3.5 Validar Límite de Préstamo del Cliente
+    const { data: clientInfo } = await supabaseAdmin
+        .from('clientes')
+        .select('limite_prestamo')
+        .eq('id', cliente_id)
+        .single()
+    
+    const clientLimit = parseFloat(clientInfo?.limite_prestamo || 0)
+    if (clientLimit > 0 && principal > clientLimit) {
+        return NextResponse.json({ 
+            error: `El monto solicitado (S/ ${principal}) excede el límite permitido para este cliente (S/ ${clientLimit}).` 
+        }, { status: 400 })
+    }
+
     // 4. Validar Cuenta y Saldo si es creación directa con desembolso
     let cuentaSeleccionada = null
     if (cuenta_id) {

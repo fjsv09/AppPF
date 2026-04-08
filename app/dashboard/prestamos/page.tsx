@@ -143,6 +143,22 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         .select('fecha')
     const feriados = (feriadosRaw || []).map(f => f.fecha)
 
+    // Obtener IDs de préstamos con solicitudes de renovación pendientes
+    const { data: solicitudesPendientes } = await supabaseAdmin
+        .from('solicitudes_renovacion')
+        .select('prestamo_id')
+        .in('estado_solicitud', ['pendiente_supervision', 'en_correccion', 'pre_aprobado'])
+    const prestamoIdsConSolicitudPendiente = solicitudesPendientes?.map(s => s.prestamo_id) || []
+
+    // Obtener IDs de préstamos que son producto de una refinanciación directa
+    const { data: renovacionesRefinanciamiento } = await supabaseAdmin
+        .from('renovaciones')
+        .select('prestamo_nuevo_id, prestamo_original:prestamo_original_id(estado)')
+    const prestamoIdsProductoRefinanciamiento = (renovacionesRefinanciamiento || [])
+        .filter((r: any) => (r.prestamo_original as any)?.estado === 'refinanciado')
+        .map((r: any) => r.prestamo_nuevo_id as string)
+        .filter(Boolean)
+
     // Filter and Process Data in Memory (Robustness)
     let filteredList = prestamosRaw || []
 
@@ -180,6 +196,18 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     if (filtroFrecuencia !== 'todos') {
         filteredList = filteredList.filter(p => p.frecuencia?.toLowerCase() === filtroFrecuencia.toLowerCase())
     }
+
+    // 1.5. Calculate loan Management Map for Renewal Logic 
+    // Computed over filteredList (so it respects advisor scope)
+    const loanManagementMap = filteredList.reduce((acc: Record<string, {hasActive: boolean}>, curr: any) => {
+        const cId = curr.cliente_id || curr.clientes?.id
+        if (!cId) return acc
+        if (!acc[cId]) acc[cId] = { hasActive: false }
+        if (curr.estado === 'activo') {
+            acc[cId].hasActive = true
+        }
+        return acc
+    }, {})
 
     // 2. KPI Calculation & Mapping
     const prestamos = filteredList.map(p => {
@@ -231,6 +259,67 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             
             clientes: p.clientes
         }
+    })
+
+    // 2.5 Compute Strict Renewal Eligibility (es_renovable_estricto)
+    prestamos.forEach(prestamo => {
+        const clienteId = prestamo.cliente_id || prestamo.clientes?.id
+        const mgmt = loanManagementMap[clienteId]
+        
+        let esRenovableEstricto = false;
+        
+        const evaluateEligibility = () => {
+            if (!mgmt) return false
+
+            const isClientBlocked = !!prestamo.clientes?.bloqueado_renovacion
+            if (isClientBlocked) return true // Handled visually in the modal/button
+            
+            if (prestamoIdsConSolicitudPendiente.includes(prestamo.id)) return false
+            if (!['activo', 'finalizado'].includes(prestamo.estado)) return false
+
+            // Role based rules
+            const isAdminOrSupervisor = userRole === 'admin' || userRole === 'supervisor'
+            if (!isAdminOrSupervisor) {
+                if (prestamo.es_paralelo) return false
+                if (prestamo.estado === 'finalizado' && mgmt.hasActive) return false
+            }
+
+            const isRefinanciado = prestamo.estado === 'refinanciado'
+            const isFinalizado = prestamo.estado === 'finalizado' || prestamo.isFinalizado || (prestamo.saldo_pendiente <= 0 && typeof prestamo.saldo_pendiente === 'number')
+            
+            const totalPagar = prestamo.monto * (1 + (prestamo.interes / 100))
+            const pagado = prestamo.total_pagado_acumulado || 0
+            const porcentajePagado = totalPagar > 0 ? (pagado / totalPagar) : 0
+            
+            const limitePorcentaje = typeof renovacionMinPagado === 'number' ? renovacionMinPagado : 60
+            const umbralRenovacion = limitePorcentaje / 100
+            const cumpleUmbral = porcentajePagado >= umbralRenovacion && porcentajePagado > 0.01
+
+            const limiteMora = typeof refinanciacionMinMora === 'number' ? refinanciacionMinMora : 50
+            const valorCuotaPromedio = parseFloat(prestamo.valor_cuota_promedio || 0)
+            const calculatedTotalCuotas = valorCuotaPromedio > 0 ? Math.round(totalPagar / valorCuotaPromedio) : 0
+            const totalCuotasCalc = prestamo.numero_cuotas || calculatedTotalCuotas || 30
+            const porcentajeMora = (totalCuotasCalc > 0) ? ((prestamo.cuotas_mora_real || 0) / totalCuotasCalc) * 100 : 0
+            
+            // Administrador y Supervisor pueden VER la opción de refinanciamiento directo
+            const esCandidatoRefinanciacionAdmin = (porcentajeMora >= limiteMora) && isAdminOrSupervisor
+
+            const isReady = isFinalizado || esCandidatoRefinanciacionAdmin || cumpleUmbral
+            if (!isReady) return false
+
+            if (isRefinanciado && !isAdminOrSupervisor) return false
+            const esProductoDeRefinanciamiento = prestamoIdsProductoRefinanciamiento.includes(prestamo.id)
+            if (esProductoDeRefinanciamiento && !isAdminOrSupervisor) return false
+
+            const estadosProhibidos = ['legal', 'castigado']
+            if (estadosProhibidos.includes(prestamo.estado_mora || '')) return false
+            
+            if (prestamo.estado_mora === 'vencido' && !isAdminOrSupervisor && !cumpleUmbral) return false
+
+            return true
+        }
+
+        prestamo.es_renovable_estricto = evaluateEligibility()
     })
 
     // 3. Totals for Dashboard
@@ -298,7 +387,8 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     const totalClientesHoy = prestamos.filter(p => (p.cuota_dia_programada || 0) > 0).length
     const clientesCobradosHoy = totalClientesHoy - clientesPendientesHoy
     
-    const oportunidadesRenovacion = prestamos.filter(p => p.es_renovable).length
+    // Use strictly evaluated property for perfectly synchronized counts
+    const oportunidadesRenovacion = prestamos.filter(p => p.es_renovable_estricto).length
 
     // 4.5 Eficiencia de Cobranza REUTILIZADA (Hoy + Atrasadas)
     let metaEficienciaTotal = 0
@@ -342,26 +432,6 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             .select('*')
         perfiles = profiles || []
     }
-
-    // Obtener IDs de préstamos con solicitudes de renovación pendientes
-    // Estados pendientes: pendiente_supervision, en_correccion, pre_aprobado
-    const { data: solicitudesPendientes } = await supabaseAdmin
-        .from('solicitudes_renovacion')
-        .select('prestamo_id')
-        .in('estado_solicitud', ['pendiente_supervision', 'en_correccion', 'pre_aprobado'])
-    
-    const prestamoIdsConSolicitudPendiente = solicitudesPendientes?.map(s => s.prestamo_id) || []
-
-    // Obtener IDs de préstamos que son producto de una refinanciación directa
-    // (el préstamo nuevo generado cuando el admin refinanció uno en mora)
-    const { data: renovacionesRefinanciamiento } = await supabaseAdmin
-        .from('renovaciones')
-        .select('prestamo_nuevo_id, prestamo_original:prestamo_original_id(estado)')
-    
-    const prestamoIdsProductoRefinanciamiento = (renovacionesRefinanciamiento || [])
-        .filter((r: any) => (r.prestamo_original as any)?.estado === 'refinanciado')
-        .map((r: any) => r.prestamo_nuevo_id as string)
-        .filter(Boolean)
 
     // 5. Configuración del Sistema (movido arriba para aplicar a las verificaciones del map)
 

@@ -71,9 +71,10 @@ interface AttendanceTableProps {
     initialData: any[]
     usuarios: UserSummary[]
     currentFilters: { startDate: string; endDate: string; user_id?: string }
+    userRole?: string
 }
 
-export function AttendanceTable({ initialData, usuarios, currentFilters }: AttendanceTableProps) {
+export function AttendanceTable({ initialData, usuarios, currentFilters, userRole }: AttendanceTableProps) {
     const router = useRouter()
 
     const [startDate, setStartDate] = useState(currentFilters.startDate)
@@ -400,7 +401,7 @@ export function AttendanceTable({ initialData, usuarios, currentFilters }: Atten
                                                                 {record.distancia_entrada ?? record.distancia_oficina}m
                                                             </span>
                                                         </div>
-                                                        {record.tardanza_entrada > 0 && (
+                                                        {record.tardanza_entrada > 0 && userRole === 'admin' && (
                                                             <button 
                                                                 onClick={() => handleExonerate(record.id, 'entrada')}
                                                                 disabled={isExonerating === `${record.id}-entrada`}
@@ -443,7 +444,7 @@ export function AttendanceTable({ initialData, usuarios, currentFilters }: Atten
                                                                         {record.distancia_tarde ?? record.distancia_oficina}m
                                                                     </span>
                                                                 </div>
-                                                                {record.tardanza_turno_tarde > 0 && (
+                                                                {record.tardanza_turno_tarde > 0 && userRole === 'admin' && (
                                                                     <button 
                                                                         onClick={() => handleExonerate(record.id, 'tarde')}
                                                                         disabled={isExonerating === `${record.id}-tarde`}
@@ -492,7 +493,7 @@ export function AttendanceTable({ initialData, usuarios, currentFilters }: Atten
                                                                         {record.distancia_cierre ?? record.distancia_oficina}m
                                                                     </span>
                                                                 </div>
-                                                                {record.tardanza_cierre > 0 && (
+                                                                {record.tardanza_cierre > 0 && userRole === 'admin' && (
                                                                     <button 
                                                                         onClick={() => handleExonerate(record.id, 'cierre')}
                                                                         disabled={isExonerating === `${record.id}-cierre`}
@@ -619,7 +620,7 @@ export function AttendanceTable({ initialData, usuarios, currentFilters }: Atten
                                                         >
                                                             <MapPin className="w-4 h-4" />
                                                         </a>
-                                                        {(step.late || 0) > 0 && (
+                                                        {((step.late || 0) > 0 && userRole === 'admin') && (
                                                             <button
                                                                 onClick={() => handleExonerate(record.id, step.key as any)}
                                                                 disabled={isExonerating === `${record.id}-${step.key}`}

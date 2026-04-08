@@ -82,7 +82,7 @@ interface ClientDirectoryProps {
     userId?: string
 }
 
-type FilterTab = 'todos' | 'activos' | 'con_deuda' | 'sin_prestamos' | 'inactivos' | 'al_dia' | 'mora' | 'recaptables' | 'reasignados' | 'recibos' | 'bloqueados'
+type FilterTab = 'todos' | 'con_deuda' | 'sin_prestamos' | 'reasignados' | 'recibos' | 'bloqueados'
 
 const ITEMS_PER_PAGE = 10
 
@@ -276,16 +276,11 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     // Tabs logic
     const tabs = useMemo(() => [
         { id: 'todos' as FilterTab, label: 'Todos', count: clientes.length },
-        { id: 'al_dia' as FilterTab, label: 'Al Día', count: clientes.filter(c => c.situacion === 'ok' || c.situacion === 'deuda').length },
-        { id: 'mora' as FilterTab, label: 'En Mora', count: clientes.filter(c => ['cpp', 'moroso', 'vencido'].includes(c.situacion)).length },
-        { id: 'recaptables' as FilterTab, label: 'Recaptables', count: clientes.filter(c => c.isRecaptable).length },
-        { id: 'activos' as FilterTab, label: 'Activos', count: clientes.filter(c => c.estado === 'activo').length },
         { id: 'con_deuda' as FilterTab, label: 'Con Deuda', count: clientes.filter(c => c.stats.totalDebt > 0).length },
         { id: 'sin_prestamos' as FilterTab, label: 'Sin Préstamos', count: clientes.filter(c => c.stats.activeLoansCount === 0).length },
-        { id: 'inactivos' as FilterTab, label: 'Inactivos', count: clientes.filter(c => c.estado !== 'activo').length },
         ...(userRol === 'admin' ? [{ id: 'reasignados' as FilterTab, label: 'Reasignados', count: clientes.filter(c => c.wasReassigned).length }] : []),
         ...((userRol === 'admin' || userRol === 'supervisor') ? [
-            { id: 'recibos' as FilterTab, label: 'Control de Recibos', count: clientes.filter(c => c.stats.activeLoansCount > 0).length },
+            { id: 'recibos' as FilterTab, label: 'Control de Recibos', count: clientes.filter(c => !!c.excepcion_voucher).length },
             { id: 'bloqueados' as FilterTab, label: 'Bloqueados', count: clientes.filter(c => !!c.bloqueado_renovacion).length }
         ] : []),
     ], [clientes, userRol])
@@ -314,15 +309,10 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
 
         // Tabs
         switch (activeFilter) {
-            case 'activos': result = result.filter(c => c.estado === 'activo'); break;
             case 'con_deuda': result = result.filter(c => c.stats.totalDebt > 0); break;
             case 'sin_prestamos': result = result.filter(c => c.stats.activeLoansCount === 0); break;
-            case 'inactivos': result = result.filter(c => c.estado !== 'activo'); break;
-            case 'al_dia': result = result.filter(c => c.situacion === 'ok' || c.situacion === 'deuda'); break;
-            case 'mora': result = result.filter(c => ['cpp', 'moroso', 'vencido'].includes(c.situacion)); break;
-            case 'recaptables': result = result.filter(c => c.isRecaptable); break;
             case 'reasignados': result = result.filter(c => c.wasReassigned); break;
-            case 'recibos': result = result.filter(c => c.stats.activeLoansCount > 0); break;
+            case 'recibos': result = result.filter(c => !!c.excepcion_voucher); break;
             case 'bloqueados': result = result.filter(c => !!c.bloqueado_renovacion); break;
         }
 
@@ -648,6 +638,9 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                 {cliente.excepcion_voucher && (userRol === 'admin' || userRol === 'supervisor') && (
                                                     <Badge className="bg-purple-500/20 text-purple-400 text-[8px] h-4 px-1 border-purple-500/30">EXENTO</Badge>
                                                 )}
+                                                {cliente.bloqueado_renovacion && (userRol === 'admin' || userRol === 'supervisor') && (
+                                                    <Badge className="bg-rose-500/20 text-rose-400 text-[8px] h-4 px-1 border-rose-500/30">BLOQUEADO</Badge>
+                                                )}
                                             </div>
                                             <div className="flex items-center gap-2 mt-0.5">
                                                 <Badge variant="outline" className={cn("px-1.5 py-0 text-[10px] h-5 rounded-sm border-0 font-bold", 
@@ -794,6 +787,9 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                             <div className="text-sm font-medium text-slate-200 truncate leading-tight">{cliente.nombres}</div>
                                             {cliente.excepcion_voucher && (userRol === 'admin' || userRol === 'supervisor') && (
                                                 <Badge className="bg-purple-500/20 text-purple-400 text-[8px] h-4 px-1 border-purple-500/30 shrink-0">EXENTO</Badge>
+                                            )}
+                                            {cliente.bloqueado_renovacion && (userRol === 'admin' || userRol === 'supervisor') && (
+                                                <Badge className="bg-rose-500/20 text-rose-400 text-[8px] h-4 px-1 border-rose-500/30 shrink-0">BLOQUEADO</Badge>
                                             )}
                                         </div>
                                     </div>

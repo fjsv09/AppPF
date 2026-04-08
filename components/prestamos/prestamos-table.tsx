@@ -154,136 +154,7 @@ export function PrestamosTable({
         }
     }, [])
 
-    // Mapa de gestión de préstamos por cliente para determinar elegibilidad de renovación
-    const loanManagementMap = useMemo(() => {
-        interface ClientData {
-            activeLoans: { id: string, fecha: string }[],
-            latestFinalized: { id: string, fecha: string } | null,
-            allEligibleIds: Set<string>
-        }
-        const clientManagement: Record<string, ClientData> = {}
-        
-        prestamos.forEach(p => {
-            const clienteId = p.cliente_id || p.clientes?.id
-            if (!clienteId) return
-            
-            if (!clientManagement[clienteId]) {
-                clientManagement[clienteId] = { activeLoans: [], latestFinalized: null, allEligibleIds: new Set() }
-            }
-            
-            const isEligible = ['activo', 'finalizado'].includes(p.estado)
-            if (!isEligible) return
-            
-            clientManagement[clienteId].allEligibleIds.add(p.id)
-            
-            const fecha = (p.fecha_inicio || p.created_at || '') as string
-            if (p.estado === 'activo') {
-                clientManagement[clienteId].activeLoans.push({ id: p.id, fecha })
-            } else if (p.estado === 'finalizado') {
-                const currentFinalized = clientManagement[clienteId].latestFinalized
-                if (!currentFinalized || fecha > currentFinalized.fecha) {
-                    clientManagement[clienteId].latestFinalized = { id: p.id, fecha }
-                }
-            }
-        })
-        
-        // Post-processing: Sort active loans from oldest to newest (to find the most ancient)
-        const finalizedMap: Record<string, { oldestActiveId: string | null, latestFinalizedId: string | null, allEligibleIds: Set<string> }> = {}
-        Object.keys(clientManagement).forEach(cid => {
-             const data = clientManagement[cid]
-             // Oldest to newest
-             data.activeLoans.sort((a, b) => a.fecha.localeCompare(b.fecha))
-             
-             finalizedMap[cid] = {
-                 oldestActiveId: data.activeLoans[0]?.id || null,
-                 latestFinalizedId: data.latestFinalized?.id || null,
-                 allEligibleIds: data.allEligibleIds
-             }
-        })
-        
-        return finalizedMap
-    }, [prestamos])
-
-    // Función helper para determinar si puede renovar
-    // REGLAS:
-    // 2. Préstamo debe estar activo, finalizado o refinanciado
-    // 3. Si es refinanciado, solo admin puede renovar
-    // 4. Si es normal, asesor y admin pueden renovar (supervisor NO)
-    // 5. NO mostrar si hay solicitud pendiente
-    const puedeRenovar = (prestamo: any) => {
-        const clienteId = prestamo.cliente_id || prestamo.clientes?.id
-        const mgmt = loanManagementMap[clienteId]
-        if (!mgmt) return false
-
-        // 0. RULE: Admin Blocked Client
-        const isClientBlocked = !!prestamo.clientes?.bloqueado_renovacion
-        if (isClientBlocked) return true // Let it be true for rendering, handle visual lock later
-
-        // 1. FUNDAMENTAL DISQUALIFIERS (Must not have pending request)
-        const tieneSolicitudPendiente = prestamoIdsConSolicitudPendiente.includes(prestamo.id)
-        if (tieneSolicitudPendiente) return false
-        
-        // Valid for: active or finished
-        const estadoValido = ['activo', 'finalizado'].includes(prestamo.estado)
-        if (!estadoValido) return false
-
-        // 2. ROLE-BASED ACCESS & PRIORITY RULING
-        if (userRol !== 'admin') {
-            // ASESOR: Regla específica del usuario
-            // Si hay préstamos activos: solo se permite renovar el MÁS ANTIGUO de ellos
-            if (mgmt.oldestActiveId) {
-                if (prestamo.id !== mgmt.oldestActiveId) return false
-            } 
-            // Si no hay activos, pero hay finalizados: se permite renovar el MÁS RECIENTE finalizado (flujo normal)
-            else if (mgmt.latestFinalizedId) {
-                if (prestamo.id !== mgmt.latestFinalizedId) return false
-            }
-        }
-        // ADMIN: Puede renovar cualquiera que sea activo o finalizado (ya filtrado arriba)
-
-        // 2. ELIGIBILITY CRITERIA
-        const isRefinanciado = prestamo.estado === 'refinanciado'
-        const isFinalizado = prestamo.estado === 'finalizado' || prestamo.isFinalizado || prestamo.saldo_pendiente <= 0
-        
-        // Calculate percentages faithfully
-        const totalPagar = prestamo.totalPagar || (prestamo.monto * (1 + (prestamo.interes / 100)))
-        const pagado = prestamo.total_pagado_acumulado || 0
-        const porcentajePagado = totalPagar > 0 ? (pagado / totalPagar) : 0
-        
-        // Threshold Logic
-        const limitePorcentaje = typeof renovacionMinPagado === 'number' ? renovacionMinPagado : 60
-        const umbralRenovacion = limitePorcentaje / 100
-        
-        // Strict "OK to Renew" condition: 
-        // a) Finalized
-        // b) Candidate for Admin direct refinance
-        // c) Active but meets the threshold AND has paid something meaningful (>1%)
-        const cumpleUmbral = porcentajePagado >= umbralRenovacion && porcentajePagado > 0.01
-
-        const limiteMora = typeof refinanciacionMinMora === 'number' ? refinanciacionMinMora : 50
-        const totalCuotasCalc = prestamo.numero_cuotas || prestamo.totalCuotas || 30
-        const porcentajeMora = (totalCuotasCalc > 0) ? ((prestamo.cuotas_mora_real || 0) / totalCuotasCalc) * 100 : 0
-        const esCandidatoRefinanciacionAdmin = (porcentajeMora >= limiteMora) && (userRol === 'admin')
-
-        // FINAL DECISION
-        const isReady = isFinalizado || esCandidatoRefinanciacionAdmin || cumpleUmbral
-        if (!isReady) return false
-
-        // 3. ROLE-BASED ACCESS (Last filter)
-        // If it's a refinance candidate, only Admin can process/see.
-        if (isRefinanciado && userRol !== 'admin') return false
-
-        // 4. STATUS-BASED EXCLUSION (Except for Admin Refinance)
-        // No permitimos renovaciones normales en estados legales o castigados.
-        // Pero permitimos que el Administrador REFINANCIE un préstamo Vencido/Moroso.
-        const estadosProhibidos = ['legal', 'castigado']
-        if (estadosProhibidos.includes(prestamo.estado_mora || '')) return false
-        
-        // Si el préstamo está Vencido, solo el Admin puede usarlo para refinanciar (a menos que ya se haya pagado 60%)
-        if (prestamo.estado_mora === 'vencido' && userRol !== 'admin' && !cumpleUmbral) return false
-
-        return true
-    }
+    // puedeRenovar logic and loanManagementMap moved to page.tsx flag es_renovable_estricto
 
     // Función helper para determinar si puede pagar
     // REGLAS:
@@ -542,7 +413,7 @@ export function PrestamosTable({
              const deudaHoy = parseFloat(p.deuda_exigible_hoy || 0)
              const isMoroso = riesgo > 0 || deudaHoy > 0
              const isFinalizado = p.estado === 'finalizado'
-             const isRenovable = !!p.es_renovable
+             const isRenovable = !!p.es_renovable_estricto
              const diasSinPago = parseInt(p.dias_sin_pago || 0)
              const valorCuota = parseFloat(p.valor_cuota_promedio || 0)
              
@@ -652,17 +523,19 @@ export function PrestamosTable({
                 // Morosos (ADVERTENCIA): 4-6 diarias o 1 otros. Es un rango escala.
                 filtered = filtered.filter(p => {
                     const isDiario = p.frecuencia?.toLowerCase() === 'diario'
-                    const isCritical = (isDiario && p.atrasadas >= 7) || (!isDiario && p.atrasadas >= 2)
+                    const hasCriticalStatus = ['vencido', 'legal', 'castigado'].includes(p.estado_mora || '')
+                    const isCritical = hasCriticalStatus || (isDiario && p.atrasadas >= 7) || (!isDiario && p.atrasadas >= 2)
                     return p.estado === 'activo' && !isCritical && ((isDiario && p.atrasadas >= 4) || (!isDiario && p.atrasadas >= 1))
                 })
                 break
 
             case 'notificar':
             case 'supervisor_alertas':
-                // Alertas (Alto Riesgo): Daily >= 7 overdue. Others >= 2 overdue.
+                // Alertas (Alto Riesgo): Daily >= 7 overdue. Others >= 2 overdue. O vencido/legal/castigado.
                 filtered = filtered.filter(p => {
                     const isDiario = p.frecuencia?.toLowerCase() === 'diario'
-                    return p.estado === 'activo' && ((isDiario && p.atrasadas >= 7) || (!isDiario && p.atrasadas >= 2))
+                    const hasCriticalStatus = ['vencido', 'legal', 'castigado'].includes(p.estado_mora || '')
+                    return p.estado === 'activo' && (hasCriticalStatus || (isDiario && p.atrasadas >= 7) || (!isDiario && p.atrasadas >= 2))
                 })
                 break
                 
@@ -697,8 +570,8 @@ export function PrestamosTable({
                 break
 
             case 'renovaciones':
-                // Renovaciones: Cumple todas las verificaciones
-                filtered = filtered.filter(p => puedeRenovar(p))
+                // Renovaciones: Cumple todas las verificaciones (ya calculado en estricto)
+                filtered = filtered.filter(p => p.es_renovable_estricto)
                 break
             
             case 'finalizados':
@@ -802,7 +675,7 @@ export function PrestamosTable({
             const isFinalizado = p.estado === 'finalizado'
             const isDiario = p.frecuencia?.toLowerCase() === 'diario'
 
-            if (puedeRenovar(p)) counts.renovaciones++
+            if (p.es_renovable_estricto) counts.renovaciones++
 
             if (isActivo) {
                 counts.en_curso++
@@ -814,7 +687,9 @@ export function PrestamosTable({
                 }
                 if (p.atrasadas >= 1 && p.deudaHoy > 0) counts.cobranza++
                 
-                const isCritical = (isDiario && p.atrasadas >= 7) || (!isDiario && p.atrasadas >= 2)
+                const hasCriticalStatus = ['vencido', 'legal', 'castigado'].includes(p.estado_mora || '')
+                const isCritical = hasCriticalStatus || (isDiario && p.atrasadas >= 7) || (!isDiario && p.atrasadas >= 2)
+                
                 if (isCritical) {
                     counts.notificar++
                 } else if ((isDiario && p.atrasadas >= 4) || (!isDiario && p.atrasadas >= 1)) {
@@ -834,7 +709,7 @@ export function PrestamosTable({
         })
 
         return counts
-    }, [processedPrestamos, prestamoIdsConSolicitudPendiente, loanManagementMap, userRol]);
+    }, [processedPrestamos]);
 
     const handleTabChange = (tab: FilterTab) => updateParams({ tab });
     const handleSearch = (term: string) => updateParams({ search: term });
@@ -1371,7 +1246,7 @@ export function PrestamosTable({
                                 <div className="col-span-5 flex items-end justify-end gap-1 h-full">
                                     {(() => {
                                         const isEffectivelyFinalized = prestamo.isFinalizado || prestamo.estado === 'finalizado' || prestamo.estado === 'renovado' || prestamo.saldo_pendiente <= 0;
-                                        const canRenew = puedeRenovar(prestamo);
+                                        const canRenew = prestamo.es_renovable_estricto;
 
                                         return (
                                             <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="flex items-center gap-1.5">
@@ -1401,7 +1276,7 @@ export function PrestamosTable({
                                                         const limiteMora = typeof refinanciacionMinMora === 'number' ? refinanciacionMinMora : 50;
                                                         const totalCuotasCalc = prestamo.numero_cuotas || prestamo.totalCuotas || 30;
                                                         const porcentajeMora = (totalCuotasCalc > 0) ? ((prestamo.cuotas_mora_real || 0) / totalCuotasCalc) * 100 : 0;
-                                                        const isAdminDirectRefinance = (porcentajeMora >= limiteMora) && (userRol === 'admin');
+                                                        const isAdminDirectRefinance = (porcentajeMora >= limiteMora) && (userRol === 'admin' || userRol === 'supervisor');
 
                                                         return (
                                                                 <SolicitudRenovacionModal
@@ -1891,12 +1766,12 @@ export function PrestamosTable({
                                         </Button>
                                     )}
 
-                                    {puedeRenovar(prestamo) && (
+                                    {prestamo.es_renovable_estricto && (
                                         (() => {
                                             const limiteMora = typeof refinanciacionMinMora === 'number' ? refinanciacionMinMora : 50;
                                             const totalCuotasCalc = prestamo.numero_cuotas || prestamo.totalCuotas || 30;
                                             const porcentajeMora = (totalCuotasCalc > 0) ? ((prestamo.cuotas_mora_real || 0) / totalCuotasCalc) * 100 : 0;
-                                            const isAdminDirectRefinance = (porcentajeMora >= limiteMora) && (userRol === 'admin');
+                                            const isAdminDirectRefinance = (porcentajeMora >= limiteMora) && (userRol === 'admin' || userRol === 'supervisor');
 
                                             return (
                                                 <div className="flex shrink-0 items-center justify-center h-8 w-8" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>

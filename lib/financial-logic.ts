@@ -199,10 +199,11 @@ export function calculateLoanMetrics(
   const cfgCppOtros = config.umbralCppOtros || 1;
   const cfgMorosoOtros = config.umbralMorosoOtros || 2;
 
-  // La transición se basa en el total de cuotas exigibles (Mora Real + Hoy)
-  const isCritico = (isDiario && totalAtrasadas >= cfgMoroso) || (!isDiario && totalAtrasadas >= cfgMorosoOtros);
+  // La transición se basa en el total de cuotas exigibles (Mora Real + Hoy) o el estado global de mora del préstamo
+  const hasCriticalStatus = ['vencido', 'legal', 'castigado'].includes(loan.estado_mora || '');
+  const isCritico = hasCriticalStatus || (isDiario && totalAtrasadas >= cfgMoroso) || (!isDiario && totalAtrasadas >= cfgMorosoOtros);
   const isMora = ((isDiario && totalAtrasadas >= cfgCpp) || (!isDiario && totalAtrasadas >= cfgCppOtros)) && !isCritico;
-  const isAlDia = totalAtrasadas === 0;
+  const isAlDia = totalAtrasadas === 0 && !hasCriticalStatus;
 
   // 10. Renovación
   const renovacionMinPagadoDecimal = (config.renovacionMinPagado || 60) / 100;

@@ -28,6 +28,7 @@ interface StepPrestamoProps {
     horario_cierre: string
     desbloqueo_hasta: string
   }
+  clienteLimit?: number
 }
 
 const CUOTAS_ESTANDAR = {
@@ -37,7 +38,7 @@ const CUOTAS_ESTANDAR = {
   mensual: 1
 }
 
-export function StepPrestamo({ initialData, onNext, onBack, isSubmitting = false, systemSchedule }: StepPrestamoProps) {
+export function StepPrestamo({ initialData, onNext, onBack, isSubmitting = false, systemSchedule, clienteLimit }: StepPrestamoProps) {
 
   const {
     register,
@@ -104,6 +105,12 @@ export function StepPrestamo({ initialData, onNext, onBack, isSubmitting = false
       }
     }
 
+    // Validar Límite de Préstamo
+    if (clienteLimit && clienteLimit > 0 && data.monto_solicitado > clienteLimit) {
+      alert(`El monto solicitado (S/ ${data.monto_solicitado}) excede el límite permitido para este cliente (S/ ${clienteLimit}).`)
+      return
+    }
+
     // Enviar el interés calculado (proporcional), no el base
     onNext({
       monto_solicitado: data.monto_solicitado,
@@ -142,6 +149,14 @@ export function StepPrestamo({ initialData, onNext, onBack, isSubmitting = false
                   className="pl-9 h-12 bg-slate-950/50 border-slate-700 focus:border-emerald-500/50 text-slate-200 rounded-xl text-base"
                 />
               </div>
+              {clienteLimit && clienteLimit > 0 && (
+                <div className="flex items-center gap-1.5 mt-1 mx-1">
+                  <div className={`w-1.5 h-1.5 rounded-full ${monto > clienteLimit ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`} />
+                  <p className={`text-[10px] uppercase font-bold tracking-tight ${monto > clienteLimit ? 'text-red-400' : 'text-amber-500/80'}`}>
+                    Límite del Cliente: S/ {clienteLimit}
+                  </p>
+                </div>
+              )}
               {errors.monto_solicitado && (
                 <p className="text-xs text-red-400 ml-1">{errors.monto_solicitado.message as string}</p>
               )}

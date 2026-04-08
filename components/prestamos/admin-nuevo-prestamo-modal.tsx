@@ -44,6 +44,7 @@ interface Cliente {
     direccion?: string
     referencia?: string
     ocupacion?: string
+    limite_prestamo?: number
 }
 
 interface Cuenta {
@@ -99,7 +100,7 @@ export function AdminNuevoPrestamoModal({ isOpen, onClose, cuentas, feriados }: 
             try {
                 const { data, error } = await supabase
                     .from('clientes')
-                    .select('id, nombres, dni, telefono, direccion, referencia, ocupacion')
+                    .select('id, nombres, dni, telefono, direccion, referencia, ocupacion, limite_prestamo')
                     .or(`nombres.ilike.%${searchTerm}%,dni.ilike.%${searchTerm}%`)
                     .limit(20)
 
@@ -160,6 +161,14 @@ export function AdminNuevoPrestamoModal({ isOpen, onClose, cuentas, feriados }: 
         if (currentAccount && currentAccount.saldo < monto) {
             toast.error('Saldo insuficiente', {
                 description: `La cuenta seleccionada no tiene fondos suficientes (${currentAccount.saldo.toLocaleString()}).`
+            })
+            return
+        }
+
+        const clientLimit = selectedClient.limite_prestamo || 0
+        if (clientLimit > 0 && monto > clientLimit) {
+            toast.error('Límite excedido', {
+                description: `El monto (S/ ${monto}) supera el límite permitido para este cliente (S/ ${clientLimit}).`
             })
             return
         }
@@ -244,9 +253,20 @@ export function AdminNuevoPrestamoModal({ isOpen, onClose, cuentas, feriados }: 
                                          <div className="p-3 bg-emerald-600/20 border border-emerald-500/30 rounded-xl shadow-lg">
                                             <User className="w-6 h-6 text-emerald-400" />
                                          </div>
-                                         <div>
+                                          <div>
                                             <p className="font-bold text-white uppercase tracking-tight text-lg">{selectedClient.nombres}</p>
-                                            <p className="text-[11px] text-emerald-500/80 font-bold font-mono">DNI: {selectedClient.dni}</p>
+                                            <div className="flex items-center gap-3">
+                                                <p className="text-[11px] text-emerald-500/80 font-bold font-mono">DNI: {selectedClient.dni}</p>
+                                                {selectedClient.limite_prestamo ? (
+                                                    <p className="text-[11px] text-amber-400 font-bold uppercase tracking-tight">
+                                                        Límite: S/ {selectedClient.limite_prestamo}
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-[11px] text-slate-500 italic uppercase">
+                                                        Sin límite asignado
+                                                    </p>
+                                                )}
+                                            </div>
                                          </div>
                                      </div>
                                      <Button 

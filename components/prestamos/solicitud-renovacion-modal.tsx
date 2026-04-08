@@ -7,10 +7,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { RefreshCw, Loader2, AlertTriangle, CheckCircle2, XCircle, Lock } from 'lucide-react'
+import { RefreshCw, Loader2, AlertTriangle, CheckCircle2, XCircle, Lock, ChevronDown, ChevronUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
-import { ScoreIndicator, BehaviorSummary } from '@/components/ui/score-indicator'
+import { ScoreIndicator, BehaviorSummary, ScoreBreakdown, ScoreLimitRules } from '@/components/ui/score-indicator'
 import { cn } from '@/lib/utils'
 import { formatMoney } from '@/utils/format'
 
@@ -98,6 +98,7 @@ export function SolicitudRenovacionModal({
     const [elegibilidad, setElegibilidad] = useState<any>(null)
     const [error, setError] = useState<string | null>(null)
     const [selectedCuenta, setSelectedCuenta] = useState<string>('')
+    const [showScoreBreakdown, setShowScoreBreakdown] = useState(false)
     const router = useRouter()
 
     // Lógica de Horario Síncrona para bloqueo preventivo inmediato
@@ -402,8 +403,29 @@ export function SolicitudRenovacionModal({
                                 <div className="flex-1">
                                     <h3 className="font-semibold text-white mb-2">Comportamiento de Pago</h3>
                                     <BehaviorSummary data={elegibilidad.score_detalle} />
+                                    
+                                    {/* Botón para ver desglose */}
+                                    <button 
+                                        type="button"
+                                        onClick={() => setShowScoreBreakdown(!showScoreBreakdown)}
+                                        className="mt-3 flex items-center gap-1.5 text-[11px] font-bold text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-wider"
+                                    >
+                                        {showScoreBreakdown ? (
+                                            <><ChevronUp className="w-3.5 h-3.5" /> Ocultar detalle de cálculo</>
+                                        ) : (
+                                            <><ChevronDown className="w-3.5 h-3.5" /> Ver detalle de cálculo</>
+                                        )}
+                                    </button>
                                 </div>
                             </div>
+
+                            {/* Panel de Desglose */}
+                            {showScoreBreakdown && (
+                                <div className="mt-4 pt-4 border-t border-slate-700/50">
+                                    <ScoreBreakdown data={elegibilidad.score_detalle} currentScore={elegibilidad.score} />
+                                    <ScoreLimitRules currentScore={elegibilidad.score} />
+                                </div>
+                            )}
                         </div>
 
                         {/* Alerta: Producto de Refinanciamiento */}

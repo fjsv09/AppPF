@@ -173,7 +173,6 @@ export function DashboardNav({
                         "flex items-center gap-2 ml-auto pl-4",
                         isCollapsed ? "justify-center mt-2 ml-0 pl-0" : ""
                     )}>
-                        {isPending && <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />}
                         <NotificationsDropdown />
                     </div>
                 </div>

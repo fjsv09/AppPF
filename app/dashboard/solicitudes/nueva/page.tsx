@@ -95,7 +95,7 @@ export default function NuevaSolicitudPage() {
         if (isEditMode) {
           const { data: solicitud, error } = await supabase
             .from('solicitudes')
-            .select('*')
+            .select('*, clientes(limite_prestamo)')
             .eq('id', solicitudId)
             .single()
 
@@ -105,6 +105,7 @@ export default function NuevaSolicitudPage() {
             setWizardState({
               currentStep: 1,
               clienteExistenteId: solicitud.cliente_id || undefined,
+              clienteLimit: (solicitud.clientes as any)?.limite_prestamo || 0,
               prospecto: {
                 nombres: solicitud.prospecto_nombres || '',
                 dni: solicitud.prospecto_dni || '',
@@ -146,6 +147,7 @@ export default function NuevaSolicitudPage() {
           if (cliente) {
             setWizardState((prev) => ({
               ...prev,
+              clienteLimit: cliente.limite_prestamo || 0,
               prospecto: {
                 nombres: cliente.nombres,
                 dni: cliente.dni,
@@ -376,6 +378,7 @@ export default function NuevaSolicitudPage() {
               onBack={handleBack}
               isSubmitting={isSubmitting}
               systemSchedule={systemSchedule}
+              clienteLimit={wizardState.clienteLimit}
             />
           )}
         </div>

@@ -147,6 +147,22 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Debe seleccionar un cliente o proporcionar datos del prospecto (nombre, DNI, teléfono)' }, { status: 400 })
         }
 
+        // 3.5 Validar Límite de Préstamo del Cliente (si no es un nuevo prospecto)
+        if (cliente_id) {
+            const { data: clientInfo } = await supabaseAdmin
+                .from('clientes')
+                .select('limite_prestamo')
+                .eq('id', cliente_id)
+                .single()
+            
+            const clientLimit = parseFloat(clientInfo?.limite_prestamo || 0)
+            if (clientLimit > 0 && parseFloat(monto_solicitado) > clientLimit) {
+                return NextResponse.json({ 
+                    error: `El monto solicitado (S/ ${monto_solicitado}) excede el límite permitido para este cliente (S/ ${clientLimit}).` 
+                }, { status: 400 })
+            }
+        }
+
         // Si es prospecto nuevo, verificar que el DNI no exista
         if (!cliente_id && prospecto_dni) {
             const { data: existingClient } = await supabaseAdmin

@@ -30,10 +30,13 @@ export async function GET(
             return NextResponse.json({ error: 'Solo los administradores pueden usar la refinanciación directa', elegibilidad: { elegible: false, razon_bloqueo: 'Usuario no es administrador' } }, { status: 403 })
         }
 
-        // 2. Obtener datos básicos del préstamo
+        // 2. Obtener datos básicos del préstamo y el límite del cliente
         const { data: prestamo } = await supabaseAdmin
             .from('prestamos')
-            .select('*')
+            .select(`
+                *,
+                clientes:cliente_id(limite_prestamo)
+            `)
             .eq('id', id)
             .single()
 
@@ -66,7 +69,30 @@ export async function GET(
         const { data: scoreDataRaw } = await supabaseAdmin.rpc('calcular_score_cliente', { p_cliente_id: prestamo.cliente_id })
         const scoreDataStr = typeof scoreDataRaw === 'string' ? scoreDataRaw : JSON.stringify(scoreDataRaw || '{}')
         const scoreDetalle = JSON.parse(scoreDataStr)
-        const scoreValue = parseInt(scoreDetalle.score || '50')
+        let scoreValue = parseInt(scoreDetalle.score !== undefined ? scoreDetalle.score : '50')
+        
+        // --- PARCHE SCORE: CORREGIR HISTORIAL DE MORA/VENCIDO NO CONTABILIZADO POR LA BD ---
+        if (scoreDetalle) {
+            const clienteId = prestamo.cliente_id;
+            const { data: todosPrestamos } = await supabaseAdmin
+                .from('prestamos')
+                .select('estado_mora')
+                .eq('cliente_id', clienteId);
+            
+            if (todosPrestamos) {
+                const realMoraCount = todosPrestamos.filter(p => ['vencido', 'castigado', 'legal'].includes(p.estado_mora?.toLowerCase())).length;
+                const dbMoraCount = scoreDetalle.historial_mora || 0;
+                
+                if (realMoraCount > dbMoraCount) {
+                    const diff = realMoraCount - dbMoraCount;
+                    scoreDetalle.historial_mora = realMoraCount;
+                    // Penalidad de 20 pts por cada préstamo vencido no contabilizado
+                    scoreValue = Math.max(0, scoreValue - (diff * 20));
+                    scoreDetalle.score = scoreValue;
+                }
+            }
+        }
+        // -----------------------------------------------------------------------------------
 
         // Límites según Score (reusando lógica original)
         let montoMaximo = prestamo.monto;
@@ -79,6 +105,12 @@ export async function GET(
 
         if (saldoPendiente > 0) {
             montoMinimo = Math.max(montoMinimo, saldoPendiente);
+        }
+
+        // CAPI: El monto máximo no puede superar el límite establecido para el cliente
+        const clientLimit = parseFloat((prestamo.clientes as any)?.limite_prestamo || 0);
+        if (clientLimit > 0 && montoMaximo > clientLimit) {
+            montoMaximo = clientLimit;
         }
 
         // Fix: Para refinanciación crítica, el monto máximo legal SIEMPRE debe cubrir al menos el saldo pendiente. 

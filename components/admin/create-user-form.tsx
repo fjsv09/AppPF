@@ -76,7 +76,19 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
             }
 
             toast.success(`Usuario ${formData.nombre} creado exitosamente`)
-            setFormData({ email: '', password: '', nombre: '', rol: 'asesor', supervisor_id: '', sueldo_base: '', fecha_nacimiento: '', fecha_ingreso: '', frecuencia_pago: 'mensual' })
+            setFormData({ 
+                email: '', 
+                password: '', 
+                nombre: '', 
+                rol: 'asesor', 
+                supervisor_id: '', 
+                sueldo_base: '', 
+                fecha_nacimiento: '', 
+                fecha_ingreso: '', 
+                frecuencia_pago: 'mensual',
+                dni: '',
+                direccion: '' 
+            })
             onSuccess?.()
         } catch (error: any) {
             toast.error(error.message)

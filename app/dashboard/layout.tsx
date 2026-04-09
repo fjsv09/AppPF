@@ -28,7 +28,7 @@ export default async function DashboardLayout({
   
   const { data: perfil } = await supabaseAdmin
     .from('perfiles')
-    .select('rol, activo, nombre_completo')
+    .select('rol, activo, nombre_completo, avatar_url')
     .eq('id', user.id)
     .single()
 
@@ -152,6 +152,7 @@ export default async function DashboardLayout({
           <DashboardNav 
             role={userRole} 
             userName={userName} 
+            userAvatar={perfil?.avatar_url}
             systemName={configMap?.nombre_sistema || 'Sistema PF'} 
             systemLogo={configMap?.logo_sistema_url}
           />

@@ -87,24 +87,33 @@ export default function AdminMetasPage() {
 
     async function fetchPendingBonos() {
         setLoadingBonos(true)
-        const { data } = await supabase
-            .from('bonos_pagados')
-            .select('*, perfiles!asesor_id(nombre_completo), metas_asesores!meta_id(*)')
-            .eq('estado', 'pendiente')
-            .order('created_at', { ascending: false })
-        setPendingBonos(data || [])
-        setLoadingBonos(false)
+        try {
+            const res = await fetch('/api/metas/liquidaciones?status=pendiente');
+            const result = await res.json();
+            if (result.success) {
+                setPendingBonos(result.data || []);
+            } else {
+                console.error('Error fetching pending bonos:', result.error);
+                setPendingBonos([]);
+            }
+        } catch (error) {
+            console.error('Error in fetchPendingBonos:', error);
+            setPendingBonos([]);
+        } finally {
+            setLoadingBonos(false);
+        }
     }
 
     async function fetchHistoryBonos() {
-        setLoadingHistory(true)
-        const { data } = await supabase
-            .from('bonos_pagados')
-            .select('*, perfiles!asesor_id(nombre_completo), metas_asesores!meta_id(*)')
-            .neq('estado', 'pendiente')
-            .order('created_at', { ascending: false })
-            .limit(100)
-        setHistoryBonos(data || [])
+        try {
+            const res = await fetch('/api/metas/liquidaciones?status=historial');
+            const result = await res.json();
+            if (result.success) {
+                setHistoryBonos(result.data || []);
+            }
+        } catch (error) {
+            console.error('Error in fetchHistoryBonos:', error);
+        }
         setLoadingHistory(false)
     }
 
@@ -630,21 +639,38 @@ export default function AdminMetasPage() {
                                         {bono.detalles_calculo && (
                                             <div className="p-3 bg-slate-950/60 rounded-2xl border border-slate-800/50 space-y-2">
                                                 <div className="flex justify-between items-center text-[10px] font-bold border-b border-white/5 pb-1 mb-1">
-                                                    <span className="text-slate-500">DETALLES DE LIQUIDACIÓN</span>
-                                                    <span className="text-blue-400/80">{bono.detalles_calculo.formula}</span>
+                                                    <span className="text-slate-500">RESUMEN DE LOGRO</span>
+                                                    <span className="text-blue-400/80">{bono.detalles_calculo.formula || 'Cálculo del Sistema'}</span>
                                                 </div>
-                                                {bono.detalles_calculo.retencion && (
-                                                    <div className="grid grid-cols-2 gap-y-1">
-                                                        <div className="flex justify-between px-2"><span className="text-[9px] text-slate-600">Cartera Total</span><span className="text-[10px] text-slate-300">{bono.detalles_calculo.retencion.totales}</span></div>
-                                                        <div className="flex justify-between px-2"><span className="text-[9px] text-slate-600">Bloqueados/Bajas</span><span className="text-[10px] text-rose-400">{bono.detalles_calculo.retencion.bloqueados}</span></div>
-                                                        <div className="flex justify-between px-2"><span className="text-[9px] text-slate-600">Activos Válidos</span><span className="text-[10px] text-emerald-400 font-bold">{bono.detalles_calculo.retencion.activos_validos}</span></div>
-                                                        <div className="flex justify-between px-2"><span className="text-[9px] text-slate-600">Gap Real</span><span className="text-[10px] text-amber-500">{bono.detalles_calculo.retencion.hueco} cli</span></div>
+                                                
+                                                {bono.detalles_calculo.statsVigentes ? (
+                                                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 pt-1">
+                                                        <div className="flex justify-between items-center bg-slate-900/40 p-1.5 rounded-lg border border-slate-800/50">
+                                                            <span className="text-[8px] text-slate-500 uppercase">Cobro</span>
+                                                            <span className="text-[10px] font-bold text-emerald-400">{bono.detalles_calculo.statsVigentes.porcentaje_cobro}%</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center bg-slate-900/40 p-1.5 rounded-lg border border-slate-800/50">
+                                                            <span className="text-[8px] text-slate-500 uppercase">Mora</span>
+                                                            <span className="text-[10px] font-bold text-rose-400">{Number(bono.detalles_calculo.statsVigentes.morosidad_actual).toFixed(1)}%</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center bg-slate-900/40 p-1.5 rounded-lg border border-slate-800/50">
+                                                            <span className="text-[8px] text-slate-500 uppercase">Cartera</span>
+                                                            <span className="text-[10px] font-bold text-blue-400">{bono.detalles_calculo.statsVigentes.clientes_en_cartera} cli</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center bg-slate-900/40 p-1.5 rounded-lg border border-slate-800/50">
+                                                            <span className="text-[8px] text-slate-500 uppercase">Nuevos</span>
+                                                            <span className="text-[10px] font-bold text-amber-400">{bono.detalles_calculo.statsVigentes.nuevos_clientes} cli</span>
+                                                        </div>
                                                     </div>
+                                                ) : (
+                                                    // Fallback para bonos antiguos/manuales
+                                                    <div className="text-[9px] text-slate-500 italic px-2">Cálculo simplificado (pre-actualización)</div>
                                                 )}
-                                                {bono.detalles_calculo.colocacion && bono.detalles_calculo.colocacion.usados_parche > 0 && (
+
+                                                {bono.detalles_calculo.statsVigentes?.hueco_calculado > 0 && (
                                                     <div className="mt-2 pt-2 border-t border-white/5">
                                                         <p className="text-[9px] text-amber-500/80 font-bold px-2 flex items-center gap-1">
-                                                            <ShieldAlert className="w-2.5 h-2.5" /> Se usaron {bono.detalles_calculo.colocacion.usados_parche} clientes nuevos para cubrir el Gap de retención.
+                                                            <AlertTriangle className="w-2.5 h-2.5" /> Hueco de retención detectado: {bono.detalles_calculo.statsVigentes.hueco_calculado} clientes por cubrir.
                                                         </p>
                                                     </div>
                                                 )}

@@ -15,7 +15,7 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
     try {
-        const { email, password, nombre, rol, supervisor_id, sueldo_base, fecha_nacimiento, fecha_ingreso, frecuencia_pago } = await request.json()
+        const { email, password, nombre, rol, supervisor_id, sueldo_base, fecha_nacimiento, fecha_ingreso, frecuencia_pago, dni, direccion } = await request.json()
 
         // Validate inputs
         if (!email || !password || !nombre || !rol) {
@@ -86,7 +86,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 sueldo_base: sueldo_base || 0,
                 fecha_nacimiento: fecha_nacimiento || null,
                 fecha_ingreso: fecha_ingreso || null,
-                frecuencia_pago: frecuencia_pago || 'mensual'
+                frecuencia_pago: frecuencia_pago || 'mensual',
+                dni: dni || null,
+                direccion: direccion || null
             }, { onConflict: 'id' })
 
         if (profileError) {

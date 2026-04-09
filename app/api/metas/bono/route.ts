@@ -50,7 +50,13 @@ export async function POST(request: Request) {
             .select()
             .single()
 
-        if (bonoError) throw bonoError
+        if (bonoError) {
+            if (bonoError.code === '23505' || bonoError.message?.includes('duplicate key')) {
+                console.log(`[BONO_API] Bono ya existe para meta ${meta_id} en fecha ${fecha}. Ignorando.`);
+                return NextResponse.json({ error: 'El bono ya está registrado.', code: 'DUPLICATE_BONUS' }, { status: 409 })
+            }
+            throw bonoError
+        }
 
         // --- NOTIFICAR A ADMINISTRADORES ---
         try {

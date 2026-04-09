@@ -105,6 +105,10 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
       supervisor_id: supervisorId === 'none' ? null : (supervisorId || null),
       rol: formData.get('rol') as string,
       sesion_unica_activa: formData.get('sesion_unica_activa') === 'true',
+      dni: formData.get('dni') as string || null,
+      direccion: formData.get('direccion') as string || null,
+      can_edit_profile: formData.get('can_edit_profile') === 'true',
+      has_edited_profile: formData.get('has_edited_profile') === 'true',
     }
 
     if (isNaN(updates.sueldo_base)) updates.sueldo_base = 0
@@ -482,6 +486,52 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
                    </SelectContent>
                 </Select>
              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">DNI / Documento</label>
+                    <Input 
+                        name="dni" 
+                        defaultValue={editingEmployee?.dni} 
+                        className="bg-slate-950 border-slate-800 h-10"
+                    />
+                 </div>
+                 <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Dirección</label>
+                    <Input 
+                        name="direccion" 
+                        defaultValue={editingEmployee?.direccion} 
+                        className="bg-slate-950 border-slate-800 h-10"
+                    />
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Permitir Edición Perfil</label>
+                    <Select name="can_edit_profile" defaultValue={editingEmployee?.can_edit_profile ? "true" : "false"}>
+                       <SelectTrigger className="bg-slate-950 border-slate-800 h-10">
+                          <SelectValue />
+                       </SelectTrigger>
+                       <SelectContent className="bg-slate-950 border-slate-800 text-white">
+                          <SelectItem value="true">Habilitado</SelectItem>
+                          <SelectItem value="false">Bloqueado</SelectItem>
+                       </SelectContent>
+                    </Select>
+                 </div>
+                 <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Estado Edición Única</label>
+                    <Select name="has_edited_profile" defaultValue={editingEmployee?.has_edited_profile ? "true" : "false"}>
+                       <SelectTrigger className="bg-slate-950 border-slate-800 h-10">
+                          <SelectValue />
+                       </SelectTrigger>
+                       <SelectContent className="bg-slate-950 border-slate-800 text-white">
+                          <SelectItem value="true">Ya Editó (Bloqueado)</SelectItem>
+                          <SelectItem value="false">Pendiente (Puede Editar)</SelectItem>
+                       </SelectContent>
+                    </Select>
+                 </div>
+              </div>
 
              <div className="grid grid-cols-2 gap-4">
                  <div className="space-y-1.5">

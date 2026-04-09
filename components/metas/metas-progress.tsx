@@ -50,12 +50,12 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
   const [bonosPendientes, setBonosPendientes] = useState<any[]>([])
   const [bonosPagadosHoy, setBonosPagadosHoy] = useState<string[]>([])
   const [bonosPagadosSemana, setBonosPagadosSemana] = useState<string[]>([])
+  const [bonosPagadosQuincena, setBonosPagadosQuincena] = useState<string[]>([])
   const [bonosPagadosMes, setBonosPagadosMes] = useState<string[]>([])
   const [historialBonos, setHistorialBonos] = useState<any[]>([])
   const [historialDescuentos, setHistorialDescuentos] = useState<any[]>([])
   const [asesoresInfo, setAsesoresInfo] = useState<any[]>([])
-  const [feriadosSet, setFeriadosSet] = useState<Set<string>>(new Set())
-  const processingMetas = useRef(new Set<string>())
+  const [projectedBonuses, setProjectedBonuses] = useState<any[]>([])
 
   const supabase = createClient()
   const esSupervisorOAdmin = userRole === 'supervisor' || userRole === 'admin'
@@ -74,17 +74,6 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
       const hoyPeruStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
       const mesActualStr = hoyPeruStr.slice(0, 7)
 
-      // Cargar Feriados
-      try {
-        const resFer = await fetch('/api/feriados')
-        if (resFer.ok) {
-          const fers = await resFer.json()
-          setFeriadosSet(new Set(fers.map((f: any) => f.fecha)))
-        }
-      } catch (e) {
-        console.error('Error fetching feriados:', e)
-      }
-
       const { data: todosBonosMes } = await supabase
         .from('bonos_pagados')
         .select('*')
@@ -93,13 +82,18 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
 
       const pagadosHoy = todosBonosMes?.filter(p => p.fecha === hoyPeruStr && p.estado === 'aprobado').map(p => p.meta_id) || []
       
-      // Calcular Lunes de esta semana para filtrado semanal
       const d = new Date(hoyPeruStr + 'T12:00:00')
       const day = d.getDay()
       const diffLunes = d.getDate() - day + (day === 0 ? -6 : 1)
       const lunesActual = new Date(d.setDate(diffLunes)).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
       
       const pagadosSemana = todosBonosMes?.filter(p => p.fecha >= lunesActual && p.estado === 'aprobado').map(p => p.meta_id) || []
+      const pagadosQuincena = todosBonosMes?.filter(p => {
+        if (p.estado !== 'aprobado') return false;
+        const isSecondHalf = parseInt(hoyPeruStr.split('-')[2]) > 15;
+        const bDate = parseInt(p.fecha.split('-')[2]);
+        return (isSecondHalf && bDate > 15) || (!isSecondHalf && bDate <= 15);
+      }).map(p => p.meta_id) || []
       const pagadosMes = todosBonosMes?.filter(p => p.estado === 'aprobado').map(p => p.meta_id) || []
       const pendientesORechazados = todosBonosMes?.filter(p => {
         if (!['pendiente', 'rechazado'].includes(p.estado)) return false;
@@ -108,11 +102,17 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
         
         if (meta.periodo === 'diario') return p.fecha === hoyPeruStr;
         if (meta.periodo === 'semanal') return p.fecha >= lunesActual;
+        if (meta.periodo === 'quincenal') {
+            const isSecondHalf = parseInt(hoyPeruStr.split('-')[2]) > 15;
+            const bDate = parseInt(p.fecha.split('-')[2]);
+            return (isSecondHalf && bDate > 15) || (!isSecondHalf && bDate <= 15);
+        }
         return true;
       }) || []
 
       setBonosPagadosHoy(pagadosHoy)
       setBonosPagadosSemana(pagadosSemana)
+      setBonosPagadosQuincena(pagadosQuincena)
       setBonosPagadosMes(pagadosMes)
       setBonosPendientes(pendientesORechazados)
 
@@ -132,382 +132,26 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
         .limit(20)
       setHistorialDescuentos(histDescuentos || [])
 
-      const hoyPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
-      const mesActual = hoyPeru.slice(0, 7)
-
-      let promedioColocacion = 0
-      let asesorIds: string[] = []
-
-      if (esSupervisorOAdmin) {
-        let query = supabase.from('perfiles').select('id, nombre_completo').eq('rol', 'asesor')
-        if (userRole === 'supervisor') {
-          query = query.eq('supervisor_id', userId)
-        }
-        const { data: asesores } = await query
-        asesorIds = asesores?.map(a => a.id) || []
-        setAsesoresInfo(asesores || [])
-      } else {
-        asesorIds = [userId]
-      }
-
-      if (asesorIds.length === 0) {
-        setLoading(false)
-        return
-      }
-
-      const { data: clientesAsesor } = await supabase
-        .from('clientes')
-        .select('id, bloqueado_renovacion, created_at')
-        .in('asesor_id', asesorIds)
-
-      let porcentajeCalculado = 0
-      if (clientesAsesor && clientesAsesor.length > 0) {
-        const clienteIds = clientesAsesor.map(c => c.id)
-        const { data: prestamos } = await supabase
-          .from('prestamos')
-          .select('id')
-          .in('cliente_id', clienteIds)
-          .eq('estado', 'activo')
-
-        if (prestamos && prestamos.length > 0) {
-          const prestamoIds = prestamos.map(p => p.id)
-          const { data: cuotasHoy } = await supabase
-            .from('cronograma_cuotas')
-            .select('id, monto_cuota, monto_pagado')
-            .in('prestamo_id', prestamoIds)
-            .eq('fecha_vencimiento', hoyPeru)
-
-          if (cuotasHoy && cuotasHoy.length > 0) {
-            const cuotaIds = cuotasHoy.map(c => c.id)
-            const totalProgramado = cuotasHoy.reduce((acc, c) => acc + Number(c.monto_cuota), 0)
-            const { data: todosLosPagos } = await supabase
-              .from('pagos')
-              .select('cuota_id, monto_pagado, fecha_pago')
-              .in('cuota_id', cuotaIds)
-
-            const startOfDay = new Date(`${hoyPeru}T00:00:00-05:00`).getTime()
-            const endOfDay = new Date(`${hoyPeru}T23:59:59-05:00`).getTime()
-            const pagosPorCuota: Record<string, { hoy: number, antes: number }> = {}
-            cuotasHoy.forEach(c => pagosPorCuota[c.id] = { hoy: 0, antes: 0 })
-
-            todosLosPagos?.forEach(p => {
-              if (!pagosPorCuota[p.cuota_id]) return
-              const timePago = new Date(p.fecha_pago).getTime()
-              if (timePago >= startOfDay && timePago <= endOfDay) {
-                pagosPorCuota[p.cuota_id].hoy += Number(p.monto_pagado)
-              } else if (timePago < startOfDay) {
-                pagosPorCuota[p.cuota_id].antes += Number(p.monto_pagado)
-              }
-            })
-
-            let totalRecaudadoHoyEfectivo = 0
-            let metaEfectivaHoy = 0
-            let cuotasCobradasHoy = 0
-            let cuotasObjetivoDiaCount = 0
-            cuotasHoy.forEach((c: any) => {
-              const metaCuota = Number(c.monto_cuota)
-              const pagos = pagosPorCuota[c.id]
-              const totalPagadoAcumulado = Number(c.monto_pagado || 0)
-              const pagadoAntes = Math.max(0, totalPagadoAcumulado - pagos.hoy)
-              const pendienteAlInicio = Math.max(0, metaCuota - pagadoAntes)
-              if (pendienteAlInicio <= 0.01) return
-              metaEfectivaHoy += pendienteAlInicio
-              cuotasObjetivoDiaCount++
-              const recaudoHoyEfectivo = Math.min(pagos.hoy, pendienteAlInicio)
-              totalRecaudadoHoyEfectivo += recaudoHoyEfectivo
-              if (pagos.hoy > 0 && (totalPagadoAcumulado >= metaCuota)) {
-                cuotasCobradasHoy++
-              }
-            })
-
-            porcentajeCalculado = metaEfectivaHoy > 0
-              ? Math.min(100, (totalRecaudadoHoyEfectivo / metaEfectivaHoy) * 100)
-              : (totalProgramado > 0 ? 100 : 0)
-
-            setRealTimeStats(prev => ({
-              ...prev,
-              monto_objetivo_dia: metaEfectivaHoy,
-              monto_cobrado_dia: totalRecaudadoHoyEfectivo,
-              cuotas_objetivo_dia: cuotasObjetivoDiaCount,
-              cuotas_cobradas_dia: cuotasCobradasHoy
-            }))
-          }
+      // Fetch Real Time Stats
+      const resStats = await fetch(`/api/metas/estadisticas?userId=${userId}`)
+      if (resStats.ok) {
+        const { data, success } = await resStats.json()
+        if (success && data?.realTimeStats) {
+            setRealTimeStats(prev => ({ ...prev, ...data.realTimeStats }))
+            setProjectedBonuses(data.pendingOrProjectedBonuses || [])
         }
       }
 
-      let clientesActivosNoBloqueados = 0
-      let clientesBloqueados = 0
-      let totalFinalClients = 0
-
-      if (clientesAsesor && clientesAsesor.length > 0) {
-        const clienteIds = clientesAsesor.map(c => c.id)
-        const { data: prestamosActivos } = await supabase
-          .from('prestamos')
-          .select('cliente_id')
-          .in('cliente_id', clienteIds)
-          .eq('estado', 'activo')
-
-        const idsConPrestamoActivo = new Set(prestamosActivos?.map(p => p.cliente_id) || [])
-        const { data: detallesClientes } = await supabase
-          .from('clientes')
-          .select('id, bloqueado_renovacion')
-          .in('id', Array.from(idsConPrestamoActivo))
-
-        totalFinalClients = idsConPrestamoActivo.size
-        clientesActivosNoBloqueados = detallesClientes?.filter(c => !c.bloqueado_renovacion).length || 0
-        clientesBloqueados = totalFinalClients - clientesActivosNoBloqueados
-      }
-
-      let clientesNuevos = []
-      let capitalNetoComisionable = 0
-      let netosComisionablesCount = 0
-      let usadosParcheCount = 0
-      let huecoCalculado = 0
-
-      const metaReten = metasData?.find(m => m.meta_retencion_clientes > 0)
-      if (metaReten) {
-        huecoCalculado = Math.max(0, metaReten.meta_retencion_clientes - clientesActivosNoBloqueados)
-      }
-
-      // 1. Obtener préstamos de la cartera
-      const { data: allRecentLoans } = await supabase
-        .from('prestamos')
-        .select(`
-          id, 
-          cliente_id, 
-          monto, 
-          interes, 
-          created_at, 
-          estado, 
-          created_by,
-          clientes!inner (
-            asesor_id
-          ),
-          cronograma_cuotas (
-            id,
-            fecha_vencimiento,
-            monto_cuota,
-            monto_pagado,
-            estado
-          )
-        `)
-        .eq('clientes.asesor_id', userId)
-        .in('estado', ['activo', 'desembolsado', 'vigente', 'aprobado', 'finalizado'])
-
-      // 2. Obtener RECAUDACIÓN REAL (Dinero físico cobrado por el asesor)
-      const getPeriodStartDate = (period: 'semanal' | 'mensual') => {
-        const now = new Date()
-        const start = new Date(now)
-        if (period === 'semanal') {
-          const day = now.getDay()
-          const diff = now.getDate() - day + (day === 0 ? -6 : 1) // Lunes
-          start.setDate(diff)
-        } else {
-          start.setDate(1) // Día 1 del mes
-        }
-        start.setHours(0,0,0,0)
-        return start
-      }
-
-      const startOfPeriod = getPeriodStartDate('mensual')
-      const { data: pagosPeriodo } = await supabase
-        .from('pagos')
-        .select('monto_pagado, created_at')
-        .eq('registrado_por', userId)
-        .gte('created_at', startOfPeriod.toISOString())
-
-      const totalRecaudadoReal = pagosPeriodo?.reduce((acc, p) => acc + Number(p.monto_pagado || 0), 0) || 0
-
-      const prestamosNuevos = (allRecentLoans?.filter(p => {
-        const fecha = new Date(p.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
-        return fecha.startsWith(mesActual)
-      }) || []).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-
-      if (prestamosNuevos.length > 0) {
-        const clientesUnicosNuevos = new Set()
-        const prestamosNuevosFiltrados = prestamosNuevos.filter(p => {
-          if (clientesUnicosNuevos.has(p.cliente_id)) return false
-          clientesUnicosNuevos.add(p.cliente_id)
-          return true
-        })
-
-        clientesNuevos = prestamosNuevosFiltrados
-        let gapToCover = huecoCalculado
-        prestamosNuevosFiltrados.forEach((p, idx) => {
-          if (gapToCover > 0) {
-            gapToCover--
-            usadosParcheCount++
-          } else {
-            capitalNetoComisionable += Number(p.monto || 0)
-            netosComisionablesCount++
-          }
-        })
-
-        const montoTotalBruto = prestamosNuevos.reduce((acc, p) => acc + Number(p.monto || 0), 0)
-        promedioColocacion = prestamosNuevos.length > 0 ? montoTotalBruto / prestamosNuevos.length : 0
-      }
-
-      // --- CÁLCULO DE MOROSIDAD BANCARIA (Sincronizado con Panel de Préstamos) ---
-      let totalCapitalOriginal = 0
-      let totalCapitalVencido = 0
-      const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
-
-      allRecentLoans?.filter(p => p.estado === 'activo').forEach(p => {
-        const montoCapital = parseFloat(p.monto) || 0
-        totalCapitalOriginal += montoCapital
-        
-        const cuotas = p.cronograma_cuotas || []
-        const numCuotas = cuotas.length || 1
-        const capitalPorCuota = montoCapital / numCuotas
-        
-        cuotas.filter((c: any) => c.fecha_vencimiento <= todayStr && c.estado !== 'pagado').forEach((c: any) => {
-            const montoCuota = parseFloat(c.monto_cuota) || 0
-            const montoPagado = parseFloat(c.monto_pagado) || 0
-            const pendiente = Math.max(0, montoCuota - montoPagado)
-            
-            if (pendiente > 0.01) {
-                const proporcionPendiente = montoCuota > 0 ? pendiente / montoCuota : 1
-                totalCapitalVencido += capitalPorCuota * proporcionPendiente
-            }
-        })
-      })
-
-      const tasaMorosidadOficial = totalCapitalOriginal > 0 ? (totalCapitalVencido / totalCapitalOriginal) * 100 : 0
-
-      setRealTimeStats(prev => ({
-        ...prev,
-        porcentaje_cobro: Math.round(porcentajeCalculado),
-        morosidad_actual: tasaMorosidadOficial,
-        clientes_en_cartera: clientesActivosNoBloqueados,
-        clientes_finales_bloqueados: clientesBloqueados,
-        hueco_calculado: huecoCalculado,
-        clientes_colocados_mes: netosComisionablesCount,
-        capital_colocado: prestamosNuevos.reduce((acc, p) => acc + Number(p.monto || 0), 0),
-        recaudacion_total: totalRecaudadoReal,
-        nuevos_clientes: netosComisionablesCount,
-        promedio_colocacion: Math.round(promedioColocacion),
-        detalles_retencion: {
-          totales: totalFinalClients,
-          bloqueados: clientesBloqueados,
-          activos_validos: clientesActivosNoBloqueados,
-          hueco: huecoCalculado
-        },
-        detalles_colocacion: {
-          nuevos_totales: clientesNuevos.length,
-          usados_parche: usadosParcheCount,
-          netos_comisionables: netosComisionablesCount,
-          capital_neto_comisionable: capitalNetoComisionable
-        }
-      }))
       setLoading(false)
     } catch (error) {
       console.error('Error fetching stats:', error)
       setLoading(false)
     }
-  }, [userId, supabase, esSupervisorOAdmin, userRole])
+  }, [userId, supabase])
 
   useEffect(() => {
     fetchStats()
   }, [fetchStats])
-
-  const checkAndPayBonus = useCallback(async (meta: any) => {
-    if (loading || !meta.id) return
-    const hoyPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
-    const today = new Date(hoyPeru + 'T12:00:00')
-    let lastWorkingDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
-    if (lastWorkingDayOfMonth.getDay() === 0) lastWorkingDayOfMonth.setDate(lastWorkingDayOfMonth.getDate() - 1)
-    const isLastWorkingDay = today.getDate() === lastWorkingDayOfMonth.getDate()
-    if (meta.periodo === 'mensual' && !isLastWorkingDay) return
-    const isSaturday = today.getDay() === 6
-    if (meta.periodo === 'semanal' && !isSaturday) return
-    if (meta.periodo === 'diario' && bonosPagadosHoy.includes(meta.id)) return
-    if (meta.periodo === 'semanal' && bonosPagadosSemana.includes(meta.id)) return
-    if (meta.periodo === 'mensual' && bonosPagadosMes.includes(meta.id)) return
-    if (bonosPendientes.some(p => p.meta_id === meta.id)) return
-    if (processingMetas.current.has(meta.id)) return
-
-    // --- REGLA DE DOMINGOS Y FERIADOS ---
-    if (!esDiaHabil(hoyPeru, feriadosSet)) return
-
-    let cumplida = false
-    let montoBonoFinal = meta.bono_monto || 0
-
-    if (meta.meta_cobro !== null && meta.meta_cobro !== undefined) {
-      if (realTimeStats.porcentaje_cobro >= meta.meta_cobro && realTimeStats.porcentaje_cobro > 0) cumplida = true
-    } else if (meta.meta_cantidad_clientes !== null && meta.meta_cantidad_clientes !== undefined) {
-      if (realTimeStats.nuevos_clientes >= meta.meta_cantidad_clientes && realTimeStats.nuevos_clientes > 0) cumplida = true
-    }
-    // Meta de Morosidad Max (%) y Escalones
-    else if (meta.meta_morosidad_max !== null && meta.meta_morosidad_max !== undefined) {
-      if (realTimeStats.morosidad_actual <= meta.meta_morosidad_max && realTimeStats.porcentaje_cobro > 0) {
-        cumplida = true
-      }
-    }
-    // Meta de Morosidad por Escalones
-    else if (meta.escalones_mora) {
-      const escalones = typeof meta.escalones_mora === 'string' ? JSON.parse(meta.escalones_mora) : meta.escalones_mora
-      // Ordenar escalones de menor a mayor mora para encontrar el primero que cumple
-      const sortedEsc = [...escalones].sort((a,b) => parseFloat(a.mora) - parseFloat(b.mora))
-      
-      const escalonCumplido = sortedEsc.find(esc => realTimeStats.morosidad_actual <= parseFloat(esc.mora))
-      if (escalonCumplido && realTimeStats.porcentaje_cobro > 0) {
-        cumplida = true
-        montoBonoFinal = parseFloat(escalonCumplido.bono)
-      }
-    }
-    else if (meta.meta_retencion_clientes !== null && meta.meta_retencion_clientes !== undefined) {
-      if (realTimeStats.clientes_en_cartera >= meta.meta_retencion_clientes && realTimeStats.clientes_en_cartera > 0) cumplida = true
-    } else if (meta.meta_colocacion_clientes) {
-      const montoMin = meta.monto_minimo_prestamo || 500
-      if (realTimeStats.promedio_colocacion >= montoMin && realTimeStats.clientes_colocados_mes > 0) {
-        cumplida = true
-        montoBonoFinal = (meta.bono_por_cliente || 0) * realTimeStats.clientes_colocados_mes
-      }
-    }
-
-    if (cumplida && montoBonoFinal > 0) {
-      processingMetas.current.add(meta.id)
-      try {
-        // --- ENVÍO SEGURO VÍA API (RLS FIX) ---
-        const response = await fetch('/api/metas/bono', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            meta_id: meta.id,
-            monto: montoBonoFinal,
-            fecha: hoyPeru,
-            detalles_calculo: {
-              formula: meta.meta_retencion_clientes ? 'RETENCIÓN' : meta.meta_colocacion_clientes ? 'COLOCACIÓN' : 'KPI',
-              valor: montoBonoFinal
-            }
-          })
-        })
-
-        const result = await response.json()
-
-        if (!response.ok) {
-          toast.error(`Error al enviar bono: ${result.error || 'Error desconocido'}`)
-          processingMetas.current.delete(meta.id)
-          return
-        }
-
-        toast.success(`Meta alcanzada. El bono de S/ ${montoBonoFinal} ha sido enviado al Administrador.`, { 
-          icon: <Clock className="w-5 h-5 text-amber-500" /> 
-        })
-        setBonosPendientes(prev => [...prev, { meta_id: meta.id, monto: montoBonoFinal, estado: 'pendiente' }])
-      } catch (err: any) {
-        toast.error('Error de conexión al enviar el bono.')
-        processingMetas.current.delete(meta.id)
-      } finally {
-        setTimeout(() => processingMetas.current.delete(meta.id), 5000)
-      }
-    }
-  }, [loading, userId, bonosPagadosHoy, bonosPagadosSemana, bonosPagadosMes, bonosPendientes, realTimeStats, supabase])
-
-  useEffect(() => {
-    if (loading) return
-    metas.forEach(meta => checkAndPayBonus(meta))
-  }, [realTimeStats, metas, loading, checkAndPayBonus])
 
   if (loading) return (
     <div className="animate-pulse space-y-4">
@@ -689,6 +333,7 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
               
               const isPaid = m.periodo === 'diario' ? isPaidToday : 
                             m.periodo === 'semanal' ? isPaidWeek : 
+                            m.periodo === 'quincenal' ? bonosPagadosQuincena.includes(m.id) :
                             isPaidMonth
 
               const bonoInfo = bonosPendientes.find(p => p.meta_id === m.id)
@@ -696,39 +341,26 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
               const isRejected = bonoInfo?.estado === 'rechazado'
               const rejectionReason = bonoInfo?.motivo_rechazo
               
-              // --- EVALUACIÓN DE META ---
+              // --- EVALUACIÓN DE META (VISUAL) ---
               let label = 'Meta'
-              let isReached = false
+              let isReached = !!projectedBonuses.find(pb => pb.meta_id === m.id)
               let bonoDisplay = `S/ ${m.bono_monto || 0}`
               
-              const isWorkingDay = esDiaHabil(hoyPeru, feriadosSet)
-
-              if (isWorkingDay) {
-                if (m.meta_cobro !== null && m.meta_cobro !== undefined) {
-                  label = 'Bono Cobranza'
-                  isReached = realTimeStats.porcentaje_cobro >= m.meta_cobro && realTimeStats.porcentaje_cobro > 0
-                } else if (m.meta_retencion_clientes !== null && m.meta_retencion_clientes !== undefined) {
-                  label = 'Bono Retención'
-                  isReached = realTimeStats.clientes_en_cartera >= m.meta_retencion_clientes && realTimeStats.porcentaje_cobro > 0
-                } else if (m.meta_cantidad_clientes !== null && m.meta_cantidad_clientes !== undefined) {
-                  label = 'Bono Nuevos Clientes'
-                  isReached = realTimeStats.nuevos_clientes >= m.meta_cantidad_clientes && realTimeStats.nuevos_clientes > 0
-                } else if (m.meta_colocacion_clientes) {
-                  label = 'Bono por Cliente'
-                  const montoMin = m.monto_minimo_prestamo || 500
-                  isReached = realTimeStats.clientes_colocados_mes > 0 && realTimeStats.promedio_colocacion >= montoMin
-                  bonoDisplay = `S/ ${(m.bono_por_cliente || 0) * realTimeStats.clientes_colocados_mes}`
-                } else if (m.meta_morosidad_max !== null && m.meta_morosidad_max !== undefined) {
-                  label = 'Bono Morosidad'
-                  isReached = realTimeStats.morosidad_actual <= m.meta_morosidad_max && realTimeStats.porcentaje_cobro > 0
-                } else if (m.escalones_mora) {
-                  label = 'Bono Morosidad'
-                  const escalones = typeof m.escalones_mora === 'string' ? JSON.parse(m.escalones_mora) : m.escalones_mora
-                  const sortedEsc = [...escalones].sort((a,b) => parseFloat(a.mora) - parseFloat(b.mora))
-                  const esc = sortedEsc.find(e => realTimeStats.morosidad_actual <= parseFloat(e.mora))
-                  isReached = !!esc && realTimeStats.porcentaje_cobro > 0
-                  bonoDisplay = esc ? `S/ ${esc.bono}` : 'S/ 0'
-                }
+              if (m.meta_cobro !== null && m.meta_cobro !== undefined) {
+                label = 'Bono Cobranza'
+              } else if (m.meta_retencion_clientes !== null && m.meta_retencion_clientes !== undefined) {
+                label = 'Bono Retención'
+              } else if (m.meta_cantidad_clientes !== null && m.meta_cantidad_clientes !== undefined) {
+                label = 'Bono Nuevos Clientes'
+              } else if (m.meta_colocacion_clientes) {
+                label = 'Bono por Cliente'
+                bonoDisplay = projectedBonuses.find(pb => pb.meta_id === m.id)?.monto ? `S/ ${projectedBonuses.find(pb => pb.meta_id === m.id)?.monto}` : `S/ ${(m.bono_por_cliente || 0)}`
+              } else if (m.meta_morosidad_max !== null && m.meta_morosidad_max !== undefined) {
+                label = 'Bono Morosidad'
+              } else if (m.escalones_mora) {
+                label = 'Bono Morosidad'
+                const escProj = projectedBonuses.find(pb => pb.meta_id === m.id)
+                bonoDisplay = escProj ? `S/ ${escProj.monto}` : 'S/ 0'
               }
 
               return (

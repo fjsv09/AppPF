@@ -30,7 +30,9 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
         sueldo_base: '' as string,
         fecha_nacimiento: '' as string,
         fecha_ingreso: '' as string,
-        frecuencia_pago: 'mensual' as string
+        frecuencia_pago: 'mensual' as string,
+        dni: '' as string,
+        direccion: '' as string
     })
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -170,6 +172,32 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
                             type="date"
                             value={formData.fecha_nacimiento}
                             onChange={(e) => setFormData({ ...formData, fecha_nacimiento: e.target.value })}
+                            className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
+                        />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    {/* DNI */}
+                    <div className="space-y-2">
+                        <Label htmlFor="dni" className="text-slate-300">DNI / Documento</Label>
+                        <Input
+                            id="dni"
+                            placeholder="Ej: 12345678"
+                            value={formData.dni}
+                            onChange={(e) => setFormData({ ...formData, dni: e.target.value })}
+                            className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
+                        />
+                    </div>
+
+                    {/* Direccion */}
+                    <div className="space-y-2">
+                        <Label htmlFor="direccion" className="text-slate-300">Dirección</Label>
+                        <Input
+                            id="direccion"
+                            placeholder="Dirección completa"
+                            value={formData.direccion}
+                            onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
                             className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
                         />
                     </div>

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { createFullNotification } from '@/services/notification-service'
 import { checkSystemAccess } from '@/utils/systemRestrictions'
+import { calculateMetasForUser } from '@/lib/metas-logic'
 
 export async function POST(request: Request) {
     const supabase = await createClient()
@@ -142,7 +143,95 @@ export async function POST(request: Request) {
             console.warn(`[CUADRE NOTIF] No active administrators found to notify for cuadre request from ${nombreAsesor}. Check that 'rol' is 'admin' and 'activo' is true in perfiles table.`);
         }
 
-        return NextResponse.json({ success: true, id: cuadreId })
+        let bonusesToPayResult: any[] = [];
+
+        // ==========================================
+        // 3. EVALUACIÓN DE METAS (CIERRE DE DÍA)
+        // ==========================================
+        // Solamente disparamos bonos cuando el cuadre es "final" o "parcial_mañana" si aplican
+        if (p_tipo_cuadre === 'final') {
+            try {
+                console.info(`[GATILLO METAS] Iniciando evaluación formal de metas post-cuadre_final para ${user.id}`);
+                const { bonusesToPay, stats } = await calculateMetasForUser(supabaseAdmin, user.id, false);
+                bonusesToPayResult = bonusesToPay || [];
+
+                console.info(`[GATILLO METAS] Stats calculados:`, JSON.stringify(stats));
+                console.info(`[GATILLO METAS] Metas alcanzadas para insertar: ${bonusesToPay.length}`);
+
+                if (bonusesToPay && bonusesToPay.length > 0) {
+                    // Mapear a estructura DB validando que no estén duplicados (upsert)
+                    const insertPayload = bonusesToPay.map(bono => ({
+                        meta_id: bono.meta_id,
+                        asesor_id: user.id,
+                        monto: bono.monto,
+                        fecha: bono.fecha,
+                        estado: 'pendiente',
+                        detalles_calculo: { formula: bono.motivo, valor: bono.monto, statsVigentes: stats }
+                    }))
+
+                    const insertedBonos = [];
+                    const errors = [];
+
+                    for (const bonoPayload of insertPayload) {
+                        const { data, error } = await supabaseAdmin
+                            .from('bonos_pagados')
+                            .insert(bonoPayload)
+                            .select();
+                        
+                        if (error) {
+                            if (error.code === '23505') {
+                                console.info(`[GATILLO METAS] El bono ${bonoPayload.meta_id} ya existía para hoy. Saltando.`);
+                            } else {
+                                console.error(`[GATILLO METAS] Error insertando bono ${bonoPayload.meta_id}:`, error);
+                                errors.push(error);
+                            }
+                        } else if (data && data.length > 0) {
+                            insertedBonos.push(data[0]);
+                        }
+                    }
+                        
+                    if (insertedBonos.length > 0) {
+                        const totalBonoSoles = insertedBonos.reduce((acc, curr) => acc + curr.monto, 0);
+                        const nombresBonos = bonusesToPay.map(b => b.nombre_meta).join(', ');
+                        console.info(`[GATILLO METAS] Inserción exitosa. Total S/ ${totalBonoSoles}.`);
+
+                        // Notificación consolidada de metas para los Admin
+                        if (admins && admins.length > 0) {
+                            console.info(`[GATILLO METAS] Notificando a ${admins.length} administradores.`);
+                            for (const admin of admins) {
+                                try {
+                                    await createFullNotification(admin.id, {
+                                        titulo: '🏆 Cierre de Metas Alcanzado',
+                                        mensaje: `${nombreAsesor} cerró su día y alcanzó sus metas: ${nombresBonos}. Total de bono para validación: S/ ${totalBonoSoles}.`,
+                                        link: '/dashboard/admin/metas?tab=liquidaciones',
+                                        tipo: 'success'
+                                    })
+                                } catch (notifErr) {
+                                    console.error(`[GATILLO METAS] Error notificando al admin ${admin.id}:`, notifErr);
+                                }
+                            }
+                        }
+                    } else {
+                        if (errors.length > 0) {
+                            console.error('[GATILLO METAS] Errores durante la inserción de bonos:', errors);
+                        } else {
+                            console.info(`[GATILLO METAS] No se encontraron nuevas metas alcanzadas para procesar hoy.`);
+                        }
+                    }
+                }
+            } catch (evError) {
+                console.error('[GATILLO METAS] Excepción durante evaluación de Cierre Final:', evError);
+            }
+        }
+
+        return NextResponse.json({ 
+            success: true, 
+            id: cuadreId,
+            evaluacion_metas: {
+                procesado: p_tipo_cuadre === 'final',
+                bonos_encontrados: bonusesToPayResult.length
+            }
+        })
 
     } catch (e: any) {
         console.error('Error solicitando cuadre:', e)

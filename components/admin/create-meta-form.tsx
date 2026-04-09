@@ -54,15 +54,21 @@ export function CreateMetaForm({ onSuccess, onCancel, initialData }: CreateMetaF
         let tipo = 'cobro'
         let valor = ''
         
-        if (initialData.meta_cobro !== null && initialData.meta_cobro !== undefined) { tipo = 'cobro'; valor = initialData.meta_cobro.toString(); }
-        else if (initialData.meta_recaudacion_total !== null && initialData.meta_recaudacion_total !== undefined) { tipo = 'recaudacion'; valor = initialData.meta_recaudacion_total.toString(); }
-        else if (initialData.meta_colocacion !== null && initialData.meta_colocacion !== undefined) { tipo = 'colocacion'; valor = initialData.meta_colocacion.toString(); }
-        else if (initialData.meta_morosidad_max !== null && initialData.meta_morosidad_max !== undefined) { tipo = 'mora'; valor = initialData.meta_morosidad_max.toString(); }
+        if (initialData.meta_cobro !== null && initialData.meta_cobro !== undefined && initialData.tipo_meta !== 'recaudacion') { tipo = 'cobro'; valor = initialData.meta_cobro.toString(); }
+        // Wait, wait... `tipo_meta` is not stored in DB, it's inferred. Let's just use > 0 or Truthy for non zero. Actually, better:
+        // Supabase returns null if they weren't set. BUT maybe they were set to 0. If they were set to 0, they are still present.
+        // Let's use truthy checks. 0 length goals are very rare, but if they are 0, checking for > 0 or !== null. Wait, let's look at the DB schema.
+        // A much safer way is to check the keys in order but make sure we only match the one that was ACTUALLY chosen in the DB.
+        // If the old save set others to null, then they shouldn't match. But wait! The DB schema might default to 0 for `meta_recaudacion_total`.
+        if (initialData.meta_cobro) { tipo = 'cobro'; valor = initialData.meta_cobro.toString(); }
+        else if (initialData.meta_recaudacion_total) { tipo = 'recaudacion'; valor = initialData.meta_recaudacion_total.toString(); }
+        else if (initialData.meta_colocacion) { tipo = 'colocacion'; valor = initialData.meta_colocacion.toString(); }
+        else if (initialData.meta_morosidad_max) { tipo = 'mora'; valor = initialData.meta_morosidad_max.toString(); }
         else if (initialData.escalones_mora) { tipo = 'mora'; valor = ''; }
-        else if (initialData.meta_cantidad_clientes !== null && initialData.meta_cantidad_clientes !== undefined) { tipo = 'clientes'; valor = initialData.meta_cantidad_clientes.toString(); }
-        else if (initialData.meta_retencion_clientes !== null && initialData.meta_retencion_clientes !== undefined) { tipo = 'retencion'; valor = initialData.meta_retencion_clientes.toString(); }
+        else if (initialData.meta_cantidad_clientes) { tipo = 'clientes'; valor = initialData.meta_cantidad_clientes.toString(); }
+        else if (initialData.meta_retencion_clientes) { tipo = 'retencion'; valor = initialData.meta_retencion_clientes.toString(); }
         else if (initialData.meta_colocacion_clientes) { tipo = 'colocacion_clientes'; valor = ''; }
-        else if (initialData.meta_capital_cartera !== null && initialData.meta_capital_cartera !== undefined) { tipo = 'capital'; valor = initialData.meta_capital_cartera.toString(); }
+        else if (initialData.meta_capital_cartera) { tipo = 'capital'; valor = initialData.meta_capital_cartera.toString(); }
 
         return {
             asesor_id: initialData.asesor_id || '',
@@ -86,15 +92,15 @@ export function CreateMetaForm({ onSuccess, onCancel, initialData }: CreateMetaF
             let tipo = 'cobro'
             let valor = ''
             
-            if (initialData.meta_cobro !== null && initialData.meta_cobro !== undefined) { tipo = 'cobro'; valor = initialData.meta_cobro.toString(); }
-            else if (initialData.meta_recaudacion_total !== null && initialData.meta_recaudacion_total !== undefined) { tipo = 'recaudacion'; valor = initialData.meta_recaudacion_total.toString(); }
-            else if (initialData.meta_colocacion !== null && initialData.meta_colocacion !== undefined) { tipo = 'colocacion'; valor = initialData.meta_colocacion.toString(); }
-            else if (initialData.meta_morosidad_max !== null && initialData.meta_morosidad_max !== undefined) { tipo = 'mora'; valor = initialData.meta_morosidad_max.toString(); }
+            if (initialData.meta_cobro) { tipo = 'cobro'; valor = initialData.meta_cobro.toString(); }
+            else if (initialData.meta_recaudacion_total) { tipo = 'recaudacion'; valor = initialData.meta_recaudacion_total.toString(); }
+            else if (initialData.meta_colocacion) { tipo = 'colocacion'; valor = initialData.meta_colocacion.toString(); }
+            else if (initialData.meta_morosidad_max) { tipo = 'mora'; valor = initialData.meta_morosidad_max.toString(); }
             else if (initialData.escalones_mora) { tipo = 'mora'; valor = ''; }
-            else if (initialData.meta_cantidad_clientes !== null && initialData.meta_cantidad_clientes !== undefined) { tipo = 'clientes'; valor = initialData.meta_cantidad_clientes.toString(); }
-            else if (initialData.meta_retencion_clientes !== null && initialData.meta_retencion_clientes !== undefined) { tipo = 'retencion'; valor = initialData.meta_retencion_clientes.toString(); }
+            else if (initialData.meta_cantidad_clientes) { tipo = 'clientes'; valor = initialData.meta_cantidad_clientes.toString(); }
+            else if (initialData.meta_retencion_clientes) { tipo = 'retencion'; valor = initialData.meta_retencion_clientes.toString(); }
             else if (initialData.meta_colocacion_clientes) { tipo = 'colocacion_clientes'; valor = ''; }
-            else if (initialData.meta_capital_cartera !== null && initialData.meta_capital_cartera !== undefined) { tipo = 'capital'; valor = initialData.meta_capital_cartera.toString(); }
+            else if (initialData.meta_capital_cartera) { tipo = 'capital'; valor = initialData.meta_capital_cartera.toString(); }
 
             setFormData({
                 asesor_id: initialData.asesor_id || '',
@@ -320,6 +326,7 @@ export function CreateMetaForm({ onSuccess, onCancel, initialData }: CreateMetaF
                         <SelectContent className="bg-slate-900 border-slate-700 text-white">
                             <SelectItem value="diario">Diario</SelectItem>
                             <SelectItem value="semanal">Semanal</SelectItem>
+                            <SelectItem value="quincenal">Quincenal</SelectItem>
                             <SelectItem value="mensual">Mensual</SelectItem>
                         </SelectContent>
                     </Select>

@@ -27,6 +27,7 @@ type Role = 'admin' | 'supervisor' | 'asesor'
 interface DashboardNavProps {
     role: Role
     userName?: string
+    userAvatar?: string
     systemName?: string
     systemLogo?: string
 }
@@ -34,6 +35,7 @@ interface DashboardNavProps {
 export function DashboardNav({ 
     role, 
     userName = 'Usuario', 
+    userAvatar,
     systemName = 'Sistema PF', 
     systemLogo 
 }: DashboardNavProps) {
@@ -95,6 +97,7 @@ export function DashboardNav({
         { href: '/dashboard/clientes', label: 'Clientes', icon: Users, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
         { href: '/dashboard/notificaciones', label: 'Notificaciones', icon: Bell, roles: ['admin', 'supervisor', 'asesor'], category: 'Principal' },
         { href: '/dashboard/prestamos', label: 'Préstamos', icon: Banknote, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
+        { href: '/dashboard/perfil', label: 'Mi Perfil', icon: Contact, roles: ['admin', 'supervisor', 'asesor'], category: 'Principal' },
         
         // --- Gestión Financiera ---
         { href: '/dashboard/admin/carteras', label: 'Gestionar Carteras', icon: Briefcase, roles: ['admin'], category: 'Finanzas' },
@@ -281,12 +284,19 @@ export function DashboardNav({
 
                 {/* User Profile / Footer */}
                 <div className="mt-8 pt-6 border-t border-white/5">
-                    <div className={cn(
-                        "flex items-center gap-3 px-2 mb-4",
-                        isCollapsed ? "justify-center" : ""
-                    )}>
-                        <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 border border-slate-600 flex-shrink-0 flex items-center justify-center text-slate-300 font-bold text-sm shadow-inner">
-                            {userName.slice(0, 2).toUpperCase()}
+                    <button 
+                        onClick={() => handleLinkClick('/dashboard/perfil')}
+                        className={cn(
+                            "flex items-center gap-3 px-2 mb-4 hover:bg-white/5 p-1.5 rounded-xl transition-all w-full text-left",
+                            isCollapsed ? "justify-center" : ""
+                        )}
+                    >
+                        <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 border border-white/10 flex-shrink-0 flex items-center justify-center text-slate-300 font-bold text-sm shadow-inner group-hover:border-blue-500/50 transition-colors overflow-hidden">
+                            {userAvatar ? (
+                                <img src={userAvatar} alt="Perfil" className="w-full h-full object-cover" />
+                            ) : (
+                                <UserCog className="w-5 h-5 text-slate-400" />
+                            )}
                         </div>
                         {!isCollapsed && (
                             <div className="overflow-hidden animate-in fade-in slide-in-from-left-2 duration-300">
@@ -297,7 +307,7 @@ export function DashboardNav({
                                 </div>
                             </div>
                         )}
-                    </div>
+                    </button>
                     
                     <Button 
                         variant="ghost" 

@@ -223,6 +223,20 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
         pagos = fullData || [];
     }
 
+    // [NUEVO] Obtener cuadres de hoy para validación visual de edición
+    let cuadresHoy: any[] = []
+    if (pagos.length > 0) {
+        const uniqueAsesores = Array.from(new Set(pagos.map(p => p.registrado_por).filter(Boolean)))
+        const { data: qCuadres } = await supabaseAdmin
+            .from('cuadres_diarios')
+            .select('asesor_id, tipo_cuadre, created_at, estado')
+            .eq('fecha', todayPeru)
+            .in('asesor_id', uniqueAsesores)
+            .in('estado', ['pendiente', 'aprobado'])
+        
+        cuadresHoy = qCuadres || []
+    }
+
     return (
         <div className="page-container max-w-full overflow-x-hidden">
             {esProductoDeRefinanciamiento && (
@@ -479,6 +493,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                 prestamo={prestamo} 
                 cronograma={cronograma || []} 
                 pagos={pagos || []}
+                cuadresHoy={cuadresHoy}
                 userRole={userRole as any} 
                 cliente={prestamo.clientes}
                 tareaEvidencia={tareaEvidencia}

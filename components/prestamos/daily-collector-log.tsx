@@ -5,10 +5,11 @@ import { format, isAfter, startOfDay } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Wallet, Calendar, CheckCircle2, XCircle, ArrowRightCircle, Receipt, User, CheckCircle, ShieldAlert, Clock, Lock, DollarSign } from 'lucide-react'
+import { Wallet, Calendar, CheckCircle2, XCircle, ArrowRightCircle, Receipt, User, CheckCircle, ShieldAlert, Clock, Lock, DollarSign, Pencil } from 'lucide-react'
 import { cn, formatDatePeru } from '@/lib/utils'
 import { PaymentVoucher } from './payment-voucher'
 import { QuickPayModal } from './quick-pay-modal'
+import { EditPaymentModal } from './edit-payment-modal'
 import { VisitActionButton } from './visit-action-button'
 import { useRouter } from 'next/navigation'
 import { api } from '@/services/api'
@@ -22,19 +23,45 @@ export function DailyCollectorLog({
     systemSchedule,
     isBlockedByCuadre,
     blockReasonCierre,
-    systemAccess
+    systemAccess,
+    cuadresHoy = []
 }: any) {
     const router = useRouter()
     const [selectedPayment, setSelectedPayment] = useState<any>(null)
     const [isVoucherOpen, setIsVoucherOpen] = useState(false)
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false)
     const [quickPayOpen, setQuickPayOpen] = useState(false)
     const today = startOfDay(new Date())
-    const todayStr = today.toISOString().split('T')[0]
+    const todayStr = new Intl.DateTimeFormat('en-CA', { 
+        timeZone: 'America/Lima', 
+        year: 'numeric', 
+        month: '2-digit', 
+        day: '2-digit' 
+    }).format(new Date())
+
+    // Función auxiliar para determinar si un pago individual está bloqueado por cuadres
+    const isPaymentLocked = (payment: any) => {
+        if (!cuadresHoy || cuadresHoy.length === 0) return false;
+        
+        // Filtramos los cuadres del asesor que registró el pago
+        const advisorCuadres = cuadresHoy.filter((c: any) => c.asesor_id === payment.registrado_por);
+        if (advisorCuadres.length === 0) return false;
+
+        // 1. Si hay un cierre final, todo el día está bloqueado
+        const tieneFinal = advisorCuadres.some((c: any) => c.tipo_cuadre === 'final');
+        if (tieneFinal) return true;
+
+        // 2. Si el pago es anterior a cualquier cuadre (parcial o mañana), está bloqueado
+        const paymentTime = new Date(payment.created_at).getTime();
+        const tieneCuadrePosterior = advisorCuadres.some((c: any) => new Date(c.created_at).getTime() > paymentTime);
+        
+        return tieneCuadrePosterior;
+    };
 
     // --- LOGICA DE ACCESO (Copiada de CronogramaClient) ---
     const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK', 'PENDING_SALDO'].includes(systemAccess?.code);
     const isBlockedForPayments = isBlockedByCuadre && isTotalBlock;
-    const puedeOperar = userRole === 'asesor'
+    const puedeOperar = userRole === 'asesor' || userRole === 'admin' || userRole === 'supervisor'
 
     const now = new Date()
     const formatter = new Intl.DateTimeFormat('es-PE', {
@@ -228,7 +255,12 @@ export function DailyCollectorLog({
                                                 {physical.map((p: any) => (
                                                     <div key={p.id} className="flex items-center gap-1.5 bg-slate-950/40 px-1.5 py-1 rounded border border-slate-800/50 w-full group/v">
                                                         <span className="text-[10px] font-black text-emerald-400 flex-1 text-left">S/ {Number(p.monto_pagado)}</span>
-                                                        <Button size="sm" variant="ghost" onClick={() => { setSelectedPayment(p); setIsVoucherOpen(true); }} className="h-4 w-4 p-0 text-slate-600 hover:text-emerald-400"><Receipt className="w-2.5 h-2.5" /></Button>
+                                                        <div className="flex items-center gap-0.5">
+                                                            <Button size="sm" variant="ghost" onClick={() => { setSelectedPayment(p); setIsVoucherOpen(true); }} className="h-4 w-4 p-0 text-slate-600 hover:text-emerald-400"><Receipt className="w-2.5 h-2.5" /></Button>
+                                                            {userRole === 'admin' && date === todayStr && !isPaymentLocked(p) && (
+                                                                <Button size="sm" variant="ghost" onClick={() => { setSelectedPayment(p); setIsEditModalOpen(true); }} className="h-4 w-4 p-0 text-slate-600 hover:text-blue-400"><Pencil className="w-2.5 h-2.5" /></Button>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 ))}
                                                 {physical.length === 0 && <span className="text-slate-800 font-black">S/ 0</span>}
@@ -259,6 +291,13 @@ export function DailyCollectorLog({
             </div>
             <PaymentVoucher open={isVoucherOpen} onOpenChange={setIsVoucherOpen} payment={selectedPayment} allPayments={pagos} loan={prestamo} client={cliente || prestamo.clientes} cronograma={cronograma} userRole={userRole} />
             
+            <EditPaymentModal 
+                open={isEditModalOpen}
+                onOpenChange={setIsEditModalOpen}
+                payment={selectedPayment}
+                onSuccess={() => router.refresh()}
+            />
+
             <QuickPayModal 
                 open={quickPayOpen}
                 onOpenChange={setQuickPayOpen}

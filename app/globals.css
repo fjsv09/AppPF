@@ -244,28 +244,48 @@ body {
   }
 
   .kpi-card {
-    @apply rounded-xl p-3.5 shadow-lg relative overflow-hidden transition-all;
-    background: var(--kpi-bg);
-    border: 1px solid var(--kpi-border);
+    @apply rounded-2xl p-4 shadow-xl relative overflow-hidden transition-all duration-300;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(2, 6, 23, 0.95));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
   }
 
   .kpi-card:hover {
-    border-color: var(--kpi-hover-border);
+    border-color: rgba(59, 130, 246, 0.5);
+    box-shadow: 0 0 20px -5px rgba(59, 130, 246, 0.4);
+    transform: translateY(-2px);
+  }
+
+  /* Variantes radiactivas por contexto */
+  .kpi-card.radioactive-emerald:hover {
+    border-color: rgba(16, 185, 129, 0.5);
+    box-shadow: 0 0 20px -5px rgba(16, 185, 129, 0.4);
+  }
+
+  .kpi-card.radioactive-amber:hover {
+    border-color: rgba(245, 158, 11, 0.5);
+    box-shadow: 0 0 20px -5px rgba(245, 158, 11, 0.4);
+  }
+
+  .kpi-card.radioactive-rose:hover {
+    border-color: rgba(244, 63, 94, 0.5);
+    box-shadow: 0 0 20px -5px rgba(244, 63, 94, 0.4);
   }
 
   .kpi-card-icon {
-    @apply absolute right-0 top-0 p-2 transition-opacity;
-    opacity: var(--kpi-icon-opacity);
+    @apply absolute right-[-10px] top-[-10px] transition-all duration-500;
+    opacity: 0.03;
   }
 
   .kpi-card:hover .kpi-card-icon {
     opacity: 0.1;
+    transform: scale(1.1) rotate(-5deg);
   }
 
   .kpi-label {
-    @apply font-bold uppercase tracking-wider mb-1;
-    font-size: var(--kpi-label-size);
-    color: var(--kpi-label-color);
+    @apply font-bold uppercase tracking-[0.1em] mb-1.5 flex items-center gap-2;
+    font-size: var(--text-2xs);
+    color: rgb(148 163 184); /* slate-400 */
   }
 
   .kpi-value {

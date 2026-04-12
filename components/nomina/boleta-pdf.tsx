@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
+import { createClient } from '@/utils/supabase/client'
 import { toPng } from 'html-to-image'
 import { jsPDF } from 'jspdf'
 import { toast } from 'sonner'
@@ -18,6 +19,8 @@ interface BoletaPDFProps {
 
 export function BoletaPDF({ nomina, trabajador, open, onOpenChange }: BoletaPDFProps) {
     const [internalOpen, setInternalOpen] = useState(false)
+    const [detalles, setDetalles] = useState<any[]>([])
+    const [loadingDetalles, setLoadingDetalles] = useState(false)
     const contentRef = useRef<HTMLDivElement>(null)
 
     const isControlled = open !== undefined
@@ -27,17 +30,44 @@ export function BoletaPDF({ nomina, trabajador, open, onOpenChange }: BoletaPDFP
         else setInternalOpen(v)
     }
 
+    useEffect(() => {
+        if (isOpen && nomina?.id) {
+            const fetchDetalles = async () => {
+                setLoadingDetalles(true)
+                const supabase = createClient()
+                const { data, error } = await supabase
+                    .from('transacciones_personal')
+                    .select('*')
+                    .eq('trabajador_id', nomina.trabajador_id)
+                    .eq('nomina_id', nomina.id)
+                    .order('created_at', { ascending: true })
+                
+                if (!error && data) {
+                    setDetalles(data)
+                }
+                setLoadingDetalles(false)
+            }
+            fetchDetalles()
+        }
+    }, [isOpen, nomina?.id])
+
     if (!nomina) return null
 
     const sueldoBase = nomina.sueldo_base || 0
     const bonos = nomina.bonos || 0
-    // Sumar lo ya descontado + lo pendiente para tener el total real del mes
     const descuentos = (nomina.descuentos_original || 0) + (nomina.descuentos || 0)
     const adelantos = (nomina.adelantos_original || 0) + (nomina.adelantos || 0)
-    const totalNeto = sueldoBase + bonos - descuentos - adelantos
-    const montoPagado = nomina.monto_pagado || totalNeto
+    
+    // Calcular total ya pagado históricamente (transacciones de tipo 'pago')
+    const totalPagadoHistorico = detalles
+        .filter(d => d.tipo === 'pago')
+        .reduce((acc, d) => acc + parseFloat(d.monto || 0), 0)
+
+    const totalNeto = sueldoBase + bonos - descuentos - adelantos - totalPagadoHistorico
     const mesAnio = format(new Date(nomina.anio, nomina.mes - 1), 'MMMM yyyy', { locale: es })
     const fechaPago = nomina.fecha_pago ? format(new Date(nomina.fecha_pago), 'dd/MM/yyyy HH:mm', { locale: es }) : 'Pendiente'
+
+    const isLiquidacion = detalles.some(d => d.tipo === 'liquidacion')
 
     const handlePrint = () => {
         const content = contentRef.current
@@ -191,41 +221,90 @@ export function BoletaPDF({ nomina, trabajador, open, onOpenChange }: BoletaPDFP
                                 </tr>
                             </thead>
                             <tbody>
+                                {/* Sueldo Base (Siempre Primero) */}
                                 <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                    <td style={{ padding: '6px 10px' }}>Sueldo Base</td>
+                                    <td style={{ padding: '6px 10px' }}>Sueldo Base Mensual</td>
                                     <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: '600' }}>S/ {sueldoBase.toFixed(2)}</td>
                                     <td style={{ padding: '6px 10px', textAlign: 'right' }}>—</td>
                                 </tr>
-                                <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                    <td style={{ padding: '6px 10px' }}>Bonos por Metas</td>
-                                    <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: '600', color: bonos > 0 ? '#059669' : '#999' }}>
-                                        {bonos > 0 ? `S/ ${bonos.toFixed(2)}` : '—'}
-                                    </td>
-                                    <td style={{ padding: '6px 10px', textAlign: 'right' }}>—</td>
-                                </tr>
-                                <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                    <td style={{ padding: '6px 10px' }}>Descuentos por Tardanza</td>
-                                    <td style={{ padding: '6px 10px', textAlign: 'right' }}>—</td>
-                                    <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: '600', color: descuentos > 0 ? '#dc2626' : '#999' }}>
-                                        {descuentos > 0 ? `S/ ${descuentos.toFixed(2)}` : '—'}
-                                    </td>
-                                </tr>
-                                <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                    <td style={{ padding: '6px 10px' }}>Adelantos de Sueldo</td>
-                                    <td style={{ padding: '6px 10px', textAlign: 'right' }}>—</td>
-                                    <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: '600', color: adelantos > 0 ? '#dc2626' : '#999' }}>
-                                        {adelantos > 0 ? `S/ ${adelantos.toFixed(2)}` : '—'}
-                                    </td>
-                                </tr>
+
+                                {/* Desglose Dinámico de Transacciones */}
+                                {loadingDetalles ? (
+                                    <tr>
+                                        <td colSpan={3} style={{ padding: '20px', textAlign: 'center', color: '#999', fontSize: '10px' }}>
+                                            Cargando desglose de conceptos...
+                                        </td>
+                                    </tr>
+                                ) : detalles.length > 0 ? (
+                                    <>
+                                        {detalles.map((trans) => {
+                                            const isIngreso = ['bono', 'liquidacion', 'bonos', 'ajuste_positivo'].includes(trans.tipo)
+                                            const isEgreso = ['descuento', 'pago', 'adelanto', 'ajuste_negativo'].includes(trans.tipo) 
+                                            
+                                            if (!isIngreso && !isEgreso) return null
+
+                                            let descripcion = trans.descripcion
+                                            if (trans.tipo === 'pago') {
+                                                descripcion = `PAGO REALIZADO (A CUENTA) - ${trans.metadatos?.cuota || ''}`
+                                            }
+
+                                            return (
+                                                <tr key={trans.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                                    <td style={{ padding: '6px 10px', fontWeight: (trans.tipo === 'liquidacion' || trans.tipo === 'pago') ? '800' : 'normal' }}>
+                                                        {descripcion}
+                                                        {trans.tipo === 'liquidacion' && ' (Pago Final)'}
+                                                    </td>
+                                                    <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: '600', color: isIngreso ? '#059669' : '#000' }}>
+                                                        {isIngreso ? `S/ ${parseFloat(trans.monto).toFixed(2)}` : '—'}
+                                                    </td>
+                                                    <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: '600', color: isEgreso ? '#dc2626' : '#000' }}>
+                                                        {isEgreso ? `S/ ${parseFloat(trans.monto).toFixed(2)}` : '—'}
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })}
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* Fallback si no hay detalles (nóminas antiguas) */}
+                                        {bonos > 0 && (
+                                            <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                                <td style={{ padding: '6px 10px' }}>Bonos Acumulados</td>
+                                                <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: '600', color: '#059669' }}>
+                                                    S/ {bonos.toFixed(2)}
+                                                </td>
+                                                <td style={{ padding: '6px 10px', textAlign: 'right' }}>—</td>
+                                            </tr>
+                                        )}
+                                        {descuentos > 0 && (
+                                            <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                                <td style={{ padding: '6px 10px' }}>Descuentos (Tardanza/Otros)</td>
+                                                <td style={{ padding: '6px 10px', textAlign: 'right' }}>—</td>
+                                                <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: '600', color: '#dc2626' }}>
+                                                    S/ {descuentos.toFixed(2)}
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {totalPagadoHistorico > 0 && (
+                                             <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                                 <td style={{ padding: '6px 10px' }}>Pagos Adelantados (Ya realizados)</td>
+                                                 <td style={{ padding: '6px 10px', textAlign: 'right' }}>—</td>
+                                                 <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: '600', color: '#dc2626' }}>
+                                                     S/ {totalPagadoHistorico.toFixed(2)}
+                                                 </td>
+                                             </tr>
+                                        )}
+                                    </>
+                                )}
                             </tbody>
                             <tfoot>
                                 <tr style={{ backgroundColor: '#f8fafc', borderTop: '2px solid #1e40af' }}>
-                                    <td style={{ padding: '8px 10px', fontWeight: '800', fontSize: '12px' }}>TOTAL INGRESOS / DEDUCCIONES</td>
-                                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '800', color: '#059669', fontSize: '12px' }}>
+                                    <td style={{ padding: '8px 10px', fontWeight: '800', fontSize: '11px' }}>TOTAL BRUTO / DEDUCCIONES</td>
+                                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '800', color: '#059669', fontSize: '11px' }}>
                                         S/ {(sueldoBase + bonos).toFixed(2)}
                                     </td>
-                                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '800', color: '#dc2626', fontSize: '12px' }}>
-                                        S/ {(descuentos + adelantos).toFixed(2)}
+                                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '800', color: '#dc2626', fontSize: '11px' }}>
+                                        S/ {(descuentos + adelantos + totalPagadoHistorico).toFixed(2)}
                                     </td>
                                 </tr>
                             </tfoot>
@@ -236,13 +315,15 @@ export function BoletaPDF({ nomina, trabajador, open, onOpenChange }: BoletaPDFP
                             display: 'flex',
                             justifyContent: 'space-between',
                             alignItems: 'center',
-                            backgroundColor: '#1e3a5f',
+                            backgroundColor: isLiquidacion ? '#dc2626' : '#1e3a5f',
                             color: 'white',
                             padding: '10px 15px',
                             borderRadius: '6px',
                             marginBottom: '15px'
                         }}>
-                            <span style={{ fontWeight: '700', fontSize: '12px', letterSpacing: '1px' }}>NETO A RECIBIR</span>
+                            <span style={{ fontWeight: '700', fontSize: '12px', letterSpacing: '1px' }}>
+                                {isLiquidacion ? 'NETO TOTAL LIQUIDACIÓN' : 'NETO A RECIBIR'}
+                            </span>
                             <span style={{ fontWeight: '900', fontSize: '18px' }}>S/ {totalNeto.toFixed(2)}</span>
                         </div>
 

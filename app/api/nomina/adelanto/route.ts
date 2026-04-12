@@ -122,7 +122,24 @@ export async function POST(request: Request) {
                 registrado_por: user.id
             })
 
-        // 5. Auditoría (columnas reales: tabla_afectada, accion, registro_id, usuario_id, detalle)
+        // 5. Registrar Transacción en la nueva tabla dedicada
+        await supabaseAdmin.from('transacciones_personal').insert({
+            trabajador_id: trabajadorId,
+            nomina_id: nomina.id,
+            tipo: 'adelanto',
+            monto: monto,
+            descripcion: `Adelanto de sueldo - ${concepto || (cuenta.nombre)}`,
+            cuenta_id: cuentaId,
+            metadatos: {
+                mes,
+                anio,
+                cuenta: cuenta.nombre,
+                concepto
+            },
+            registrado_por: user.id
+        })
+
+        // 6. Auditoría (legacy)
         const { error: auditError } = await supabaseAdmin.from('auditoria').insert({
             tabla_afectada: 'nomina_personal',
             accion: 'registro_adelanto',

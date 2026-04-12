@@ -189,12 +189,21 @@ export async function POST(request: Request) {
         let eventTarget = 'entrada'
         let updateField = 'hora_entrada'
 
-        if (tNow >= tCierre) {
-            eventTarget = 'cierre'
-            updateField = 'hora_cierre'
-        } else if (tNow >= tFinTurno1) {
+        // Lógica Acumulativa Sincronizada con GET:
+        // 1. Si no ha marcado entrada, SIEMPRE será entrada primero (no importa la hora)
+        if (!existingRecord?.hora_entrada) {
+            eventTarget = 'entrada'
+            updateField = 'hora_entrada'
+        }
+        // 2. Si ya marcó entrada, verificar si ya es hora de registrar Inicio del Turno Tarde
+        else if (tNow >= tFinTurno1 && !existingRecord.hora_turno_tarde) {
             eventTarget = 'fin_turno_1'
             updateField = 'hora_turno_tarde'
+        }
+        // 3. Si ya marcó entrada y turno tarde, verificar si es hora del Cierre Final
+        else if (tNow >= tCierre && !existingRecord.hora_cierre) {
+            eventTarget = 'cierre'
+            updateField = 'hora_cierre'
         }
 
         // Si ya marcó este evento específico, error

@@ -66,6 +66,8 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     if (rpcError) console.error('Error running Mora Robot:', rpcError)
     else console.log('🤖 Mora Robot Result:', rpcResult)
 
+    const selectedDate = (sParams.fecha as string) || getTodayPeru()
+
     // Fetch relations to calculate KPIs in memory - NO CACHE
     // Force fresh data after the update
     const { data: prestamosRaw, error } = await supabaseAdmin
@@ -80,7 +82,23 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             ),
             cronograma_cuotas (
                 *,
-                pagos (created_at, monto_pagado)
+                pagos (created_at, monto_pagado, voucher_compartido)
+            ),
+            gestiones (
+                id,
+                tipo_gestion,
+                resultado,
+                notas,
+                created_at,
+                usuario_id
+            ),
+            visitas_terreno (
+                id,
+                estado,
+                cumple_minimo,
+                notas,
+                fecha_inicio,
+                asesor_id
             )
         `)
         .order('created_at', { ascending: false })
@@ -209,10 +227,29 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         return acc
     }, {})
 
+    // 2.1 Fetch Perfiles (needed before mapping for asesorBloqueoMap)
+    let perfiles: any[] = []
+    let asesorBloqueoMap: Record<string, boolean> = {}
+    if (userRole === 'admin' || userRole === 'supervisor') {
+        const { data: profiles } = await supabaseAdmin
+            .from('perfiles')
+            .select('*')
+        perfiles = profiles || []
+        
+        // Build map of asesor_id -> pagos_bloqueados for admin block toggle
+        if (userRole === 'admin') {
+            perfiles.forEach((p: any) => {
+                if (p.rol === 'asesor' || p.rol === 'supervisor') {
+                    asesorBloqueoMap[p.id] = !!p.pagos_bloqueados
+                }
+            })
+        }
+    }
+
     // 2. KPI Calculation & Mapping
     const prestamos = filteredList.map(p => {
-        const todayPeru = getTodayPeru()
-        const metrics = calculateLoanMetrics(p, todayPeru, { 
+        const referenceDate = selectedDate
+        const metrics = calculateLoanMetrics(p, referenceDate, { 
             renovacionMinPagado, 
             umbralCpp, 
             umbralMoroso,
@@ -257,7 +294,11 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             // Attach metrics for optimized aggregate calculation
             metrics: metrics,
             
-            clientes: p.clientes
+            clientes: {
+                ...p.clientes,
+                // Attach asesor block status for admin toggle UI
+                asesor_pagos_bloqueados: asesorBloqueoMap[p.clientes?.asesor_id] || false
+            }
         }
     })
 
@@ -272,7 +313,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             if (!mgmt) return false
 
             const isClientBlocked = !!prestamo.clientes?.bloqueado_renovacion
-            if (isClientBlocked) return true // Handled visually in the modal/button
+            if (isClientBlocked) return false // No se cuentan como renovables si el cliente está bloqueado
             
             if (prestamoIdsConSolicitudPendiente.includes(prestamo.id)) return false
             if (!['activo', 'finalizado'].includes(prestamo.estado)) return false
@@ -307,9 +348,9 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             const isReady = isFinalizado || esCandidatoRefinanciacionAdmin || cumpleUmbral
             if (!isReady) return false
 
-            if (isRefinanciado && !isAdminOrSupervisor) return false
+            if (isRefinanciado) return false
             const esProductoDeRefinanciamiento = prestamoIdsProductoRefinanciamiento.includes(prestamo.id)
-            if (esProductoDeRefinanciamiento && !isAdminOrSupervisor) return false
+            if (esProductoDeRefinanciamiento) return false
 
             const estadosProhibidos = ['legal', 'castigado']
             if (estadosProhibidos.includes(prestamo.estado_mora || '')) return false
@@ -424,16 +465,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     // Component Prop Compatibility
     const overdueAmount = metaCobranzaHoy
 
-    // ... Perfiles logic for filters ...
-    let perfiles: any[] = []
-    if (userRole === 'admin' || userRole === 'supervisor') {
-        const { data: profiles } = await supabaseAdmin
-            .from('perfiles')
-            .select('*')
-        perfiles = profiles || []
-    }
-
-    // 5. Configuración del Sistema (movido arriba para aplicar a las verificaciones del map)
+    // Perfiles ya cargados arriba (sección 2.1)
 
     return (
         <div className="page-container">
@@ -639,6 +671,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                     <PrestamosTable 
                         prestamos={prestamos || []} 
                         today={today}
+                        selectedDate={selectedDate}
                         totalPrestado={totalPrestado}
                         overdueAmount={capitalEnRiesgo}
                         perfiles={perfiles || []}

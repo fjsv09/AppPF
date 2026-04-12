@@ -26,7 +26,7 @@ export async function POST(request: Request) {
         // Verify User Profile & Role (using Admin)
         const { data: perfil, error: perfilError } = await supabaseAdmin
             .from('perfiles')
-            .select('rol')
+            .select('rol, supervisor_id')
             .eq('id', user.id)
             .single()
 
@@ -35,11 +35,11 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 403 })
         }
  
-        // --- BLOQUEAR SUPERVISORES ---
-        if (perfil.rol === 'supervisor') {
-             return NextResponse.json({ 
-                 error: 'Los supervisores no tienen permisos para registrar pagos directamente.' 
-             }, { status: 403 })
+        // --- ROLES PERMITIDOS: admin, supervisor, asesor ---
+        if (!['admin', 'supervisor', 'asesor'].includes(perfil.rol)) {
+            return NextResponse.json({ 
+                error: 'No tiene permisos para registrar pagos.' 
+            }, { status: 403 })
         }
 
         // --- VERIFICACIÓN DE ACCESO Y REGLAS DE NEGOCIO (Horarios, Cuadres, Feriados) ---
@@ -61,6 +61,65 @@ export async function POST(request: Request) {
         if (!cuota_id || !monto) {
             return NextResponse.json({ error: 'Faltan campos requeridos (cuota_id, monto)' }, { status: 400 })
         }
+
+        // --- VERIFICACIÓN DE SCOPE (Supervisor solo puede pagar préstamos de sus asesores) ---
+        if (perfil.rol === 'supervisor') {
+            // Obtener el asesor_id del préstamo via la cuota
+            const { data: cuotaData, error: cuotaError } = await supabaseAdmin
+                .from('cronograma_cuotas')
+                .select('prestamo_id, prestamos!inner(clientes!inner(asesor_id))')
+                .eq('id', cuota_id)
+                .single()
+
+            if (cuotaError || !cuotaData) {
+                return NextResponse.json({ error: 'Cuota no encontrada' }, { status: 404 })
+            }
+
+            const asesorDelPrestamo = (cuotaData as any).prestamos?.clientes?.asesor_id
+
+            // Verificar que el asesor del préstamo está bajo la supervisión del supervisor
+            if (asesorDelPrestamo) {
+                const { data: asesorPerfil } = await supabaseAdmin
+                    .from('perfiles')
+                    .select('supervisor_id')
+                    .eq('id', asesorDelPrestamo)
+                    .single()
+                
+                if (asesorPerfil?.supervisor_id !== user.id) {
+                    return NextResponse.json({ 
+                        error: 'Solo puede registrar pagos de asesores bajo su supervisión.' 
+                    }, { status: 403 })
+                }
+            }
+        }
+        // --- FIN VERIFICACIÓN DE SCOPE ---
+
+        // --- VERIFICACIÓN DE BLOQUEO DE PAGOS POR ADMIN ---
+        if (perfil.rol !== 'admin') {
+            // Obtener el asesor_id del préstamo
+            const { data: cuotaInfo } = await supabaseAdmin
+                .from('cronograma_cuotas')
+                .select('prestamos!inner(clientes!inner(asesor_id))')
+                .eq('id', cuota_id)
+                .single()
+
+            const asesorId = (cuotaInfo as any)?.prestamos?.clientes?.asesor_id
+
+            if (asesorId) {
+                const { data: asesorData } = await supabaseAdmin
+                    .from('perfiles')
+                    .select('pagos_bloqueados')
+                    .eq('id', asesorId)
+                    .single()
+                
+                if (asesorData?.pagos_bloqueados) {
+                    return NextResponse.json({ 
+                        error: 'Los pagos para este asesor están bloqueados por el administrador.' 
+                    }, { status: 403 })
+                }
+            }
+        }
+        // --- FIN VERIFICACIÓN DE BLOQUEO ---
 
         // Call RPC using Admin Client
         const { data, error } = await supabaseAdmin.rpc('registrar_pago_db', {
@@ -88,12 +147,12 @@ export async function POST(request: Request) {
             }
         }
 
-        // Audit Log (using Admin)
+        // Audit Log (using Admin) - Incluye el rol del usuario que hizo el pago
         await supabaseAdmin.from('auditoria').insert({
             usuario_id: user.id,
             accion: 'registrar_pago',
             tabla_afectada: 'pagos',
-            detalle: { cuota_id, monto, result }
+            detalle: { cuota_id, monto, result, rol_cobrador: perfil.rol }
         })
 
         // Iniciar notificación asíncrona (no bloquea la respuesta del pago)

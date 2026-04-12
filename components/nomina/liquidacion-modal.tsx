@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { createClient } from '@/utils/supabase/client'
 import { toast } from 'sonner'
-import { UserMinus, Wallet, Loader2, CheckCircle2, AlertTriangle, CalendarDays, Calculator } from 'lucide-react'
+import { UserMinus, Wallet, Loader2, CheckCircle2, AlertTriangle, CalendarDays, Calculator, Smartphone, Coins } from 'lucide-react'
 
 interface LiquidacionModalProps {
     open: boolean
@@ -33,12 +33,14 @@ export function LiquidacionModal({ open, onOpenChange, trabajador, nominaActual,
     }, [open, trabajador])
 
     async function fetchData() {
+        const GLOBAL_CARTERA_ID = '00000000-0000-0000-0000-000000000000'
         setLoadingData(true)
 
-        // Fetch cuentas
+        // Fetch accounts filtered by Global Cartera
         const { data: cuentasData } = await supabase
             .from('cuentas_financieras')
             .select('id, nombre, saldo, tipo')
+            .eq('cartera_id', GLOBAL_CARTERA_ID)
             .order('nombre')
 
         setCuentas(cuentasData || [])
@@ -232,30 +234,63 @@ export function LiquidacionModal({ open, onOpenChange, trabajador, nominaActual,
                         {/* Cuenta de origen (solo si hay monto positivo) */}
                         {totalLiquidacion > 0 && (
                             <div className="space-y-2">
-                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Cuenta de Origen (Desembolso)</p>
-                                <div className="grid gap-2 max-h-36 overflow-y-auto">
-                                    {cuentas.filter(c => parseFloat(c.saldo) > 0).map(c => (
-                                        <button
-                                            key={c.id}
-                                            onClick={() => setSelectedCuenta(c.id)}
-                                            className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${
-                                                selectedCuenta === c.id
-                                                    ? 'bg-blue-500/10 border-blue-500/50'
-                                                    : 'bg-slate-950/30 border-slate-800 hover:border-slate-700'
-                                            }`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <Wallet className={`w-4 h-4 ${selectedCuenta === c.id ? 'text-blue-400' : 'text-slate-500'}`} />
-                                                <div>
-                                                    <p className="text-xs font-bold text-slate-200 truncate max-w-[200px]">{c.nombre}</p>
-                                                    <p className="text-[9px] text-slate-500 uppercase">{c.tipo}</p>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Cuenta de Origen (Nómina Global)</p>
+                                <div className="grid gap-2 max-h-48 overflow-y-auto pr-1 scrollbar-hide">
+                                    {cuentas.map(c => {
+                                        const isDigital = c.tipo?.toLowerCase().includes('digital') || c.tipo?.toLowerCase().includes('banco')
+                                        const isSelected = selectedCuenta === c.id
+                                        const currentSaldo = parseFloat(c.saldo)
+                                        const isInsufficient = totalLiquidacion > currentSaldo
+
+                                        return (
+                                            <button
+                                                key={c.id}
+                                                onClick={() => setSelectedCuenta(c.id)}
+                                                className={`w-full group relative flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 text-left overflow-hidden ${
+                                                    isSelected 
+                                                        ? 'bg-blue-600/10 border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.1)]' 
+                                                        : 'bg-slate-950/40 border-slate-800/50 hover:border-slate-700'
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-4 relative z-10">
+                                                    {/* Custom Radio Icon */}
+                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
+                                                        isSelected ? 'border-blue-500 bg-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'border-slate-700 bg-slate-900'
+                                                    }`}>
+                                                        {isSelected && <div className="w-2 h-2 rounded-full bg-white shadow-[0_0_5px_white]" />}
+                                                    </div>
+
+                                                    <div className={`p-2.5 rounded-xl transition-colors ${
+                                                        isSelected ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-900 text-slate-500'
+                                                    }`}>
+                                                        {isDigital ? <Smartphone className="w-4 h-4" /> : <Coins className="w-4 h-4" />}
+                                                    </div>
+
+                                                    <div>
+                                                        <p className={`text-xs font-black transition-colors ${isSelected ? 'text-white' : 'text-slate-300'}`}>
+                                                            {c.nombre}
+                                                        </p>
+                                                        <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${
+                                                            isDigital ? 'bg-indigo-500/10 text-indigo-400' : 'bg-amber-500/10 text-amber-400'
+                                                        }`}>
+                                                            {c.tipo}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <span className={`text-sm font-black ${parseFloat(c.saldo) >= totalLiquidacion ? 'text-emerald-400' : 'text-amber-500'}`}>
-                                                S/ {parseFloat(c.saldo).toFixed(2)}
-                                            </span>
-                                        </button>
-                                    ))}
+
+                                                <div className="text-right relative z-10">
+                                                    <p className={`text-[9px] font-bold uppercase tracking-tight mb-0.5 ${isSelected ? 'text-blue-400' : 'text-slate-500'}`}>Saldo Disponible</p>
+                                                    <p className={`text-base font-black ${isSelected ? 'text-white' : isInsufficient ? 'text-rose-400' : 'text-slate-400'}`}>
+                                                        S/ {currentSaldo.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                                    </p>
+                                                </div>
+
+                                                {isSelected && (
+                                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-transparent pointer-events-none" />
+                                                )}
+                                            </button>
+                                        )
+                                    })}
                                 </div>
                             </div>
                         )}

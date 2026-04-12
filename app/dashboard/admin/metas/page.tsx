@@ -121,6 +121,22 @@ export default function AdminMetasPage() {
         fetchMetas()
         fetchPendingBonos()
         fetchHistoryBonos()
+
+        // Suscripción en tiempo real para "Radiactividad" técnica en Admin
+        const channel = supabase
+            .channel('admin_metas_realtime')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'bonos_pagados' }, () => {
+                fetchPendingBonos()
+                fetchHistoryBonos()
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'metas_asesores' }, () => {
+                fetchMetas()
+            })
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
     }, [])
 
     const handleConfirmDeactivate = async () => {
@@ -424,7 +440,7 @@ export default function AdminMetasPage() {
                             <p className="kpi-label">Metas Activas</p>
                             <h3 className="kpi-value">{activeMetasTotal}</h3>
                         </div>
-                        <div className="kpi-card group hover:border-emerald-500/30">
+                        <div className="kpi-card group radioactive-emerald">
                             <div className="kpi-card-icon">
                                 <Percent className="w-16 h-16 text-emerald-500" />
                             </div>
@@ -433,14 +449,14 @@ export default function AdminMetasPage() {
                                 S/ {pendingBonos.filter(b => b.estado === 'aprobado').reduce((acc, b) => acc + (b.monto || 0), 0).toLocaleString()}
                             </h3>
                         </div>
-                        <div className="kpi-card group hover:border-amber-500/30">
+                        <div className="kpi-card group radioactive-amber">
                             <div className="kpi-card-icon">
                                 <Award className="w-16 h-16 text-amber-500" />
                             </div>
                             <p className="kpi-label">Pendientes Revisión</p>
                             <h3 className="kpi-value text-amber-500">{pendingBonos.length}</h3>
                         </div>
-                        <div className="kpi-card group hover:border-rose-500/30">
+                        <div className="kpi-card group radioactive-rose">
                             <div className="kpi-card-icon">
                                 <ShieldAlert className="w-16 h-16 text-rose-500" />
                             </div>

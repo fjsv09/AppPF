@@ -9,6 +9,10 @@ import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import { Loader2, Lock, CheckCircle, RefreshCw } from 'lucide-react'
 import { toBlob } from 'html-to-image'
+import { EditQuotaModal } from './edit-quota-modal'
+import { Pencil } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
 
 import {
     Dialog,
@@ -48,10 +52,13 @@ export function CronogramaClient({
     // El bloqueo por falta de cuadre (Mañana) AHORA TAMBIÉN BLOQUEA pagos (Requerimiento de obligar entrega de dinero).
     const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK', 'PENDING_SALDO', 'MISSING_MORNING_CUADRE'].includes(systemAccess?.code);
     const isBlockedForPayments = isBlockedByCuadre && isTotalBlock;
-    // Solo el asesor puede realizar pagos
-    const puedePagar = userRol === 'asesor'
+    // Admin, Supervisor y Asesor pueden realizar pagos
+    const puedePagar = userRol === 'asesor' || userRol === 'admin' || userRol === 'supervisor'
     const router = useRouter()
     const [loading, setLoading] = useState(false)
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+    const [selectedQuota, setSelectedQuota] = useState<any>(null)
+
 
     // --- LOGICA DE HORARIO ---
     const now = new Date()
@@ -91,7 +98,13 @@ export function CronogramaClient({
     // Today's date for comparison (start of day)
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    const todayStr = today.toISOString().split('T')[0]
+    // Today's date in Peru (YYYY-MM-DD)
+    const todayStr = new Intl.DateTimeFormat('en-CA', { 
+        timeZone: 'America/Lima', 
+        year: 'numeric', 
+        month: '2-digit', 
+        day: '2-digit' 
+    }).format(new Date())
 
     // Step 1: Classify each quota
     const quotasWithStatus = sorted.map(c => {
@@ -343,6 +356,22 @@ export function CronogramaClient({
                                                     </div>
                                                 )}
                                             </td>
+
+                                            {userRol === 'admin' && isPaid && cuota.fecha_vencimiento === todayStr && (
+                                                <td className="px-2 md:px-4 py-3 text-center border-l border-slate-800/50">
+                                                    <Button 
+                                                       variant="ghost" 
+                                                       size="sm" 
+                                                       className="h-7 w-7 p-0 rounded-md text-blue-400 hover:text-white hover:bg-blue-600/20"
+                                                       onClick={() => {
+                                                           setSelectedQuota(cuota)
+                                                           setIsEditModalOpen(true)
+                                                       }}
+                                                    >
+                                                       <Pencil className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                </td>
+                                            )}
                                         </tr>
                                     )
                                 })
@@ -351,8 +380,16 @@ export function CronogramaClient({
                     </table>
                 </div>
             </div>
+
+            <EditQuotaModal 
+                open={isEditModalOpen}
+                onOpenChange={setIsEditModalOpen}
+                quota={selectedQuota}
+                onSuccess={() => router.refresh()}
+            />
         </div>
     )
 }
+
 
 

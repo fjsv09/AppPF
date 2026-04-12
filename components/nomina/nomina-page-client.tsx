@@ -28,7 +28,10 @@ import {
     FileText,
     User,
     Users,
-    ChevronDown
+    ChevronDown,
+    DownloadCloud,
+    ExternalLink,
+    Clock
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { format } from 'date-fns'
@@ -136,8 +139,9 @@ export function NominaPageClient({ trabajadores, defaultUserId }: NominaPageClie
         .order('mes', { ascending: false })
         .limit(12),
        supabase
-        .from('auditoria')
+        .from('transacciones_personal')
         .select('*')
+        .eq('trabajador_id', selectedId)
         .order('created_at', { ascending: false })
         .limit(200),
        supabase
@@ -147,20 +151,13 @@ export function NominaPageClient({ trabajadores, defaultUserId }: NominaPageClie
         .lte('fecha', new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString())
     ])
 
-    // Solo mostrar movimientos de nómina del trabajador seleccionado
-    const filteredAudit = (auditRes.data || []).filter((a: any) => {
-        if (a.tabla_afectada !== 'nomina_personal') return false
-        const detalleStr = JSON.stringify(a.detalle || {})
-        return detalleStr.includes(selectedId)
-    })
-
     setFeriados(feriadosRes.data || [])
     setPayrollData(payrollRes.data)
     setPerfil(perfilRes.data)
     setHistory(historyRes.data || [])
-    setActividad(filteredAudit)
+    setActividad(auditRes.data || [])
     setLoading(false)
-  }
+}
 
   useEffect(() => {
     fetchNomina()
@@ -180,10 +177,10 @@ export function NominaPageClient({ trabajadores, defaultUserId }: NominaPageClie
   // Pagos completados: lectura directa de la tabla
   const pagosCompletados = payrollData?.pagos_completados || 0
 
-  // Total pagado este mes (sumado desde auditoría para visualización)
+  // Total pagado este mes (sumado desde la tabla de transacciones para visualización)
   const totalPagadoAcumulado = actividad
-    .filter((a: any) => a.accion === 'pago_nomina')
-    .reduce((acc: number, curr: any) => acc + parseFloat(curr.detalle?.monto || 0), 0)
+    .filter((a: any) => ['pago', 'bono'].includes(a.tipo))
+    .reduce((acc: number, curr: any) => acc + parseFloat(curr.monto || 0), 0)
 
   const totalCalculated = sueldoBaseProporcional + 
     ((pagosCompletados + 1) === divisor ? (payrollData?.bonos || 0) : 0) - 
@@ -426,20 +423,17 @@ export function NominaPageClient({ trabajadores, defaultUserId }: NominaPageClie
                             <div key={item.id} className="p-4 flex items-start gap-4 hover:bg-slate-800/20 transition-colors">
                                 <div className="mt-1">
                                     <div className={`w-2 h-2 rounded-full ${
-                                        item.accion === 'pago_nomina' ? 'bg-emerald-500' : 
-                                        item.accion === 'registro_adelanto' ? 'bg-amber-500' :
-                                        item.accion === 'descuento_nomina' ? 'bg-rose-500' :
-                                        item.accion === 'descuento_adelanto' ? 'bg-orange-500' : 'bg-blue-500'
+                                        item.tipo === 'pago' ? 'bg-emerald-500' : 
+                                        item.tipo === 'adelanto' ? 'bg-amber-500' :
+                                        item.tipo === 'descuento' ? 'bg-rose-500' :
+                                        item.tipo === 'bono' ? 'bg-purple-500' :
+                                        item.tipo === 'liquidacion' ? 'bg-blue-600' : 'bg-slate-500'
                                     }`} />
                                 </div>
                                 <div className="flex-1 space-y-1">
                                     <div className="flex justify-between">
-                                        <p className="text-xs font-bold text-white capitalize">
-                                            {item.accion === 'pago_nomina' ? 'Pago Realizado' : 
-                                             item.accion === 'registro_adelanto' ? 'Adelanto de Sueldo' :
-                                             item.accion === 'descuento_nomina' ? 'Descuento por Tardanza' :
-                                             item.accion === 'descuento_adelanto' ? 'Adelanto Descontado' :
-                                             item.accion?.replace(/_/g, ' ')}
+                                        <p className="text-xs font-bold text-white uppercase tracking-tight">
+                                            {item.descripcion}
                                         </p>
                                         <span className="text-[10px] text-slate-500 font-medium">
                                             {format(new Date(item.created_at), "PPP p", { locale: es })}
@@ -448,35 +442,35 @@ export function NominaPageClient({ trabajadores, defaultUserId }: NominaPageClie
                                     <div className="flex flex-wrap gap-2">
                                         <span className="text-[11px] text-slate-400">
                                             Monto: <strong className={`${
-                                                item.accion === 'descuento_nomina' || item.accion === 'descuento_adelanto' 
+                                                item.tipo === 'descuento' 
                                                     ? 'text-rose-400' : 'text-slate-200'
                                             }`}>
-                                                {item.accion === 'descuento_nomina' || item.accion === 'descuento_adelanto' ? '- ' : ''}S/ {parseFloat(item.detalle?.monto || 0).toFixed(2)}
+                                                {item.tipo === 'descuento' ? '- ' : ''}S/ {parseFloat(item.monto || 0).toFixed(2)}
                                             </strong>
                                         </span>
-                                        {item.detalle?.cuenta && (
+                                        {item.metadatos?.cuenta && (
                                             <span className="text-[11px] text-slate-500 italic">
-                                                — vía {item.detalle.cuenta}
+                                                — vía {item.metadatos.cuenta}
                                             </span>
                                         )}
-                                        {item.detalle?.cuota && (
+                                        {item.metadatos?.cuota && (
                                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-bold">
-                                                Cuota {item.detalle.cuota}
+                                                Cuota {item.metadatos.cuota}
                                             </span>
                                         )}
-                                        {item.accion === 'pago_nomina' && (
+                                        {item.tipo === 'pago' && (
                                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold">
                                                 Confirmado
                                             </span>
                                         )}
-                                        {item.accion === 'descuento_nomina' && (
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 font-bold">
-                                                Tardanza
+                                        {item.tipo === 'bono' && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-bold">
+                                                Bono Producción
                                             </span>
                                         )}
-                                        {item.accion === 'descuento_adelanto' && (
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 font-bold">
-                                                Descontado
+                                        {item.tipo === 'descuento' && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 font-bold">
+                                                {item.metadatos?.tipo === 'tardanza' ? 'Tardanza' : 'Amortización'}
                                             </span>
                                         )}
                                     </div>
@@ -496,53 +490,117 @@ export function NominaPageClient({ trabajadores, defaultUserId }: NominaPageClie
           </div>
 
           <div className="lg:col-span-12 xl:col-span-4 h-full">
-            <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm overflow-hidden flex flex-col min-h-[500px]">
-              <CardHeader className="p-4 border-b border-slate-800 bg-slate-800/10">
-                <CardTitle className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-tight">
-                  <History className="w-4 h-4 text-blue-500" />
-                  Historial de Boletas
+            <Card className="bg-slate-900/40 border-slate-800/50 backdrop-blur-xl overflow-hidden flex flex-col min-h-[500px] border-t-2 border-t-blue-500/30">
+              <CardHeader className="p-5 border-b border-white/5 bg-blue-500/5">
+                <CardTitle className="text-xs font-black text-blue-400 flex items-center justify-between gap-2 uppercase tracking-[0.2em]">
+                  <div className="flex items-center gap-2">
+                    <History className="w-4 h-4" />
+                    Historial de Boletas
+                  </div>
+                  <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[9px]">
+                    {history.length} DOCS
+                  </Badge>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-0 flex-1 overflow-y-auto">
-                <div className="divide-y divide-white/5">
+              <CardContent className="p-4 flex-1 overflow-y-auto custom-scrollbar">
+                <div className="grid grid-cols-1 gap-3">
                   {history.slice((currentPageBoletas - 1) * itemsPerPage, currentPageBoletas * itemsPerPage).map((p: any) => (
-                    <div key={p.id} className="p-4 hover:bg-slate-800/30 transition-colors flex items-center justify-between group">
-                      <div className="flex-1 cursor-pointer" onClick={() => viewBoleta(p)}>
-                        <p className="text-sm font-bold text-white uppercase tracking-tight">
-                          {new Date(p.anio, p.mes - 1, 1).toLocaleString('es-ES', { month: 'long' }).toUpperCase()} {p.anio}
-                        </p>
-                        <p className="text-[10px] text-slate-500">Sueldo Base: S/ {(p.sueldo_base || 0).toFixed(2)}</p>
+                    <div 
+                      key={p.id} 
+                      onClick={() => viewBoleta(p)}
+                      className="group relative p-4 rounded-2xl bg-slate-950/40 border border-slate-800/50 hover:border-blue-500/50 transition-all duration-300 cursor-pointer overflow-hidden"
+                    >
+                      {/* Efecto de Brillo Neón en Hover */}
+                      <div className="absolute inset-0 bg-gradient-to-br from-blue-600/0 via-transparent to-blue-600/0 group-hover:from-blue-600/5 group-hover:to-indigo-600/5 transition-opacity duration-500" />
+                      
+                      <div className="relative flex items-center gap-4">
+                        {/* Icono de Documento Estilizado */}
+                        <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center group-hover:scale-110 group-hover:border-blue-500/30 transition-all duration-300 shadow-inner">
+                          <div className="relative">
+                            <FileText className="w-6 h-6 text-slate-500 group-hover:text-blue-400 transition-colors" />
+                            <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-blue-500 animate-pulse opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-sm font-black text-white uppercase tracking-tight truncate">
+                              {new Date(p.anio, p.mes - 1, 1).toLocaleString('es-ES', { month: 'long' }).toUpperCase()} {p.anio}
+                            </p>
+                            <Badge className={`${
+                              p.estado === 'pagado' 
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                            } text-[8px] font-black px-1.5 py-0 border leading-none h-4 uppercase`}>
+                              {p.estado}
+                            </Badge>
+                          </div>
+                          
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                              <Wallet className="w-3 h-3" />
+                              S/ {(p.sueldo_base || 0).toFixed(2)}
+                            </div>
+                            <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                              <Clock className="w-3 h-3" />
+                              {p.mes}/{p.anio}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Botón de Acción Radial */}
+                        <div className="flex items-center gap-2">
+                           <div className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 group-hover:text-blue-400 group-hover:border-blue-500/50 group-hover:bg-blue-500/10 transition-all duration-300 shadow-lg">
+                              <ExternalLink className="w-3.5 h-3.5" />
+                           </div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => viewBoleta(p)}
-                          className="p-1.5 hover:bg-blue-500/20 rounded-lg text-blue-400 opacity-0 group-hover:opacity-100 transition-all"
-                        >
-                          <FileText className="w-3.5 h-3.5" />
-                        </button>
-                        <Badge variant="outline" className={`${p.estado === 'pagado' ? 'text-emerald-400 border-emerald-900/50 bg-emerald-500/5' : 'text-amber-500 border-amber-900/50 bg-amber-500/5'} text-[9px] font-bold px-2 py-0.5`}>
-                          {p.estado}
-                        </Badge>
-                      </div>
+
+                      {/* Línea de progreso/decorativa inferior (Radiactiva) */}
+                      <div className="absolute bottom-0 left-0 h-[2px] w-0 bg-gradient-to-r from-blue-500 to-indigo-500 group-hover:w-full transition-all duration-500" />
                     </div>
                   ))}
+                  
                   {history.length === 0 && (
-                    <div className="p-8 text-center text-slate-600 italic text-[10px]">No hay historial registrado</div>
+                    <div className="flex flex-col items-center justify-center p-12 text-center space-y-4 rounded-3xl border border-dashed border-slate-800 bg-slate-950/20">
+                      <div className="w-16 h-16 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800">
+                        <History className="w-8 h-8 text-slate-700" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Sin historial</p>
+                        <p className="text-[10px] text-slate-600 mt-1">No hay boletas generadas para este periodo.</p>
+                      </div>
+                    </div>
                   )}
                 </div>
               </CardContent>
 
               {history.length > itemsPerPage && (
-                <div className="p-3 border-t border-slate-800 flex items-center justify-between mt-auto bg-slate-800/10">
-                   <span className="text-[10px] text-slate-500 uppercase font-bold pl-2 tracking-widest">
-                     PÁG {currentPageBoletas} / {Math.ceil(history.length / itemsPerPage)}
-                   </span>
-                   <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-800" disabled={currentPageBoletas === 1} onClick={() => setCurrentPageBoletas(prev => prev - 1)}>
-                        <ChevronLeft className="w-4 h-4" />
+                <div className="p-4 border-t border-white/5 flex items-center justify-between mt-auto bg-slate-900/50">
+                   <div className="flex flex-col">
+                      <span className="text-[9px] text-slate-500 uppercase font-black tracking-[0.2em]">Página</span>
+                      <span className="text-xs font-black text-blue-400">
+                        {currentPageBoletas.toString().padStart(2, '0')} <span className="text-slate-700">/</span> {Math.ceil(history.length / itemsPerPage).toString().padStart(2, '0')}
+                      </span>
+                   </div>
+                   <div className="flex gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-10 w-10 p-0 rounded-xl bg-slate-950/50 border border-slate-800 hover:border-blue-500/50 hover:bg-blue-500/10 text-slate-400 hover:text-blue-400 transition-all" 
+                        disabled={currentPageBoletas === 1} 
+                        onClick={(e) => { e.stopPropagation(); setCurrentPageBoletas(prev => prev - 1) }}
+                      >
+                        <ChevronLeft className="w-5 h-5" />
                       </Button>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-800" disabled={currentPageBoletas === Math.ceil(history.length / itemsPerPage)} onClick={() => setCurrentPageBoletas(prev => prev + 1)}>
-                        <ChevronRight className="w-4 h-4" />
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-10 w-10 p-0 rounded-xl bg-slate-950/50 border border-slate-800 hover:border-blue-500/50 hover:bg-blue-500/10 text-slate-400 hover:text-blue-400 transition-all" 
+                        disabled={currentPageBoletas === Math.ceil(history.length / itemsPerPage)} 
+                        onClick={(e) => { e.stopPropagation(); setCurrentPageBoletas(prev => prev + 1) }}
+                      >
+                        <ChevronRight className="w-5 h-5" />
                       </Button>
                    </div>
                 </div>

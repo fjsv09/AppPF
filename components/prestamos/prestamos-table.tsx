@@ -17,9 +17,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectLa
 import { 
     AlertCircle, Wallet, Search, Users, Calendar, MoreVertical, 
     CalendarDays, CheckCircle2, AlertTriangle, MapPin, DollarSign, FileText, ChevronRight, Eye, Files,
-    X, RotateCcw, MessageCircle, MessageSquare, Loader2, ListFilter, LayoutGrid, Table, Lock, ClipboardList, ShieldAlert
+    X, XCircle, RotateCcw, MessageCircle, MessageSquare, Loader2, ListFilter, LayoutGrid, Table, Lock, ClipboardList, ShieldAlert, ShieldOff, Shield, Pencil
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
 import { createClient } from '@/utils/supabase/client'
 import { ContratoGenerator } from './contrato-generator'
@@ -27,6 +28,7 @@ import { QuickPayModal } from './quick-pay-modal'
 import { SolicitudRenovacionModal } from './solicitud-renovacion-modal'
 import { RegistrarGestionModal } from '../gestiones/registrar-gestion-modal'
 import { VisitActionButton } from './visit-action-button'
+import { EditLoanModal } from './edit-loan-modal'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +37,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { AsignarVisitaModal } from '../gestiones/asignar-visita-modal'
 import { Progress } from "@/components/ui/progress"
 import { getTodayPeru, calculateLoanMetrics, getLoanStatusUI } from "@/lib/financial-logic";
@@ -44,6 +56,7 @@ import { toast } from "sonner"
 interface PrestamosTableProps {
     prestamos: any[]
     today: string
+    selectedDate?: string
     totalPrestado: number
     overdueAmount: number
     perfiles?: any[]
@@ -115,6 +128,7 @@ export const TableSkeleton = () => (
 export function PrestamosTable({ 
     prestamos, 
     today, 
+    selectedDate: propSelectedDate,
     totalPrestado, 
     overdueAmount,
     perfiles = [], 
@@ -158,19 +172,19 @@ export function PrestamosTable({
 
     // Función helper para determinar si puede pagar
     // REGLAS:
-    // 1. DEBE ser el último préstamo del cliente (no préstamos anteriores)
-    // 2. Solo ASESOR puede pagar (no admin, no supervisor)
-    // 3. Préstamo no debe estar finalizado
+    // 1. Admin, Supervisor y Asesor pueden pagar (datos ya filtrados por scope en page.tsx)
+    // 2. Préstamo no debe estar finalizado
+    // 3. Admin/Supervisor: cobros registrados con su ID pero el sistema sigue cobrando al asesor
     const puedePagar = (prestamo: any) => {
         const isFinalized = prestamo.isFinalizado || prestamo.saldo_pendiente <= 0 || prestamo.estado === 'finalizado'
         
-        // REGLA #1: Solo asesor puede pagar (o admin en ciertos casos, pero aquí mantenemos la lógica actual)
-        if (userRol !== 'asesor') return false
-        
-        // REGLA #2: No se puede pagar si está finalizado (esto incluye saldo_pendiente <= 0.01)
+        // No se puede pagar si está finalizado
         if (isFinalized) return false
+
+        // Admin, Supervisor y Asesor pueden pagar
+        if (userRol === 'admin' || userRol === 'supervisor' || userRol === 'asesor') return true
         
-        return true
+        return false
     }
     const router = useRouter()
     const pathname = usePathname()
@@ -222,6 +236,18 @@ export function PrestamosTable({
 
     // --- LOGICA DE HORARIO ---
     const [canRequestDueToTime, setCanRequestDueToTime] = useState(true)
+
+    // --- NUEVOS ESTADOS PARA GESTIÓN ADMIN ---
+    const [isEditLoanModalOpen, setIsEditLoanModalOpen] = useState(false)
+    const [loanToEdit, setLoanToEdit] = useState<any>(null)
+    
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+    const [loanToDelete, setLoanToDelete] = useState<any>(null)
+    const [isRestoreDialogOpen, setIsRestoreDialogOpen] = useState(false)
+    const [loanToRestore, setLoanToRestore] = useState<any>(null)
+    const [selectedActionAccount, setSelectedActionAccount] = useState('')
+    const [loadingAction, setLoadingAction] = useState(false)
+
 
     // 1. ADD INTERNAL REFRESH EFFECT (User Request: "refresque internamente al entrar")
 
@@ -379,6 +405,42 @@ export function PrestamosTable({
         }
         setSelectedLoanForAsignar(prestamo)
         setAsignarTareaOpen(true)
+    }
+
+    // Handler para bloquear/desbloquear pagos de un asesor (Admin only)
+    const [togglingBloqueo, setTogglingBloqueo] = useState<string | null>(null)
+    const handleToggleBloqueo = async (asesorId: string, currentlyBlocked: boolean, asesorNombre: string, e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault()
+            e.stopPropagation()
+        }
+        setTogglingBloqueo(asesorId)
+        try {
+            const response = await fetch('/api/admin/bloquear-pagos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ asesor_id: asesorId, bloqueado: !currentlyBlocked })
+            })
+            if (!response.ok) {
+                const err = await response.json()
+                throw new Error(err.error || 'Error al cambiar bloqueo')
+            }
+            toast.success(
+                !currentlyBlocked 
+                    ? `Pagos bloqueados para ${asesorNombre}` 
+                    : `Pagos desbloqueados para ${asesorNombre}`,
+                {
+                    description: !currentlyBlocked 
+                        ? 'El asesor y supervisor no podrán registrar cobros.' 
+                        : 'El asesor y supervisor pueden registrar cobros nuevamente.'
+                }
+            )
+            router.refresh()
+        } catch (error: any) {
+            toast.error('Error al cambiar bloqueo', { description: error.message })
+        } finally {
+            setTogglingBloqueo(null)
+        }
     }
 
     // Sectores Logic
@@ -612,8 +674,9 @@ export function PrestamosTable({
                 break
 
             case 'visitas_control':
-                // Visitas Control: Solo los de "Ruta Hoy" (quienes deben ser visitados hoy)
-                filtered = filtered.filter(p => p.cuota_dia_hoy > 0.01 && p.estado === 'activo')
+                // Control Ruta: Solo los de "Ruta Hoy" (quienes deben ser visitados hoy - Auditoría)
+                // Usamos cuota_dia_programada para que no desaparezcan al pagar
+                filtered = filtered.filter(p => p.cuota_dia_programada > 0.01 && p.estado === 'activo')
                 break
 
             case 'todos':
@@ -625,6 +688,13 @@ export function PrestamosTable({
         const frequencyWeight: Record<string, number> = { 'Diario': 1, 'Semanal': 2, 'Quincenal': 3, 'Mensual': 4 }
         
         filtered.sort((a, b) => {
+            // Prioridad para Control Ruta: Pendientes arriba, Pagados abajo
+            if (activeFilter === 'visitas_control') {
+                const isPaidA = a.cuota_dia_hoy <= 0.01 ? 1 : 0
+                const isPaidB = b.cuota_dia_hoy <= 0.01 ? 1 : 0
+                if (isPaidA !== isPaidB) return isPaidA - isPaidB
+            }
+
             let res = 0
             if (sortBy === 'fecha_inicio') {
                 res = new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime()
@@ -683,6 +753,8 @@ export function PrestamosTable({
                 
                 if (p.cuota_dia_hoy > 0.01) {
                     counts.ruta_hoy++
+                }
+                if (p.cuota_dia_programada > 0.01) {
                     counts.visitas_control++
                 }
                 if (p.atrasadas >= 1 && p.deudaHoy > 0) counts.cobranza++
@@ -768,6 +840,18 @@ export function PrestamosTable({
                         </Button>
                     )}
                 </div>
+
+                {activeFilter === 'visitas_control' && (
+                    <div className="flex items-center gap-2 bg-slate-950/30 border border-slate-800/60 p-1.5 rounded-lg animate-in slide-in-from-left-2 duration-300">
+                        <CalendarDays className="w-3.5 h-3.5 text-blue-400 ml-1.5" />
+                        <Input
+                            type="date"
+                            value={propSelectedDate || today}
+                            onChange={(e) => updateParams({ fecha: e.target.value })}
+                            className="h-8 w-auto min-w-[130px] bg-transparent border-0 text-slate-200 text-xs focus-visible:ring-0 focus-visible:ring-offset-0 px-1"
+                        />
+                    </div>
+                )}
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
                     {/* View Toggle */}
                     <div className="shrink-0 md:hidden">
@@ -799,7 +883,7 @@ export function PrestamosTable({
                                 {(userRol === 'admin' || userRol === 'supervisor') && (
                                     <SelectItem value="visitas_control" className="focus:bg-slate-800 focus:text-white">
                                         <div className="flex items-center justify-between w-full gap-2">
-                                            <span className="text-blue-400">Control de Visitas</span>
+                                            <span className="text-blue-400">Control Ruta</span>
                                             <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.visitas_control}</Badge>
                                         </div>
                                     </SelectItem>
@@ -1012,14 +1096,176 @@ export function PrestamosTable({
                  "space-y-2",
                  viewType === 'cards' ? "md:hidden" : "hidden"
              )}>
-                {paginatedPrestamos.map((prestamo) => (
-                    <div
-                        key={prestamo.id}
+                {paginatedPrestamos.map((prestamo) => {
+                    const datePeru = propSelectedDate || today
+                    const cuotaDia = prestamo.cronograma_cuotas?.find((c: any) => c.fecha_vencimiento === datePeru)
+                    const cobradoDia = cuotaDia?.pagos?.reduce((sum: number, p: any) => sum + parseFloat(p.monto_pagado || 0), 0) || 0
+                    const isPaid = (parseFloat(cuotaDia?.monto_cuota || 0) - parseFloat(cuotaDia?.monto_pagado || 0)) <= 0.01
+                    const hasVoucher = cuotaDia?.pagos?.some((p: any) => p.voucher_compartido)
+                    
+                    const gestionDia = prestamo.gestiones?.filter((g: any) => g.created_at.startsWith(datePeru))
+                        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+
+                    const visitaDia = prestamo.visitas_terreno?.filter((v: any) => v.fecha_inicio.startsWith(datePeru))
+                        .sort((a: any, b: any) => new Date(b.fecha_inicio).getTime() - new Date(a.fecha_inicio).getTime())[0]
+
+                    const isVisited = !!visitaDia || cuotaDia?.visitado
+                    const auditStatus = !isVisited ? 'pending' : (cobradoDia > 0 ? 'success' : 'alert')
+
+                    if (activeFilter === 'visitas_control') {
+                        return (
+                            <div
+                                key={prestamo.id}
+                                onClick={() => router.push(`/dashboard/prestamos/${prestamo.id}`)}
+                                className={cn(
+                                    "p-3 rounded-xl border-l-[4px] transition-all active:scale-[0.98] mb-2 relative overflow-hidden",
+                                    auditStatus === 'pending' ? 'bg-slate-900/60 border-slate-800 shadow-lg' :
+                                    auditStatus === 'success' ? 'bg-emerald-500/[0.02] border-emerald-500 shadow-sm' :
+                                    'bg-rose-500/[0.02] border-rose-500 shadow-sm'
+                                )}
+                            >
+                                <div className="space-y-2.5">
+                                    {/* Mobile Header Compact */}
+                                    <div className="flex justify-between items-start gap-2">
+                                        <div className="space-y-0.5 min-w-0 flex-1">
+                                            <div className="flex items-center gap-1.5 opacity-70">
+                                                <div className="h-1 w-1 rounded-full bg-blue-500" />
+                                                <span className="text-[9px] font-bold text-blue-400 uppercase tracking-tight truncate">
+                                                    Asesor: {prestamo.asesor_nombre?.split(' ')[0] || '---'}
+                                                </span>
+                                            </div>
+                                            <h3 className="text-base font-bold text-white tracking-tight leading-none truncate">
+                                                {prestamo.clientes?.nombres}
+                                            </h3>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <span className="text-sm font-black text-white bg-slate-800/50 px-2 py-0.5 rounded-lg border border-slate-700/30">
+                                                S/ {parseFloat(cuotaDia?.monto_cuota || prestamo.cuota_dia_programada || 0).toFixed(2)}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Metrics Grid Compact */}
+                                    <div className="grid grid-cols-4 gap-1 py-1.5 border-y border-slate-800/40">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[7px] font-bold text-slate-500 uppercase tracking-tighter">Visita</span>
+                                            {isVisited ? (
+                                                <span className="text-[10px] font-black text-emerald-400">SÍ</span>
+                                            ) : (
+                                                <span className="text-[10px] font-black text-slate-600">NO</span>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col items-center border-x border-slate-800/40">
+                                            <span className="text-[7px] font-bold text-slate-500 uppercase tracking-tighter">Cobro</span>
+                                            <span className={cn(
+                                                "text-[10px] font-black",
+                                                cobradoDia > 0 ? "text-emerald-400" : "text-rose-500/40"
+                                            )}>
+                                                S/ {cobradoDia.toFixed(2)}
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col items-center border-r border-slate-800/40">
+                                            <span className="text-[7px] font-bold text-slate-500 uppercase tracking-tighter">M. Pago</span>
+                                            <span className="text-[9px] font-bold text-slate-400 truncate w-full text-center">
+                                                {cuotaDia?.pagos?.[0]?.metodo_pago || '-'}
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[7px] font-bold text-slate-500 uppercase tracking-tighter">Voucher</span>
+                                            <div className="h-3 flex items-center justify-center">
+                                                {cobradoDia > 0 ? (
+                                                    hasVoucher ? (
+                                                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                                    ) : (
+                                                        <AlertCircle className="w-3 h-3 text-amber-500" />
+                                                    )
+                                                ) : <span className="text-slate-800 text-[9px]">-</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Management & Actions Row */}
+                                    <div className="flex items-center justify-between gap-3 pt-0.5">
+                                        <div className="flex-1 min-w-0">
+                                            {gestionDia ? (
+                                                <div className="bg-blue-500/5 px-2 py-1.5 rounded-lg border border-blue-500/10">
+                                                    <div className="flex items-center gap-1.5 mb-0.5">
+                                                        <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter">GESTIÓN: {gestionDia.resultado}</span>
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-400 italic leading-tight truncate">
+                                                        "{gestionDia.notes || gestionDia.notas || '...'}"
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <span className="text-[9px] text-slate-600 italic">Sin gestiones hoy.</span>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="h-8 w-8 rounded-lg text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 active:scale-95 transition-all"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (prestamo.clientes?.telefono) {
+                                                        window.open(`https://wa.me/51${prestamo.clientes.telefono}?text=Hola ${prestamo.clientes.nombres}...`, '_blank')
+                                                    }
+                                                }}
+                                                disabled={!prestamo.clientes?.telefono}
+                                            >
+                                                <MessageCircle className="w-4 h-4" />
+                                            </Button>
+                                            
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className="h-8 w-8 rounded-lg text-slate-400 bg-slate-800/40 hover:bg-slate-700 active:scale-95 transition-all"
+                                                    >
+                                                        <MoreVertical className="w-4 h-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-52 bg-slate-900 border-slate-700 text-slate-200 rounded-xl p-1 shadow-2xl">
+                                                    <DropdownMenuItem 
+                                                        className="hover:bg-blue-600/10 hover:text-blue-400 cursor-pointer text-xs font-bold py-2.5 rounded-lg"
+                                                        onClick={() => handleOpenGestion(prestamo)}
+                                                    >
+                                                        <MessageSquare className="w-4 h-4 mr-2" />
+                                                        Registrar Gestión
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator className="bg-slate-800" />
+                                                    <DropdownMenuItem 
+                                                        className="hover:bg-slate-800 cursor-pointer text-xs py-2.5 rounded-lg"
+                                                        onClick={() => router.push(`/dashboard/prestamos/${prestamo.id}`)}
+                                                    >
+                                                        <Eye className="w-4 h-4 mr-2 text-slate-500" />
+                                                        Ver Detalle
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem 
+                                                        className="hover:bg-slate-800 cursor-pointer text-xs py-2.5 rounded-lg"
+                                                        onClick={() => handleViewContract(prestamo)}
+                                                    >
+                                                        <Files className="w-4 h-4 mr-2 text-blue-400" />
+                                                        Ver Documentos
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    }
+
+                    return (
+                        <div
+                            key={prestamo.id}
                         className={cn(
-                            "group block bg-slate-900 border border-slate-800/60 rounded-xl mb-3 relative overflow-hidden transition-all duration-200 shadow-sm hover:shadow-md hover:border-slate-700",
+                            "group block bg-slate-900 border border-slate-800/60 rounded-xl mb-2 relative overflow-hidden transition-all duration-200 shadow-sm hover:shadow-md hover:border-slate-700",
                             // Status Bar (Left Border)
-                            prestamo.estado === 'refinanciado' ? "border-l-[4px] border-l-indigo-500 bg-slate-900/40" :
-                            (prestamo.isFinalizado || prestamo.estado === 'renovado' || prestamo.saldo_pendiente <= 0 || (prestamo.totalCuotas > 0 && prestamo.cuotasPagadas >= prestamo.totalCuotas)) ? "border-l-[4px] border-l-slate-600 bg-slate-900/40" :
+                            (prestamo.estado === 'refinanciado' || prestamo.estado === 'renovado' || prestamo.isFinalizado || prestamo.saldo_pendiente <= 0 || (prestamo.totalCuotas > 0 && prestamo.cuotasPagadas >= prestamo.totalCuotas)) ? "border-l-[4px] border-l-slate-600 bg-slate-900/40 opacity-60 grayscale" :
                             prestamo.estado_mora === 'vencido' ? "border-l-[4px] border-l-rose-500" :
                             prestamo.estado_mora === 'moroso' ? "border-l-[4px] border-l-red-600" :
                             prestamo.estado_mora === 'cpp' || (prestamo.deudaHoy > 0 && prestamo.cuotasAtrasadas >= 3) ? "border-l-[4px] border-l-orange-500" :
@@ -1028,13 +1274,13 @@ export function PrestamosTable({
                         )}
                     >
                         {/* Compact Ledger View */}
-                        <div className="flex flex-col py-2 px-3 gap-2 relative bg-gradient-to-br from-slate-900/50 to-slate-900/10 hover:bg-slate-800/20 transition-colors">
+                        <div className="flex flex-col py-1 px-2 gap-1 relative bg-gradient-to-br from-slate-900/50 to-slate-900/10 hover:bg-slate-800/20 transition-colors">
                             {/* TOP ROW: Identity & Header Status */}
-                            <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2 min-w-0">
                                     {/* Avatar */}
                                     <div className="shrink-0">
-                                        <div className="w-9 h-9 rounded-full border border-slate-700 bg-slate-800 text-slate-300 flex items-center justify-center overflow-hidden shadow-sm">
+                                        <div className="w-8 h-8 rounded-full border border-slate-700 bg-slate-800 text-slate-300 flex items-center justify-center overflow-hidden shadow-sm">
                                             {prestamo.clientes?.foto_perfil ? (
                                                 <div onClick={(e) => e.stopPropagation()} className="w-full h-full relative z-10">
                                                     <ImageLightbox
@@ -1074,7 +1320,7 @@ export function PrestamosTable({
                                                     
                                                     {/* Pnd. Visita / Visitado - Next to location */}
                                                     {prestamo.isVisitadoHoy ? (
-                                                        <span className="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 shrink-0">
+                                                        <span className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 shrink-0">
                                                             <MapPin className="w-2.5 h-2.5" />
                                                             Visitado
                                                         </span>
@@ -1162,17 +1408,17 @@ export function PrestamosTable({
 
 
                             {/* MIDDLE ROW: Stats & Info (Full Width, Left Aligned) */}
-                            <div className="grid grid-cols-12 gap-2 items-end">
+                            <div className="grid grid-cols-12 gap-1.5 items-end">
                                 {/* Stats & Asesor - Spans left */}
-                                <div className="col-span-7 flex flex-col gap-2">
-                                     <div className="flex items-center gap-2.5">
+                                <div className="col-span-7 flex flex-col gap-1.5">
+                                     <div className="flex items-center gap-2">
                                         <div className="flex flex-col">
-                                            <span className="text-[8px] text-slate-500 uppercase font-black tracking-wider mb-0.5">Capital</span>
-                                            <span className="font-mono text-slate-300 text-[13px]">${prestamo.monto?.toFixed(0)}</span>
+                                            <span className="text-[7px] text-slate-500 uppercase font-black tracking-wider mb-0.5">Capital</span>
+                                            <span className="font-mono text-slate-300 text-[12px]">${prestamo.monto?.toFixed(0)}</span>
                                         </div>
                                         <div className="flex flex-col">
-                                            <span className="text-[8px] text-slate-500 uppercase font-black tracking-wider mb-0.5">Cuota</span>
-                                            <span className="font-mono text-slate-300 text-[13px]">${prestamo.valorCuota?.toFixed(0)}</span>
+                                            <span className="text-[7px] text-slate-500 uppercase font-black tracking-wider mb-0.5">Cuota</span>
+                                            <span className="font-mono text-slate-300 text-[12px]">${prestamo.valorCuota?.toFixed(0)}</span>
                                         </div>
                                         {/* New Saldo/Any Partial Section */}
                                         {(prestamo.saldo_cuota_parcial > 0) && (
@@ -1207,7 +1453,7 @@ export function PrestamosTable({
                                      </div>
                                      
                                      {/* Badges */}
-                                     <div className="flex flex-wrap items-center gap-2">
+                                     <div className="flex flex-wrap items-center gap-1.5">
                                         {(() => {
                                             const isFullyPaidMobile = prestamo.isFinalizado || prestamo.saldo_pendiente <= 0 || (prestamo.cuotasPagadas >= prestamo.totalCuotas && prestamo.totalCuotas > 0);
                                             
@@ -1396,16 +1642,112 @@ export function PrestamosTable({
                                                             Registrar Gestión
                                                         </DropdownMenuItem>
                                                          {userRol === 'admin' && (
-                                                            <DropdownMenuItem 
-                                                                className="hover:bg-slate-800 cursor-pointer text-xs"
-                                                                onClick={(e) => {
-                                                                    handleOpenAsignarTarea(prestamo, e)
-                                                                }}
-                                                            >
-                                                                <ClipboardList className="w-3.5 h-3.5 mr-2 text-amber-500" />
-                                                                Asignar Gestión
-                                                            </DropdownMenuItem>
-                                                         )}
+                                                        <DropdownMenuItem 
+                                                            className="hover:bg-slate-800 cursor-pointer text-xs"
+                                                            onClick={(e) => {
+                                                                handleOpenAsignarTarea(prestamo, e)
+                                                            }}
+                                                        >
+                                                            <ClipboardList className="w-3.5 h-3.5 mr-2 text-amber-500" />
+                                                            Asignar Gestión
+                                                        </DropdownMenuItem>
+                                                     )}
+
+                                                     {/* Bloquear/Desbloquear Pagos (Admin Only) */}
+                                                     {userRol === 'admin' && prestamo.asesor_id && (
+                                                         <>
+                                                             <DropdownMenuSeparator className="bg-slate-800" />
+                                                             <DropdownMenuItem 
+                                                                 className={cn(
+                                                                     "cursor-pointer text-xs font-bold",
+                                                                     prestamo.clientes?.asesor_pagos_bloqueados
+                                                                         ? "hover:bg-emerald-900/20 text-emerald-500"
+                                                                         : "hover:bg-rose-900/20 text-rose-500"
+                                                                 )}
+                                                                 disabled={togglingBloqueo === prestamo.asesor_id}
+                                                                 onClick={(e) => {
+                                                                     handleToggleBloqueo(
+                                                                         prestamo.asesor_id,
+                                                                         !!prestamo.clientes?.asesor_pagos_bloqueados,
+                                                                         prestamo.asesor_nombre || 'Asesor',
+                                                                         e
+                                                                     )
+                                                                 }}
+                                                             >
+                                                                 {togglingBloqueo === prestamo.asesor_id ? (
+                                                                     <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                                                                 ) : prestamo.clientes?.asesor_pagos_bloqueados ? (
+                                                                     <Shield className="w-3.5 h-3.5 mr-2" />
+                                                                 ) : (
+                                                                     <ShieldOff className="w-3.5 h-3.5 mr-2" />
+                                                                 )}
+                                                                 {prestamo.clientes?.asesor_pagos_bloqueados ? 'Desbloquear Pagos' : 'Bloquear Pagos'}
+                                                             </DropdownMenuItem>
+                                                         </>
+                                                     )}
+
+                                                     {/* ACCIONES DE ADMINISTRADOR */}
+                                                     {userRol === 'admin' && (
+                                                         <>
+                                                             <DropdownMenuSeparator className="bg-slate-800" />
+                                                             {prestamo.estado !== 'inactivo' ? (
+                                                                 <>
+                                                                    <DropdownMenuItem 
+                                                                        className={cn(
+                                                                            "hover:bg-amber-900/20 cursor-pointer text-xs font-bold",
+                                                                            (prestamo.total_pagado_acumulado || 0) > 0.01 ? "opacity-30 grayscale cursor-not-allowed" : "text-amber-500"
+                                                                        )}
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault()
+                                                                            e.stopPropagation()
+                                                                            if ((prestamo.total_pagado_acumulado || 0) > 0.01) {
+                                                                                toast.warning("No se puede editar: El préstamo ya tiene pagos.")
+                                                                                return
+                                                                            }
+                                                                            setLoanToEdit(prestamo)
+                                                                            setIsEditLoanModalOpen(true)
+                                                                        }}
+                                                                    >
+                                                                        <Pencil className="w-3.5 h-3.5 mr-2" />
+                                                                        Editar Préstamo
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem 
+                                                                        className={cn(
+                                                                            "hover:bg-rose-900/20 cursor-pointer text-xs font-bold",
+                                                                            (prestamo.total_pagado_acumulado || 0) > 0.01 ? "opacity-30 grayscale cursor-not-allowed" : "text-rose-500"
+                                                                        )}
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault()
+                                                                            e.stopPropagation()
+                                                                            if ((prestamo.total_pagado_acumulado || 0) > 0.01) {
+                                                                                toast.warning("No se puede eliminar: El préstamo ya tiene pagos.")
+                                                                                return
+                                                                            }
+                                                                            setLoanToDelete(prestamo)
+                                                                            setIsDeleteDialogOpen(true)
+                                                                        }}
+                                                                    >
+                                                                        <X className="w-3.5 h-3.5 mr-2" />
+                                                                        Eliminar Préstamo
+                                                                    </DropdownMenuItem>
+                                                                 </>
+                                                             ) : (
+                                                                 <DropdownMenuItem 
+                                                                    className="hover:bg-emerald-900/20 cursor-pointer text-xs font-bold text-emerald-500"
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault()
+                                                                        e.stopPropagation()
+                                                                        setLoanToRestore(prestamo)
+                                                                        setIsRestoreDialogOpen(true)
+                                                                    }}
+                                                                >
+                                                                    <RotateCcw className="w-3.5 h-3.5 mr-2" />
+                                                                    Restaurar Préstamo
+                                                                </DropdownMenuItem>
+                                                             )}
+                                                         </>
+                                                     )}
+
                                                         <DropdownMenuItem 
                                                             className="hover:bg-slate-800 cursor-pointer text-xs"
                                                             onClick={(e) => {
@@ -1437,7 +1779,8 @@ export function PrestamosTable({
                             </div>
                         </div>
                     </div>
-                ))}
+                )
+            })}
                 
                 {filteredPrestamos.length === 0 && (
                      <div className="text-center py-12 text-slate-500">
@@ -1453,19 +1796,37 @@ export function PrestamosTable({
                  viewType === 'table' ? "block overflow-x-auto" : "hidden md:block"
              )}>
                 <div className={cn(viewType === 'table' && "min-w-[1000px]")}>
-                 {/* Table Header */}
-                 <div className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-2 px-6 py-4 bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-400">
-                    <div className="col-span-2 pl-2">Cliente / Préstamo</div>
-                    <div className="col-span-1 text-center">Sector</div>
-                    <div className="col-span-1 text-right">Capital</div>
-                    <div className="col-span-1 text-right">Cuota</div>
-                    <div className="col-span-1 text-right">Mora</div>
-                    <div className="col-span-1 text-right text-blue-400">Saldo</div>
-                    <div className="col-span-1 text-center">Prog.</div>
-                    <div className="col-span-1 text-center">Pago</div>
-                    <div className="col-span-1 text-center">Fechas</div>
-                    <div className="col-span-1 text-center">Estado</div>
-                    <div className="col-span-2 text-right pr-4">ACCIONES</div>
+                {/* Table Header */}
+                <div className={cn(
+                    "grid grid-cols-[repeat(13,minmax(0,1fr))] gap-2 px-6 py-4 bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-400",
+                    activeFilter === 'visitas_control' && "grid-cols-[repeat(12,minmax(0,1fr))]"
+                )}>
+                    {activeFilter === 'visitas_control' ? (
+                        <>
+                            <div className="col-span-2 pl-2">Asesor / Cliente</div>
+                            <div className="col-span-1 text-center">Cuota</div>
+                            <div className="col-span-1 text-center">Visita</div>
+                            <div className="col-span-1 text-center">Cobro Real</div>
+                            <div className="col-span-1 text-center">M. Pago</div>
+                            <div className="col-span-1 text-center">Recibo</div>
+                            <div className="col-span-3">Gestión / Motivo</div>
+                            <div className="col-span-2 text-right pr-4">Acciones</div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="col-span-2 pl-2">Cliente / Préstamo</div>
+                            <div className="col-span-1 text-center">Sector</div>
+                            <div className="col-span-1 text-right">Capital</div>
+                            <div className="col-span-1 text-right">Cuota</div>
+                            <div className="col-span-1 text-right">Mora</div>
+                            <div className="col-span-1 text-right text-blue-400">Saldo</div>
+                            <div className="col-span-1 text-center">Prog.</div>
+                            <div className="col-span-1 text-center">Pago</div>
+                            <div className="col-span-1 text-center">Fechas</div>
+                            <div className="col-span-1 text-center">Estado</div>
+                            <div className="col-span-2 text-right pr-4">ACCIONES</div>
+                        </>
+                    )}
                 </div>
 
                 {/* Table Body */}
@@ -1509,7 +1870,7 @@ export function PrestamosTable({
                         const isFullyPaid = prestamo.saldo_pendiente <= 0 || (prestamo.cuotasPagadas >= prestamo.totalCuotas && prestamo.totalCuotas > 0)
                         
                         const getRowStyle = () => {
-                            if (prestamo.isFinalizado || isFullyPaid) return { borderLeftColor: '#475569', className: "opacity-60 grayscale pl-[calc(1.5rem-6px)]" } // Slate-600
+                            if (prestamo.isFinalizado || isFullyPaid || prestamo.estado === 'refinanciado' || prestamo.estado === 'renovado') return { borderLeftColor: '#475569', className: "opacity-60 grayscale pl-[calc(1.5rem-6px)]" } // Slate-600
                             if (['vencido', 'moroso'].includes(prestamo.estado_mora)) return { borderLeftColor: '#ef4444', className: "hover:bg-red-900/5 pl-[calc(1.5rem-6px)]" } // Red-500
                             if (prestamo.estado_mora === 'cpp' || (prestamo.deudaHoy > 0 && prestamo.cuotasAtrasadas >= 3)) return { borderLeftColor: '#f97316', className: "hover:bg-orange-900/5 pl-[calc(1.5rem-6px)]" } // Orange-500
                             if (prestamo.deudaHoy > 0) return { borderLeftColor: '#fbbf24', className: "hover:bg-amber-900/5 pl-[calc(1.5rem-6px)]" } // Amber-400
@@ -1517,6 +1878,168 @@ export function PrestamosTable({
                         }
 
                         const rowStyle = getRowStyle()
+
+                        if (activeFilter === 'visitas_control') {
+                            const datePeru = propSelectedDate || today
+                            const cuotaDia = prestamo.cronograma_cuotas?.find((c: any) => c.fecha_vencimiento === datePeru)
+                            const cobradoDia = cuotaDia?.pagos?.reduce((sum: number, p: any) => sum + parseFloat(p.monto_pagado || 0), 0) || 0
+                            const isPaid = (parseFloat(cuotaDia?.monto_cuota || 0) - parseFloat(cuotaDia?.monto_pagado || 0)) <= 0.01
+                            const hasVoucher = cuotaDia?.pagos?.some((p: any) => p.voucher_compartido)
+                            
+                            // Get latest management note for this date
+                            const gestionDia = prestamo.gestiones?.filter((g: any) => g.created_at.startsWith(datePeru))
+                                .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+
+                            // Get visit details
+                            const visitaDia = prestamo.visitas_terreno?.filter((v: any) => v.fecha_inicio.startsWith(datePeru))
+                                .sort((a: any, b: any) => new Date(b.fecha_inicio).getTime() - new Date(a.fecha_inicio).getTime())[0]
+
+                            const isVisited = !!visitaDia || cuotaDia?.visitado
+                            
+                            // High contrast status
+                            const auditStatus = !isVisited ? 'pending' : (cobradoDia > 0 ? 'success' : 'alert')
+
+                            return (
+                                <div 
+                                    key={prestamo.id} 
+                                    className={cn(
+                                        "grid grid-cols-[repeat(12,minmax(0,1fr))] gap-2 px-6 py-4 hover:bg-slate-800/40 transition-all items-center border-l-[4px]",
+                                        auditStatus === 'pending' ? 'border-l-slate-700 bg-slate-900/10' :
+                                        auditStatus === 'success' ? 'border-l-emerald-500 bg-emerald-500/5' :
+                                        'border-l-rose-500 bg-rose-500/5'
+                                    )}
+                                >
+                                    {/* Asesor / Cliente */}
+                                    <div className="col-span-2">
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-tighter truncate">
+                                                {prestamo.asesor_nombre?.split(' ')[0] || 'SIN ASESOR'}
+                                            </span>
+                                            <span className="text-sm font-bold text-white truncate">{prestamo.clientes?.nombres}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Cuota */}
+                                    <div className="col-span-1 text-center">
+                                        <span className="text-xs font-black text-slate-400">S/ {parseFloat(cuotaDia?.monto_cuota || prestamo.cuota_dia_programada || 0).toFixed(2)}</span>
+                                    </div>
+
+                                    {/* Estado Visita */}
+                                    <div className="col-span-1 flex flex-col items-center">
+                                        {isVisited ? (
+                                            <>
+                                                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[9px] font-black px-1.5 py-0">V</Badge>
+                                                {visitaDia && <span className="text-[9px] text-slate-500 mt-0.5 font-mono">{visitaDia.fecha_inicio.split('T')[1].substring(0,5)}</span>}
+                                            </>
+                                        ) : (
+                                            <Badge variant="outline" className="text-slate-600 border-slate-800 text-[9px] font-black px-1.5 py-0">SV</Badge>
+                                        )}
+                                    </div>
+
+                                    {/* Cobro Real */}
+                                    <div className="col-span-1 text-center">
+                                        {cobradoDia > 0 ? (
+                                            <div className="flex flex-col items-center">
+                                                <span className="text-sm font-black text-emerald-400">S/ {cobradoDia.toFixed(2)}</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs font-black text-rose-500/40">S/ 0.00</span>
+                                        )}
+                                    </div>
+
+                                    {/* Método de Pago */}
+                                    <div className="col-span-1 text-center">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase">
+                                            {cuotaDia?.pagos?.[0]?.metodo_pago || '-'}
+                                        </span>
+                                    </div>
+
+                                    {/* Recibo / Voucher */}
+                                    <div className="col-span-1 flex justify-center">
+                                        {cobradoDia > 0 ? (
+                                            hasVoucher ? (
+                                                <div className="p-1 rounded-full bg-emerald-500/10 border border-emerald-500/20" title="Voucher Compartido">
+                                                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                                </div>
+                                            ) : (
+                                                <div className="p-1 rounded-full bg-amber-500/10 border border-amber-500/20" title="Pendiente de Compartir">
+                                                    <AlertCircle className="w-4 h-4 text-amber-500" />
+                                                </div>
+                                            )
+                                        ) : <span className="text-slate-800">-</span>}
+                                    </div>
+
+                                    {/* Gestión / Motivo */}
+                                    <div className="col-span-3">
+                                        <div className="flex flex-col gap-1 pr-2">
+                                            {gestionDia ? (
+                                                <>
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase leading-none">{gestionDia.resultado}</span>
+                                                    <p className="text-[10px] text-slate-500 line-clamp-2 italic leading-tight">{gestionDia.notas || 'Sin notas'}</p>
+                                                </>
+                                            ) : (
+                                                <span className="text-[10px] text-slate-700 italic">No se registró gestión</span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Acciones */}
+                                    <div className="col-span-2 text-right pr-4">
+                                        <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="flex justify-end gap-1.5 items-center">
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="h-8 w-8 rounded-lg text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all font-bold"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    if (prestamo.clientes?.telefono) {
+                                                        window.open(`https://wa.me/51${prestamo.clientes.telefono}?text=Hola ${prestamo.clientes.nombres}...`, '_blank')
+                                                    }
+                                                }}
+                                                disabled={!prestamo.clientes?.telefono}
+                                                title="WhatsApp"
+                                            >
+                                                <MessageCircle className="w-3.5 h-3.5" />
+                                            </Button>
+
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 shrink-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-white hover:bg-slate-700 transition-all">
+                                                        <MoreVertical className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-48 bg-slate-900 border-slate-700 text-slate-200">
+                                                    <DropdownMenuItem 
+                                                        className="hover:bg-slate-800 cursor-pointer text-xs text-blue-400 font-bold"
+                                                        onClick={() => handleOpenGestion(prestamo)}
+                                                    >
+                                                        <MessageSquare className="w-3.5 h-3.5 mr-2" />
+                                                        Registrar Gestión
+                                                    </DropdownMenuItem>
+                                                    
+                                                    <DropdownMenuItem 
+                                                        className="hover:bg-slate-800 cursor-pointer text-xs"
+                                                        onClick={() => router.push(`/dashboard/prestamos/${prestamo.id}`)}
+                                                    >
+                                                        <Eye className="w-3.5 h-3.5 mr-2 text-slate-500" />
+                                                        Ver Detalle
+                                                    </DropdownMenuItem>
+                                                    
+                                                    <DropdownMenuItem 
+                                                        className="hover:bg-slate-800 cursor-pointer text-xs"
+                                                        onClick={() => handleViewContract(prestamo)}
+                                                    >
+                                                        <Files className="w-3.5 h-3.5 mr-2 text-blue-400" />
+                                                        {isLoadingContract && selectedContractLoan?.id === prestamo.id ? 'Cargando...' : 'Ver Documentos'}
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        }
 
                         return (
                             <div 
@@ -1692,7 +2215,7 @@ export function PrestamosTable({
                                 <div className="col-span-1 text-center flex items-center justify-center gap-1 group/visit">
                                     {prestamo.isVisitadoHoy ? (
                                         <div className="shrink-0" title="Visitado hoy (Marcaron ubicación GPS)">
-                                            <MapPin className="w-4 h-4 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.3)] animate-pulse" />
+                                            <MapPin className="w-4 h-4 text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.3)] animate-pulse" />
                                         </div>
                                     ) : (
                                         activeFilter === 'visitas_control' && (
@@ -1878,6 +2401,104 @@ export function PrestamosTable({
                                                     Asignar Gestión
                                                 </DropdownMenuItem>
                                             )}
+
+                                            {/* ADMIN ACTIONS: Edit & Delete */}
+                                            {userRol === 'admin' && (
+                                                <>
+                                                    <DropdownMenuSeparator className="bg-slate-800" />
+                                                    {prestamo.estado !== 'inactivo' ? (
+                                                        <>
+                                                            <DropdownMenuItem 
+                                                                className={cn(
+                                                                    "hover:bg-amber-900/20 cursor-pointer text-xs font-bold",
+                                                                    (prestamo.total_pagado_acumulado || 0) > 0.01 ? "opacity-30 grayscale cursor-not-allowed" : "text-amber-500"
+                                                                )}
+                                                                onClick={(e) => {
+                                                                    e.preventDefault()
+                                                                    e.stopPropagation()
+                                                                    if ((prestamo.total_pagado_acumulado || 0) > 0.01) {
+                                                                        toast.warning("No se puede editar: El préstamo ya tiene pagos.")
+                                                                        return
+                                                                    }
+                                                                    setLoanToEdit(prestamo)
+                                                                    setIsEditLoanModalOpen(true)
+                                                                }}
+                                                            >
+                                                                <Pencil className="w-3.5 h-3.5 mr-2" />
+                                                                Editar Préstamo
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem 
+                                                                className={cn(
+                                                                    "hover:bg-rose-900/20 cursor-pointer text-xs font-bold",
+                                                                    (prestamo.total_pagado_acumulado || 0) > 0.01 ? "opacity-30 grayscale cursor-not-allowed" : "text-rose-500"
+                                                                )}
+                                                                onClick={(e) => {
+                                                                    e.preventDefault()
+                                                                    e.stopPropagation()
+                                                                    if ((prestamo.total_pagado_acumulado || 0) > 0.01) {
+                                                                        toast.warning("No se puede eliminar: El préstamo ya tiene pagos.")
+                                                                        return
+                                                                    }
+                                                                    setLoanToDelete(prestamo)
+                                                                    setIsDeleteDialogOpen(true)
+                                                                }}
+                                                            >
+                                                                <X className="w-3.5 h-3.5 mr-2" />
+                                                                Eliminar Préstamo
+                                                            </DropdownMenuItem>
+                                                        </>
+                                                    ) : (
+                                                        <DropdownMenuItem 
+                                                            className="hover:bg-emerald-900/20 cursor-pointer text-xs font-bold text-emerald-500"
+                                                            onClick={(e) => {
+                                                                e.preventDefault()
+                                                                e.stopPropagation()
+                                                                setLoanToRestore(prestamo)
+                                                                setIsRestoreDialogOpen(true)
+                                                            }}
+                                                        >
+                                                            <RotateCcw className="w-3.5 h-3.5 mr-2" />
+                                                            Restaurar Préstamo
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                </>
+                                            )}
+
+                                            {/* Bloquear/Desbloquear Pagos (Admin Only) */}
+                                            {userRol === 'admin' && prestamo.asesor_id && (
+                                                <>
+                                                    <DropdownMenuSeparator className="bg-slate-800" />
+                                                    <DropdownMenuItem 
+                                                        className={cn(
+                                                            "cursor-pointer text-xs font-bold",
+                                                            prestamo.clientes?.asesor_pagos_bloqueados
+                                                                ? "hover:bg-emerald-900/20 text-emerald-500"
+                                                                : "hover:bg-rose-900/20 text-rose-500"
+                                                        )}
+                                                        disabled={togglingBloqueo === prestamo.asesor_id}
+                                                        onClick={(e) => {
+                                                            e.preventDefault()
+                                                            e.stopPropagation()
+                                                            handleToggleBloqueo(
+                                                                prestamo.asesor_id,
+                                                                !!prestamo.clientes?.asesor_pagos_bloqueados,
+                                                                prestamo.asesor_nombre || 'Asesor',
+                                                                e
+                                                            )
+                                                        }}
+                                                    >
+                                                        {togglingBloqueo === prestamo.asesor_id ? (
+                                                            <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                                                        ) : prestamo.clientes?.asesor_pagos_bloqueados ? (
+                                                            <Shield className="w-3.5 h-3.5 mr-2" />
+                                                        ) : (
+                                                            <ShieldOff className="w-3.5 h-3.5 mr-2" />
+                                                        )}
+                                                        {prestamo.clientes?.asesor_pagos_bloqueados ? 'Desbloquear Pagos' : 'Bloquear Pagos'}
+                                                    </DropdownMenuItem>
+                                                </>
+                                            )}
+
                                             <DropdownMenuItem 
                                                 className="hover:bg-slate-800 cursor-pointer text-xs"
                                                 onClick={(e) => {
@@ -1981,6 +2602,134 @@ export function PrestamosTable({
                     router.refresh()
                 }}
             />
+
+            <EditLoanModal 
+                open={isEditLoanModalOpen}
+                onOpenChange={setIsEditLoanModalOpen}
+                prestamo={loanToEdit}
+                onSuccess={() => router.refresh()}
+            />
+
+            {/* Dialogo Eliminar */}
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogContent className="bg-slate-900 border-slate-800 text-slate-100">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-rose-500 flex items-center gap-2">
+                            <ShieldAlert className="w-6 h-6" /> ¿Eliminar Préstamo?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-400">
+                            Esta acción devolverá el capital a la cuenta seleccionada y el préstamo pasará a estado <strong>Inactivo</strong>.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label className="text-xs text-slate-500 uppercase font-bold">Cuenta para devolución</Label>
+                            <Select value={selectedActionAccount} onValueChange={setSelectedActionAccount}>
+                                <SelectTrigger className="bg-slate-950 border-slate-800">
+                                    <SelectValue placeholder="Seleccionar cuenta..." />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
+                                    {cuentas?.map((c: any) => (
+                                        <SelectItem key={c.id} value={c.id}>
+                                            {c.nombre} (S/ {parseFloat(c.saldo).toFixed(2)})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="bg-slate-800 border-none hover:bg-slate-700">Cancelar</AlertDialogCancel>
+                        <Button 
+                            disabled={loadingAction || !selectedActionAccount}
+                            onClick={async () => {
+                                setLoadingAction(true)
+                                try {
+                                    const response = await fetch(`/api/prestamos/${loanToDelete.id}`, {
+                                        method: 'DELETE',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ cuenta_id: selectedActionAccount })
+                                    })
+                                    if (!response.ok) throw new Error((await response.json()).error)
+                                    toast.success("Préstamo desactivado")
+                                    setIsDeleteDialogOpen(false)
+                                    router.refresh()
+                                } catch (e: any) {
+                                    toast.error(e.message)
+                                } finally {
+                                    setLoadingAction(false)
+                                }
+                            }}
+                            className="bg-rose-600 hover:bg-rose-700 text-white"
+                        >
+                            {loadingAction ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : "Confirmar"}
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Dialogo Restaurar */}
+            <AlertDialog open={isRestoreDialogOpen} onOpenChange={setIsRestoreDialogOpen}>
+                <AlertDialogContent className="bg-slate-900 border-slate-800 text-slate-100">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-emerald-500 flex items-center gap-2">
+                            <RotateCcw className="w-6 h-6" /> ¿Restaurar Préstamo?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-400">
+                            Se volverá a descontar el capital de la cuenta.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label className="text-xs text-slate-500 uppercase font-bold">Cuenta para desembolso</Label>
+                            <Select value={selectedActionAccount} onValueChange={setSelectedActionAccount}>
+                                <SelectTrigger className="bg-slate-950 border-slate-800">
+                                    <SelectValue placeholder="Seleccionar cuenta..." />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
+                                    {cuentas?.map((c: any) => (
+                                        <SelectItem key={c.id} value={c.id}>
+                                            {c.nombre} (S/ {parseFloat(c.saldo).toFixed(2)})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="bg-slate-800 border-none hover:bg-slate-700">Cancelar</AlertDialogCancel>
+                        <Button 
+                            disabled={loadingAction || !selectedActionAccount}
+                            onClick={async () => {
+                                setLoadingAction(true)
+                                try {
+                                    const response = await fetch(`/api/prestamos/${loanToRestore.id}/restaurar`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ cuenta_id: selectedActionAccount })
+                                    })
+                                    if (!response.ok) throw new Error((await response.json()).error)
+                                    toast.success("Préstamo restaurado")
+                                    setIsRestoreDialogOpen(false)
+                                    router.refresh()
+                                } catch (e: any) {
+                                    toast.error(e.message)
+                                } finally {
+                                    setLoadingAction(false)
+                                }
+                            }}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        >
+                            {loadingAction ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : "Confirmar"}
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
         </div>
     )
 }

@@ -2,6 +2,8 @@ import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { addDays } from 'date-fns'
+import { revalidatePath } from 'next/cache'
+
 
 // Helper para fechas - MISMA LÓGICA QUE EN /api/prestamos/route.ts
 function parseUTCDate(dateStr: string): Date {
@@ -122,32 +124,107 @@ export async function PUT(
             }
         }
 
-        // 5. Actualizar préstamo
-        // Nota: Recalcular fecha_fin si cambian parámetros (usamos lógica simplificada o RPC después)
+        // 5. Calcular nueva fecha_fin
+        const fInicio = parseUTCDate(fecha_inicio || prestamoActual.fecha_inicio)
+        let fFin = new Date(fInicio)
+        const nCuotas = parseInt(cuotas || prestamoActual.cuotas)
+        const nFrecuencia = frecuencia || prestamoActual.frecuencia
+
+        switch (nFrecuencia) {
+            case 'diario':
+                fFin.setUTCDate(fFin.getUTCDate() + nCuotas)
+                break
+            case 'semanal':
+                fFin.setUTCDate(fFin.getUTCDate() + (nCuotas * 7))
+                break
+            case 'quincenal':
+                fFin.setUTCDate(fFin.getUTCDate() + (nCuotas * 15))
+                break
+            case 'mensual':
+                fFin.setUTCMonth(fFin.getUTCMonth() + nCuotas)
+                break
+        }
+        const nuevaFechaFin = formatUTCDate(fFin)
+
+        // 6. Actualizar préstamo
         const { error: updateError } = await supabaseAdmin
             .from('prestamos')
             .update({
                 monto: nuevoMonto,
                 interes: parseFloat(interes || prestamoActual.interes),
                 fecha_inicio: fecha_inicio || prestamoActual.fecha_inicio,
-                frecuencia: frecuencia || prestamoActual.frecuencia,
-                cuotas: parseInt(cuotas || prestamoActual.cuotas),
-                // fecha_fin se actualizará al regenerar el cronograma
+                frecuencia: nFrecuencia,
+                cuotas: nCuotas,
+                fecha_fin: nuevaFechaFin,
             })
             .eq('id', id)
 
+
         if (updateError) throw updateError
 
-        // 6. Eliminar cronograma antiguo y regenerar
-        // Eliminamos las cuotas actuales ya que no hay pagos
+        // 7. Eliminar cronograma antiguo y regenerar MANUALMENTE
+        // Esto garantiza que el cronograma siempre aparezca en ediciones administrativas
         await supabaseAdmin.from('cronograma_cuotas').delete().eq('prestamo_id', id)
 
-        // Usamos el RPC para regenerar (asumiendo que lee los nuevos datos del préstamo)
-        const { error: rpcError } = await supabaseAdmin.rpc('generar_cronograma_db', {
-            p_prestamo_id: id
+        // Lógica de Generación Manual (Sincronizada con reglas de negocio)
+        const totalPagar = nuevoMonto * (1 + (parseFloat(interes || prestamoActual.interes) / 100))
+        const montoCuota = parseFloat((totalPagar / nCuotas).toFixed(2))
+        
+        const cuotasNuevas = []
+        let fechaTemp = new Date(fInicio)
+
+        for (let i = 1; i <= nCuotas; i++) {
+            // Avanzar fecha según modalidad
+            if (nFrecuencia === 'diario') {
+                fechaTemp.setUTCDate(fechaTemp.getUTCDate() + 1)
+                // Omitir domingos (Business Rule: Sistema PF no cobra domingos en diario)
+                while (fechaTemp.getUTCDay() === 0) {
+                    fechaTemp.setUTCDate(fechaTemp.getUTCDate() + 1)
+                }
+            } else if (nFrecuencia === 'semanal') {
+                fechaTemp.setUTCDate(fechaTemp.getUTCDate() + 7)
+            } else if (nFrecuencia === 'quincenal') {
+                fechaTemp.setUTCDate(fechaTemp.getUTCDate() + 15)
+            } else if (nFrecuencia === 'mensual') {
+                fechaTemp.setUTCMonth(fechaTemp.getUTCMonth() + 1)
+            }
+
+            cuotasNuevas.push({
+                prestamo_id: id,
+                numero_cuota: i,
+                monto_cuota: i === nCuotas ? parseFloat((totalPagar - (montoCuota * (nCuotas - 1))).toFixed(2)) : montoCuota,
+                monto_pagado: 0,
+                fecha_vencimiento: formatUTCDate(new Date(fechaTemp)),
+                estado: 'pendiente'
+            })
+        }
+
+        const { error: insertError } = await supabaseAdmin
+            .from('cronograma_cuotas')
+            .insert(cuotasNuevas)
+
+        if (insertError) throw insertError
+
+        // Recalcular fecha_fin real basada en la última cuota (por si hubo saltos de domingos)
+        const ultimaCuota = cuotasNuevas[cuotasNuevas.length - 1]
+        if (ultimaCuota) {
+            await supabaseAdmin
+                .from('prestamos')
+                .update({ fecha_fin: ultimaCuota.fecha_vencimiento })
+                .eq('id', id)
+        }
+
+
+        // 8. Registrar en historial para que aparezca en la pestaña Historial
+        await supabaseAdmin.rpc('registrar_cambio_estado', {
+            p_prestamo_id: id,
+            p_estado_anterior: prestamoActual.estado,
+            p_estado_nuevo: prestamoActual.estado, // El estado no cambia, solo los datos
+            p_dias_atraso: 0,
+            p_motivo: `Edición administrativa: Capital ${prestamoActual.monto} -> ${nuevoMonto}, Cuotas ${prestamoActual.cuotas} -> ${nCuotas}`,
+            p_responsable: user.id
         })
 
-        if (rpcError) throw rpcError
 
         // 7. Auditoría
         await supabaseAdmin.from('auditoria').insert({
@@ -158,7 +235,11 @@ export async function PUT(
             detalle: { antes: prestamoActual, despues: body, diffMonto, cuenta_id }
         })
 
+        revalidatePath('/dashboard/prestamos', 'page')
+        revalidatePath(`/dashboard/prestamos/${id}`, 'page')
+
         return NextResponse.json({ message: 'Préstamo actualizado exitosamente' })
+
 
     } catch (error: any) {
         console.error('ERROR EDITING LOAN:', error)
@@ -258,7 +339,11 @@ export async function DELETE(
             detalle: { monto: prestamoActual.monto, cuenta_id }
         })
 
+        revalidatePath('/dashboard/prestamos', 'page')
+        revalidatePath(`/dashboard/prestamos/${id}`, 'page')
+
         return NextResponse.json({ message: 'Préstamo desactivado y dinero devuelto' })
+
 
     } catch (error: any) {
         console.error('ERROR DELETING LOAN:', error)

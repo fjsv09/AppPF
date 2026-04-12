@@ -27,6 +27,7 @@ interface LoanTabsProps {
     isBlockedByCuadre?: boolean
     blockReasonCierre?: string
     systemAccess?: any
+    cuadresHoy?: any[]
 }
 
 import { VisitadosList } from "./visitados-list"
@@ -41,7 +42,8 @@ export function LoanTabs({
     systemSchedule,
     isBlockedByCuadre,
     blockReasonCierre,
-    systemAccess
+    systemAccess,
+    cuadresHoy = []
 }: LoanTabsProps) {
     const searchParams = useSearchParams()
     const router = useRouter()
@@ -130,6 +132,7 @@ export function LoanTabs({
                             <DailyCollectorLog 
                                 cronograma={cronograma} 
                                 pagos={pagos} 
+                                cuadresHoy={cuadresHoy}
                                 prestamo={prestamo} 
                                 cliente={cliente}
                                 userRole={userRole}

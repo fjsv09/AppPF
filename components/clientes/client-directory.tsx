@@ -871,20 +871,6 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all" onClick={() => window.open(`https://wa.me/${cliente.telefono}`, '_blank')}>
                                         <MessageCircle className="w-4 h-4" />
                                     </Button>
-                                    {(userRol === 'admin' || userRol === 'supervisor') && (
-                                        <Button 
-                                            size="sm" 
-                                            variant="ghost" 
-                                            className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50 transition-all"
-                                            onClick={() => {
-                                                setPendingEditClient(cliente)
-                                                setConfirmEditOpen(true)
-                                            }}
-                                        >
-                                            <Edit className="w-4 h-4" />
-                                        </Button>
-                                    )}
-
                                     <Button 
                                         size="sm" 
                                         variant="ghost" 
@@ -926,6 +912,17 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                 >
                                                     {cliente.bloqueado_renovacion ? <Unlock className="w-4 h-4 mr-2" /> : <Lock className="w-4 h-4 mr-2" />} 
                                                     {cliente.bloqueado_renovacion ? 'Desbloquear Renovación' : 'Bloquear Renovación'}
+                                                </DropdownMenuItem>
+                                            )}
+                                            {(userRol === 'admin' || userRol === 'supervisor') && (
+                                                <DropdownMenuItem 
+                                                    onClick={() => {
+                                                        setPendingEditClient(cliente)
+                                                        setConfirmEditOpen(true)
+                                                    }} 
+                                                    className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400 font-bold"
+                                                >
+                                                    <Edit className="w-4 h-4 mr-2" /> Editar Datos
                                                 </DropdownMenuItem>
                                             )}
                                             <DropdownMenuItem onClick={() => router.push(`?client=${cliente.id}`)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">

@@ -169,7 +169,26 @@ export async function POST(request: Request) {
                 .eq('id', nominaActual.id)
         }
 
-        // 10. Auditoría
+        // 10. Registrar Transacción dedicada
+        await supabaseAdmin.from('transacciones_personal').insert({
+            trabajador_id: trabajadorId,
+            tipo: 'liquidacion',
+            monto: montoAPagar,
+            descripcion: `Liquidación por renuncia - ${trabajador.nombre_completo}`,
+            cuenta_id: montoAPagar > 0 ? cuentaOrigenId : null,
+            metadatos: {
+                dias_trabajados: diasTrabajados,
+                sueldo_proporcional: sueldoProporcional,
+                bonos,
+                descuentos,
+                adelantos,
+                total_ya_pagado: totalYaPagado,
+                cuenta: cuenta.nombre
+            },
+            registrado_por: user.id
+        })
+
+        // 11. Auditoría (Legacy)
         await supabaseAdmin.from('auditoria').insert({
             tabla_afectada: 'liquidaciones_personal',
             accion: 'liquidacion_renuncia',

@@ -34,6 +34,7 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
     monto_cobrado_dia: 0,
     cuotas_objetivo_dia: 0,
     cuotas_cobradas_dia: 0,
+    monto_minimo_colocacion: 500,
     detalles_retencion: {
       totales: 0,
       bloqueados: 0,
@@ -151,7 +152,32 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
 
   useEffect(() => {
     fetchStats()
-  }, [fetchStats])
+
+    // Suscripción en tiempo real para "Radiactividad" técnica
+    const channel = supabase
+      .channel('metas_realtime')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'bonos_pagados',
+        filter: `asesor_id=eq.${userId}`
+      }, () => {
+        fetchStats()
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'metas_asesores',
+        filter: `asesor_id=eq.${userId}`
+      }, () => {
+        fetchStats()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [fetchStats, userId, supabase])
 
   if (loading) return (
     <div className="animate-pulse space-y-4">
@@ -262,11 +288,28 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
               {metaColocClientes && (
                 <MetricBox
                   label="Bono x Cliente"
-                  value={`S/ ${(metaColocClientes.bono_por_cliente || 0) * realTimeStats.clientes_colocados_mes}`}
+                  value={`S/ ${projectedBonuses.find(pb => pb.meta_id === metaColocClientes.id)?.monto || 0}`}
                   target={`Meta: S/ ${metaColocClientes.bono_por_cliente || 0}/cli`}
-                  progress={realTimeStats.clientes_colocados_mes > 0 ? 100 : 0}
+                  progress={(() => {
+                      const montoMin = metaColocClientes.monto_minimo_prestamo || 500;
+                      const cap = (realTimeStats as any).capital_neto_comisionable || 0;
+                      const nextStep = (Math.floor(cap / montoMin) + 1) * montoMin;
+                      const currentProgress = (cap % montoMin) / montoMin * 100;
+                      return cap > 0 ? (cap >= metaColocClientes.meta_cantidad_clientes * montoMin ? 100 : currentProgress) : 0;
+                  })()}
                   icon={<DollarSign className="w-3.5 h-3.5 text-emerald-400" />}
-                  subtitle={`Total Comis: S/ ${realTimeStats.clientes_colocados_mes} | Promedio: S/ ${realTimeStats.promedio_colocacion}`}
+                  subtitle={(() => {
+                      const montoMin = metaColocClientes.monto_minimo_prestamo || 500;
+                      const cap = (realTimeStats as any).capital_neto_comisionable || 0;
+                      const bloques = Math.floor(cap / montoMin);
+                      const cliBonificados = Math.min(realTimeStats.clientes_colocados_mes, bloques);
+                      const faltanteSiguiente = montoMin - (cap % montoMin);
+                      
+                      if (cliBonificados < realTimeStats.clientes_colocados_mes) {
+                          return `Bonificando ${cliBonificados} de ${realTimeStats.clientes_colocados_mes} cli. Falta S/ ${Math.round(faltanteSiguiente)} para el siguiente.`;
+                      }
+                      return `Bonificando ${cliBonificados} cli. Promedio: S/ ${realTimeStats.promedio_colocacion}`;
+                  })()}
                 />
               )}
 
@@ -337,9 +380,9 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
                             isPaidMonth
 
               const bonoInfo = bonosPendientes.find(p => p.meta_id === m.id)
-              const isPending = bonoInfo?.estado === 'pendiente'
-              const isRejected = bonoInfo?.estado === 'rechazado'
-              const rejectionReason = bonoInfo?.motivo_rechazo
+              const isPending = !isPaid && bonoInfo?.estado === 'pendiente'
+              const isRejected = !isPaid && bonoInfo?.estado === 'rechazado'
+              const rejectionReason = isRejected ? bonoInfo?.motivo_rechazo : null
               
               // --- EVALUACIÓN DE META (VISUAL) ---
               let label = 'Meta'
@@ -453,29 +496,48 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
 }
 
 function MetricBox({ label, value, progress, target, icon, reverse = false, subtitle }: any) {
+  const isGood = reverse ? (progress <= 50) : (progress >= 90);
+  const isWarning = !isGood && (progress > 50);
+
   return (
-    <div className="bg-slate-950/40 border border-slate-800 p-3 rounded-xl space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-slate-900 rounded-lg">{icon}</div>
-          <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{label}</span>
+    <div className={`kpi-card group relative p-4 transition-all duration-500 hover:scale-[1.02] ${
+      isGood ? 'radioactive-emerald' : isWarning ? 'radioactive-amber' : 'radioactive-rose'
+    }`}>
+      <div className="flex items-center justify-between relative z-10">
+        <div className="flex items-center gap-2.5">
+          <div className={`p-2 rounded-xl bg-slate-900/80 shadow-inner group-hover:scale-110 transition-transform duration-500`}>
+            {icon}
+          </div>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
         </div>
-        <Badge variant="outline" className="text-[9px] bg-slate-900 border-slate-800 text-slate-400 px-2 py-0">Meta: {target}</Badge>
+        <Badge variant="outline" className="text-[9px] bg-slate-950/50 border-white/5 text-slate-500 px-2 py-0 font-medium">
+          Meta: {target}
+        </Badge>
       </div>
-      <div className="space-y-1">
+      
+      <div className="mt-4 space-y-1 relative z-10">
         <div className="flex justify-between items-end">
-          <span className="text-xl font-black text-white">{value}</span>
-          <span className="text-[9px] font-bold text-slate-500">{Math.round(Math.min(100, progress))}%</span>
+          <span className="text-2xl font-black text-white tracking-tighter drop-shadow-sm">{value}</span>
+          <div className="flex flex-col items-end">
+             <span className={`text-[10px] font-black ${isGood ? 'text-emerald-400' : isWarning ? 'text-amber-400' : 'text-rose-400'}`}>
+                {Math.round(progress)}%
+             </span>
+          </div>
         </div>
         <Progress
           value={progress}
-          className="h-1.5 bg-slate-800"
-          indicatorClassName={reverse ? (progress > 50 ? 'bg-emerald-500' : 'bg-rose-500') : (progress > 80 ? 'bg-emerald-500' : 'bg-blue-500')}
+          className="h-1.5 bg-slate-800/50 overflow-hidden"
+          indicatorClassName={reverse ? (progress > 50 ? 'bg-rose-500' : 'bg-emerald-500') : (progress > 80 ? 'bg-emerald-500' : 'bg-blue-500')}
         />
         {subtitle && (
-          <p className="text-[9px] text-slate-500 italic mt-1">{subtitle}</p>
+          <p className="text-[10px] text-slate-500 italic mt-2 font-medium leading-tight line-clamp-1">{subtitle}</p>
         )}
       </div>
+      
+      {/* Glow effect background */}
+      <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-700 pointer-events-none ${
+        isGood ? 'bg-emerald-500' : isWarning ? 'bg-amber-500' : 'bg-rose-500'
+      }`} />
     </div>
   )
 }

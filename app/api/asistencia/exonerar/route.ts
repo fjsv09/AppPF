@@ -119,7 +119,7 @@ export async function POST(request: Request) {
 
         if (errorAsistencia) throw errorAsistencia
 
-        // 2. Si se anuló descuento, restarlo de la nómina
+        // 2. Si se anuló descuento, restarlo de la nómina y registrar ajuste
         if (descuentoAAnular > 0) {
             const { data: nomina } = await supabaseAdmin
                 .from('nomina_personal')
@@ -135,6 +135,22 @@ export async function POST(request: Request) {
                     .from('nomina_personal')
                     .update({ descuentos: parseFloat(nuevoDescuentoNomina.toFixed(2)) })
                     .eq('id', nomina.id)
+
+                // NUEVO: Registrar en transacciones_personal para visibilidad en boleta e historial
+                const readableTurno = turno === 'entrada' ? 'Mañana' : (turno === 'tarde' ? 'Turno Tarde' : 'Cierre')
+                await supabaseAdmin.from('transacciones_personal').insert({
+                    trabajador_id: usuarioId,
+                    nomina_id: nomina.id,
+                    tipo: 'ajuste_positivo',
+                    monto: descuentoAAnular,
+                    descripcion: `Ajuste Positivo: Exoneración de Tardanza (${readableTurno}) — ${asistencia.fecha}`,
+                    metadatos: {
+                        asistencia_id: asistenciaId,
+                        turno: turno,
+                        minutos_exonerados: tardanzaAAnularMinutos
+                    },
+                    registrado_por: user.id
+                })
             }
         }
 

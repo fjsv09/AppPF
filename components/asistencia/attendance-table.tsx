@@ -9,6 +9,8 @@ import {
     FileText, User, ArrowUpRight, Banknote, ShieldCheck,
     RotateCcw
 } from 'lucide-react'
+import { format, parseISO } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -150,10 +152,22 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
     }, [startDate, endDate, userFilter, handleFilter])
 
     const filteredData = useMemo(() => {
-        if (!searchTerm) return initialData
-        return initialData.filter(item =>
-            item.perfil?.nombre_completo?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
+        let data = [...initialData]
+        
+        // Primero filtramos si hay término de búsqueda
+        if (searchTerm) {
+            data = data.filter(item =>
+                item.perfil?.nombre_completo?.toLowerCase().includes(searchTerm.toLowerCase())
+            )
+        }
+
+        // Siempre ordenamos: Fecha DESC, Hora Entrada DESC
+        return data.sort((a, b) => {
+            if (a.fecha !== b.fecha) {
+                return b.fecha.localeCompare(a.fecha)
+            }
+            return (b.hora_entrada || '').localeCompare(a.hora_entrada || '')
+        })
     }, [initialData, searchTerm])
 
     // KPI Stats - REACTIVE TO SEARCH
@@ -327,6 +341,7 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
                         <thead>
                             <tr className="border-b border-slate-800/50 bg-slate-950/20">
                                 <th className="px-6 py-4 text-[11px] font-black uppercase text-slate-500 tracking-widest bg-slate-950/30">Trabajador</th>
+                                <th className="px-6 py-4 text-[11px] font-black uppercase text-slate-500 tracking-widest text-center bg-slate-950/30">Fecha</th>
                                 <th className="px-6 py-4 text-[11px] font-black uppercase text-slate-500 tracking-widest text-center bg-slate-950/30">Seguimiento de Eventos (E - TT - C)</th>
                                 <th className="px-6 py-4 text-[11px] font-black uppercase text-slate-500 tracking-widest text-right bg-slate-950/30">Resumen Financiero</th>
                             </tr>
@@ -369,6 +384,16 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
                                                         )}
                                                     </div>
                                                 </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3 text-center">
+                                            <div className="inline-flex flex-col items-center">
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter mb-0.5">
+                                                    {format(parseISO(record.fecha), 'EEEE', { locale: es })}
+                                                </span>
+                                                <span className="text-sm font-black text-white bg-white/5 px-2 py-0.5 rounded-lg border border-white/10">
+                                                    {format(parseISO(record.fecha), 'dd/MM/yyyy')}
+                                                </span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-3">
@@ -570,12 +595,17 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <Badge className={cn(
-                                        "px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest",
-                                        record.estado === 'puntual' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                                    )}>
-                                        {record.estado}
-                                    </Badge>
+                                    <div className="flex flex-col items-end gap-1">
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                            {format(parseISO(record.fecha), 'EEE d MMM', { locale: es })}
+                                        </span>
+                                        <Badge className={cn(
+                                            "px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest",
+                                            record.estado === 'puntual' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                        )}>
+                                            {record.estado}
+                                        </Badge>
+                                    </div>
                                 </div>
                             </div>
 

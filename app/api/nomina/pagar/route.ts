@@ -156,6 +156,10 @@ export async function POST(request: Request) {
             updatePayload.descuentos_original = parseFloat(nomina.descuentos_original || 0) + deduccionDescuentoEfectiva
         }
 
+        if (deduccionAdelanto > 0) {
+            updatePayload.adelantos_original = parseFloat(nomina.adelantos_original || 0) + deduccionAdelanto
+        }
+
         const { error: updError } = await supabaseAdmin
             .from('nomina_personal')
             .update(updatePayload)
@@ -180,7 +184,83 @@ export async function POST(request: Request) {
             })
         }
 
-        // 7. Auditoría del pago
+        // 7. Registro en la nueva tabla dedicada (transacciones_personal)
+        const transacciones = []
+
+        // A. Transacción de Pago de Sueldo
+        transacciones.push({
+            trabajador_id: nomina.trabajador_id,
+            nomina_id: nomina.id,
+            tipo: 'pago',
+            monto: montoPagarFinal - bonosPeriodo, // El pago base (neto sin el bono)
+            descripcion: `Pago de Nómina - Cuota ${nuevosPagosCount}/${maxPagos}`,
+            cuenta_id: cuentaOrigenId,
+            metadatos: {
+                cuota: `${nuevosPagosCount}/${maxPagos}`,
+                frecuencia,
+                bruto_base: sueldoBasePeriodo,
+                adelanto_descontado: deduccionAdelanto,
+                descuento_aplicado: deduccionDescuentoEfectiva,
+                cuenta: cuenta?.nombre
+            },
+            registrado_por: user.id
+        })
+
+        // B. Transacción de Bonos (Separada si existen)
+        if (bonosPeriodo > 0) {
+            transacciones.push({
+                trabajador_id: nomina.trabajador_id,
+                nomina_id: nomina.id,
+                tipo: 'bono',
+                monto: bonosPeriodo,
+                descripcion: `Pago de Bonos de Producción - Mes ${nomina.mes}/${nomina.anio}`,
+                cuenta_id: cuentaOrigenId,
+                metadatos: {
+                    cuota: `${nuevosPagosCount}/${maxPagos}`,
+                    cuenta: cuenta?.nombre
+                },
+                registrado_por: user.id
+            })
+        }
+
+        // C. Registro de Descuento por Tardanza (como transacción informativa de ajuste)
+        if (deduccionDescuentoEfectiva > 0) {
+            transacciones.push({
+                trabajador_id: nomina.trabajador_id,
+                nomina_id: nomina.id,
+                tipo: 'descuento',
+                monto: deduccionDescuentoEfectiva,
+                descripcion: `Descuento por Tardanza - Aplicado en Cuota ${nuevosPagosCount}/${maxPagos}`,
+                metadatos: {
+                    tipo: 'tardanza',
+                    pendiente_restante: nuevoDescuentoPendiente
+                },
+                registrado_por: user.id
+            })
+        }
+
+        // D. Registro de Amortización de Adelanto (Opcional - Se omite para evitar duplicidad visual con el registro original de adelanto)
+        /* 
+        if (deduccionAdelanto > 0) {
+            transacciones.push({
+                trabajador_id: nomina.trabajador_id,
+                nomina_id: nomina.id,
+                tipo: 'descuento',
+                monto: deduccionAdelanto,
+                descripcion: `Amortización de Adelanto - Descontado en Cuota ${nuevosPagosCount}/${maxPagos}`,
+                metadatos: {
+                    tipo: 'adelanto',
+                    pendiente_restante: nuevoAdelantoPendiente
+                },
+                registrado_por: user.id
+            })
+        }
+        */
+
+        const { error: transError } = await supabaseAdmin.from('transacciones_personal').insert(transacciones)
+        if (transError) console.error('[TRANSACCIONES ERROR]', transError)
+
+        // 8. Auditoría (Legacy)
         await supabaseAdmin.from('auditoria').insert({
             tabla_afectada: 'nomina_personal',
             accion: 'pago_nomina',
@@ -197,40 +277,6 @@ export async function POST(request: Request) {
                 descuento_aplicado: deduccionDescuentoEfectiva
             }
         })
-
-        // 8. Auditoría separada del descuento por tardanza (si se aplicó)
-        if (deduccionDescuentoEfectiva > 0) {
-            await supabaseAdmin.from('auditoria').insert({
-                tabla_afectada: 'nomina_personal',
-                accion: 'descuento_nomina',
-                registro_id: nomina.id,
-                usuario_id: user.id,
-                detalle: {
-                    trabajador_id: nomina.trabajador_id,
-                    tipo: 'tardanza',
-                    monto: deduccionDescuentoEfectiva,
-                    descripcion: `Descuento por tardanza aplicado en cuota ${nuevosPagosCount}/${maxPagos}`,
-                    descuento_pendiente_restante: nuevoDescuentoPendiente
-                }
-            })
-        }
-
-        // 9. Auditoría separada del adelanto descontado (si se aplicó)
-        if (deduccionAdelanto > 0) {
-            await supabaseAdmin.from('auditoria').insert({
-                tabla_afectada: 'nomina_personal',
-                accion: 'descuento_adelanto',
-                registro_id: nomina.id,
-                usuario_id: user.id,
-                detalle: {
-                    trabajador_id: nomina.trabajador_id,
-                    tipo: 'adelanto',
-                    monto: deduccionAdelanto,
-                    descripcion: `Adelanto descontado en cuota ${nuevosPagosCount}/${maxPagos}`,
-                    adelanto_pendiente_restante: nuevoAdelantoPendiente
-                }
-            })
-        }
 
         return NextResponse.json({
             success: true,

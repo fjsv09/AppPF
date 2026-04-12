@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { DollarSign, AlertCircle, Share2, Loader2, CheckCircle, Lock, CreditCard } from 'lucide-react'
+import { DollarSign, AlertCircle, Share2, Loader2, CheckCircle, Lock, CreditCard, Shield } from 'lucide-react'
 import { api } from '@/services/api'
 import { toBlob } from 'html-to-image'
 import { cn } from '@/lib/utils'
@@ -317,6 +317,22 @@ export function QuickPayModal({
                                             </span>
                                         </DialogDescription>
                                     </DialogHeader>
+
+                                    {/* Banner informativo para Admin/Supervisor */}
+                                    {(userRol === 'admin' || userRol === 'supervisor') && (
+                                        <div className="bg-blue-950/30 border border-blue-500/20 rounded-xl p-3 flex gap-3 mb-2">
+                                            <Shield className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                                            <div className="text-xs text-blue-200/80 space-y-1">
+                                                <span className="font-bold text-blue-400 block">
+                                                    Cobro como {userRol === 'admin' ? 'Administrador' : 'Supervisor'}
+                                                </span>
+                                                <p className="text-slate-400">
+                                                    Este pago quedará registrado a tu nombre en auditoría, pero el sistema seguirá atribuyendo 
+                                                    la cobranza al asesor. El dinero (físico o digital) lo recibe el asesor.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {fetching ? (
                                         <div className="py-12 flex flex-col items-center justify-center gap-4">

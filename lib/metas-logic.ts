@@ -248,6 +248,7 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
     })
 
     const morosidadCalculada = totalCapitalOriginal > 0 ? (totalCapitalVencido / totalCapitalOriginal) * 100 : 0
+    const metaColoc = metasData?.find((m: any) => m.meta_colocacion_clientes)
     const statsResult = {
         porcentaje_cobro: Math.round(porcentajeCalculado),
         morosidad_actual: morosidadCalculada,
@@ -256,9 +257,11 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
         nuevos_clientes: netosComisionablesCount,
         promedio_colocacion: Math.round(promedioColocacion),
         capital_colocado: prestamosNuevos.reduce((acc: number, p: any) => acc + Number(p.monto || 0), 0),
+        capital_neto_comisionable: capitalNetoComisionable,
         recaudacion_total: totalRecaudadoReal,
         clientes_finales_bloqueados: totalFinalClients - clientesActivosNoBloqueados,
-        hueco_calculado: huecoCalculado
+        hueco_calculado: huecoCalculado,
+        monto_minimo_colocacion: metaColoc?.monto_minimo_prestamo || 500
     }
 
     // 5. EVALUACIÓN Y GATILLO DE BONOS
@@ -270,15 +273,23 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
         return temp
     }
 
+    // A. Cierre Mensual (Último día hábil del mes)
     const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
     const workingLastDay = findPreviousWorkingDay(lastDayOfMonth)
     const isLastWorkingDay = today.getDate() === workingLastDay.getDate()
 
+    // B. Cierre Quincenal (Día 15 o Fin de mes, ajustado a hábil previo)
     const midMonth = new Date(today.getFullYear(), today.getMonth(), 15)
     const workingMidMonth = findPreviousWorkingDay(midMonth)
     const isQuincenaDay = (today.getDate() === workingMidMonth.getDate()) || isLastWorkingDay
     
-    const isSaturday = today.getDay() === 6
+    // C. Cierre Semanal (Sábado, ajustado a hábil previo -viernes- si es feriado)
+    const saturdayThisWeek = new Date(today)
+    const diffToSat = (6 - today.getDay())
+    saturdayThisWeek.setDate(today.getDate() + diffToSat)
+    const workingSaturday = findPreviousWorkingDay(saturdayThisWeek)
+    const isWeeklyClosureDay = today.getDate() === workingSaturday.getDate()
+
     const isWorkingDay = esDiaHabil(hoyPeruStr, feriadosSet)
 
     interface BonusResult {
@@ -300,7 +311,7 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
         if (!forceEvaluation) {
             if (meta.periodo === 'mensual' && !isLastWorkingDay) continue;
             if (meta.periodo === 'quincenal' && !isQuincenaDay) continue;
-            if (meta.periodo === 'semanal' && !isSaturday) continue;
+            if (meta.periodo === 'semanal' && !isWeeklyClosureDay) continue;
             
             if (meta.periodo === 'diario' && pagadosHoy.includes(meta.id)) continue;
             if (meta.periodo === 'semanal' && pagadosSemana.includes(meta.id)) continue;
@@ -352,9 +363,12 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
         } 
         else if (meta.meta_colocacion_clientes) {
             const montoMin = meta.monto_minimo_prestamo || 500
-            if (statsResult.promedio_colocacion >= montoMin && statsResult.clientes_colocados_mes > 0) {
+            const bloquesCapital = Math.floor(statsResult.capital_neto_comisionable / montoMin)
+            const clientesAPagar = Math.min(statsResult.clientes_colocados_mes, bloquesCapital)
+            
+            if (clientesAPagar > 0) {
                 cumplida = true
-                montoBonoFinal = (meta.bono_por_cliente || 0) * statsResult.clientes_colocados_mes
+                montoBonoFinal = (meta.bono_por_cliente || 0) * clientesAPagar
                 nombreMotivo = 'Colocacion x Cliente'
             }
         }

@@ -841,7 +841,7 @@ export function PrestamosTable({
                     )}
                 </div>
 
-                {activeFilter === 'visitas_control' && (
+                {false && (
                     <div className="flex items-center gap-2 bg-slate-950/30 border border-slate-800/60 p-1.5 rounded-lg animate-in slide-in-from-left-2 duration-300">
                         <CalendarDays className="w-3.5 h-3.5 text-blue-400 ml-1.5" />
                         <Input
@@ -2218,7 +2218,7 @@ export function PrestamosTable({
                                             <MapPin className="w-4 h-4 text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.3)] animate-pulse" />
                                         </div>
                                     ) : (
-                                        activeFilter === 'visitas_control' && (
+                                        false && (
                                             <div className="shrink-0 opacity-50 italic text-[7px] text-slate-500 uppercase font-black tracking-tighter">
                                                 Pnd.
                                             </div>

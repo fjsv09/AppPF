@@ -1325,7 +1325,7 @@ export function PrestamosTable({
                                                             Visitado
                                                         </span>
                                                     ) : (
-                                                        (activeFilter === 'visitas_control' || activeFilter === 'ruta_hoy') && (
+                                                        activeFilter === 'ruta_hoy' && (
                                                             <span className="text-slate-500 bg-slate-500/5 border border-slate-700/50 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase transition-opacity shrink-0">
                                                                 Pnd. Visita
                                                             </span>

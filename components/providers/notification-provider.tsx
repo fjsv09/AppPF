@@ -35,8 +35,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         console.log('Título:', titulo)
         console.log('Estado Permiso:', typeof Notification !== 'undefined' ? Notification.permission : 'N/A')
 
-        if (typeof window === 'undefined' || !("Notification" in window)) {
-            console.error('Navegador no soporta notificaciones')
+        if (typeof window === 'undefined') return
+        
+        const hasNotificationSupport = "Notification" in window
+        if (!hasNotificationSupport) {
+            console.warn('Navegador no soporta API de Notificaciones')
             return
         }
 
@@ -102,12 +105,32 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         initUser()
         fetchUnread()
         
-        // Registro proactivo de permisos
-        if (typeof window !== 'undefined' && "Notification" in window) {
-            if (Notification.permission === "default") {
-                Notification.requestPermission().then(p => console.log('Respuesta permiso inicial:', p))
+        // Registro proactivo de permisos (Solo si el navegador lo permite sin gesto de usuario)
+        // En iOS Safari, esto puede fallar o no hacer nada si no es PWA.
+        const checkNotificationInit = async () => {
+            if (typeof window !== 'undefined' && "Notification" in window) {
+                // Verificamos si es iOS Safari (donde Notification solo existe si es PWA)
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+                const isStandalone = (window as any).navigator.standalone || window.matchMedia('(display-mode: standalone)').matches
+                
+                if (isIOS && !isStandalone) {
+                    console.info('Notificaciones nativas no disponibles en Safari móvil (requiere instalar en inicio)')
+                    return
+                }
+
+                try {
+                    if (Notification.permission === "default") {
+                        // Intentamos pedir permiso, pero lo envolvemos en un try-catch
+                        // porque algunos navegadores requieren gesto de usuario obligatorio
+                        await Notification.requestPermission()
+                    }
+                } catch (err) {
+                    console.warn('No se pudo solicitar permiso de notificación automáticamente:', err)
+                }
             }
         }
+        
+        checkNotificationInit()
 
         console.log('Configurando canal realtime para notificaciones...')
         

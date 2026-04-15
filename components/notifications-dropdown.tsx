@@ -53,28 +53,8 @@ export function NotificationsDropdown() {
     // PUSH EFFECTS - Wait for SW to be fully active before checking subscription
     useEffect(() => {
         if (typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window) {
-            navigator.serviceWorker.register('/sw.js')
+            navigator.serviceWorker.ready
                 .then(async (reg) => {
-                    // Wait for the SW to be active (critical for push to work)
-                    if (reg.installing) {
-                        await new Promise<void>(resolve => {
-                            reg.installing!.addEventListener('statechange', function handler() {
-                                if (this.state === 'activated') {
-                                    this.removeEventListener('statechange', handler)
-                                    resolve()
-                                }
-                            })
-                        })
-                    } else if (reg.waiting) {
-                        await new Promise<void>(resolve => {
-                            reg.waiting!.addEventListener('statechange', function handler() {
-                                if (this.state === 'activated') {
-                                    this.removeEventListener('statechange', handler)
-                                    resolve()
-                                }
-                            })
-                        })
-                    }
                     // If reg.active exists, SW is already active
                     setRegistration(reg)
                     const sub = await reg.pushManager.getSubscription()
@@ -82,7 +62,6 @@ export function NotificationsDropdown() {
                         setSubscription(sub)
                         setIsSubscribed(true)
                         // Re-sync subscription to server on each page load
-                        // This ensures the server always has the current subscription
                         try {
                             await fetch('/api/push/subscribe', {
                                 method: 'POST',
@@ -97,7 +76,7 @@ export function NotificationsDropdown() {
                     setLoadingPush(false)
                 })
                 .catch(err => {
-                    console.error('Service Worker registration failed:', err)
+                    console.error('Service Worker ready check failed:', err)
                     setLoadingPush(false)
                 })
         } else {

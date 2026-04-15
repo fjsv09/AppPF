@@ -57,6 +57,10 @@ next-env.d.ts
 !components.json
 !project.json
 !*.d.ts
+!.eslintrc.json
+.db_url
+.env*
+.vercel
 *.png
 !public/*.png
 *.jpg

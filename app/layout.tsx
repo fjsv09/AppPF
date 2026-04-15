@@ -54,6 +54,8 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+import { SWRegistration } from '@/components/providers/sw-registration';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -70,6 +72,7 @@ export default function RootLayout({
       <body
         className={`${inter.variable} antialiased bg-background text-foreground font-sans`}
       >
+        <SWRegistration />
         <ProgressProvider>
           <NotificationProvider>
             {children}

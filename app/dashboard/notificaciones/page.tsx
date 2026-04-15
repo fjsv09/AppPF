@@ -51,28 +51,8 @@ export default function NotificacionesPage() {
     // PUSH EFFECTS - Wait for SW to be fully active
     useEffect(() => {
         if (typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window) {
-            navigator.serviceWorker.register('/sw.js')
+            navigator.serviceWorker.ready
                 .then(async (reg) => {
-                    // Wait for the SW to be active (critical for push to work)
-                    if (reg.installing) {
-                        await new Promise<void>(resolve => {
-                            reg.installing!.addEventListener('statechange', function handler() {
-                                if (this.state === 'activated') {
-                                    this.removeEventListener('statechange', handler)
-                                    resolve()
-                                }
-                            })
-                        })
-                    } else if (reg.waiting) {
-                        await new Promise<void>(resolve => {
-                            reg.waiting!.addEventListener('statechange', function handler() {
-                                if (this.state === 'activated') {
-                                    this.removeEventListener('statechange', handler)
-                                    resolve()
-                                }
-                            })
-                        })
-                    }
                     setRegistration(reg)
                     const sub = await reg.pushManager.getSubscription()
                     if (sub) {
@@ -93,7 +73,7 @@ export default function NotificacionesPage() {
                     setLoadingPush(false)
                 })
                 .catch(err => {
-                    console.error('Service Worker registration failed:', err)
+                    console.error('Service Worker ready check failed:', err)
                     setLoadingPush(false)
                 })
         } else {
@@ -104,14 +84,14 @@ export default function NotificacionesPage() {
     const subscribePush = async () => {
         let currentReg = registration
         
-        // Si no tenemos registro, intentamos registrar de nuevo.
+        // Si no tenemos registro, lo intentamos esperar desde ready
         if (!currentReg) {
             if ('serviceWorker' in navigator && 'PushManager' in window) {
                 try {
-                    currentReg = await navigator.serviceWorker.register('/sw.js')
+                    currentReg = await navigator.serviceWorker.ready
                     setRegistration(currentReg)
                 } catch (err: any) {
-                    toast.error(`Error al registrar SW: ${err.message}`)
+                    toast.error(`Error al obtener SW: ${err.message}`)
                     return
                 }
             } else {

@@ -30,28 +30,8 @@ export function PushSubscriptionManager() {
 
     useEffect(() => {
         if (typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window) {
-            navigator.serviceWorker.register('/sw.js')
+            navigator.serviceWorker.ready
                 .then(async (reg) => {
-                    // Wait for the SW to be active
-                    if (reg.installing) {
-                        await new Promise<void>(resolve => {
-                            reg.installing!.addEventListener('statechange', function handler() {
-                                if (this.state === 'activated') {
-                                    this.removeEventListener('statechange', handler)
-                                    resolve()
-                                }
-                            })
-                        })
-                    } else if (reg.waiting) {
-                        await new Promise<void>(resolve => {
-                            reg.waiting!.addEventListener('statechange', function handler() {
-                                if (this.state === 'activated') {
-                                    this.removeEventListener('statechange', handler)
-                                    resolve()
-                                }
-                            })
-                        })
-                    }
                     setRegistration(reg)
                     const sub = await reg.pushManager.getSubscription()
                     if (sub) {
@@ -71,7 +51,7 @@ export function PushSubscriptionManager() {
                     setLoading(false)
                 })
                 .catch(err => {
-                    console.error('Service Worker registration failed:', err)
+                    console.error('Service Worker ready check failed:', err)
                     setLoading(false)
                 })
         } else {

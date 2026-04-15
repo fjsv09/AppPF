@@ -30,8 +30,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const systemName = configMap?.nombre_sistema || "ProFinanzas";
   const systemLogo = configMap?.logo_sistema_url;
 
-  // Add a timestamp to the logo URL to bust browser cache
-  const logoWithTimestamp = systemLogo ? `${systemLogo}${systemLogo.includes('?') ? '&' : '?'}v=${Date.now()}` : undefined;
+  const logoUrl = systemLogo || '/favicon.ico';
 
   return {
     title: {
@@ -40,16 +39,20 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description: "Gestión eficiente de préstamos y clientes",
     manifest: '/manifest.json',
-    icons: logoWithTimestamp ? {
+    themeColor: '#0f172a',
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: 'black-translucent',
+      title: systemName,
+    },
+    icons: {
       icon: [
-        { url: logoWithTimestamp, rel: 'icon', type: 'image/png' },
-        { url: logoWithTimestamp, rel: 'shortcut icon' },
+        { url: logoUrl, rel: 'icon' },
+        { url: logoUrl, rel: 'shortcut icon' },
       ],
       apple: [
-        { url: logoWithTimestamp, rel: 'apple-touch-icon' },
+        { url: logoUrl, rel: 'apple-touch-icon' },
       ],
-    } : {
-      icon: '/favicon.ico', // Fallback to local if no logo is configured
     }
   };
 }

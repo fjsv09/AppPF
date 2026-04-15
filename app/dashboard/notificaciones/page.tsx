@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { useNotifications } from '@/components/providers/notification-provider'
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
 
@@ -40,6 +41,8 @@ export default function NotificacionesPage() {
     const [loading, setLoading] = useState(true)
     const [notifications, setNotifications] = useState<Notification[]>([])
     const [unreadCount, setUnreadCount] = useState(0)
+    const { refreshUnread } = useNotifications()
+    const [activeTab, setActiveTab] = useState<'unread' | 'history'>('unread')
     const router = useRouter()
 
     // PUSH STATE
@@ -188,6 +191,7 @@ export default function NotificacionesPage() {
                 prev.map(n => n.id === id ? { ...n, leido: true } : n)
             )
             setUnreadCount(prev => Math.max(0, prev - 1))
+            refreshUnread()
         } catch (e) {
             console.error('Error marking as read:', e)
         }
@@ -202,11 +206,15 @@ export default function NotificacionesPage() {
             })
             setNotifications(prev => prev.map(n => ({ ...n, leido: true })))
             setUnreadCount(0)
+            refreshUnread()
             toast.success('Todas las notificaciones marcadas como leídas')
         } catch (e) {
             console.error('Error marking all as read:', e)
         }
     }
+
+    const unreadNotifications = notifications.filter(n => !n.leido)
+    const historyNotifications = notifications.filter(n => n.leido)
 
     const handleNotificationClick = (notification: Notification) => {
         if (!notification.leido) {
@@ -299,74 +307,159 @@ export default function NotificacionesPage() {
                     </div>
                 </div>
 
-                {/* LISTADO - Sin contenedor oscuro pesado */}
-                <div className="space-y-3">
+                {/* TAB NAVIGATION */}
+                <div className="flex p-1 bg-slate-900/50 border border-slate-800 rounded-2xl mb-8">
+                    <button
+                        onClick={() => setActiveTab('unread')}
+                        className={cn(
+                            "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black transition-all",
+                            activeTab === 'unread' 
+                                ? "bg-purple-600 text-white shadow-lg shadow-purple-900/20" 
+                                : "text-slate-500 hover:text-slate-300"
+                        )}
+                    >
+                        NO LEÍDAS
+                        {unreadNotifications.length > 0 && (
+                            <span className={cn(
+                                "px-1.5 py-0.5 rounded-full text-[9px]",
+                                activeTab === 'unread' ? "bg-white text-purple-600" : "bg-slate-800 text-slate-500"
+                            )}>
+                                {unreadNotifications.length}
+                            </span>
+                        )}
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('history')}
+                        className={cn(
+                            "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black transition-all",
+                            activeTab === 'history' 
+                                ? "bg-purple-600 text-white shadow-lg shadow-purple-900/20" 
+                                : "text-slate-500 hover:text-slate-300"
+                        )}
+                    >
+                        HISTORIAL
+                        {historyNotifications.length > 0 && (
+                            <span className={cn(
+                                "px-1.5 py-0.5 rounded-full text-[9px]",
+                                activeTab === 'history' ? "bg-white text-purple-600" : "bg-slate-800 text-slate-500"
+                            )}>
+                                {historyNotifications.length}
+                            </span>
+                        )}
+                    </button>
+                </div>
+
+                {/* LISTADO - Contenido según Tab Activa */}
+                <div className="pb-10 min-h-[400px]">
                     {loading ? (
                         <div className="flex flex-col items-center justify-center py-12 gap-3">
                             <Loader2 className="h-6 w-6 text-slate-700 animate-spin" />
                             <p className="text-xs text-slate-500">Cargando...</p>
                         </div>
-                    ) : notifications.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-slate-500 text-center border border-dashed border-slate-800 rounded-xl">
-                            <p className="text-sm font-medium">No hay notificaciones recientes</p>
-                        </div>
                     ) : (
-                        notifications.map((notification) => (
-                            <div
-                                key={notification.id}
-                                onClick={() => handleNotificationClick(notification)}
-                                className={cn(
-                                    "p-4 rounded-xl border transition-all hover:bg-white/5 cursor-pointer relative",
-                                    notification.leido 
-                                        ? "bg-slate-900/20 border-slate-800/40" 
-                                        : "bg-purple-500/5 border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.05)]"
-                                )}
-                            >
-                                <div className="flex gap-3">
-                                    <div className={cn(
-                                        "mt-1 w-2 h-2 rounded-full flex-shrink-0",
-                                        notification.leido ? "bg-slate-700" : getTypeColor(notification.tipo)
-                                    )} />
-                                    
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center justify-between gap-2 mb-1">
-                                            <p className={cn(
-                                                "text-sm font-bold truncate",
-                                                notification.leido ? "text-slate-400" : "text-white"
-                                            )}>
-                                                {notification.titulo}
-                                            </p>
-                                            <span className="text-[10px] text-slate-600 font-bold whitespace-nowrap">
-                                                {formatTime(notification.created_at)}
-                                            </span>
+                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            {activeTab === 'unread' ? (
+                                <div className="space-y-3">
+                                    {unreadNotifications.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center py-20 text-slate-600 border border-dashed border-slate-800/50 rounded-3xl bg-slate-950/20">
+                                            <div className="w-16 h-16 rounded-full bg-slate-900/50 flex items-center justify-center mb-4">
+                                                <Check className="h-8 w-8 opacity-20" />
+                                            </div>
+                                            <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Todo al día</p>
+                                            <p className="text-[10px] text-slate-600 mt-1 uppercase tracking-tighter">No tienes notificaciones pendientes</p>
                                         </div>
-                                        <p className="text-xs text-slate-500 leading-snug line-clamp-2 mb-2">
-                                            {notification.mensaje}
-                                        </p>
-                                        
-                                        <div className="flex items-center justify-between">
-                                            {notification.link_accion ? (
-                                                <div className="flex items-center gap-1 text-[10px] font-bold text-blue-400 uppercase tracking-tighter">
-                                                    Ver detalle <ExternalLink className="h-2.5 w-2.5" />
+                                    ) : (
+                                        unreadNotifications.map((notification) => (
+                                            <div
+                                                key={notification.id}
+                                                onClick={() => handleNotificationClick(notification)}
+                                                className="p-4 rounded-xl border transition-all hover:bg-white/5 cursor-pointer relative bg-purple-500/5 border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.05)]"
+                                            >
+                                                <div className="flex gap-3">
+                                                    <div className={cn(
+                                                        "mt-1 w-2 h-2 rounded-full flex-shrink-0",
+                                                        getTypeColor(notification.tipo)
+                                                    )} />
+                                                    
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center justify-between gap-2 mb-1">
+                                                            <p className="text-sm font-bold truncate text-white">
+                                                                {notification.titulo}
+                                                            </p>
+                                                            <span className="text-[10px] text-slate-600 font-bold whitespace-nowrap">
+                                                                {formatTime(notification.created_at)}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-slate-500 leading-snug line-clamp-2 mb-2">
+                                                            {notification.mensaje}
+                                                        </p>
+                                                        
+                                                        <div className="flex items-center justify-between">
+                                                            {notification.link_accion ? (
+                                                                <div className="flex items-center gap-1 text-[10px] font-bold text-blue-400 uppercase tracking-tighter">
+                                                                    Ver detalle <ExternalLink className="h-2.5 w-2.5" />
+                                                                </div>
+                                                            ) : <div />}
+                                                            
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    markAsRead(notification.id)
+                                                                }}
+                                                                className="text-[10px] font-bold text-slate-500 hover:text-emerald-400 transition-colors uppercase"
+                                                            >
+                                                                Marcar leído
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            ) : <div />}
-                                            
-                                            {!notification.leido && (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        markAsRead(notification.id)
-                                                    }}
-                                                    className="text-[10px] font-bold text-slate-500 hover:text-emerald-400 transition-colors uppercase"
-                                                >
-                                                    Marcar leído
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
+                                            </div>
+                                        ))
+                                    )}
                                 </div>
-                            </div>
-                        ))
+                            ) : (
+                                <div className="space-y-3">
+                                    {historyNotifications.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center py-20 text-slate-700 border border-dashed border-slate-900 rounded-3xl">
+                                            <p className="text-sm font-bold text-slate-600 uppercase tracking-widest">Historial vacío</p>
+                                            <p className="text-[10px] text-slate-700 mt-1 uppercase tracking-tighter">Las notificaciones leídas aparecerán aquí</p>
+                                        </div>
+                                    ) : (
+                                        historyNotifications.map((notification) => (
+                                            <div
+                                                key={notification.id}
+                                                onClick={() => handleNotificationClick(notification)}
+                                                className="p-4 rounded-xl border transition-all hover:bg-white/5 cursor-pointer relative bg-slate-900/20 border-slate-800/40"
+                                            >
+                                                <div className="flex gap-3">
+                                                    <div className="mt-1 w-2 h-2 rounded-full flex-shrink-0 bg-slate-700" />
+                                                    
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center justify-between gap-2 mb-1">
+                                                            <p className="text-sm font-bold truncate text-slate-400">
+                                                                {notification.titulo}
+                                                            </p>
+                                                            <span className="text-[10px] text-slate-600 font-bold whitespace-nowrap">
+                                                                {formatTime(notification.created_at)}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-slate-500 leading-snug line-clamp-2 mb-2">
+                                                            {notification.mensaje}
+                                                        </p>
+                                                        
+                                                        {notification.link_accion && (
+                                                            <div className="flex items-center gap-1 text-[10px] font-bold text-blue-400/50 uppercase tracking-tighter">
+                                                                Ver detalle <ExternalLink className="h-2.5 w-2.5" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
         </div>

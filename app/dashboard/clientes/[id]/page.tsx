@@ -10,10 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Badge } from '@/components/ui/badge'
-import { User, CreditCard, Phone, MapPin, Activity, DollarSign, Calendar, FileText, TrendingUp, Wallet, CheckCircle, Plus, FileStack, MessageSquare, Users, History } from 'lucide-react'
+import { User, CreditCard, Phone, MapPin, Activity, DollarSign, Calendar, FileText, TrendingUp, Wallet, CheckCircle, Plus, FileStack, MessageSquare, Users, History, AlertTriangle, Lock, Info, AlertCircle } from 'lucide-react'
 import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ClienteTabs } from '@/components/clientes/cliente-tabs'
-import { cn } from '@/lib/utils'
+import { cn, getFrequencyBadgeStyles } from '@/lib/utils'
+import { calculateLoanMetrics, getLoanStatusUI } from '@/lib/financial-logic'
 import { ClientGestiones } from '@/components/clientes/client-gestiones'
 import { ClientExpediente } from '@/components/clientes/client-expediente'
 import { ClientProfileActions } from '@/components/clientes/client-profile-actions'
@@ -51,8 +52,31 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
     const latestSolicitud = cliente.solicitudes?.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
     const documentos = latestSolicitud?.documentos_evaluacion || {}
 
-    // Fetch loans history...
-    const { data: loans } = await supabaseAdmin.from('prestamos').select('*').eq('cliente_id', id).order('created_at', { ascending: false })
+    // Fetch loans history with full relations for metrics calculation
+    const { data: loans, error: loansError } = await supabaseAdmin
+        .from('prestamos')
+        .select(`
+            *,
+            cronograma_cuotas (
+                *,
+                pagos (created_at, monto_pagado)
+            )
+        `)
+        .eq('cliente_id', id)
+        .order('created_at', { ascending: false })
+
+    if (loansError) {
+        console.error('❌ Error fetching loans for history:', loansError)
+    }
+
+    // [NUEVO] Obtener IDs de préstamos que son producto de una refinanciación directa
+    const { data: renovacionesRefinanciamiento } = await supabaseAdmin
+        .from('renovaciones')
+        .select('prestamo_nuevo_id, prestamo_original:prestamo_original_id(estado)')
+    const prestamoIdsProductoRefinanciamiento = (renovacionesRefinanciamiento || [])
+        .filter((r: any) => (r.prestamo_original as any)?.estado === 'refinanciado')
+        .map((r: any) => r.prestamo_nuevo_id as string)
+        .filter(Boolean)
 
     // Fetch payments to calculate payment habits
     const prestamoIds = loans?.map((l: any) => l.id) || []
@@ -188,11 +212,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                              <div className="p-1.5 rounded-lg bg-slate-900/40 border border-slate-800/40 flex flex-col items-center justify-center group">
                                 <div className="text-[7px] text-slate-500 uppercase tracking-widest font-bold mb-0.5">Historial</div>
                                 <div className="text-base font-bold text-white leading-none">
-                                    {loans?.filter((l: any) => {
-                                        const isMigrado = l.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
-                                        const isEffectivelyFinalized = l.estado === 'finalizado' || (isMigrado && l.saldo_pendiente <= 0.01)
-                                        return l.estado === 'completado' || l.estado === 'renovado' || isEffectivelyFinalized || (l.saldo_pendiente !== null && l.saldo_pendiente <= 0.01 && l.estado !== 'anulado')
-                                    }).length || 0}
+                                    {loans?.filter((l: any) => l.estado !== 'anulado').length || 0}
                                 </div>
                             </div>
                              <div className="p-1.5 rounded-lg bg-blue-500/5 border border-blue-500/10 flex flex-col items-center justify-center group">
@@ -273,47 +293,152 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                             
                         </div>
 
-                        <TabsContent value="historial" className="space-y-4 m-0 animate-in fade-in duration-300 overflow-x-hidden">
+                        <TabsContent value="historial" className="space-y-3 m-0 animate-in fade-in duration-300 overflow-x-hidden">
                             {loans?.map((loan: any) => {
+                                 const metrics = calculateLoanMetrics(loan)
+                                 const statusUI = getLoanStatusUI({ ...loan, metrics })
+                                 
                                  const isMigrado = loan.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
-                                 const isEffectivelyFinalized = loan.estado === 'finalizado' || (isMigrado && loan.saldo_pendiente <= 0.01)
-                                 const isPaid = loan.estado === 'pagado' || isEffectivelyFinalized;
+                                 const isPaid = metrics.saldoPendiente <= 0.01 || ['finalizado', 'pagado', 'renovado', 'refinanciado'].includes(loan.estado);
                                  
                                  return (
-                                <Link key={loan.id} href={`/dashboard/prestamos/${loan.id}`}>
-                                    <div className="group relative overflow-hidden bg-slate-900/40 border border-slate-800 rounded-lg p-2.5 hover:border-blue-500/30 hover:bg-slate-900/60 transition-all duration-300">
-                                        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-500 to-purple-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <Link key={loan.id} href={`/dashboard/prestamos/${loan.id}`} className="block">
+                                    <div className={cn(
+                                        "group relative overflow-hidden transition-all duration-200 shadow-sm rounded-xl border",
+                                        // Card Base Style
+                                        isPaid ? 
+                                            "bg-slate-900/40 border-slate-800 opacity-60 grayscale-[0.8]" : 
+                                            "bg-slate-900 border-slate-800/60 hover:shadow-md hover:border-slate-700",
                                         
-                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
-                                                    isPaid ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500 group-hover:bg-blue-500/20'
-                                                }`}>
-                                                    {isPaid ? <CheckCircle className="w-3.5 h-3.5" /> : <Wallet className="w-3.5 h-3.5" />}
+                                        // Status Bar (Left Border)
+                                        isPaid ? "border-l-[4px] border-l-slate-600" :
+                                        loan.estado_mora === 'vencidom' || statusUI.label === 'VENCIDO' ? "border-l-[4px] border-l-rose-500" :
+                                        loan.estado_mora === 'morosom' || statusUI.label === 'MOROSO' ? "border-l-[4px] border-l-red-600" :
+                                        statusUI.label === 'CPP' || (metrics.deudaExigibleHoy > 0 && metrics.cuotasAtrasadas >= 3) ? "border-l-[4px] border-l-orange-500" :
+                                        metrics.deudaExigibleHoy > 0 ? "border-l-[4px] border-l-amber-400" :
+                                        "border-l-[4px] border-l-emerald-500"
+                                    )}>
+                                        <div className="flex flex-col py-1.5 px-3 gap-1 relative bg-gradient-to-br from-slate-900/50 to-slate-900/10 hover:bg-slate-800/20 transition-colors">
+                                            {/* TOP ROW: ID, Monto and Badges (Unified Line) */}
+                                            <div className="flex items-center justify-between gap-2 h-5">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <div className={cn(
+                                                        "h-4 w-4 rounded bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0",
+                                                        isPaid && "bg-emerald-500/10 text-emerald-500"
+                                                    )}>
+                                                        {isPaid ? <CheckCircle className="w-2.5 h-2.5" /> : <Wallet className="w-2.5 h-2.5" />}
+                                                    </div>
+                                                    
+                                                    <div className="flex items-baseline gap-2 overflow-hidden">
+                                                        <h3 className="text-sm font-black text-white leading-none shrink-0">
+                                                            ${parseFloat(loan.monto).toFixed(0)}
+                                                        </h3>
+                                                        <div className="flex items-center gap-1.5 opacity-60 shrink-0">
+                                                            <span className="text-[7px] font-mono text-slate-500 uppercase tracking-tighter">
+                                                                #{loan.id.split('-')[0].toUpperCase()}
+                                                            </span>
+                                                            <span className="text-[7px] font-bold text-slate-600 border-l border-slate-800 pl-1.5 flex items-center gap-1 uppercase tracking-tighter">
+                                                                <Calendar className="w-2 h-2" />
+                                                                {format(new Date(loan.created_at), 'dd MMM yy', { locale: es })}
+                                                            </span>
+                                                        </div>
+                                                        
+                                                        <div className="flex items-center gap-1">
+                                                            {loan.es_paralelo && (
+                                                                <Badge variant="outline" className="text-[6.5px] h-3 border-purple-500/30 text-purple-400 bg-purple-500/5 px-1 uppercase font-black">P</Badge>
+                                                            )}
+                                                            {/* Badge de Refinanciamiento */}
+                                                            {prestamoIdsProductoRefinanciamiento.includes(loan.id) && (
+                                                                <span 
+                                                                    className="flex items-center gap-0.5 text-[6.5px] font-black uppercase tracking-tight text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1 py-0 rounded shrink-0"
+                                                                    title="Refinanciamiento"
+                                                                >
+                                                                    <AlertTriangle className="w-1.5 h-1.5 shrink-0" />
+                                                                    REFIN.
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <div className="text-base font-bold text-white group-hover:text-blue-200 transition-colors">
-                                                        ${loan.monto}
-                                                    </div>
-                                                    <div className="text-[9px] text-slate-500 flex items-center gap-1 font-mono mt-0.5">
-                                                        <Calendar className="w-2.5 h-2.5" />
-                                                        {format(new Date(loan.created_at), 'dd MMM yyyy', { locale: es })}
-                                                    </div>
+
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    <Badge 
+                                                        variant="outline"
+                                                        className={cn(
+                                                            "text-[7px] font-black uppercase tracking-wider px-1 h-3.5 rounded-md bg-slate-950/50",
+                                                            statusUI.border,
+                                                            statusUI.color,
+                                                            statusUI.animate && "animate-pulse"
+                                                        )}
+                                                    >
+                                                        {statusUI.label}
+                                                    </Badge>
+                                                    <span className={cn(
+                                                        "text-[7px] font-bold uppercase tracking-wide border px-1 h-3.5 flex items-center rounded-md bg-slate-950/30 shadow-sm",
+                                                        getFrequencyBadgeStyles(loan.frecuencia)
+                                                    )}>
+                                                        {loan.frecuencia}
+                                                    </span>
                                                 </div>
                                             </div>
- 
-                                            <div className="flex items-center justify-between w-full sm:w-auto gap-4 sm:gap-6 border-t border-slate-800 sm:border-0 pt-1.5 sm:pt-0">
-                                                <div className="text-left sm:text-right">
-                                                    <div className="text-[7px] text-slate-500 uppercase tracking-wider font-bold">Interés</div>
-                                                    <div className="text-[11px] font-medium text-slate-300">{loan.interes}%</div>
+
+                                            {/* UNIFIED FINANCIAL ROW (Metrics Only) */}
+                                            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/40 mt-1">
+                                                <div className="flex items-center gap-4 overflow-hidden">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[8px] text-blue-500/60 uppercase font-black tracking-tighter">Interés</span>
+                                                        <span className="text-[11px] font-black text-blue-400 opacity-90 leading-none">{loan.interes}%</span>
+                                                    </div>
+                                                    
+                                                    <div className="flex items-center gap-4 border-l border-slate-700/30 pl-3">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[8px] text-slate-500 uppercase font-black tracking-tighter">Cuota</span>
+                                                            <span className="font-mono text-slate-200 text-xs font-bold leading-none">
+                                                                ${parseFloat(
+                                                                    loan.valor_cuota || 
+                                                                    loan.valorCuota || 
+                                                                    loan.cuota || 
+                                                                    loan.monto_cuota || 
+                                                                    loan.cronograma_cuotas?.[0]?.monto_cuota || 
+                                                                    0
+                                                                ).toFixed(0)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex flex-col border-l border-slate-800/40 pl-3">
+                                                            <span className="text-[8px] text-red-500/60 uppercase font-black tracking-tighter">Mora</span>
+                                                            <span className={cn(
+                                                                "font-mono text-xs font-extrabold leading-none",
+                                                                metrics.deudaExigibleHoy > 0 ? "text-red-500" : "text-slate-600"
+                                                            )}>
+                                                                ${metrics.deudaExigibleHoy.toFixed(0)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex flex-col border-l border-slate-800/40 pl-3">
+                                                            <span className="text-[8px] text-blue-500/60 uppercase font-black tracking-tighter">Saldo</span>
+                                                            <span className={cn(
+                                                                "font-mono text-xs font-extrabold leading-none",
+                                                                metrics.saldoPendiente > 0 ? "text-blue-400" : "text-slate-600"
+                                                            )}>
+                                                                ${metrics.saldoPendiente.toFixed(0)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <Badge variant="outline" className={`px-1.5 py-0 text-[8px] h-4 border ${
-                                                    !isEffectivelyFinalized && loan.estado === 'activo' ? 'bg-blue-950/30 text-blue-400 border-blue-900/50' : 
-                                                    isPaid ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' : 
-                                                    'bg-slate-800.50 text-slate-400 border-slate-700'
-                                                }`}>
-                                                    {isEffectivelyFinalized ? 'FINALIZADO' : loan.estado.toUpperCase()}
-                                                </Badge>
+
+                                                <div className="flex items-center gap-3 shrink-0">
+                                                    {metrics.cuotasAtrasadas > 0 && !isPaid && (
+                                                        <div className="flex items-center gap-1 text-rose-500 font-black text-[9px] bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30 uppercase tracking-tight shadow-[0_0_10px_rgba(244,63,94,0.1)]">
+                                                            <AlertTriangle className="w-3 h-3 animate-pulse" />
+                                                            {metrics.cuotasAtrasadas} ATR
+                                                        </div>
+                                                    )}
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="text-slate-500 font-black text-[8px] uppercase tracking-tighter">Progreso</span>
+                                                        <span className="text-xs font-black text-slate-300 tracking-tighter leading-none">
+                                                            {metrics.cuotasPagadas}/{metrics.totalCuotas}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

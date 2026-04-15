@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/utils/supabase/client'
 import { useNotifications } from './providers/notification-provider'
+import { cn } from '@/lib/utils'
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
 
@@ -40,6 +41,7 @@ export function NotificationsDropdown() {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(true)
     const [notifications, setNotifications] = useState<Notification[]>([])
+    const [activeTab, setActiveTab] = useState<'unread' | 'history'>('unread')
     const { unreadCount, refreshUnread } = useNotifications()
     const dropdownRef = useRef<HTMLDivElement>(null)
     const router = useRouter()
@@ -202,6 +204,9 @@ export function NotificationsDropdown() {
             console.error('Error marking all as read:', e)
         }
     }
+
+    const unreadNotifications = notifications.filter(n => !n.leido)
+    const historyNotifications = notifications.filter(n => n.leido)
 
     const handleNotificationClick = (notification: Notification) => {
         if (!notification.leido) {
@@ -379,6 +384,38 @@ export function NotificationsDropdown() {
                         </div>
                     </div>
 
+                    {/* Tabs for Dropdown */}
+                    <div className="flex bg-slate-900 border-b border-white/5">
+                        <button
+                            onClick={() => setActiveTab('unread')}
+                            className={cn(
+                                "flex-1 py-2 text-[10px] font-black uppercase tracking-widest relative transition-all",
+                                activeTab === 'unread' ? "text-purple-400" : "text-slate-500 hover:text-slate-400"
+                            )}
+                        >
+                            Nuevas
+                            {unreadNotifications.length > 0 && (
+                                <span className={cn(
+                                    "ml-1.5 px-1 py-0.5 rounded-full text-[8px]",
+                                    activeTab === 'unread' ? "bg-purple-500 text-white" : "bg-slate-800 text-slate-500"
+                                )}>
+                                    {unreadNotifications.length}
+                                </span>
+                            )}
+                            {activeTab === 'unread' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]" />}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('history')}
+                            className={cn(
+                                "flex-1 py-2 text-[10px] font-black uppercase tracking-widest relative transition-all",
+                                activeTab === 'history' ? "text-purple-400" : "text-slate-500 hover:text-slate-400"
+                            )}
+                        >
+                            Anteriores
+                            {activeTab === 'history' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]" />}
+                        </button>
+                    </div>
+
                     {/* List */}
                     <div className="max-h-[50vh] overflow-y-auto custom-scrollbar">
                         {loading ? (
@@ -395,56 +432,99 @@ export function NotificationsDropdown() {
                                 <p className="text-[10px] text-slate-600 mt-1 uppercase tracking-tighter">Todo al día por ahora</p>
                             </div>
                         ) : (
-                            notifications.map((n) => (
-                                <div
-                                    key={n.id}
-                                    onClick={() => handleNotificationClick(n)}
-                                    className={`group p-4 border-b border-white/5 cursor-pointer transition-all hover:bg-white/[0.03] ${
-                                        !n.leido ? 'bg-purple-500/[0.03]' : ''
-                                    }`}
-                                >
-                                    <div className="flex gap-4">
-                                        <div className="flex-shrink-0 mt-1">
-                                            <div className={`w-2.5 h-2.5 rounded-full shadow-[0_0_8px] ${
-                                                n.leido 
-                                                    ? 'bg-slate-700 shadow-transparent' 
-                                                    : getTypeColor(n.tipo) + ' shadow-current'
-                                            }`} />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className={`text-sm font-bold leading-tight ${
-                                                n.leido ? 'text-slate-400' : 'text-slate-100'
-                                            }`}>
-                                                {n.titulo}
-                                            </p>
-                                            <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
-                                                {n.mensaje}
-                                            </p>
-                                            <div className="flex items-center gap-3 mt-2">
-                                                <span className="text-[10px] font-mono text-slate-600" suppressHydrationWarning>
-                                                    {formatTime(n.created_at)}
-                                                </span>
-                                                {n.link_accion && (
-                                                    <div className="flex items-center gap-1 text-[9px] font-black text-purple-400 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        Ver detalle <ExternalLink className="h-2.5 w-2.5" />
-                                                    </div>
-                                                )}
+                            <div className="divide-y divide-white/5 animate-in fade-in duration-200">
+                                {activeTab === 'unread' ? (
+                                    <>
+                                        {unreadNotifications.length === 0 ? (
+                                            <div className="p-10 text-center opacity-40">
+                                                <Check className="h-8 w-8 mx-auto mb-2 text-slate-500" />
+                                                <p className="text-[10px] font-bold uppercase tracking-widest">Sin pendientes</p>
                                             </div>
-                                        </div>
-                                        {!n.leido && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    markAsRead(n.id);
-                                                }}
-                                                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-emerald-400 hover:bg-slate-700 transition-all"
-                                            >
-                                                <Check className="h-3.5 w-3.5" />
-                                            </button>
+                                        ) : (
+                                            unreadNotifications.map((n) => (
+                                                <div
+                                                    key={n.id}
+                                                    onClick={() => handleNotificationClick(n)}
+                                                    className="group p-4 cursor-pointer transition-all hover:bg-white/[0.03] bg-purple-500/[0.02]"
+                                                >
+                                                    <div className="flex gap-4">
+                                                        <div className="flex-shrink-0 mt-1">
+                                                            <div className={`w-2 h-2 rounded-full shadow-[0_0_8px] ${getTypeColor(n.tipo)} shadow-current`} />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-bold leading-tight text-white/90">
+                                                                {n.titulo}
+                                                            </p>
+                                                            <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                                                                {n.mensaje}
+                                                            </p>
+                                                            <div className="flex items-center gap-3 mt-2">
+                                                                <span className="text-[10px] font-mono text-slate-600" suppressHydrationWarning>
+                                                                    {formatTime(n.created_at)}
+                                                                </span>
+                                                                {n.link_accion && (
+                                                                    <div className="flex items-center gap-1 text-[9px] font-black text-purple-400 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        Ver detalle <ExternalLink className="h-2.5 w-2.5" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                markAsRead(n.id);
+                                                            }}
+                                                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-emerald-400 hover:bg-slate-700 transition-all"
+                                                        >
+                                                            <Check className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))
                                         )}
-                                    </div>
-                                </div>
-                            ))
+                                    </>
+                                ) : (
+                                    <>
+                                        {historyNotifications.length === 0 ? (
+                                            <div className="p-10 text-center opacity-40">
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Historial vacío</p>
+                                            </div>
+                                        ) : (
+                                            historyNotifications.map((n) => (
+                                                <div
+                                                    key={n.id}
+                                                    onClick={() => handleNotificationClick(n)}
+                                                    className="group p-4 cursor-pointer transition-all hover:bg-white/[0.03]"
+                                                >
+                                                    <div className="flex gap-4">
+                                                        <div className="flex-shrink-0 mt-1">
+                                                            <div className="w-2 h-2 rounded-full bg-slate-700" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-bold leading-tight text-slate-400">
+                                                                {n.titulo}
+                                                            </p>
+                                                            <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                                                                {n.mensaje}
+                                                            </p>
+                                                            <div className="flex items-center gap-3 mt-2">
+                                                                <span className="text-[10px] font-mono text-slate-600" suppressHydrationWarning>
+                                                                    {formatTime(n.created_at)}
+                                                                </span>
+                                                                {n.link_accion && (
+                                                                    <div className="flex items-center gap-1 text-[9px] font-black text-purple-400 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        Ver detalle <ExternalLink className="h-2.5 w-2.5" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </>
+                                )}
+                            </div>
                         )}
                     </div>
 

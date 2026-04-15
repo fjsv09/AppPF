@@ -155,7 +155,41 @@ export function PrestamosTable({
     const isTotalBlock = ['OUT_OF_HOURS', 'NIGHT_RESTRICTION', 'HOLIDAY_BLOCK', 'PENDING_SALDO', 'MISSING_MORNING_CUADRE'].includes(systemAccess?.code);
     const isBlockedForPayments = isBlockedByCuadre && isTotalBlock;
     const isBlockedForOperations = isBlockedByCuadre;
+    
+    // --- HOOKS & STATE ---
+    const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
+    const [isPending, startTransition] = useTransition()
+    
     const [userLoc, setUserLoc] = useState<[number, number] | null>(null)
+    const [viewType, setViewType] = useState<'cards' | 'table'>('cards')
+    const [isMountedView, setIsMountedView] = useState(false)
+    const [showMap, setShowMap] = useState(false)
+    const [localSearch, setLocalSearch] = useState(searchParams.get('search') || '')
+    const [canRequestDueToTime, setCanRequestDueToTime] = useState(true)
+    
+    // Admin/Mgmt states
+    const [isEditLoanModalOpen, setIsEditLoanModalOpen] = useState(false)
+    const [loanToEdit, setLoanToEdit] = useState<any>(null)
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+    const [loanToDelete, setLoanToDelete] = useState<any>(null)
+    const [isRestoreDialogOpen, setIsRestoreDialogOpen] = useState(false)
+    const [loanToRestore, setLoanToRestore] = useState<any>(null)
+    const [selectedActionAccount, setSelectedActionAccount] = useState('')
+    const [loadingAction, setLoadingAction] = useState(false)
+    const [togglingBloqueo, setTogglingBloqueo] = useState<string | null>(null)
+    const [contractOpen, setContractOpen] = useState(false)
+    const [selectedContractLoan, setSelectedContractLoan] = useState<any>(null)
+    const [selectedContractCronograma, setSelectedContractCronograma] = useState<any[]>([])
+    const [isLoadingContract, setIsLoadingContract] = useState(false)
+    const [quickPayOpen, setQuickPayOpen] = useState(false)
+    const [selectedLoanForPay, setSelectedLoanForPay] = useState<any>(null)
+    const [gestionOpen, setGestionOpen] = useState(false)
+    const [selectedLoanForGestion, setSelectedLoanForGestion] = useState<any>(null)
+    const [asignarTareaOpen, setAsignarTareaOpen] = useState(false)
+    const [selectedLoanForAsignar, setSelectedLoanForAsignar] = useState<any>(null)
+    const [isFiltering, setIsFiltering] = useState(false)
 
     useEffect(() => {
         if (typeof window !== 'undefined' && navigator.geolocation) {
@@ -167,6 +201,21 @@ export function PrestamosTable({
            return () => navigator.geolocation.clearWatch(id)
         }
     }, [])
+
+    // Persistence for View Type (Mobile)
+    useEffect(() => {
+        const savedView = localStorage.getItem('loan-view-type')
+        if (savedView === 'cards' || savedView === 'table') {
+            setViewType(savedView)
+        }
+        setIsMountedView(true)
+    }, [])
+
+    useEffect(() => {
+        if (isMountedView) {
+            localStorage.setItem('loan-view-type', viewType)
+        }
+    }, [viewType, isMountedView])
 
     // puedeRenovar logic and loanManagementMap moved to page.tsx flag es_renovable_estricto
 
@@ -186,14 +235,7 @@ export function PrestamosTable({
         
         return false
     }
-    const router = useRouter()
-    const pathname = usePathname()
-    const searchParams = useSearchParams()
-
-    // --- URL STATE MANAGEMENT ---
-    const [viewType, setViewType] = useState<'cards' | 'table'>('cards')
-    const [showMap, setShowMap] = useState(false)
-    const [isPending, startTransition] = useTransition() // Transition state for router pushes
+    // --- URL PARAMETERS & DERIVED STATE ---
     const activeFilter = (searchParams.get('tab') as FilterTab) || 'ruta_hoy'
     const searchQuery = searchParams.get('search') || ''
     const filtroSupervisor = searchParams.get('supervisor') || 'todos'
@@ -231,22 +273,6 @@ export function PrestamosTable({
         })
     }
 
-    // Debounce State
-    const [localSearch, setLocalSearch] = useState(searchParams.get('search') || '')
-
-    // --- LOGICA DE HORARIO ---
-    const [canRequestDueToTime, setCanRequestDueToTime] = useState(true)
-
-    // --- NUEVOS ESTADOS PARA GESTIÓN ADMIN ---
-    const [isEditLoanModalOpen, setIsEditLoanModalOpen] = useState(false)
-    const [loanToEdit, setLoanToEdit] = useState<any>(null)
-    
-    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-    const [loanToDelete, setLoanToDelete] = useState<any>(null)
-    const [isRestoreDialogOpen, setIsRestoreDialogOpen] = useState(false)
-    const [loanToRestore, setLoanToRestore] = useState<any>(null)
-    const [selectedActionAccount, setSelectedActionAccount] = useState('')
-    const [loadingAction, setLoadingAction] = useState(false)
 
 
     // 1. ADD INTERNAL REFRESH EFFECT (User Request: "refresque internamente al entrar")
@@ -320,95 +346,7 @@ export function PrestamosTable({
         return () => clearTimeout(timer)
     }, [localSearch, searchParams, pathname, router])
 
-    // --- VISUAL FEEDBACK: FLASH SKELETON ON FILTER CHANGE ---
-    const [isFiltering, setIsFiltering] = useState(false)
-
-    useEffect(() => {
-        setIsFiltering(true)
-        const timer = setTimeout(() => {
-             setIsFiltering(false)
-        }, 500) // 500ms perception delay
-        return () => clearTimeout(timer)
-    }, [activeFilter, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia]) // Trigger on any filter change
-
-    // --- CONTRACT VIEWER STATE ---
-    const [contractOpen, setContractOpen] = useState(false)
-    const [selectedContractLoan, setSelectedContractLoan] = useState<any>(null)
-    const [selectedContractCronograma, setSelectedContractCronograma] = useState<any[]>([])
-    const [isLoadingContract, setIsLoadingContract] = useState(false)
-
-    // Handlers
-    const handleViewContract = async (prestamo: any) => {
-        try {
-            setIsLoadingContract(true)
-            setSelectedContractLoan(prestamo)
-            
-            const supabase = createClient()
-            const { data: cronograma, error } = await supabase
-                .from('cronograma_cuotas')
-                .select('*')
-                .eq('prestamo_id', prestamo.id)
-                .order('numero_cuota', { ascending: true })
-
-            if (error) throw error
-
-            setSelectedContractCronograma(cronograma || [])
-            setContractOpen(true)
-        } catch (error) {
-            console.error('Error loading contract data:', error)
-            alert('Error al cargar el contrato. Intente nuevamente.')
-        } finally {
-            setIsLoadingContract(false)
-        }
-    }
-
-    const handleQuickPay = (prestamo: any, e: React.MouseEvent) => {
-        e.preventDefault()
-        e.stopPropagation()
-        
-        if (!canRequestDueToTime || isBlockedForPayments) {
-            toast.error("Sistema bloqueado", {
-                description: blockReasonCierre || "No puede realizar cobros fuera de horario o sin cuadre parcial."
-            });
-            return;
-        }
-
-        setSelectedLoanForPay(prestamo)
-        setQuickPayOpen(true)
-    }
-
-    // Quick Pay State
-    const [quickPayOpen, setQuickPayOpen] = useState(false)
-    const [selectedLoanForPay, setSelectedLoanForPay] = useState<any>(null)
-
-    // Gestión State
-    const [gestionOpen, setGestionOpen] = useState(false)
-    const [selectedLoanForGestion, setSelectedLoanForGestion] = useState<any>(null)
-
-    const handleOpenGestion = (prestamo: any, e?: React.MouseEvent) => {
-        if (e) {
-            e.preventDefault()
-            e.stopPropagation()
-        }
-        setSelectedLoanForGestion(prestamo)
-        setGestionOpen(true)
-    }
-
-    // Asignar Tarea State
-    const [asignarTareaOpen, setAsignarTareaOpen] = useState(false)
-    const [selectedLoanForAsignar, setSelectedLoanForAsignar] = useState<any>(null)
-
-    const handleOpenAsignarTarea = (prestamo: any, e?: React.MouseEvent) => {
-        if (e) {
-            e.preventDefault()
-            e.stopPropagation()
-        }
-        setSelectedLoanForAsignar(prestamo)
-        setAsignarTareaOpen(true)
-    }
-
     // Handler para bloquear/desbloquear pagos de un asesor (Admin only)
-    const [togglingBloqueo, setTogglingBloqueo] = useState<string | null>(null)
     const handleToggleBloqueo = async (asesorId: string, currentlyBlocked: boolean, asesorNombre: string, e?: React.MouseEvent) => {
         if (e) {
             e.preventDefault()

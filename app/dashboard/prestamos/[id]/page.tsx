@@ -14,9 +14,9 @@ import { UploadEvidenceButton } from '@/components/dashboard/upload-evidence-but
 import { Calendar, DollarSign, Percent, User, Users, CreditCard, AlertTriangle, Lock } from "lucide-react";
 import Link from "next/link";
 import { LoanTabs } from "@/components/prestamos/loan-tabs";
-import { cn } from "@/lib/utils";
 import { BackButton } from "@/components/ui/back-button";
 import { getTodayPeru, calculateLoanMetrics, getLoanStatusUI } from "@/lib/financial-logic";
+import { cn, getFrequencyBadgeStyles } from "@/lib/utils";
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -407,32 +407,48 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-4 lg:grid-cols-8 gap-y-6 gap-x-2 md:gap-8 pt-4 md:pt-6 border-t border-white/10 relative z-10">
-                        <div className="flex flex-col justify-between h-full space-y-1.5">
-                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black">Monto</p>
-                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end">
+                    <div className="grid grid-cols-3 lg:grid-cols-9 gap-y-6 gap-x-2 pt-4 md:pt-6 border-t border-white/10 relative z-10 w-full">
+                        {/* MONTO */}
+                        <div className="flex flex-col items-center justify-between h-full space-y-1.5 text-center">
+                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black w-full">Monto</p>
+                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-center w-full">
                                 <p className="text-xs md:text-2xl font-black text-white leading-none tracking-tight">${prestamo.monto?.toLocaleString()}</p>
                             </div>
                         </div>
 
-                        <div className="flex flex-col justify-between h-full space-y-1.5 text-center">
-                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black">Interés</p>
-                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-center">
+                        {/* INTERES */}
+                        <div className="flex flex-col items-center justify-between h-full space-y-1.5 text-center">
+                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black w-full">Interés</p>
+                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-center w-full">
                                 <p className="text-xs md:text-2xl font-black text-white leading-none tracking-tight">{prestamo.interes}%</p>
                             </div>
                         </div>
 
-                        <div className="flex flex-col justify-between h-full space-y-1.5 text-center sm:text-left">
-                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black">Cuotas</p>
-                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-center sm:justify-start">
+                        {/* FRECUENCIA */}
+                        <div className="flex flex-col items-center justify-between h-full space-y-1.5 text-center">
+                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black w-full">Frecuencia</p>
+                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-center w-full">
+                                <Badge className={cn(
+                                    "text-[9px] md:text-sm font-black px-2 py-0.5 rounded-lg border uppercase tracking-wider",
+                                    getFrequencyBadgeStyles(prestamo.frecuencia)
+                                )}>
+                                    {prestamo.frecuencia}
+                                </Badge>
+                            </div>
+                        </div>
+
+                        {/* CUOTAS */}
+                        <div className="flex flex-col items-center justify-between h-full space-y-1.5 text-center">
+                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black w-full">Cuotas</p>
+                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-center w-full">
                                 <p className="text-xs md:text-2xl font-black text-white leading-none tracking-tight">{prestamo.cuotas}</p>
                             </div>
                         </div>
 
                         {/* SALDO PARCIAL */}
-                        <div className="flex flex-col justify-between h-full space-y-1.5 text-right sm:text-left">
-                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black">Saldo</p>
-                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-end sm:justify-start">
+                        <div className="flex flex-col items-center justify-between h-full space-y-1.5 text-center">
+                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black w-full">Saldo</p>
+                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-center w-full">
                                 <p className={cn(
                                     "text-xs md:text-2xl font-black leading-none tracking-tight",
                                     metrics.saldoCuotaParcial > 0 ? "text-blue-400" : "text-white/30"
@@ -442,10 +458,10 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                             </div>
                         </div>
 
-                        {/* PROGRESO (Standardized with Panel) */}
-                        <div className="flex flex-col justify-between h-full space-y-1.5">
-                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black">Prog.</p>
-                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex flex-col justify-end items-start text-left">
+                        {/* PROGRESO */}
+                        <div className="flex flex-col items-center justify-between h-full space-y-1.5 text-center">
+                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black w-full">Prog.</p>
+                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex flex-col justify-end items-center w-full text-center">
                                 {metrics.totalCuotas > 0 && (
                                     <div className="mb-0.5">
                                         {metrics.cuotasPagadas >= metrics.totalCuotas ? (
@@ -466,9 +482,10 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                             </div>
                         </div>
 
-                        <div className="flex flex-col justify-between h-full space-y-1.5 text-center">
-                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black">Estado</p>
-                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-center">
+                        {/* ESTADO */}
+                        <div className="flex flex-col items-center justify-between h-full space-y-1.5 text-center">
+                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black w-full">Estado</p>
+                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-center w-full">
                                 <div className="flex items-center gap-1 mb-0.5">
                                     {(() => {
                                         const statusUI = getLoanStatusUI({ ...prestamo, metrics, deudaHoy: metrics.deudaExigibleHoy });
@@ -483,16 +500,18 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                             </div>
                         </div>
 
-                        <div className="flex flex-col justify-between h-full space-y-1.5 text-center sm:text-left">
-                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black">Inicio</p>
-                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-center sm:justify-start">
+                        {/* INICIO */}
+                        <div className="flex flex-col items-center justify-between h-full space-y-1.5 text-center">
+                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black w-full">Inicio</p>
+                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-center w-full text-center">
                                 <p className="text-[9px] md:text-sm font-bold text-white/50 mb-0.5">{prestamo.fecha_inicio?.split('-').reverse().join('/')}</p>
                             </div>
                         </div>
 
-                        <div className="flex flex-col justify-between h-full space-y-1.5 text-right">
-                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black">Fin</p>
-                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-end">
+                        {/* FIN */}
+                        <div className="flex flex-col items-center justify-between h-full space-y-1.5 text-center">
+                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black w-full">Fin</p>
+                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-center w-full text-center">
                                 <p className="text-[9px] md:text-sm font-bold text-white/50 mb-0.5">{prestamo.fecha_fin?.split('-').reverse().join('/')}</p>
                             </div>
                         </div>

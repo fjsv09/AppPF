@@ -167,10 +167,30 @@ export function EditLoanModal({ open, onOpenChange, prestamo, onSuccess }: EditL
                                     <SelectValue placeholder="Seleccionar" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
-                                    <SelectItem value="diario">Diario</SelectItem>
-                                    <SelectItem value="semanal">Semanal</SelectItem>
-                                    <SelectItem value="quincenal">Quincenal</SelectItem>
-                                    <SelectItem value="mensual">Mensual</SelectItem>
+                                    <SelectItem value="diario">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                            <span>Diario</span>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="semanal">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-purple-500" />
+                                            <span>Semanal</span>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="quincenal">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-amber-500" />
+                                            <span>Quincenal</span>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="mensual">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-rose-500" />
+                                            <span>Mensual</span>
+                                        </div>
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

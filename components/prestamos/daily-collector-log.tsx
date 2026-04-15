@@ -88,32 +88,56 @@ export function DailyCollectorLog({
     const canPayDueToTime = isWithinHours || isTemporaryUnlocked
     // --- FIN LOGICA DE ACCESO ---
 
+    // --- VIRTUAL DISTRIBUTION LOGIC ---
+    const virtualCronograma = useMemo(() => {
+        if (!cronograma) return [];
+        const sorted = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota);
+        const totalPagadoHistorico = (pagos || []).reduce((acc: number, p: any) => acc + (parseFloat(p.monto_pagado) || 0), 0);
+        let remaining = totalPagadoHistorico;
+        
+        return sorted.map(c => {
+            const montoCuota = parseFloat(c.monto_cuota || 0);
+            let pagadoEnEstaCuota = 0;
+            if (remaining >= montoCuota - 0.01) {
+                pagadoEnEstaCuota = montoCuota;
+                remaining -= montoCuota;
+            } else if (remaining > 0) {
+                pagadoEnEstaCuota = Math.round(remaining * 100) / 100;
+                remaining = 0;
+            }
+            return {
+                ...c,
+                monto_pagado_virtual: pagadoEnEstaCuota,
+                monto_pagado: pagadoEnEstaCuota // OVERRIDE PARA LA UI
+            };
+        });
+    }, [cronograma, pagos]);
+
     // --- LOGICA DE CUOTA ACTIVA (Identificar cobro del día) ---
     const activeQuota = useMemo(() => {
-        if (!cronograma) return null;
-        const sorted = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota)
-        const quotasWithStatus = sorted.map(c => {
+        if (virtualCronograma.length === 0) return null;
+        const quotasWithStatus = virtualCronograma.map(c => {
             const montoCuota = parseFloat(c.monto_cuota)
-            const montoPagado = parseFloat(c.monto_pagado || 0)
+            const montoPagado = parseFloat(c.monto_pagado)
             return { ...c, isPaid: (montoCuota - montoPagado) <= 0.01 }
         })
         const firstUnpaid = quotasWithStatus.find(q => !q.isPaid)
         const todayQuota = quotasWithStatus.find(q => !q.isPaid && q.fecha_vencimiento === todayStr)
         return todayQuota || firstUnpaid
-    }, [cronograma, todayStr])
+    }, [virtualCronograma, todayStr])
     // --- FIN LOGICA CUOTA ACTIVA ---
 
     const allRows = useMemo(() => {
-        if (!cronograma) return []
-        const qDates = cronograma.map((c: any) => c.fecha_vencimiento)
+        if (virtualCronograma.length === 0) return []
+        const qDates = virtualCronograma.map((c: any) => c.fecha_vencimiento)
         const pDates = (pagos || []).map((p: any) => formatDatePeru(p.created_at, 'isoDate'))
         const dates = Array.from(new Set([...qDates, ...pDates])).sort()
         return dates.map(d => ({
             date: d,
-            cuota: cronograma.find((c: any) => c.fecha_vencimiento === d),
+            cuota: virtualCronograma.find((c: any) => c.fecha_vencimiento === d),
             physical: (pagos || []).filter((p: any) => formatDatePeru(p.created_at, 'isoDate') === d)
         }))
-    }, [cronograma, pagos])
+    }, [virtualCronograma, pagos])
 
     if (allRows.length === 0) return <div className="py-10 text-center text-slate-500 font-bold uppercase text-[10px]">Sin datos</div>
 
@@ -226,6 +250,10 @@ export function DailyCollectorLog({
                                 } else if (isPart) {
                                   if (totalDay > 0) st = { l: "ABONÓ", c: "text-amber-400 bg-amber-500/10", bg: "bg-amber-500/5" }
                                   else st = { l: "SISTEMA", c: "text-rose-500 bg-rose-500/10", bg: "bg-rose-500/5" }
+                                } else if (totalDay > 0) {
+                                  // Regla de Recaudación Física: Si se cobró dinero pero se aplicó a deudas anteriores
+                                  if (totalDay >= (cVal - 0.01)) st = { l: "CUMPLIÓ", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
+                                  else st = { l: "ABONÓ", c: "text-amber-400 bg-amber-500/10", bg: "bg-amber-500/5" }
                                 } else if (isFuture) st = { l: "PENDIENTE", c: "text-slate-500 bg-slate-800/20", bg: "" }
 
                                 return (

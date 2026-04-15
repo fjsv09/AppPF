@@ -1,17 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
-// This uses the SERVICE_ROLE key to create users - ONLY accessible from server
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false
-        }
-    }
-)
+import { requireAdmin, createAdminClient } from '@/utils/supabase/admin'
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
     try {
@@ -33,9 +23,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             )
         }
 
-        // Check if caller is admin (get from current session)
-        // In production, you'd verify the caller has admin role
-        // For now, we'll check the authorization header or cookie
+        // Validar que el ejecutor tenga rol Admin real comprobando contra DB
+        const authCheck = await requireAdmin()
+        if ('error' in authCheck) {
+            return authCheck.error // Retorna el 401/403 construido
+        }
+
+        const supabaseAdmin = createAdminClient()
 
         // Check if user already exists by email
         const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()

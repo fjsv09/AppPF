@@ -151,11 +151,14 @@ export function SimpleImageUpload({
               <span className="text-[10px] text-slate-300 font-medium">PDF</span>
             </div>
           ) : (
-            <img
-              src={preview || value}
-              alt={label}
-              className="w-full h-full object-cover"
-            />
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={preview || value}
+                alt={label}
+                className="w-full h-full object-cover"
+              />
+            </>
           )}
         </div>
       )}

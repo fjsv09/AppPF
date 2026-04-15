@@ -158,27 +158,64 @@ export async function GET(
             }
         }
 
-        // --- PARCHE SCORE: CORREGIR HISTORIAL DE MORA/VENCIDO NO CONTABILIZADO POR LA BD ---
+        // --- PARCHE SCORE: CORREGIR HISTORIAL DE MORA/VENCIDO Y MIGRACIÓN NO CONTABILIZADO POR LA BD ---
         if (responseElegibilidad?.score_detalle) {
             const clienteId = prestamo?.cliente_id || responseElegibilidad.cliente_id || (responseElegibilidad.score_detalle.cliente_id);
             if (clienteId) {
+                // 1. Obtener todos los préstamos del cliente
                 const { data: todosPrestamos } = await supabaseAdmin
                     .from('prestamos')
-                    .select('estado_mora')
+                    .select('id, estado_mora, observacion_supervisor')
                     .eq('cliente_id', clienteId);
                 
                 if (todosPrestamos) {
+                    // Fix Historial Mora (Regla ya existente)
                     const realMoraCount = todosPrestamos.filter(p => ['vencido', 'castigado', 'legal'].includes(p.estado_mora?.toLowerCase())).length;
                     const dbMoraCount = responseElegibilidad.score_detalle.historial_mora || 0;
                     
                     if (realMoraCount > dbMoraCount) {
                         const diff = realMoraCount - dbMoraCount;
                         responseElegibilidad.score_detalle.historial_mora = realMoraCount;
-                        // Penalidad de 20 pts por cada préstamo vencido no contabilizado
                         let currentScore = typeof responseElegibilidad.score === 'number' ? responseElegibilidad.score : parseInt(responseElegibilidad.score || '50');
                         currentScore = Math.max(0, currentScore - (diff * 20));
                         responseElegibilidad.score = currentScore;
                         responseElegibilidad.score_detalle.score = currentScore;
+                    }
+
+                    // 2. EXCLUIR DATOS DE MIGRACIÓN DEL SCORE
+                    const prestamosMigradosIds = todosPrestamos
+                        .filter(p => p.observacion_supervisor?.includes('Préstamo migrado del sistema anterior'))
+                        .map(p => p.id);
+
+                    if (prestamosMigradosIds.length > 0) {
+                        console.log(`[PATCH SCORE] Detectados ${prestamosMigradosIds.length} préstamos migrados para el cliente ${clienteId}`);
+                        
+                        // Obtenemos el total de cuotas de migración
+                        const { data: cuotasMigracion } = await supabaseAdmin
+                            .from('cronograma_cuotas')
+                            .select('id')
+                            .in('prestamo_id', prestamosMigradosIds);
+                        
+                        const totalCuotasMigradas = cuotasMigracion?.length || 0;
+                        console.log(`[PATCH SCORE] Total cuotas migratorias a ignorar: ${totalCuotasMigradas}`);
+                        
+                        // Si el score reporta pagos tardíos, restamos las cuotas migratorias que ya pasaron
+                        const originalLatePayments = responseElegibilidad.score_detalle.pagos_tardios || 0;
+                        if (originalLatePayments > 0) {
+                            const cleanLatePayments = Math.max(0, originalLatePayments - totalCuotasMigradas);
+                            const impactRemoved = originalLatePayments - cleanLatePayments;
+                            
+                            responseElegibilidad.score_detalle.pagos_tardios = cleanLatePayments;
+                            
+                            let currentScore = typeof responseElegibilidad.score === 'number' ? responseElegibilidad.score : parseInt(responseElegibilidad.score || '50');
+                            const restoredPoints = Math.floor(impactRemoved * 0.5);
+                            currentScore = Math.min(100, currentScore + restoredPoints);
+                            
+                            responseElegibilidad.score = currentScore;
+                            responseElegibilidad.score_detalle.score = currentScore;
+                            
+                            console.log(`[PATCH SCORE] Pagos tardíos ajustados: ${originalLatePayments} -> ${cleanLatePayments}. Score restaurado en ${restoredPoints} puntos.`);
+                        }
                     }
                 }
             }

@@ -261,7 +261,7 @@ export async function GET(request: Request) {
         renovaciones_volumen += parseFloat(r.prestamo_nuevo?.monto || 0)
     })
 
-    // Total clientes activos con deuda vigente
+    // Total clientes ACTIVOS
     const { data: clientesConDeuda } = await supabaseAdmin
         .from('prestamos')
         .select('cliente_id')

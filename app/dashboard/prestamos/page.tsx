@@ -82,7 +82,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             ),
             cronograma_cuotas (
                 *,
-                pagos (created_at, monto_pagado, voucher_compartido)
+                pagos (created_at, monto_pagado, voucher_compartido, latitud, longitud, registrado_por)
             ),
             gestiones (
                 id,
@@ -99,7 +99,8 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                 notas,
                 fecha_inicio,
                 asesor_id
-            )
+            ),
+            observacion_supervisor
         `)
         .order('created_at', { ascending: false })
 
@@ -217,10 +218,15 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
 
     // 1.5. Calculate loan Management Map for Renewal Logic 
     // Computed over filteredList (so it respects advisor scope)
-    const loanManagementMap = filteredList.reduce((acc: Record<string, {hasActive: boolean}>, curr: any) => {
+    const loanManagementMap = filteredList.reduce((acc: Record<string, {hasActive: boolean, latestLoanId: string}>, curr: any) => {
         const cId = curr.cliente_id || curr.clientes?.id
         if (!cId) return acc
-        if (!acc[cId]) acc[cId] = { hasActive: false }
+        if (!acc[cId]) {
+            acc[cId] = { 
+                hasActive: false,
+                latestLoanId: curr.id // First one encountered is latest due to DESC sort
+            }
+        }
         if (curr.estado === 'activo') {
             acc[cId].hasActive = true
         }
@@ -315,6 +321,18 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             const isClientBlocked = !!prestamo.clientes?.bloqueado_renovacion
             if (isClientBlocked) return false // No se cuentan como renovables si el cliente está bloqueado
             
+            // Regla para Préstamos Migrados:
+            // Si es migrado y ya no tiene saldo pendiente (efectivamente finalizado), 
+            // solo permitimos la renovación si es el registro más reciente de ese cliente.
+            const isMigrado = prestamo.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+            const isEffectivelyFinalized = prestamo.estado === 'finalizado' || 
+                                         prestamo.estado === 'renovado' || 
+                                         (prestamo.saldo_pendiente <= 0.01 && typeof prestamo.saldo_pendiente === 'number')
+
+            if (isMigrado && isEffectivelyFinalized) {
+                if (mgmt && prestamo.id !== mgmt.latestLoanId) return false
+            }
+
             if (prestamoIdsConSolicitudPendiente.includes(prestamo.id)) return false
             if (!['activo', 'finalizado'].includes(prestamo.estado)) return false
 
@@ -372,7 +390,41 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         return acc + Math.max(0, deudaTotal - pagado)
     }, 0)
 
-    const activeLoans = prestamos.filter(p => p.estado === 'activo').length
+    // --- NUEVA LÓGICA DE ACTIVOS (Sincronizada con Directorio de Clientes) ---
+    // 1. Agrupar préstamos por cliente para identificar el principal
+    const clientesMapActivos = new Map<string, any>()
+    prestamos.forEach(p => {
+        const cId = p.cliente_id
+        if (!cId) return
+        if (!clientesMapActivos.has(cId)) {
+            clientesMapActivos.set(cId, [])
+        }
+        clientesMapActivos.get(cId).push(p)
+    })
+
+    const activeLoans = Array.from(clientesMapActivos.entries()).filter(([cId, loans]) => {
+        const cliente = loans[0]?.clientes
+        // Regla: No estar bloqueado para renovar
+        if (!!cliente?.bloqueado_renovacion) return false
+
+        // Buscar préstamo principal activo (no paralelo, no refinanciado)
+        const mainActiveLoan = loans.find((p: any) => 
+            p.estado === 'activo' && 
+            !p.es_paralelo && 
+            p.estado !== 'refinanciado' &&
+            !prestamoIdsProductoRefinanciamiento.includes(p.id)
+        )
+
+        if (!mainActiveLoan) return false
+
+        // Regla: No estar vencido
+        if (mainActiveLoan.estado_mora === 'vencido') return false
+
+        // Regla: Debe tener saldo pendiente
+        const metrics = mainActiveLoan.metrics // Ya calculados arriba
+        return (metrics?.saldoPendiente || 0) > 0.01
+    }).length
+
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
 
     const totalPagado = prestamos.reduce((acc, p) => acc + (p.total_pagado_acumulado || 0), 0)
@@ -504,7 +556,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             {/* ---------------- KPI GRID (REORGANIZED COMPACT) ---------------- */}
             <div className={cn(
                 "grid grid-cols-2 gap-2 md:gap-4 mb-6",
-                userRole === 'admin' ? "lg:grid-cols-5" : "lg:grid-cols-4"
+                userRole === 'admin' ? "lg:grid-cols-6" : "lg:grid-cols-5"
             )}>
                 {/* Meta Hoy Card (Uniform Size) */}
                 <Link href="/dashboard/prestamos?tab=ruta_hoy" className="bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] transition-all group">
@@ -536,6 +588,27 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                         <div className="flex">
                             <span className="bg-[#10b981]/10 text-[#10b981] text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-[#10b981]/20 uppercase tracking-wider mt-1">
                                 {clientesCobradosHoy} de {totalClientesHoy} Préstamos
+                            </span>
+                        </div>
+                     </div>
+                </Link>
+
+                {/* KPI: ACTIVOS (NUEVO) */}
+                <Link href="/dashboard/prestamos?tab=activos" className="bg-[#090e16] border border-emerald-500/20 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] hover:border-emerald-500/40 transition-all group">
+                     {/* Decorative background wallet icon */}
+                     <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12 group-hover:opacity-[0.03] transition-opacity">
+                        <Users className="w-20 h-20 md:w-24 md:h-24 text-emerald-500" />
+                     </div>
+                     
+                     <div className="relative z-10">
+                        <p className="text-emerald-500 font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-1 md:mb-2">ACTIVOS</p>
+                        <h2 className="text-lg md:text-2xl font-black text-white tracking-tighter">{activeLoans}</h2>
+                     </div>
+
+                     <div className="relative z-10 mt-1 md:mt-2 space-y-1.5">
+                        <div className="flex">
+                            <span className="bg-emerald-500/10 text-emerald-400 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider mt-1">
+                                COBRANZA VIGENTE
                             </span>
                         </div>
                      </div>

@@ -95,6 +95,27 @@ export function CronogramaClient({
     // Calculate Global State for Display
     const sorted = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota)
     
+    // Virtual Distribution Logic (Align with VoucherContent & Loanmetrics)
+    // Usamos todos los pagos históricos para calcular cómo se distribuyen lógicamente sobre las cuotas
+    const totalPagadoHistorico = pagos.reduce((acc, p) => acc + (parseFloat(p.monto_pagado) || 0), 0)
+    let remainingToDistribute = totalPagadoHistorico
+    
+    const virtualCronograma = sorted.map(c => {
+        const montoCuota = parseFloat(c.monto_cuota || 0)
+        let pagadoEnEstaCuota = 0
+        if (remainingToDistribute >= montoCuota - 0.01) {
+            pagadoEnEstaCuota = montoCuota
+            remainingToDistribute -= montoCuota
+        } else if (remainingToDistribute > 0) {
+            pagadoEnEstaCuota = Math.round(remainingToDistribute * 100) / 100
+            remainingToDistribute = 0
+        }
+        return {
+            ...c,
+            monto_pagado_virtual: pagadoEnEstaCuota
+        }
+    })
+    
     // Today's date for comparison (start of day)
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -106,12 +127,13 @@ export function CronogramaClient({
         day: '2-digit' 
     }).format(new Date())
 
-    // Step 1: Classify each quota
-    const quotasWithStatus = sorted.map(c => {
+    // Step 1: Classify each quota based on Virtual Distribution
+    const quotasWithStatus = virtualCronograma.map(c => {
         const dueDate = new Date(c.fecha_vencimiento + 'T00:00:00')
-        const montoCuota = parseFloat(c.monto_cuota)
-        const montoPagado = parseFloat(c.monto_pagado || 0)
-        const pendiente = montoCuota - montoPagado
+        const montoCuota = parseFloat(c.monto_cuota || 0)
+        // Sustituimos monto_pagado por el virtualmente calculado
+        const montoPagado = c.monto_pagado_virtual
+        const pendiente = Math.max(0, montoCuota - montoPagado)
         const isPaid = pendiente <= 0.01
         
         // Determine if overdue, today, or future
@@ -286,7 +308,7 @@ export function CronogramaClient({
                                                 <RefreshCw className="w-6 h-6 text-slate-600" />
                                             </div>
                                             <p className="font-medium">No hay cuotas generadas</p>
-                                            {!prestamo.bloqueo_cronograma && <p className="text-xs text-slate-600 mt-1">Presione "Regenerar" para crear el cronograma.</p>}
+                                            {!prestamo.bloqueo_cronograma && <p className="text-xs text-slate-600 mt-1">Presione &quot;Regenerar&quot; para crear el cronograma.</p>}
                                         </div>
                                     </td>
                                 </tr>
@@ -319,9 +341,9 @@ export function CronogramaClient({
                                                 <span className="hidden md:inline">${parseFloat(cuota.monto_cuota).toFixed(2)}</span>
                                             </td>
                                             <td className="px-2 md:px-4 py-3 text-right">
-                                                <span className={`text-[11px] md:text-sm font-bold ${parseFloat(cuota.monto_pagado || 0) > 0 ? 'text-emerald-400' : 'text-slate-600'}`}>
-                                                    <span className="md:hidden">${parseFloat(cuota.monto_pagado || 0).toFixed(0)}</span>
-                                                    <span className="hidden md:inline">${parseFloat(cuota.monto_pagado || 0).toFixed(2)}</span>
+                                                <span className={`text-[11px] md:text-sm font-bold ${cuota.montoPagado > 0 ? 'text-emerald-400' : 'text-slate-600'}`}>
+                                                    <span className="md:hidden">${cuota.montoPagado.toFixed(0)}</span>
+                                                    <span className="hidden md:inline">${cuota.montoPagado.toFixed(2)}</span>
                                                 </span>
                                             </td>
                                             <td className="px-2 md:px-4 py-3 text-right font-bold text-[11px] md:text-sm text-white">

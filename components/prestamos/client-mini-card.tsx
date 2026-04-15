@@ -34,11 +34,14 @@ export function ClientMiniCard({ clienteId, nombres, fotoPerfil, className }: Cl
                             alt={nombres}
                             className="w-full h-full"
                             thumbnail={
-                                <img
-                                    src={fotoPerfil}
-                                    alt={nombres}
-                                    className="w-full h-full object-cover"
-                                />
+                                <>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={fotoPerfil}
+                                        alt={nombres}
+                                        className="w-full h-full object-cover"
+                                    />
+                                </>
                             }
                         />
                     </div>

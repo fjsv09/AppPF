@@ -170,39 +170,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
             }
         }
     }
-    // Si es supervisor, esElegibleParaRenovar se mantiene en false.
     
-    const esUltimoPrestamo = esElegibleParaRenovar
-
-    const todayPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
-    const metrics = calculateLoanMetrics({ 
-        ...prestamo, 
-        cronograma_cuotas: cronograma || [] 
-    }, todayPeru, { 
-        renovacionMinPagado, 
-        umbralCpp: 4, 
-        umbralMoroso: 7, 
-        umbralCppOtros: 1, 
-        umbralMorosoOtros: 2 
-    })
-    
-    const esRefinanciado = prestamo.estado === 'refinanciado'
-    const esCandidatoRefinanciacionAdmin = (metrics.riesgoPorcentaje >= refinanciacionMinMora) && (userRole === 'admin');
-    const esRenovacionParaleloAdmin = esParalelo && (userRole === 'admin');
-    const esFlujoRefinanciacionAdmin = esCandidatoRefinanciacionAdmin || esRenovacionParaleloAdmin;
-
-    const tieneSolicitudPendiente = !!solicitudRenovacion
-    const puedeRenovar = userRole && !prestamo.clientes?.bloqueado_renovacion && (
-        (userRole === 'admin') || 
-        (userRole === 'asesor' && !esParalelo && !esRefinanciado && !esProductoDeRefinanciamiento) ||
-        (userRole === 'supervisor' && !esProductoDeRefinanciamiento)
-    )
-    
-    const mostrarBotonRenovacion = esUltimoPrestamo && !tieneSolicitudPendiente && (
-        prestamo.estado === 'activo' || 
-        prestamo.estado === 'finalizado'
-    ) && (puedeRenovar || esFlujoRefinanciacionAdmin)
-
     const { data: qCuentas } = await supabaseAdmin.from('cuentas_financieras').select('id, nombre, saldo').order('nombre')
     const cuentas = qCuentas || []
 
@@ -222,6 +190,49 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
             .order('created_at', { ascending: false });
         pagos = fullData || [];
     }
+
+    const todayPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+    const metrics = calculateLoanMetrics({ 
+        ...prestamo, 
+        cronograma_cuotas: cronograma || [] 
+    }, todayPeru, { 
+        renovacionMinPagado, 
+        umbralCpp: 4, 
+        umbralMoroso: 7, 
+        umbralCppOtros: 1, 
+        umbralMorosoOtros: 2 
+    }, pagos)
+
+    // [BLOQUEO MIGRACIÓN] Si es un préstamo migrado ya pagado (o sin saldo), 
+    // solo permitimos renovar si es el más reciente de todo su historial.
+    const isMigrado = prestamo.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+    const effectivelyFinalized = prestamo.estado === 'finalizado' || (metrics.saldoPendiente <= 0.01)
+
+    if (isMigrado && effectivelyFinalized && todosLosPrestamos && todosLosPrestamos.length > 0) {
+        const latestLoan = todosLosPrestamos[todosLosPrestamos.length - 1]
+        if (latestLoan.id !== prestamo.id) {
+            esElegibleParaRenovar = false
+        }
+    }
+    
+    const esUltimoPrestamo = esElegibleParaRenovar
+
+    const esRefinanciado = prestamo.estado === 'refinanciado'
+    const esCandidatoRefinanciacionAdmin = (metrics.riesgoPorcentaje >= refinanciacionMinMora) && (userRole === 'admin');
+    const esRenovacionParaleloAdmin = esParalelo && (userRole === 'admin');
+    const esFlujoRefinanciacionAdmin = esCandidatoRefinanciacionAdmin || esRenovacionParaleloAdmin;
+
+    const tieneSolicitudPendiente = !!solicitudRenovacion
+    const puedeRenovar = userRole && !prestamo.clientes?.bloqueado_renovacion && (
+        (userRole === 'admin') || 
+        (userRole === 'asesor' && !esParalelo && !esRefinanciado && !esProductoDeRefinanciamiento) ||
+        (userRole === 'supervisor' && !esProductoDeRefinanciamiento)
+    )
+    
+    const mostrarBotonRenovacion = esUltimoPrestamo && !tieneSolicitudPendiente && (
+        prestamo.estado === 'activo' || 
+        prestamo.estado === 'finalizado'
+    ) && (puedeRenovar || esFlujoRefinanciacionAdmin)
 
     // [NUEVO] Obtener cuadres de hoy para validación visual de edición
     let cuadresHoy: any[] = []

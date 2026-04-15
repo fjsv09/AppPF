@@ -257,7 +257,7 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
                                 {solicitud.motivo_prestamo && (
                                     <div className="flex flex-col gap-1.5 pt-4 md:pt-0 md:border-t-0 border-t border-slate-800/50">
                                         <span className="text-xs uppercase font-bold tracking-wider text-slate-500">Motivo del Préstamo</span>
-                                        <span className="text-sm text-slate-200 italic">"{solicitud.motivo_prestamo}"</span>
+                                        <span className="text-sm text-slate-200 italic">&quot;{solicitud.motivo_prestamo}&quot;</span>
                                     </div>
                                 )}
                             </div>
@@ -322,11 +322,14 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
                                                     thumbnail={
                                                         <div className="cursor-pointer">
                                                             <div className="aspect-square bg-slate-950 rounded-xl mb-3 overflow-hidden border border-slate-700 relative">
-                                                                <img 
-                                                                    src={solicitud.documentos_evaluacion[doc.key]}
-                                                                    alt={doc.label}
-                                                                    className="w-full h-full object-cover group-hover:scale-105 group-hover:opacity-80 transition-all duration-300"
-                                                                />
+                                                                <>
+                                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                                    <img 
+                                                                        src={solicitud.documentos_evaluacion[doc.key]}
+                                                                        alt={doc.label}
+                                                                        className="w-full h-full object-cover group-hover:scale-105 group-hover:opacity-80 transition-all duration-300"
+                                                                    />
+                                                                </>
                                                                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                                     <Eye className="w-6 h-6 text-white" />
                                                                 </div>

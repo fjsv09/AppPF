@@ -68,3 +68,17 @@ next-env.d.ts
 /tmp/
 .agent/
 /scripts/
+/scratch/
+*.mjs
+add_column_prestamos.ts
+deep_cleanup_migration.ts
+fix_migrated_status.ts
+inspect_columns.ts
+inspect_oscar_loans.ts
+test-schema.ts
+tmp_debug_db.ts
+tmp_debug_logic.ts
+tmp_get_mora_example.ts
+tmp_inspect_pagos.ts
+supabase_types.ts
+/supabase/.temp/

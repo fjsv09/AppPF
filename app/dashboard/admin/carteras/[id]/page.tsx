@@ -156,7 +156,10 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
                      <ShieldCheck className="w-4 h-4 text-blue-400" />
                    </div>
                ) : responsable?.foto_perfil ? (
-                   <img src={responsable.foto_perfil} className="w-full h-full rounded-full object-cover" />
+                   <>
+                       {/* eslint-disable-next-line @next/next/no-img-element */}
+                       <img src={responsable.foto_perfil} alt={responsable.nombre_completo} className="w-full h-full rounded-full object-cover" />
+                   </>
                ) : (
                    <div className="h-full w-full rounded-full bg-slate-800 flex items-center justify-center">
                      <Users className="w-4 h-4 text-slate-500" />

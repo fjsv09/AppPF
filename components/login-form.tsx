@@ -130,7 +130,10 @@ export function LoginFormContent({
                         <div className="mb-8 text-center">
                             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 mb-6 shadow-lg overflow-hidden">
                                 {systemLogo ? (
-                                    <img src={systemLogo} alt="Logo" className="w-full h-full object-cover" />
+                                    <>
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={systemLogo} alt="Logo" className="w-full h-full object-cover" />
+                                    </>
                                 ) : (
                                     <span className="text-3xl">🛡️</span>
                                 )}

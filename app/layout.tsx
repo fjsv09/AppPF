@@ -39,6 +39,7 @@ export async function generateMetadata(): Promise<Metadata> {
       template: `%s | ${systemName}`,
     },
     description: "Gestión eficiente de préstamos y clientes",
+    manifest: '/manifest.json',
     icons: logoWithTimestamp ? {
       icon: [
         { url: logoWithTimestamp, rel: 'icon', type: 'image/png' },
@@ -60,6 +61,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className="dark">
+      <head>
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+      </head>
       <body
         className={`${inter.variable} antialiased bg-background text-foreground font-sans`}
       >

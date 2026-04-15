@@ -1,18 +1,5 @@
-import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { createClient as createServerClient } from '@/utils/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-
-// Cliente con Service Role para bypass RLS
-const supabaseAdmin = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false
-        }
-    }
-)
+import { requireAdmin, createAdminClient } from '@/utils/supabase/admin'
 
 export async function POST(request: NextRequest) {
     try {
@@ -25,13 +12,14 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        // Obtener el usuario que realiza la acción (Admin/Supervisor)
-        const supabase = await createServerClient()
-        const { data: { user } } = await supabase.auth.getUser()
-
-        if (!user) {
-            return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+        // Validar que el ejecutor tenga rol Admin real comprobando contra DB
+        const authCheck = await requireAdmin()
+        if ('error' in authCheck) {
+            return authCheck.error // Retorna el 401/403 construido
         }
+        
+        const { user } = authCheck
+        const supabaseAdmin = createAdminClient()
 
         // 1. Obtener los asesores actuales antes de cambiar
         const { data: currentClients, error: fetchError } = await supabaseAdmin

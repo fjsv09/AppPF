@@ -20,6 +20,7 @@ import { Edit, MessageSquare, DollarSign } from 'lucide-react'
 import { QuickPayModal } from '../prestamos/quick-pay-modal'
 import { BulkImportModal } from './bulk-import-modal'
 import { FileUp } from 'lucide-react'
+import { getTodayPeru, calculateLoanMetrics } from '@/lib/financial-logic'
 
 const ClientesMapa = dynamic(() => import('./clientes-mapa'), { 
     ssr: false,
@@ -80,9 +81,10 @@ interface ClientDirectoryProps {
     perfiles?: any[] 
     userRol?: 'admin' | 'supervisor' | 'asesor'
     userId?: string
+    prestamoIdsProductoRefinanciamiento?: string[]
 }
 
-type FilterTab = 'todos' | 'con_deuda' | 'sin_prestamos' | 'reasignados' | 'recibos' | 'bloqueados'
+type FilterTab = 'todos' | 'con_deuda' | 'activos_deuda' | 'sin_prestamos' | 'reasignados' | 'recibos' | 'bloqueados'
 
 const ITEMS_PER_PAGE = 10
 
@@ -90,7 +92,7 @@ const formatMoney = (value: number): string => {
     return value.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
-export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', userId = '' }: ClientDirectoryProps) {
+export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', userId = '', prestamoIdsProductoRefinanciamiento = [] }: ClientDirectoryProps) {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
@@ -277,6 +279,27 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     const tabs = useMemo(() => [
         { id: 'todos' as FilterTab, label: 'Todos', count: clientes.length },
         { id: 'con_deuda' as FilterTab, label: 'Con Deuda', count: clientes.filter(c => c.stats.totalDebt > 0).length },
+        { id: 'activos_deuda' as FilterTab, label: 'ACTIVOS', count: clientes.filter(c => {
+            if (!!c.bloqueado_renovacion) return false
+            const loans = c.prestamos || []
+            const mainActiveLoan = loans.find((p: any) => {
+                const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado del sistema anterior')
+                const saldo = p.cronograma_cuotas?.reduce((acc: number, cuota: any) => acc + (cuota.monto_cuota - (cuota.monto_pagado || 0)), 0) || 0
+                const isEffectivelyFinalized = isMigrado && saldo <= 0.01
+
+                return p.estado === 'activo' && 
+                    !isEffectivelyFinalized &&
+                    !p.es_paralelo && 
+                    p.estado !== 'refinanciado' &&
+                    !prestamoIdsProductoRefinanciamiento.includes(p.id)
+            })
+            if (!mainActiveLoan) return false
+            if (mainActiveLoan.estado_mora === 'vencido') return false
+            // Using the centralized utility
+            const today = getTodayPeru()
+            const metrics = calculateLoanMetrics(mainActiveLoan, today)
+            return metrics.saldoPendiente > 0.01
+        }).length },
         { id: 'sin_prestamos' as FilterTab, label: 'Sin Préstamos', count: clientes.filter(c => c.stats.activeLoansCount === 0).length },
         ...(userRol === 'admin' ? [{ id: 'reasignados' as FilterTab, label: 'Reasignados', count: clientes.filter(c => c.wasReassigned).length }] : []),
         ...((userRol === 'admin' || userRol === 'supervisor') ? [
@@ -310,6 +333,25 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         // Tabs
         switch (activeFilter) {
             case 'con_deuda': result = result.filter(c => c.stats.totalDebt > 0); break;
+            case 'activos_deuda': result = result.filter(c => {
+                if (!!c.bloqueado_renovacion) return false
+                const loans = c.prestamos || []
+                const mainActiveLoan = loans.find((p: any) => {
+                    const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado del sistema anterior')
+                    const saldo = p.cronograma_cuotas?.reduce((acc: number, cuota: any) => acc + (cuota.monto_cuota - (cuota.monto_pagado || 0)), 0) || 0
+                    const isEffectivelyFinalized = isMigrado && saldo <= 0.01
+
+                    return p.estado === 'activo' && 
+                           !isEffectivelyFinalized &&
+                           !p.es_paralelo && 
+                           p.estado !== 'refinanciado'
+                })
+                if (!mainActiveLoan) return false
+                if (mainActiveLoan.estado_mora === 'vencido') return false
+                const today = getTodayPeru()
+                const metrics = calculateLoanMetrics(mainActiveLoan, today)
+                return metrics.saldoPendiente > 0.01
+            }); break;
             case 'sin_prestamos': result = result.filter(c => c.stats.activeLoansCount === 0); break;
             case 'reasignados': result = result.filter(c => c.wasReassigned); break;
             case 'recibos': result = result.filter(c => !!c.excepcion_voucher); break;
@@ -626,7 +668,12 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                     src={cliente.foto_perfil} 
                                                     alt={cliente.nombres} 
                                                     className="w-full h-full" 
-                                                    thumbnail={<img src={cliente.foto_perfil} alt={cliente.nombres} className="w-full h-full object-cover" />} 
+                                                    thumbnail={
+                                                        <>
+                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                            <img src={cliente.foto_perfil} alt={cliente.nombres} className="w-full h-full object-cover" />
+                                                        </>
+                                                    } 
                                                 />
                                             ) : (
                                                 <span className="text-sm font-bold text-slate-400">{cliente.nombres?.charAt(0)}</span>
@@ -777,7 +824,12 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                 )}>
                                     <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center overflow-hidden shrink-0 border border-slate-700">
                                         {cliente.foto_perfil ? (
-                                            <ImageLightbox src={cliente.foto_perfil} alt={cliente.nombres} className="w-full h-full" thumbnail={<img src={cliente.foto_perfil} alt={cliente.nombres} className="w-full h-full object-cover" />} />
+                                            <ImageLightbox src={cliente.foto_perfil} alt={cliente.nombres} className="w-full h-full" thumbnail={
+                                                <>
+                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                    <img src={cliente.foto_perfil} alt={cliente.nombres} className="w-full h-full object-cover" />
+                                                </>
+                                            } />
                                         ) : (
                                             <span className="text-xs font-bold text-slate-400">{cliente.nombres?.charAt(0)}</span>
                                         )}
@@ -1097,7 +1149,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                 Editar Perfil de Cliente
                             </AlertDialogTitle>
                             <AlertDialogDescription className="text-slate-400 text-center text-[11px] leading-relaxed mt-2 px-2">
-                                ¿Estás seguro de que deseas MODIFICAR los datos de "{pendingEditClient?.nombres}"?
+                                ¿Estás seguro de que deseas MODIFICAR los datos de &quot;{pendingEditClient?.nombres}&quot;?
                                 <br/><br/>
                                 <span className="text-blue-400/80">Recuerda que todos los cambios quedan registrados en la auditoría del sistema.</span>
                             </AlertDialogDescription>

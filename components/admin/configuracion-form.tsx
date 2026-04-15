@@ -440,7 +440,10 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
                                     {item.clave === 'logo_sistema_url' && currentValue && (
                                         <div className="mt-2 relative group/logo">
                                             <div className="flex justify-center p-2 bg-slate-800/20 rounded-lg border border-slate-700/30">
-                                                <img src={currentValue} alt="Logo Preview" className="h-16 object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                                                <>
+                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                    <img src={currentValue} alt="Logo Preview" className="h-16 object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                                                </>
                                                 {isEditing && (
                                                     <button 
                                                         onClick={() => setConfig({ ...config, [item.clave]: '' })}

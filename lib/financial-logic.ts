@@ -48,10 +48,10 @@ interface LoanMetrics {
 export function calculateLoanMetrics(
   loan: any, 
   today: string = getTodayPeru(),
-  config: SystemConfig = { renovacionMinPagado: 60, umbralCpp: 1, umbralMoroso: 4, umbralCppOtros: 1, umbralMorosoOtros: 2 }
+  config: SystemConfig = { renovacionMinPagado: 60, umbralCpp: 1, umbralMoroso: 4, umbralCppOtros: 1, umbralMorosoOtros: 2 },
+  standalonePagos?: any[]
 ): LoanMetrics {
-  if (!loan || loan.estado !== 'activo') {
-    const totalPagado = (loan.cronograma_cuotas || []).reduce((sum: number, c: any) => sum + (c.monto_pagado || 0), 0);
+  if (!loan) {
     return {
       cuotasAtrasadas: 0,
       deudaExigibleTotal: 0,
@@ -60,7 +60,48 @@ export function calculateLoanMetrics(
       cuotaDiaProgramada: 0,
       cobradoHoy: 0,
       cobradoRutaHoy: 0,
-      totalPagadoAcumulado: totalPagado,
+      totalPagadoAcumulado: 0,
+      saldoPendiente: 0,
+      riesgoPorcentaje: 0,
+      diasSinPago: 0,
+      isCritico: false,
+      isMora: false,
+      isAlDia: true,
+      esRenovable: false,
+      estadoCalculado: 'sin_deuda',
+      valorCuotaPromedio: 0,
+      saldoCuotaParcial: 0,
+      totalCuotas: 0,
+      cuotasPagadas: 0
+    };
+  }
+
+  const cronograma = loan.cronograma_cuotas || [];
+  
+  // Fuente de verdad para pagos: standalonePagos > loan.pagos > flatMap(cronograma.pagos)
+  const pagos = standalonePagos || loan.pagos || cronograma.flatMap((c: any) => c.pagos || []);
+  
+  const totalPagar = Number(loan.monto) * (1 + (Number(loan.interes) / 100));
+
+  // 0. Cálculo de Pagado Real (Basado en transacciones reales para evitar desincronización con el cronograma)
+  // Si tenemos el array de pagos, sumamos el monto_pagado de cada uno.
+  const totalPagadoAcumuladoReal = pagos.length > 0
+    ? pagos.reduce((sum: number, p: any) => sum + (Number(p.monto_pagado) || 0), 0)
+    : cronograma.reduce((sum: number, c: any) => sum + (Number(c.monto_pagado) || 0), 0);
+
+  // Usamos el mayor para ser resilientes a desincronizaciones puntuales en BD
+  const totalPagadoAcumulado = Math.max(totalPagadoAcumuladoReal, cronograma.reduce((sum: number, c: any) => sum + (Number(c.monto_pagado) || 0), 0));
+
+  if (loan.estado !== 'activo') {
+    return {
+      cuotasAtrasadas: 0,
+      deudaExigibleTotal: 0,
+      deudaExigibleHoy: 0,
+      cuotaDiaHoy: 0,
+      cuotaDiaProgramada: 0,
+      cobradoHoy: 0,
+      cobradoRutaHoy: 0,
+      totalPagadoAcumulado: totalPagadoAcumulado,
       saldoPendiente: 0,
       riesgoPorcentaje: 0,
       diasSinPago: 0,
@@ -71,14 +112,10 @@ export function calculateLoanMetrics(
       estadoCalculado: loan?.estado === 'finalizado' ? 'finalizado' : 'sin_deuda',
       valorCuotaPromedio: 0,
       saldoCuotaParcial: 0,
-      totalCuotas: (loan.cronograma_cuotas || []).length,
-      cuotasPagadas: (loan.cronograma_cuotas || []).filter((c: any) => c.estado === 'pagado').length
+      totalCuotas: cronograma.length,
+      cuotasPagadas: cronograma.filter((c: any) => c.estado === 'pagado').length
     };
   }
-
-  const cronograma = loan.cronograma_cuotas || [];
-  const pagos = cronograma.flatMap((c: any) => c.pagos || []);
-  const totalPagar = Number(loan.monto) * (1 + (Number(loan.interes) / 100));
 
   // 1. Meta Hoy (Específicamente cuotas que vencen hoy)
   const cuotaDiaHoy = cronograma
@@ -98,7 +135,7 @@ export function calculateLoanMetrics(
   };
 
   const cobradoHoy = pagos
-    .filter((pay: any) => getIsToday(pay.created_at))
+    .filter((pay: any) => getIsToday(pay.created_at || pay.fecha_pago))
     .reduce((sum: number, pay: any) => sum + (Number(pay.monto_pagado) || 0), 0);
 
   // Cobrado Ruta Hoy: SOLO lo que pagó de la cuota que vence HOY (Meta de la ruta)
@@ -142,20 +179,26 @@ export function calculateLoanMetrics(
     }, 0);
 
   // 3. Deuda Exigible Hoy (Todo lo vencido hasta hoy inclusive)
-  const deudaExigibleHoy = cronograma
+  // Importante: Aquí recalculamos la deuda exigible basada en el TOTAL pagado acumulado real
+  // para que si el dinero se aplicó por cascada, el "Atraso" global disminuya correctamente.
+  const valorCuotaPromedio = cronograma.length > 0 
+    ? cronograma.reduce((s: number, c: any) => s + Number(c.monto_cuota), 0) / cronograma.length
+    : 0;
+
+  const totalExigibleHastaHoy = cronograma
     .filter((c: any) => c.fecha_vencimiento <= today)
-    .reduce((sum: number, c: any) => sum + Math.max(0, Number(c.monto_cuota) - (Number(c.monto_pagado) || 0)), 0);
+    .reduce((sum: number, c: any) => sum + Number(c.monto_cuota), 0);
+
+  const deudaExigibleHoy = Math.max(0, totalExigibleHastaHoy - totalPagadoAcumulado);
 
   // 4. Cuotas Exigibles (Mora + Hoy)
-  // Este conteo debe coincidir con lo que el usuario ve en la tabla para evitar confusión
+  const cuotasAtrasadas = valorCuotaPromedio > 0 ? Math.floor(deudaExigibleHoy / valorCuotaPromedio) : 0;
+  
+  // Conteo de cuotas que tienen saldo pendiente individual (para lógica de CPP/Moroso)
   const totalAtrasadas = cronograma
     .filter((c: any) => c.fecha_vencimiento <= today && c.estado !== 'pagado' && (c.monto_cuota - (c.monto_pagado || 0)) > 0.5)
     .length;
 
-  // Igualando estrictamente al cálculo de UI de la tabla principal
-  const tempValorCuota = cronograma.length > 0 ? cronograma.reduce((s: number, c: any) => s + Number(c.monto_cuota), 0) / cronograma.length : 0;
-  const cuotasAtrasadas = tempValorCuota > 0 ? Math.floor(deudaExigibleHoy / tempValorCuota) : 0;
-  
   // 4.6. Saldo Cuota Parcial (Cualquier cuota con pago > 0 y < monto)
   const partialPaidQuota = cronograma.find((c: any) => {
     const pagado = Number(c.monto_pagado) || 0;
@@ -168,29 +211,21 @@ export function calculateLoanMetrics(
     : 0;
 
   // 5. Acumulados
-  const totalPagadoAcumulado = cronograma.reduce((sum: number, c: any) => sum + (Number(c.monto_pagado) || 0), 0);
   const saldoPendiente = Math.max(0, totalPagar - totalPagadoAcumulado);
 
   // 6. Riesgo Capital % (Vencido <= hoy / Saldo Pendiente)
-  const capitalVencido = cronograma
-    .filter((c: any) => c.fecha_vencimiento <= today)
-    .reduce((sum: number, c: any) => sum + (Number(c.monto_cuota) - (Number(c.monto_pagado) || 0)), 0);
-  const riesgoPorcentaje = totalPagar > 0 ? (capitalVencido / totalPagar) * 100 : 0;
+  // También usamos la deuda exigible recalculada para el riesgo
+  const riesgoPorcentaje = totalPagar > 0 ? (deudaExigibleHoy / totalPagar) * 100 : 0;
 
   // 7. Días sin pago
   let diasSinPago = 0;
   const now = new Date();
   if (pagos.length > 0) {
-    const lastPaymentDate = new Date(Math.max(...pagos.map((pay: any) => new Date(pay.created_at).getTime())));
+    const lastPaymentDate = new Date(Math.max(...pagos.map((pay: any) => new Date(pay.created_at || pay.fecha_pago).getTime())));
     diasSinPago = Math.ceil(Math.abs(now.getTime() - lastPaymentDate.getTime()) / (1000 * 60 * 60 * 24));
   } else if (loan.fecha_inicio) {
     diasSinPago = Math.ceil(Math.abs(now.getTime() - new Date(loan.fecha_inicio).getTime()) / (1000 * 60 * 60 * 24));
   }
-
-  // 8. Valor Cuota Promedio
-  const valorCuotaPromedio = cronograma.length > 0 
-    ? cronograma.reduce((s: number, c: any) => s + Number(c.monto_cuota), 0) / cronograma.length
-    : 0;
 
   // 9. Reglas de Negocio (Dinámicas desde Configuración)
   const isDiario = loan.frecuencia?.toLowerCase() === 'diario';
@@ -201,9 +236,9 @@ export function calculateLoanMetrics(
 
   // La transición se basa en el total de cuotas exigibles (Mora Real + Hoy) o el estado global de mora del préstamo
   const hasCriticalStatus = ['vencido', 'legal', 'castigado'].includes(loan.estado_mora || '');
-  const isCritico = hasCriticalStatus || (isDiario && totalAtrasadas >= cfgMoroso) || (!isDiario && totalAtrasadas >= cfgMorosoOtros);
-  const isMora = ((isDiario && totalAtrasadas >= cfgCpp) || (!isDiario && totalAtrasadas >= cfgCppOtros)) && !isCritico;
-  const isAlDia = totalAtrasadas === 0 && !hasCriticalStatus;
+  const isCritico = hasCriticalStatus || (isDiario && cuotasAtrasadas >= cfgMoroso) || (!isDiario && cuotasAtrasadas >= cfgMorosoOtros);
+  const isMora = ((isDiario && cuotasAtrasadas >= cfgCpp) || (!isDiario && cuotasAtrasadas >= cfgCppOtros)) && !isCritico;
+  const isAlDia = cuotasAtrasadas === 0 && !hasCriticalStatus;
 
   // 10. Renovación
   const renovacionMinPagadoDecimal = (config.renovacionMinPagado || 60) / 100;
@@ -216,7 +251,7 @@ export function calculateLoanMetrics(
   let estadoCalculado: any = 'al_dia';
   if (isCritico) estadoCalculado = 'critico';
   else if (isMora) estadoCalculado = 'atrasado';
-  else if (totalAtrasadas > 0) estadoCalculado = 'deuda';
+  else if (cuotasAtrasadas > 0) estadoCalculado = 'deuda';
 
   return {
     cuotasAtrasadas,
@@ -248,7 +283,29 @@ export function calculateLoanMetrics(
 export function calculateClientSituation(client: any) {
   if (client.estado === 'inactivo') return 'inactivo';
 
-  const activeLoans = (client.prestamos || []).filter((p: any) => p.estado === 'activo');
+  const activeLoans = (client.prestamos || []).filter((p: any) => {
+    // Si ya está finalizado en BD, descartar
+    if (p.estado !== 'activo') return false
+    
+    // Si es una migración, verificar saldo
+    const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado del sistema anterior')
+    if (isMigrado) {
+        // Calcular saldo (Redundante pero seguro)
+        let saldo = 0
+        if (p.cronograma_cuotas) {
+            saldo = p.cronograma_cuotas.reduce((acc: number, c: any) => acc + (c.monto_cuota - (c.monto_pagado || 0)), 0)
+        } else if (p.monto !== undefined && p.interes !== undefined) {
+             // Fallback a cálculo de capital + interés si no hay cronograma cargado
+             const totalPagar = Number(p.monto) * (1 + (Number(p.interes) / 100))
+             // Aquí no tenemos total_pagado_acumulado fácilmente, así que confiamos en el cronograma
+             // o dejamos que pase como activo. Por suerte en las vistas de lista SÍ traemos cronograma.
+        }
+        if (saldo <= 0.01) return false
+    }
+
+    return true
+  });
+
   if (activeLoans.length === 0) return 'sin_deuda';
 
   // Jerarquía de riesgo para el resumen del cliente

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Wallet, MapPin, User, Lock, Phone, Navigation, AlertTriangle } from 'lucide-react'
+import { Wallet, MapPin, User, Lock, Phone, Navigation, AlertTriangle, CheckCircle, DollarSign } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -34,8 +34,35 @@ if (typeof window !== 'undefined') {
 }
 
 // Create custom icons for different statuses
-const createCustomIcon = (color: string) => {
+const createCustomIcon = (color: string, isPayment: boolean = false) => {
     if (typeof window === 'undefined') return {} as any;
+    
+    if (isPayment) {
+        return L.divIcon({
+            className: 'payment-icon',
+            html: `
+                <div style="
+                    background-color: #10b981;
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50%;
+                    border: 3px solid white;
+                    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.5);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-weight: bold;
+                ">
+                    $
+                </div>
+            `,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            popupAnchor: [0, -16]
+        })
+    }
+
     return L.divIcon({
         className: 'custom-icon',
         html: `
@@ -60,6 +87,9 @@ interface RutaMapaProps {
     onQuickPay: (prestamo: any, e: React.MouseEvent) => void
     today: string
     isBlocked?: boolean
+    userRole?: string
+    currentUserId?: string
+    perfiles?: any[]
 }
 
 // Helper component to auto-fit the map bounds to the markers
@@ -74,7 +104,15 @@ function BoundsAutoFitter({ markers }: { markers: [number, number][] }) {
     return null;
 }
 
-export default function RutaMapa({ prestamos, onQuickPay, today, isBlocked = false }: RutaMapaProps) {
+export default function RutaMapa({ 
+    prestamos = [], 
+    onQuickPay, 
+    today, 
+    isBlocked = false, 
+    userRole = 'asesor',
+    currentUserId,
+    perfiles = []
+}: RutaMapaProps) {
     const [isMounted, setIsMounted] = useState(false)
     const [userLoc, setUserLoc] = useState<[number, number] | null>(null)
     const [radioMax, setRadioMax] = useState(300)
@@ -102,34 +140,95 @@ export default function RutaMapa({ prestamos, onQuickPay, today, isBlocked = fal
     if (!isMounted) return <div className="h-[400px] w-full rounded-xl bg-slate-900 animate-pulse flex items-center justify-center text-slate-500">Cargando mapa...</div>
 
     // Filter out loans without valid coordinates
-    const mapItems = prestamos.map(p => {
-        const coordsStr = p.gps_coordenadas || p.clientes?.solicitudes?.[0]?.gps_coordenadas
-        
-        if (!coordsStr || typeof coordsStr !== 'string') return null;
-        const [latStr, lngStr] = coordsStr.split(',')
-        if (!latStr || !lngStr) return null;
+    const mapItems = (() => {
+        try {
+            return prestamos.flatMap(p => {
+                const items = [];
+                
+                // 1. Client Official Location
+                const coordsStr = p.gps_coordenadas || p.clientes?.solicitudes?.[0]?.gps_coordenadas
+                if (coordsStr && typeof coordsStr === 'string') {
+                    const [latStr, lngStr] = coordsStr.split(',')
+                    if (latStr && lngStr) {
+                        const lat = parseFloat(latStr.trim())
+                        const lng = parseFloat(lngStr.trim())
+                        if (!isNaN(lat) && !isNaN(lng)) {
+                            const statusUI = getLoanStatusUI(p);
+                            items.push({
+                                ...p,
+                                id: `${p.id}-official`,
+                                lat,
+                                lng,
+                                isPayment: false,
+                                icon: createCustomIcon(statusUI.marker),
+                                statusText: statusUI.label,
+                                statusColor: statusUI.color,
+                                badgeClass: cn(statusUI.border, statusUI.color, statusUI.animate && "animate-pulse"),
+                                deudaHoy: p.deudaHoy || 0
+                            });
+                        }
+                    }
+                }
 
-        const lat = parseFloat(latStr.trim())
-        const lng = parseFloat(lngStr.trim())
+                // 2. Real Payment Location (Today) - Filtered by role and ownership
+                if (userRole === 'admin' || userRole === 'supervisor') {
+                    const hoyPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+                    
+                    // Si es supervisor, solo permitimos ver cobros hechos por su equipo
+                    // [PATCH]: Verificación de seguridad para perfiles
+                    let myAdvisorIds: string[] = [];
+                    if (userRole === 'supervisor' && currentUserId && Array.isArray(perfiles)) {
+                        myAdvisorIds = perfiles
+                            .filter(profile => profile && profile.supervisor_id === currentUserId)
+                            .map(profile => profile.id);
+                    }
 
-        if (isNaN(lat) || isNaN(lng)) return null;
+                    const pagosDeHoy = (p.cronograma_cuotas || [])
+                        .flatMap((c: any) => c.pagos || [])
+                        .filter((pag: any) => {
+                            if (!pag || !pag.created_at) return false;
+                            
+                            const fechaPago = new Date(pag.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+                            const isCorrectDate = fechaPago === hoyPeru && pag.latitud && pag.longitud;
+                            
+                            if (!isCorrectDate) return false;
 
-        // Use centralized UI logic
-        const statusUI = getLoanStatusUI(p);
-        const icon = createCustomIcon(statusUI.marker);
-        const deudaHoy = p.deudaHoy || 0;
+                            // Restricción para Supervisores: Solo ver sus propios cobros o los de sus asesores
+                            if (userRole === 'supervisor' && currentUserId) {
+                                const isFromTeam = myAdvisorIds.includes(pag.registrado_por) || pag.registrado_por === currentUserId;
+                                return isFromTeam;
+                            }
 
-        return {
-            ...p,
-            lat,
-            lng,
-            icon,
-            statusText: statusUI.label,
-            statusColor: statusUI.color,
-            badgeClass: cn(statusUI.border, statusUI.color, statusUI.animate && "animate-pulse"),
-            deudaHoy
+                            return true;
+                        });
+
+                    pagosDeHoy.forEach((pag: any, idx: number) => {
+                        items.push({
+                            ...p,
+                            id: `${p.id}-payment-${idx}`,
+                            lat: pag.latitud,
+                            lng: pag.longitud,
+                            isPayment: true,
+                            icon: createCustomIcon('', true),
+                            monto_pagado: pag.monto_pagado,
+                            created_at: pag.created_at,
+                            distancia_cobro: coordsStr ? calculateDistance(
+                                parseFloat(coordsStr.split(',')[0]), 
+                                parseFloat(coordsStr.split(',')[1]), 
+                                pag.latitud, 
+                                pag.longitud
+                            ) : null
+                        });
+                    });
+                }
+
+                return items;
+            }).filter(Boolean) as any[];
+        } catch (error) {
+            console.error("CRITICAL ERROR IN MAP RENDERING:", error);
+            return [];
         }
-    }).filter(Boolean) as any[]
+    })();
 
     if (mapItems.length === 0) {
         return (
@@ -201,98 +300,122 @@ export default function RutaMapa({ prestamos, onQuickPay, today, isBlocked = fal
                                 <div className="p-1 min-w-[220px]">
                                     <div className="font-bold text-sm mb-1 flex items-center justify-between">
                                         <div className="flex items-center gap-2">
-                                            <User className="w-3.5 h-3.5 opacity-70" />
+                                            {item.isPayment ? <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> : <User className="w-3.5 h-3.5 opacity-70" />}
                                             <span className="truncate">{item.clientes?.nombres}</span>
                                         </div>
-                                        {distance !== null && (
-                                            <div className={cn(
-                                                "text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-1 font-black",
-                                                isFar ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"
-                                            )}>
-                                                <Navigation className="w-2.5 h-2.5" />
-                                                {distance < 1000 ? `${distance}m` : `${(distance/1000).toFixed(1)}km`}
-                                            </div>
+                                        {item.isPayment ? (
+                                            <Badge className="bg-emerald-500 hover:bg-emerald-600 text-[10px] font-black uppercase">Cobro Realizado</Badge>
+                                        ) : (
+                                            distance !== null && (
+                                                <div className={cn(
+                                                    "text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-1 font-black",
+                                                    isFar ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"
+                                                )}>
+                                                    <Navigation className="w-2.5 h-2.5" />
+                                                    {distance < 1000 ? `${distance}m` : `${(distance/1000).toFixed(1)}km`}
+                                                </div>
+                                            )
                                         )}
                                     </div>
 
-                                    {isFar && (
-                                        <div className="mb-2 p-1.5 bg-red-50 border border-red-100 rounded-lg text-[10px] text-red-600 font-bold flex items-center gap-1.5">
-                                            <AlertTriangle className="w-3 h-3 shrink-0" />
-                                            <span>Fuera de rango para iniciar visita (&gt;{radioMax}m)</span>
-                                        </div>
-                                    )}
-                                
-                                    <div className="grid grid-cols-2 gap-2 mb-3">
-                                        <a 
-                                            href={item.clientes?.telefono ? `tel:${item.clientes?.telefono}` : '#'} 
-                                            className={cn(
-                                                "flex items-center justify-center gap-1.5 text-xs font-bold transition-all px-2 py-2 rounded-xl border shadow-sm",
-                                                item.clientes?.telefono 
-                                                    ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200" 
-                                                    : "text-slate-400 bg-slate-50 border-slate-200 cursor-not-allowed"
+                                    {item.isPayment ? (
+                                        <div className="space-y-2">
+                                            <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3 text-center">
+                                                <div className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest">Monto Recaudado</div>
+                                                <div className="text-2xl font-black text-emerald-700">${item.monto_pagado}</div>
+                                                <div className="text-[10px] text-slate-500 mt-1">
+                                                    {new Date(item.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
+                                                </div>
+                                            </div>
+                                            {item.distancia_cobro !== null && (
+                                                <div className="text-[10px] text-slate-500 flex items-center justify-center gap-1">
+                                                    <MapPin className="w-3 h-3" />
+                                                    Cobrado a {item.distancia_cobro}m de la casa del cliente
+                                                </div>
                                             )}
-                                            onClick={(e) => {
-                                                if (!item.clientes?.telefono) e.preventDefault();
-                                            }}
-                                        >
-                                            <Phone className={cn("w-3.5 h-3.5", item.clientes?.telefono ? "text-emerald-600" : "text-slate-300")} />
-                                            <span>Llamar</span>
-                                        </a>
-                                        {(() => {
-                                            const cronograma = (item.cronograma_cuotas || []);
-                                            const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
-                                            const cuotaHoy = cronograma.find((c: any) => c.fecha_vencimiento === hoy && c.estado !== 'pagado');
-                                            const cuotaPendiente = cronograma.find((c: any) => c.estado !== 'pagado');
-                                            const cuotaTargetId = cuotaHoy?.id || cuotaPendiente?.id;
-                                            
-                                            if (!cuotaTargetId) return null;
-                                            
-                                            return (
-                                                <VisitActionButton 
-                                                    cuotaId={cuotaTargetId} 
-                                                    variant="default" 
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {isFar && (
+                                                <div className="mb-2 p-1.5 bg-red-50 border border-red-100 rounded-lg text-[10px] text-red-600 font-bold flex items-center gap-1.5">
+                                                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                                                    <span>Fuera de rango para iniciar visita (&gt;{radioMax}m)</span>
+                                                </div>
+                                            )}
+                                        
+                                            <div className="grid grid-cols-2 gap-2 mb-3">
+                                                <a 
+                                                    href={item.clientes?.telefono ? `tel:${item.clientes?.telefono}` : '#'} 
                                                     className={cn(
-                                                        "h-9 rounded-xl text-xs font-bold w-full",
-                                                        isFar ? "bg-slate-200 text-slate-400 border-slate-300 opacity-60 cursor-not-allowed" : "bg-indigo-600 text-white"
+                                                        "flex items-center justify-center gap-1.5 text-xs font-bold transition-all px-2 py-2 rounded-xl border shadow-sm",
+                                                        item.clientes?.telefono 
+                                                            ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200" 
+                                                            : "text-slate-400 bg-slate-50 border-slate-200 cursor-not-allowed"
                                                     )}
-                                                    showText={true}
-                                                    disabled={isFar}
-                                                />
-                                            );
-                                        })()}
-                                    </div>
+                                                    onClick={(e) => {
+                                                        if (!item.clientes?.telefono) e.preventDefault();
+                                                    }}
+                                                >
+                                                    <Phone className={cn("w-3.5 h-3.5", item.clientes?.telefono ? "text-emerald-600" : "text-slate-300")} />
+                                                    <span>Llamar</span>
+                                                </a>
+                                                {(() => {
+                                                    const cronograma = (item.cronograma_cuotas || []);
+                                                    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+                                                    const cuotaHoy = cronograma.find((c: any) => c.fecha_vencimiento === hoy && c.estado !== 'pagado');
+                                                    const cuotaPendiente = cronograma.find((c: any) => c.estado !== 'pagado');
+                                                    const cuotaTargetId = cuotaHoy?.id || cuotaPendiente?.id;
+                                                    
+                                                    if (!cuotaTargetId) return null;
+                                                    
+                                                    return (
+                                                        <VisitActionButton 
+                                                            cuotaId={cuotaTargetId} 
+                                                            variant="default" 
+                                                            className={cn(
+                                                                "h-9 rounded-xl text-xs font-bold w-full",
+                                                                isFar ? "bg-slate-200 text-slate-400 border-slate-300 opacity-60 cursor-not-allowed" : "bg-indigo-600 text-white"
+                                                            )}
+                                                            showText={true}
+                                                            disabled={isFar}
+                                                        />
+                                                    );
+                                                })()}
+                                            </div>
 
-                                    <div className="flex bg-slate-100 rounded-lg p-2 mb-3 items-center justify-between border border-slate-200">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mora / Día</span>
-                                            <span className={`font-bold text-lg font-mono ${item.statusColor}`}>
-                                                ${item.deudaHoy.toFixed(2)}
-                                            </span>
-                                        </div>
-                                        <div className="flex flex-col items-end">
-                                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estado</span>
-                                             <Badge variant="outline" className={cn("text-[10px] h-5 px-1.5 uppercase tracking-wide bg-slate-950/50", item.badgeClass)}>
-                                                {item.statusText}
-                                            </Badge>
-                                        </div>
-                                    </div>
+                                            <div className="flex bg-slate-100 rounded-lg p-2 mb-3 items-center justify-between border border-slate-200">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mora / Día</span>
+                                                    <span className={`font-bold text-lg font-mono ${item.statusColor}`}>
+                                                        ${item.deudaHoy.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-col items-end">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estado</span>
+                                                    <Badge variant="outline" className={cn("text-[10px] h-5 px-1.5 uppercase tracking-wide bg-slate-950/50", item.badgeClass)}>
+                                                        {item.statusText}
+                                                    </Badge>
+                                                </div>
+                                            </div>
 
-                                    {item.deudaHoy > 0 && (
-                                        <Button 
-                                            onClick={(e) => {
-                                                 if (!isBlocked) onQuickPay(item, e);
-                                            }}
-                                            disabled={isBlocked}
-                                            className={cn(
-                                                "w-full shadow-sm flex items-center justify-center gap-2 h-8",
-                                                isBlocked 
-                                                    ? "bg-slate-300 text-slate-500 cursor-not-allowed" 
-                                                    : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                            {item.deudaHoy > 0 && (
+                                                <Button 
+                                                    onClick={(e) => {
+                                                        if (!isBlocked) onQuickPay(item, e);
+                                                    }}
+                                                    disabled={isBlocked}
+                                                    className={cn(
+                                                        "w-full shadow-sm flex items-center justify-center gap-2 h-8",
+                                                        isBlocked 
+                                                            ? "bg-slate-300 text-slate-500 cursor-not-allowed" 
+                                                            : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                                    )}
+                                                >
+                                                    {isBlocked ? <Lock className="w-3.5 h-3.5" /> : <Wallet className="w-3.5 h-3.5" />}
+                                                    {isBlocked ? 'Bloqueado' : 'Cobrar'}
+                                                </Button>
                                             )}
-                                        >
-                                            {isBlocked ? <Lock className="w-3.5 h-3.5" /> : <Wallet className="w-3.5 h-3.5" />}
-                                            {isBlocked ? 'Bloqueado' : 'Cobrar'}
-                                        </Button>
+                                        </>
                                     )}
                                 </div>
                             </Popup>
@@ -306,6 +429,7 @@ export default function RutaMapa({ prestamos, onQuickPay, today, isBlocked = fal
                 <h4 className="font-bold text-slate-700 mb-2 uppercase tracking-wider text-[10px]">Leyenda</h4>
                 <div className="flex flex-col gap-1.5">
                     <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm border border-emerald-600"></div><span className="text-slate-600 font-medium">Al día (OK)</span></div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-4 rounded-full bg-emerald-500 shadow-sm border border-white flex items-center justify-center text-[8px] text-white font-bold">$</div><span className="text-slate-600 font-medium font-bold">Cobro Realizado</span></div>
                     <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-400 shadow-sm border border-amber-500"></div><span className="text-slate-600 font-medium">Deuda Hoy</span></div>
                     <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-orange-500 shadow-sm border border-orange-600"></div><span className="text-slate-600 font-medium">CPP (Mora Leve)</span></div>
                     <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-rose-500 shadow-sm border border-rose-600"></div><span className="text-slate-600 font-medium">Moroso / Vencido</span></div>

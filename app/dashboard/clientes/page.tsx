@@ -5,7 +5,7 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { BackButton } from '@/components/ui/back-button'
-import { Users, TrendingUp, CreditCard, Plus, Zap, CheckCircle2, AlertTriangle, Lock, HandCoins } from 'lucide-react'
+import { Users, TrendingUp, CreditCard, Plus, Zap, CheckCircle2, AlertTriangle, Lock, HandCoins, UserCheck } from 'lucide-react'
 import { ClientDirectory } from '@/components/clientes/client-directory'
 import { getTodayPeru, calculateClientSituation, calculateLoanMetrics } from '@/lib/financial-logic'
 import { cn } from '@/lib/utils'
@@ -18,7 +18,13 @@ export const metadata: Metadata = {
     title: 'Directorio Clientes'
 }
 
-export default async function ClientesPage() {
+export default async function ClientesPage({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
+    const sParams = searchParams;
+    const filtroSupervisor = sParams.supervisor as string || 'todos';
+    const filtroAsesor = sParams.asesor as string || 'todos';
+    const filtroSector = sParams.sector as string || 'todos';
+    const searchQuery = sParams.q as string || '';
+
     const supabase = await createClient()
     const supabaseAdmin = createAdminClient()
 
@@ -52,6 +58,7 @@ export default async function ClientesPage() {
                 frecuencia,
                 fecha_inicio,
                 estado_mora,
+                es_paralelo,
                 cronograma_cuotas (
                     monto_cuota,
                     monto_pagado,
@@ -116,12 +123,32 @@ export default async function ClientesPage() {
         reassignments.forEach(r => reassignedClientIds.add(r.cliente_id))
     }
 
+    // Obtener IDs de préstamos que son producto de una refinanciación directa
+    const { data: renovacionesRefinanciamiento } = await supabaseAdmin
+        .from('renovaciones')
+        .select('prestamo_nuevo_id, prestamo_original:prestamo_original_id(estado)')
+    const prestamoIdsProductoRefinanciamiento = (renovacionesRefinanciamiento || [])
+        .filter((r: any) => (r.prestamo_original as any)?.estado === 'refinanciado')
+        .map((r: any) => r.prestamo_nuevo_id as string)
+        .filter(Boolean)
+
     const todayPeru = getTodayPeru()
     
     // Process clients to add calculated stats
     const clients = (clientsRaw || [])?.map((client: any) => {
         // Process loans to identify primary active loan
-        const activeLoans = client.prestamos?.filter((p: any) => p.estado === 'activo') || []
+        const activeLoans = client.prestamos?.filter((p: any) => {
+            const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado del sistema anterior')
+            
+            // Calculate balance if not present or check against known payments
+            let saldo = 0
+            if (p.cronograma_cuotas) {
+                saldo = p.cronograma_cuotas.reduce((acc: number, c: any) => acc + (c.monto_cuota - (c.monto_pagado || 0)), 0)
+            }
+
+            const isEffectivelyFinalized = isMigrado && saldo <= 0.01
+            return p.estado === 'activo' && !isEffectivelyFinalized
+        }) || []
         
         // Define risk hierarchy
         const riskLevels: Record<string, number> = {
@@ -185,16 +212,87 @@ export default async function ClientesPage() {
                 totalDebt: totalDebt,
                 historicalLoansCount: historicalLoans.length
             }
-        }
-    }) || []
+        }    }) || []
 
-    // Calc Header Stats
-    const totalClients = clients.length
-    const clientsConDeuda = clients.filter((c: any) => c.stats.totalDebt > 0).length
-    const clientsSinPrestamos = clients.filter((c: any) => c.stats.activeLoansCount === 0).length
-    const reasignadosCount = clients.filter((c: any) => c.wasReassigned).length
-    const bloqueadosCount = clients.filter((c: any) => !!c.bloqueado_renovacion).length
-    const controlRecibosCount = clients.filter((c: any) => !!c.excepcion_voucher).length
+    // Fetch perfiles for filters (Needed here for KPI calculations and later for the directory)
+    let perfiles: any[] = []
+    if (userRole === 'admin' || userRole === 'supervisor') {
+        const { data: perfilesData } = await supabaseAdmin
+            .from('perfiles')
+            .select('id, nombre_completo, rol, supervisor_id')
+            .in('rol', ['supervisor', 'asesor'])
+            .order('nombre_completo')
+        perfiles = perfilesData || []
+    }
+
+    // --- APLICAR FILTROS PARA KPI ACTIVOS (REACTIVOS AL URL) ---
+    let filteredForKPIs = [...clients]
+
+    // Filtro por Texto (Q)
+    if (searchQuery) {
+        const query = searchQuery.toLowerCase()
+        filteredForKPIs = filteredForKPIs.filter(c => 
+            c.nombres?.toLowerCase().includes(query) ||
+            c.dni?.includes(query) ||
+            c.telefono?.includes(query) ||
+            c.sectores?.nombre?.toLowerCase().includes(query)
+        )
+    }
+
+    // Filtro por Supervisor (Admin only)
+    if (userRole === 'admin' && filtroSupervisor !== 'todos') {
+         const advisorIds = perfiles
+            .filter(p => p.supervisor_id === filtroSupervisor)
+            .map(p => p.id)
+         filteredForKPIs = filteredForKPIs.filter(c => advisorIds.includes(c.asesor_id))
+    }
+
+    // Filtro por Asesor
+    if (filtroAsesor !== 'todos') {
+        filteredForKPIs = filteredForKPIs.filter(c => c.asesor_id === filtroAsesor)
+    }
+
+    // Filtro por Sector
+    if (filtroSector !== 'todos') {
+        filteredForKPIs = filteredForKPIs.filter(c => c.sector_id === filtroSector)
+    }
+
+    // Calc Header Stats Basados en la Lista Filtrada por el usuario
+    const totalClients = filteredForKPIs.length
+    const clientsConDeuda = filteredForKPIs.filter((c: any) => c.stats.totalDebt > 0).length
+    const clientsSinPrestamos = filteredForKPIs.filter((c: any) => c.stats.activeLoansCount === 0).length
+    const reasignadosCount = filteredForKPIs.filter((c: any) => c.wasReassigned).length
+    const bloqueadosCount = filteredForKPIs.filter((c: any) => !!c.bloqueado_renovacion).length
+
+    // Clientes Activos con Deuda Pendiente (REGLAS DE NEGOCIO):
+    // 1. Solo cuenta el préstamo PRINCIPAL (no paralelos, no refinanciados)
+    // 2. El préstamo debe estar en estado 'activo'
+    // 3. Excluye si el préstamo principal está 'vencido'
+    // 4. Excluye si el cliente está bloqueado en renovaciones
+    const clientesActivosConDeuda = filteredForKPIs.filter((c: any) => {
+        if (!!c.bloqueado_renovacion) return false
+        
+        const loans = c.prestamos || []
+        // Buscar el préstamo principal activo
+        const mainActiveLoan = loans.find((p: any) => 
+            p.estado === 'activo' && 
+            !p.es_paralelo && 
+            p.estado !== 'refinanciado' &&
+            !prestamoIdsProductoRefinanciamiento.includes(p.id)
+        )
+
+        if (!mainActiveLoan) return false
+        
+        // Excluir si está vencido
+        if (mainActiveLoan.estado_mora === 'vencido') return false
+        
+        // Debe tener saldo pendiente
+        const metrics = calculateLoanMetrics(mainActiveLoan, todayPeru)
+        return metrics.saldoPendiente > 0.01
+    }).length
+
+    const controlRecibosCount = filteredForKPIs.filter((c: any) => !!c.excepcion_voucher).length
+
     // [REFORZADO] Lógica de Acceso al Sistema (Centralizada)
     const { checkSystemAccess } = await import('@/utils/systemRestrictions')
     const accessResult = await checkSystemAccess(supabaseAdmin, user?.id || '', userRole || 'asesor', 'solicitud')
@@ -216,16 +314,6 @@ export default async function ClientesPage() {
         desbloqueo_hasta: sysConfig.desbloqueo_hasta || ''
     }
 
-    // Fetch perfiles for filters (Restaura la lógica necesaria)
-    let perfiles: any[] = []
-    if (userRole === 'admin' || userRole === 'supervisor') {
-        const { data: perfilesData } = await supabaseAdmin
-            .from('perfiles')
-            .select('id, nombre_completo, rol, supervisor_id')
-            .in('rol', ['supervisor', 'asesor'])
-            .order('nombre_completo')
-        perfiles = perfilesData || []
-    }
 
     return (
         <div className="page-container">
@@ -264,7 +352,7 @@ export default async function ClientesPage() {
             </div>
 
              {/* Hero Stats */}
-             <div className="kpi-grid lg:grid-cols-4">
+             <div className="kpi-grid lg:grid-cols-5">
                  {/* Card 1: Total */}
                  <Link href="?tab=todos" className="block h-full">
                      <div className="kpi-card group hover:border-blue-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
@@ -293,7 +381,24 @@ export default async function ClientesPage() {
                      </div>
                  </Link>
 
-                 {/* Card 3: Sin Préstamos */}
+                 {/* Card 3: Activos con Deuda (Excluye vencidos y bloqueados) */}
+                 <Link href="?tab=activos_deuda" className="block h-full">
+                     <div className="kpi-card group hover:border-emerald-500/50 hover:scale-[1.02] active:scale-95 cursor-pointer h-full relative overflow-hidden border-emerald-500/20 shadow-[0_0_15px_-5px_rgba(16,185,129,0.1)] hover:shadow-[0_0_25px_-5px_rgba(16,185,129,0.3)] transition-all">
+                        {/* Subtle inner glow */}
+                        <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/10 blur-3xl group-hover:bg-emerald-500/20 transition-colors" />
+                        
+                        <div className="kpi-card-icon">
+                            <UserCheck className="w-16 h-16 text-emerald-500 group-hover:scale-110 transition-transform" />
+                        </div>
+                        <p className="kpi-label">ACTIVOS</p>
+                        <h2 className="kpi-value text-emerald-50">{clientesActivosConDeuda}</h2>
+                        <div className="mt-2 text-emerald-400 flex items-center gap-1">
+                             <span className="kpi-badge bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">ACTIVOS</span>
+                        </div>
+                     </div>
+                 </Link>
+
+                 {/* Card 4: Sin Préstamos */}
                  <Link href="?tab=sin_prestamos" className="block h-full">
                      <div className="kpi-card group hover:border-slate-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
                         <div className="kpi-card-icon">
@@ -356,6 +461,7 @@ export default async function ClientesPage() {
                 perfiles={perfiles}
                 userRol={userRole as any}
                 userId={user?.id}
+                prestamoIdsProductoRefinanciamiento={prestamoIdsProductoRefinanciamiento}
             />
         </div>
     )

@@ -1,20 +1,17 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false
-        }
-    }
-)
+import { requireAdmin, createAdminClient } from '@/utils/supabase/admin'
 
 export async function POST(request: NextRequest) {
     try {
         const { id, email, password, role, nombre } = await request.json()
+
+        // Validar que el ejecutor tenga rol Admin real comprobando contra DB
+        const authCheck = await requireAdmin()
+        if ('error' in authCheck) {
+            return authCheck.error // Retorna el 401/403 construido
+        }
+        
+        const supabaseAdmin = createAdminClient()
 
         if (!id) {
             return NextResponse.json({ error: 'ID de usuario requerido' }, { status: 400 })

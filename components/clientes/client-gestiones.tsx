@@ -220,7 +220,7 @@ export function ClientGestiones({ loans = [], clienteId, clienteNombre = 'Client
                                         </div>
                                         <span className="text-[9px] font-medium text-slate-500">{formatDatePeru(gestion.created_at)}</span>
                                     </div>
-                                    {gestion.notas && <p className="text-[11px] text-slate-400 leading-snug italic mb-1.5 line-clamp-2">"{gestion.notas}"</p>}
+                                    {gestion.notas && <p className="text-[11px] text-slate-400 leading-snug italic mb-1.5 line-clamp-2">&quot;{gestion.notas}&quot;</p>}
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <div className="text-[9px] text-slate-600 font-medium flex items-center gap-1">

@@ -279,11 +279,14 @@ export default function ImageUpload({
           </button>
 
           {preview ? (
-            <img
-              src={preview}
-              alt="Preview"
-              className="w-full h-48 object-contain rounded-lg"
-            />
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={preview}
+                alt="Preview"
+                className="w-full h-48 object-contain rounded-lg"
+              />
+            </>
           ) : (
             <div className="flex items-center justify-center h-48">
               <FileText className="w-16 h-16 text-white/60" />

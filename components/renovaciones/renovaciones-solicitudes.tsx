@@ -18,7 +18,7 @@ import {
     Search, X, Filter, MapPin, Activity
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn, getFrequencyBadgeStyles } from '@/lib/utils'
 import { formatMoney } from '@/utils/format'
 
 interface Solicitud {
@@ -356,10 +356,19 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                                     </div>
                                     <div className="flex flex-col text-center items-center">
                                         <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Plan</span>
-                                        <span className="text-xs text-slate-400 flex items-center justify-center gap-1">
+                                        <div className="flex items-center justify-center gap-1.5">
                                             <CalendarDays className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                                            <span className="truncate">{sol.cuotas} {sol.modalidad.substring(0,3)}.</span>
-                                        </span>
+                                            <span className="text-slate-400">{sol.cuotas}</span>
+                                            <Badge 
+                                                variant="outline" 
+                                                className={cn(
+                                                    "text-[8px] h-3.5 px-1 border-0 font-bold uppercase",
+                                                    getFrequencyBadgeStyles(sol.modalidad)
+                                                )}
+                                            >
+                                                {sol.modalidad.substring(0,3)}.
+                                            </Badge>
+                                        </div>
                                     </div>
                                     <div className="flex flex-col text-right items-end min-w-0">
                                         <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5 text-right w-full">Asesor</span>
@@ -454,8 +463,17 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                                 {/* Solicitado */}
                                 <div className="col-span-2 text-right flex flex-col items-end justify-center min-w-0">
                                     <div className="text-sm font-mono font-bold text-slate-300">${sol.monto_solicitado.toLocaleString('en-US')}</div>
-                                    <div className="text-[10px] text-slate-400 mt-0.5 flex flex-col items-end leading-tight">
-                                        <span>{sol.cuotas} {sol.modalidad}</span>
+                                    <div className="text-[10px] text-slate-400 mt-0.5 flex items-center justify-end gap-1 leading-tight">
+                                        <span>{sol.cuotas}</span>
+                                        <Badge 
+                                            variant="outline" 
+                                            className={cn(
+                                                "text-[8px] h-3.5 px-1 border-0 font-bold uppercase",
+                                                getFrequencyBadgeStyles(sol.modalidad)
+                                            )}
+                                        >
+                                            {sol.modalidad}
+                                        </Badge>
                                         <span>al {sol.interes}%</span>
                                     </div>
                                 </div>

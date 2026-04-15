@@ -56,6 +56,8 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule, onClose }: P
     const [amount, setAmount] = useState('')
     const [metodoPago, setMetodoPago] = useState('')
     const [paymentResult, setPaymentResult] = useState<any>(null) // Para voucher
+    const [location, setLocation] = useState<{lat: number, lng: number} | null>(null)
+    const [locationError, setLocationError] = useState<boolean>(false)
 
     const supabase = createClient()
     const router = useRouter()
@@ -115,12 +117,47 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule, onClose }: P
             .order('numero_cuota', { ascending: true })
         if (qData) setQuotas(qData)
 
-        // 2. Fetch history payments (for voucher calculations)
-        const { data: hData } = await supabase.from('pagos')
-            .select('*, perfiles(nombre_completo)')
-            .eq('prestamo_id', loan.id)
-            .order('created_at', { ascending: true })
-        if (hData) setHistoryPayments(hData)
+        // 2. Fetch history payments (for voucher calculations and virtual distribution)
+        const idsCuotas = qData?.map((c: any) => c.id) || [];
+        const { data: hDataRaw } = idsCuotas.length > 0 
+            ? await supabase.from('pagos')
+                .select('*, perfiles(nombre_completo)')
+                .in('cuota_id', idsCuotas)
+                .order('created_at', { ascending: true })
+            : { data: [] };
+        
+        const hData = hDataRaw || [];
+        setHistoryPayments(hData);
+        
+        // 3. Virtual Distribution (Para arreglar que la cuota 9 saga pendiente)
+        let virtualQData = qData || [];
+        if (qData) {
+            const sorted = [...qData].sort((a, b) => a.numero_cuota - b.numero_cuota)
+            const totalPagadoHistorico = hData.reduce((acc, p) => acc + (parseFloat(p.monto_pagado) || 0), 0)
+            let remainingToDistribute = totalPagadoHistorico
+            
+            virtualQData = sorted.map(c => {
+                const montoCuota = parseFloat(c.monto_cuota || 0)
+                let pagadoEnEstaCuota = 0
+                if (remainingToDistribute >= montoCuota - 0.01) {
+                    pagadoEnEstaCuota = montoCuota
+                    remainingToDistribute -= montoCuota
+                } else if (remainingToDistribute > 0) {
+                    pagadoEnEstaCuota = Math.round(remainingToDistribute * 100) / 100
+                    remainingToDistribute = 0
+                }
+                
+                // Actualizado dinámicamente para que la UI no permita re-pagar excedentes
+                const estado = (montoCuota - pagadoEnEstaCuota) <= 0.01 ? 'pagado' : c.estado
+                
+                return {
+                    ...c,
+                    monto_pagado: pagadoEnEstaCuota,
+                    estado: estado
+                }
+            })
+            setQuotas(virtualQData)
+        }
 
         if (qData) {
             // Lógica de Cuota Inteligente
@@ -136,6 +173,18 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule, onClose }: P
         setPayingQuota(quota)
         const pending = quota.monto_cuota - (quota.monto_pagado || 0)
         setAmount(pending.toString())
+        
+        // Intentar capturar ubicación al iniciar pago
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                (err) => {
+                    console.warn("Location denied or error:", err);
+                    setLocationError(true);
+                },
+                { enableHighAccuracy: true, timeout: 5000 }
+            );
+        }
     }
 
     const confirmPayment = async () => {
@@ -148,20 +197,27 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule, onClose }: P
             const apiResult = await api.pagos.registrar({ 
                 cuota_id: payingQuota.id, 
                 monto: parseFloat(amount), 
-                metodo_pago: metodoPago 
+                metodo_pago: metodoPago,
+                latitud: location?.lat,
+                longitud: location?.lng
             })
             
             // RE-FETCH DATA FROM DB WITH ABSOLUTE CERTAINTY
-            const [qRes, hRes] = await Promise.all([
-                supabase.from('cronograma_cuotas')
-                    .select('*')
-                    .eq('prestamo_id', selectedLoan.id)
-                    .order('numero_cuota', { ascending: true }),
-                supabase.from('pagos')
+            const { data: qData } = await supabase.from('cronograma_cuotas')
+                .select('*')
+                .eq('prestamo_id', selectedLoan.id)
+                .order('numero_cuota', { ascending: true });
+                
+            const idsCuotas = qData?.map((c: any) => c.id) || [];
+            const { data: hData } = idsCuotas.length > 0 
+                ? await supabase.from('pagos')
                     .select('*, perfiles(nombre_completo)')
-                    .eq('prestamo_id', selectedLoan.id)
+                    .in('cuota_id', idsCuotas)
                     .order('created_at', { ascending: true })
-            ])
+                : { data: [] };
+
+            const qRes = { data: qData };
+            const hRes = { data: hData };
 
             console.log('Wizard Refetch Results:', { 
                 quotasCount: qRes.data?.length, 
@@ -494,6 +550,16 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule, onClose }: P
                                             </button>
                                         </div>
                                     </div>
+
+                                    {locationError && (
+                                        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-3 animate-in fade-in">
+                                            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+                                            <div className="text-left">
+                                                <p className="text-amber-400 font-bold text-[10px] uppercase">Aviso de Ubicación</p>
+                                                <p className="text-slate-400 text-[10px] leading-tight">GPS no disponible. El cobro se registrará sin ubicación pero es recomendable activarlo.</p>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div className="grid grid-cols-1 xs:grid-cols-2 gap-3 xs:gap-4">
                                         <Button 

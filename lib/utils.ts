@@ -66,7 +66,24 @@ export function formatDatePeru(date: string | Date, preset: 'full' | 'time' | 'd
             day: '2-digit'
         }).format(d);
 
+  }
+}
+
+/**
+ * Retorna las clases de Tailwind para el diseño de insignias de frecuencia de préstamo
+ */
+export function getFrequencyBadgeStyles(frecuencia: string | null | undefined) {
+  const freq = frecuencia?.toLowerCase() || '';
+  switch (freq) {
+    case 'diario':
+      return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+    case 'semanal':
+      return "bg-purple-500/10 text-purple-400 border-purple-500/20";
+    case 'quincenal':
+      return "bg-amber-500/10 text-amber-400 border-amber-500/20";
+    case 'mensual':
+      return "bg-rose-500/10 text-rose-400 border-rose-500/20";
     default:
-        return d.toLocaleString('es-PE', options);
+      return "bg-slate-800 text-slate-400 border-slate-700";
   }
 }

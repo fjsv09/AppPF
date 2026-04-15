@@ -40,7 +40,10 @@ export function ClientExpediente({ documentos }: ClientExpedienteProps) {
                     className="aspect-square bg-slate-900 border border-slate-800 rounded-xl overflow-hidden relative group cursor-pointer shadow-sm hover:shadow-md hover:border-slate-700 transition-all"
                     thumbnail={(
                         <div className="w-full h-full relative">
-                            <img src={url as string} alt={DOC_LABELS[key]} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                            <>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={url as string} alt={DOC_LABELS[key]} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                            </>
                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                                 <p className="text-white text-xs font-bold uppercase tracking-wider">{DOC_LABELS[key]}</p>
                             </div>

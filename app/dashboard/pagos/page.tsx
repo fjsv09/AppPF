@@ -8,7 +8,6 @@ import { es } from 'date-fns/locale'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { DollarSign, TrendingUp } from 'lucide-react'
-import { PaymentModal } from '@/components/pagos/payment-modal'
 import { RecentPaymentsList } from '@/components/pagos/recent-payments-list'
 import { BackButton } from '@/components/ui/back-button'
 import { DashboardAlerts } from '@/components/dashboard/dashboard-alerts'
@@ -266,7 +265,6 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
                         </div>
                     </div>
                 </div>
-                <PaymentModal userRol={userRol} />
 
             </div>
 

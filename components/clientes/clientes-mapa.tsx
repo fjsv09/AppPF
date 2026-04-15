@@ -212,7 +212,7 @@ export default function ClientesMapa({ clientes }: ClientesMapaProps) {
             </div>
 
             {/* Custom CSS overrides for Leaflet popups inside Next.js dark mode */}
-            <style dangerouslySetInnerHTML={{ __html: `
+            <style>{`
                 .leaflet-popup-content-wrapper {
                     background-color: white;
                     color: #1e293b; 
@@ -229,7 +229,7 @@ export default function ClientesMapa({ clientes }: ClientesMapaProps) {
                 .leaflet-container {
                     background-color: #0f172a !important; 
                 }
-            ` }} />
+            `}</style>
         </div>
     )
 }

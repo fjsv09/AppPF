@@ -50,7 +50,7 @@ import {
 import { AsignarVisitaModal } from '../gestiones/asignar-visita-modal'
 import { Progress } from "@/components/ui/progress"
 import { getTodayPeru, calculateLoanMetrics, getLoanStatusUI } from "@/lib/financial-logic";
-import { cn } from "@/lib/utils"
+import { cn, getFrequencyBadgeStyles } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface PrestamosTableProps {
@@ -83,7 +83,7 @@ interface PrestamosTableProps {
     cuentas?: any[]
 }
 
-type FilterTab = 'ruta_hoy' | 'cobranza' | 'morosos' | 'notificar' | 'semana' | 'en_curso' | 'renovaciones' | 'finalizados' | 'todos' | 'supervisor_alertas' | 'supervisor_mora' | 'renovados' | 'refinanciados' | 'anulados' | 'pendientes' | 'visitas_control'
+type FilterTab = 'ruta_hoy' | 'cobranza' | 'morosos' | 'notificar' | 'semana' | 'en_curso' | 'renovaciones' | 'finalizados' | 'todos' | 'supervisor_alertas' | 'supervisor_mora' | 'renovados' | 'refinanciados' | 'anulados' | 'pendientes' | 'visitas_control' | 'activos'
 type SortBy = 'fecha_inicio' | 'frecuencia'
 type SortOrder = 'asc' | 'desc'
 
@@ -641,6 +641,25 @@ export function PrestamosTable({
                  filtered = filtered.filter(p => p.estado === 'finalizado' || p.saldo_pendiente <= 0 || (p.cuotasPagadas >= p.totalCuotas && p.totalCuotas > 0))
                  break
 
+            case 'activos':
+                 // Logica Estricta de Activos (Sincronizada con KPI)
+                 filtered = filtered.filter(p => {
+                    const cliente = p.clientes
+                    if (!!cliente?.bloqueado_renovacion) return false
+
+                    const isMainActive = p.estado === 'activo' && 
+                                       !p.es_paralelo && 
+                                       p.estado !== 'refinanciado' &&
+                                       !(prestamoIdsProductoRefinanciamiento || []).includes(p.id)
+
+                    if (!isMainActive) return false
+                    if (p.estado_mora === 'vencido') return false
+                    
+                    const metrics = calculateLoanMetrics(p, today)
+                    return metrics.saldoPendiente > 0.01
+                 })
+                 break
+
             case 'renovados':
                 if (userRol === 'admin') {
                     filtered = filtered.filter(p => p.estado === 'renovado')
@@ -852,7 +871,7 @@ export function PrestamosTable({
                         />
                     </div>
                 )}
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     {/* View Toggle */}
                     <div className="shrink-0 md:hidden">
                         <Button
@@ -999,7 +1018,12 @@ export function PrestamosTable({
                         <SelectContent className="bg-slate-900 border-slate-800">
                             <SelectItem value="todos">Todas Frecuencias</SelectItem>
                             {frecuenciasList.map((f: string) => (
-                                <SelectItem key={f} value={f}>{f}</SelectItem>
+                                <SelectItem key={f} value={f.toLowerCase()} className="focus:bg-slate-800 focus:text-white">
+                                    <div className="flex items-center gap-2">
+                                        <div className={cn("w-2 h-2 rounded-full", f.toLowerCase() === 'diario' ? 'bg-emerald-500' : f.toLowerCase() === 'semanal' ? 'bg-purple-500' : f.toLowerCase() === 'quincenal' ? 'bg-amber-500' : f.toLowerCase() === 'mensual' ? 'bg-rose-500' : 'bg-slate-500')} />
+                                        <span>{f}</span>
+                                    </div>
+                                </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
@@ -1077,6 +1101,9 @@ export function PrestamosTable({
                                 onQuickPay={handleQuickPay} 
                                 today={today} 
                                 isBlocked={!canRequestDueToTime || isBlockedForPayments}
+                                userRole={userRol}
+                                currentUserId={userId}
+                                perfiles={perfiles}
                             />
                         </div>
                     ) : (
@@ -1193,7 +1220,7 @@ export function PrestamosTable({
                                                         <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter">GESTIÓN: {gestionDia.resultado}</span>
                                                     </div>
                                                     <p className="text-[10px] text-slate-400 italic leading-tight truncate">
-                                                        "{gestionDia.notes || gestionDia.notas || '...'}"
+                                                        &quot;{gestionDia.notes || gestionDia.notas || '...'}&quot;
                                                     </p>
                                                 </div>
                                             ) : (
@@ -1288,12 +1315,15 @@ export function PrestamosTable({
                                                         alt={prestamo.clientes.nombres}
                                                         className="w-full h-full"
                                                         thumbnail={
-                                                            <img 
-                                                                src={prestamo.clientes.foto_perfil} 
-                                                                alt={prestamo.clientes.nombres} 
-                                                                className="w-full h-full object-cover"
-                                                                loading="lazy"
-                                                            />
+                                                            <>
+                                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                                <img 
+                                                                    src={prestamo.clientes.foto_perfil} 
+                                                                    alt={prestamo.clientes.nombres} 
+                                                                    className="w-full h-full object-cover"
+                                                                    loading="lazy"
+                                                                />
+                                                            </>
                                                         }
                                                     />
                                                 </div>
@@ -1397,7 +1427,10 @@ export function PrestamosTable({
                                                     {statusUI.label}
                                                 </Badge>
                                                 {/* Frecuencia Badge */}
-                                                <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500 bg-slate-800/50 border border-slate-700/50 px-1.5 py-0.5 rounded-md">
+                                                <span className={cn(
+                                                    "text-[9px] font-bold uppercase tracking-wide border px-1.5 py-0.5 rounded-md",
+                                                    getFrequencyBadgeStyles(prestamo.frecuencia)
+                                                )}>
                                                     {prestamo.frecuencia}
                                                 </span>
                                             </div>
@@ -1896,8 +1929,15 @@ export function PrestamosTable({
 
                             const isVisited = !!visitaDia || cuotaDia?.visitado
                             
+                            const isMigrado = prestamo.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+                            
                             // High contrast status
-                            const auditStatus = !isVisited ? 'pending' : (cobradoDia > 0 ? 'success' : 'alert')
+                            let auditStatus = !isVisited ? 'pending' : (cobradoDia > 0 ? 'success' : 'alert')
+                            
+                            // [MIGRACIÓN] Aislamiento: Si es migrado y está pagada la cuota, forzamos éxito para no alertar
+                            if (isMigrado && isPaid) {
+                                auditStatus = 'success'
+                            }
 
                             return (
                                 <div 
@@ -1956,9 +1996,9 @@ export function PrestamosTable({
 
                                     {/* Recibo / Voucher */}
                                     <div className="col-span-1 flex justify-center">
-                                        {cobradoDia > 0 ? (
-                                            hasVoucher ? (
-                                                <div className="p-1 rounded-full bg-emerald-500/10 border border-emerald-500/20" title="Voucher Compartido">
+                                        {cobradoDia > 0 || (isMigrado && isPaid) ? (
+                                            (hasVoucher || isMigrado) ? (
+                                                <div className="p-1 rounded-full bg-emerald-500/10 border border-emerald-500/20" title="Auditoría OK (Migración)">
                                                     <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                                                 </div>
                                             ) : (
@@ -2063,12 +2103,15 @@ export function PrestamosTable({
                                                     alt={prestamo.clientes.nombres}
                                                     className="w-full h-full"
                                                     thumbnail={
-                                                        <img 
-                                                            src={prestamo.clientes.foto_perfil} 
-                                                            alt={prestamo.clientes.nombres} 
-                                                            className="w-full h-full object-cover"
-                                                            loading="lazy"
-                                                        />
+                                                        <>
+                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                            <img 
+                                                                src={prestamo.clientes.foto_perfil} 
+                                                                alt={prestamo.clientes.nombres} 
+                                                                className="w-full h-full object-cover"
+                                                                loading="lazy"
+                                                            />
+                                                        </>
                                                     }
                                                 />
                                             </div>
@@ -2569,6 +2612,7 @@ export function PrestamosTable({
                 isBlockedByCuadre={isBlockedByCuadre}
                 blockReasonCierre={blockReasonCierre}
                 systemAccess={systemAccess}
+                userLoc={userLoc}
             />
 
             {selectedContractLoan && (

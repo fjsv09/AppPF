@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { Home, Users, Banknote, Calendar, ShieldAlert, History, LogOut, Settings, ChartBar, FileText, Menu, RefreshCw, Cog, Briefcase, Camera, Bell, Landmark, Wallet, UserCog, Receipt, CreditCard, Target, Award, Contact, ChevronLeft, ChevronRight, Clock, Loader2 } from 'lucide-react'
+import { Home, Users, Banknote, Calendar, ShieldAlert, History, LogOut, Settings, ChartBar, FileText, Menu, RefreshCw, Cog, Briefcase, Camera, Bell, Landmark, Wallet, UserCog, Receipt, CreditCard, Target, Award, Contact, ChevronLeft, ChevronRight, Clock, Loader2, TrendingUp } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Button } from './ui/button'
@@ -101,6 +101,7 @@ export function DashboardNav({
         
         // --- Gestión Financiera ---
         { href: '/dashboard/admin/carteras', label: 'Gestionar Carteras', icon: Briefcase, roles: ['admin'], category: 'Finanzas' },
+        { href: '/dashboard/admin/capital', label: 'Capital y Socios', icon: TrendingUp, roles: ['admin'], category: 'Finanzas' },
         { href: '/dashboard/admin/cuadres', label: 'Gestión de Cuadres', icon: Landmark, roles: ['admin'], category: 'Finanzas' },
 
         { href: '/dashboard/cuadre', label: 'Cuadre de Caja', icon: Wallet, roles: ['asesor'], category: 'Finanzas' },
@@ -153,7 +154,10 @@ export function DashboardNav({
                     <div className="flex items-center gap-3 overflow-hidden">
                         {systemLogo ? (
                             <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 shadow-lg shadow-blue-900/20 border border-white/10">
-                                <img src={systemLogo} alt="Logo" className="w-full h-full object-cover" />
+                                <>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={systemLogo} alt="Logo" className="w-full h-full object-cover" />
+                                </>
                             </div>
                         ) : (
                             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex-shrink-0 flex items-center justify-center shadow-lg shadow-blue-900/20">
@@ -293,7 +297,10 @@ export function DashboardNav({
                     >
                         <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 border border-white/10 flex-shrink-0 flex items-center justify-center text-slate-300 font-bold text-sm shadow-inner group-hover:border-blue-500/50 transition-colors overflow-hidden">
                             {userAvatar ? (
-                                <img src={userAvatar} alt="Perfil" className="w-full h-full object-cover" />
+                                <>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={userAvatar} alt="Perfil" className="w-full h-full object-cover" />
+                                </>
                             ) : (
                                 <UserCog className="w-5 h-5 text-slate-400" />
                             )}

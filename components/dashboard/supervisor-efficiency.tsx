@@ -326,7 +326,12 @@ export function SupervisorEfficiency({
                                                 )}
                                             >
                                                 <div className="w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold overflow-hidden">
-                                                    {ase.foto ? <img src={ase.foto} alt="" className="w-full h-full object-cover" /> : ase.nombre.charAt(0)}
+                                                    {ase.foto ? (
+                                                        <>
+                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                            <img src={ase.foto} alt="" className="w-full h-full object-cover" />
+                                                        </>
+                                                    ) : ase.nombre.charAt(0)}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <h4 className={cn("font-bold text-xs truncate uppercase", selectedAsesorId === ase.id ? "text-blue-400" : "text-white")}>{ase.nombre}</h4>

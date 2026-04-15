@@ -210,7 +210,10 @@ export function TareasList({ initialTareas, userId, userRol }: { initialTareas: 
                                                                   <ImageLightbox 
                                                                       src={tarea.evidencia_url}
                                                                       alt="Evidencia"
-                                                                      thumbnail={ <img src={tarea.evidencia_url} className="w-full h-full object-cover" /> }
+                                                                      thumbnail={ 
+                                                                          // eslint-disable-next-line @next/next/no-img-element
+                                                                          <img src={tarea.evidencia_url} alt="thumbnail" className="w-full h-full object-cover" /> 
+                                                                      }
                                                                   />
                                                                </div>
                                                             ) : null}
@@ -339,7 +342,10 @@ export function TareasList({ initialTareas, userId, userRol }: { initialTareas: 
                                                                  <ImageLightbox 
                                                                      src={tarea.evidencia_url}
                                                                      alt="Evidencia"
-                                                                     thumbnail={ <img src={tarea.evidencia_url} alt="thumbnail" className="w-full h-full object-cover" /> }
+                                                                     thumbnail={ 
+                                                                         // eslint-disable-next-line @next/next/no-img-element
+                                                                         <img src={tarea.evidencia_url} alt="thumbnail" className="w-full h-full object-cover" /> 
+                                                                     }
                                                                  />
                                                              </div>
                                                          )}

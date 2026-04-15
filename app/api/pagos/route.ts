@@ -56,7 +56,7 @@ export async function POST(request: Request) {
         // --- FIN VERIFICACIÓN DE ACCESO ---
 
         const body = await request.json()
-        const { cuota_id, monto, metodo_pago = 'Efectivo' } = body
+        const { cuota_id, monto, metodo_pago = 'Efectivo', latitud, longitud } = body
 
         if (!cuota_id || !monto) {
             return NextResponse.json({ error: 'Faltan campos requeridos (cuota_id, monto)' }, { status: 400 })
@@ -126,7 +126,9 @@ export async function POST(request: Request) {
             p_cuota_id: cuota_id,
             p_monto: monto,
             p_usuario_id: user.id,
-            p_metodo_pago: metodo_pago
+            p_metodo_pago: metodo_pago,
+            p_latitud: latitud,
+            p_longitud: longitud
         })
 
         if (error) {
@@ -152,7 +154,7 @@ export async function POST(request: Request) {
             usuario_id: user.id,
             accion: 'registrar_pago',
             tabla_afectada: 'pagos',
-            detalle: { cuota_id, monto, result, rol_cobrador: perfil.rol }
+            detalle: { cuota_id, monto, result, rol_cobrador: perfil.rol, latitud, longitud }
         })
 
         // Iniciar notificación asíncrona (no bloquea la respuesta del pago)

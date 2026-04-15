@@ -78,7 +78,7 @@ export const api = {
         },
     },
     pagos: {
-        registrar: async (data: { cuota_id: string; monto: number; metodo_pago?: string }) => {
+        registrar: async (data: { cuota_id: string; monto: number; metodo_pago?: string; latitud?: number; longitud?: number }) => {
             const response = await fetch('/api/pagos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

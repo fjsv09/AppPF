@@ -51,6 +51,7 @@ export function LightboxModal({ src, alt, isOpen, onClose }: { src: string, alt:
         onClick={onClose}
         title="Clic para cerrar"
         >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
             src={src}
             alt={alt}

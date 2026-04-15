@@ -33,28 +33,39 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments 
         });
         const paymentDateStr = formatter.format(new Date(payment.created_at || new Date()))
         
-        const sortedPayments = [...(allPayments || [])].sort((a, b) => {
-            const timeA = new Date(a.created_at).getTime()
-            const timeB = new Date(b.created_at).getTime()
+        // 1. Obtener todos los pagos realizados hasta este momento (inclusive)
+        // Si no tenemos allPayments, usamos solo el pago actual como fallback
+        const currentId = payment.id || 'current';
+        const sortedPayments = [...(allPayments || [])];
+        
+        // Si el pago actual no está en la lista (pasa en registros nuevos), lo añadimos para el cálculo
+        if (!sortedPayments.find(p => p.id === currentId)) {
+            sortedPayments.push(payment);
+        }
+
+        // Ordenar por fecha y luego ID para consistencia
+        sortedPayments.sort((a, b) => {
+            const timeA = new Date(a.created_at || 0).getTime()
+            const timeB = new Date(b.created_at || 0).getTime()
             if (timeA !== timeB) return timeA - timeB
             return (a.id || '').toString().localeCompare((b.id || '').toString())
         })
         
-        const paymentIndex = sortedPayments.findIndex(p => p.id === payment.id)
+        const paymentIndex = sortedPayments.findIndex(p => p.id === currentId)
         const paymentsAtThatTime = paymentIndex >= 0 ? sortedPayments.slice(0, paymentIndex + 1) : [payment]
-        const totalPaidAtThatTime = paymentsAtThatTime.reduce((acc, p) => acc + parseFloat(p.monto_pagado || p.pago_monto || 0), 0)
+        const totalPaidAtThatTime = paymentsAtThatTime.reduce((acc, p) => acc + Number(p.monto_pagado || p.pago_monto || 0), 0)
         
         let remainingToDistribute = totalPaidAtThatTime
         const cronogramaOrdenado = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota)
         
         const virtualCronograma = cronogramaOrdenado.map(c => {
-            const montoCuota = parseFloat(c.monto_cuota)
+            const montoCuota = Number(c.monto_cuota || 0)
             let pagadoEnEstaCuota = 0
             if (remainingToDistribute >= montoCuota - 0.01) {
                 pagadoEnEstaCuota = montoCuota
                 remainingToDistribute -= montoCuota
             } else if (remainingToDistribute > 0) {
-                pagadoEnEstaCuota = remainingToDistribute
+                pagadoEnEstaCuota = Math.round(remainingToDistribute * 100) / 100
                 remainingToDistribute = 0
             }
             return {
@@ -65,11 +76,11 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments 
         })
         
         pagadas = virtualCronograma.filter(c => c.isPagadaVirtual).length
-        saldoPendiente = virtualCronograma.reduce((acc, c) => acc + (parseFloat(c.monto_cuota) - c.monto_pagado_virtual), 0)
+        saldoPendiente = Math.max(0, virtualCronograma.reduce((acc, c) => acc + (Number(c.monto_cuota || 0) - c.monto_pagado_virtual), 0))
         
         cuotasAtrasadas = virtualCronograma.filter(c => {
             const isPending = !c.isPagadaVirtual
-            const isOverdueAtThatTime = c.fecha_vencimiento <= paymentDateStr;
+            const isOverdueAtThatTime = c.fecha_vencimiento < paymentDateStr;
             return isPending && isOverdueAtThatTime;
         }).length
     }

@@ -11,6 +11,7 @@ import { DollarSign, AlertCircle, Share2, Loader2, CheckCircle, Lock, CreditCard
 import { api } from '@/services/api'
 import { toBlob } from 'html-to-image'
 import { cn } from '@/lib/utils'
+import { VoucherContent } from '@/components/comunes/voucher-content'
 
 interface QuickPayModalProps {
     open: boolean
@@ -28,6 +29,7 @@ interface QuickPayModalProps {
     isBlockedByCuadre?: boolean
     blockReasonCierre?: string
     systemAccess?: any
+    userLoc?: [number, number] | null
 }
 
 export function QuickPayModal({ 
@@ -41,7 +43,8 @@ export function QuickPayModal({
     systemSchedule, 
     isBlockedByCuadre, 
     blockReasonCierre,
-    systemAccess
+    systemAccess,
+    userLoc
 }: QuickPayModalProps) {
     const [loading, setLoading] = useState(false)
     const [amount, setAmount] = useState('')
@@ -56,6 +59,9 @@ export function QuickPayModal({
     const receiptRef = useRef<HTMLDivElement>(null)
     const [sharing, setSharing] = useState(false)
     const [lastPayment, setLastPayment] = useState<any>(null)
+    const [historyPayments, setHistoryPayments] = useState<any[]>([])
+
+    const [location, setLocation] = useState<{lat: number, lng: number} | null>(null)
 
     const supabase = useMemo(() => createClient(), [])
 
@@ -108,30 +114,56 @@ export function QuickPayModal({
     useEffect(() => {
         if (open && !result) {
             if (initialPrestamo) {
-                setPrestamo(initialPrestamo)
-                fetchSmartQuota(initialPrestamo.id)
+                // Saneamos el ID por si viene del mapa con sufijos (-official, etc)
+                const cleanId = initialPrestamo.id?.split('-')?.length > 5 
+                    ? initialPrestamo.id.substring(0, 36) 
+                    : initialPrestamo.id.replace('-official', '').replace(/-payment-\d+$/, '');
+                
+                const sanitizedPrestamo = { ...initialPrestamo, id: cleanId };
+                setPrestamo(sanitizedPrestamo)
+                fetchSmartQuota(cleanId)
             } else if (prestamoId) {
-                fetchPrestamoData(prestamoId)
+                const cleanId = prestamoId.split('-')?.length > 5 
+                    ? prestamoId.substring(0, 36) 
+                    : prestamoId.replace('-official', '').replace(/-payment-\d+$/, '');
+                fetchPrestamoData(cleanId)
             }
             setLastPayment(null)
+
+            // Priorizar ubicación pasada por prop (más rápida y confiable)
+            if (userLoc) {
+                setLocation({ lat: userLoc[0], lng: userLoc[1] })
+            } else if (navigator.geolocation) {
+                // Fallback a captura manual si no viene por prop
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                    (err) => console.warn("GPS access denied or error:", err),
+                    { enableHighAccuracy: true, timeout: 5000 }
+                )
+            }
         }
-    }, [open, prestamoId, initialPrestamo, result])
+    }, [open, prestamoId, initialPrestamo, result, userLoc])
 
     useEffect(() => {
         if (!open) {
             setResult(null)
             setLastPayment(null)
             setMetodoPago('')
+            setLocation(null)
         }
     }, [open])
 
     const fetchPrestamoData = async (id: string) => {
+        const cleanId = id.split('-')?.length > 5 
+            ? id.substring(0, 36) 
+            : id.replace('-official', '').replace(/-payment-\d+$/, '');
+            
         setFetching(true)
         try {
             const { data } = await supabase
                 .from('prestamos')
                 .select('*, clientes(id, nombres, dni, telefono)')
-                .eq('id', id)
+                .eq('id', cleanId)
                 .single()
             
             if (data) {
@@ -145,26 +177,61 @@ export function QuickPayModal({
     }
 
     const fetchSmartQuota = async (id: string) => {
+        const cleanId = id.split('-')?.length > 5 
+            ? id.substring(0, 36) 
+            : id.replace('-official', '').replace(/-payment-\d+$/, '');
+            
         setFetching(true)
         try {
             const { data: cronograma } = await supabase
                 .from('cronograma_cuotas')
                 .select('*')
-                .eq('prestamo_id', id)
+                .eq('prestamo_id', cleanId)
                 .order('fecha_vencimiento', { ascending: true })
 
-            if (cronograma) {
-                setFullCronograma(cronograma)
-                const todayQuota = cronograma.find((c: any) => c.fecha_vencimiento === today && c.estado !== 'pagado')
-                const oldestPending = cronograma.find((c: any) => c.estado !== 'pagado')
-                const targetQuota = todayQuota || oldestPending
+            if (!cronograma) return;
 
-                if (targetQuota) {
-                    const pendiente = targetQuota.monto_cuota - (targetQuota.monto_pagado || 0)
-                    setAmount(pendiente.toFixed(2))
-                    setQuota(targetQuota)
-                } 
-            }
+            const idsCuotas = cronograma.map((c: any) => c.id);
+            const { data: pagosData } = idsCuotas.length > 0 
+                ? await supabase.from('pagos').select('*').in('cuota_id', idsCuotas).order('created_at', { ascending: true })
+                : { data: null };
+
+            const hData = pagosData || [];
+
+            // Virtual Distribution Logic
+            const totalPagadoHistorico = hData.reduce((acc, p) => acc + (parseFloat(p.monto_pagado) || 0), 0)
+            let remainingToDistribute = totalPagadoHistorico
+            
+            const virtualCronograma = cronograma.map(c => {
+                const montoCuota = parseFloat(c.monto_cuota || 0)
+                let pagadoEnEstaCuota = 0
+                if (remainingToDistribute >= montoCuota - 0.01) {
+                    pagadoEnEstaCuota = montoCuota
+                    remainingToDistribute -= montoCuota
+                } else if (remainingToDistribute > 0) {
+                    pagadoEnEstaCuota = Math.round(remainingToDistribute * 100) / 100
+                    remainingToDistribute = 0
+                }
+                const isPaid = (montoCuota - pagadoEnEstaCuota) <= 0.01;
+                return {
+                    ...c,
+                    monto_pagado: pagadoEnEstaCuota,
+                    estado: isPaid ? 'pagado' : c.estado
+                }
+            })
+
+            setFullCronograma(virtualCronograma)
+            
+            const todayQuota = virtualCronograma.find(c => c.fecha_vencimiento === today && c.estado !== 'pagado')
+            const oldestPending = virtualCronograma.find(c => c.estado !== 'pagado')
+            const targetQuota = todayQuota || oldestPending
+
+            if (targetQuota) {
+                const pendiente = targetQuota.monto_cuota - (targetQuota.monto_pagado || 0)
+                setAmount(pendiente.toFixed(2))
+                setQuota(targetQuota)
+            } 
+
         } catch (error) {
             console.error('Error fetching quota', error)
             toast.error('Error al cargar cuota')
@@ -181,7 +248,7 @@ export function QuickPayModal({
             const canvas = await toBlob(receiptRef.current, { cacheBust: true, pixelRatio: 2 })
             if (!canvas) throw new Error('Error al generar imagen')
 
-            const file = new File([canvas], `comprobante-${lastPayment?.operacion}.png`, { type: 'image/png' })
+            const file = new File([canvas], `comprobante-${lastPayment?.id?.slice?.(-10) || 'pago'}.png`, { type: 'image/png' })
 
             if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
                 await navigator.share({
@@ -191,13 +258,13 @@ export function QuickPayModal({
                 })
             } else {
                 const link = document.createElement('a')
-                link.download = `comprobante-${lastPayment?.operacion}.png`
+                link.download = `comprobante-${lastPayment?.id?.slice?.(-10) || 'pago'}.png`
                 link.href = URL.createObjectURL(canvas)
                 link.click()
                 toast.success('Comprobante descargado')
             }
-            if (lastPayment?.pago_id && userRol === 'asesor') {
-                api.pagos.compartirVoucher(lastPayment.pago_id).catch(() => {})
+            if (lastPayment?.id && userRol === 'asesor') {
+                api.pagos.compartirVoucher(lastPayment.id).catch(() => {})
             }
         } catch (e) {
             console.error(e)
@@ -218,37 +285,30 @@ export function QuickPayModal({
             const res = await api.pagos.registrar({ 
                 cuota_id: quota.id, 
                 monto: payAmount,
-                metodo_pago: metodoPago
+                metodo_pago: metodoPago,
+                latitud: location?.lat,
+                longitud: location?.lng
             })
-            setResult(res)
-            
-            const { data: updatedCronograma } = await supabase
-                .from('cronograma_cuotas')
-                .select('*')
-                .eq('prestamo_id', prestamo.id)
-                .order('fecha_vencimiento', { ascending: true })
-            
-            const freshCronograma = updatedCronograma || fullCronograma
-            if (updatedCronograma) setFullCronograma(updatedCronograma)
 
-            const totalCuotas = freshCronograma.length
-            const totalPagadas = freshCronograma.filter(c => c.estado === 'pagado').length
-            const atrasadasAfter = freshCronograma.filter(c => c.fecha_vencimiento <= today && c.estado !== 'pagado').length
-            const saldoTotal = freshCronograma.reduce((acc, c) => acc + (parseFloat(c.monto_cuota) - parseFloat(c.monto_pagado || 0)), 0)
+            const qRes = await supabase.from('cronograma_cuotas').select('*').eq('prestamo_id', prestamo.id).order('fecha_vencimiento', { ascending: true })
+            const idsCuotas = qRes.data?.map((c: any) => c.id) || []
+            
+            const pRes = idsCuotas.length > 0 
+                ? await supabase.from('pagos').select('*').in('cuota_id', idsCuotas).order('created_at', { ascending: true })
+                : { data: [] }
+            
+            if (qRes.data) setFullCronograma(qRes.data)
+            if (pRes.data) setHistoryPayments(pRes.data)
 
-            setLastPayment({
-                monto: payAmount,
-                cuota: quota.numero_cuota,
-                fecha: new Date().toLocaleDateString('es-PE'),
-                hora: new Date().toLocaleTimeString('es-PE'),
-                operacion: res?.pago_id?.slice?.(-10)?.toUpperCase() || Math.random().toString(36).substr(2, 9).toUpperCase(),
-                cliente: prestamo?.clientes?.nombres || 'Cliente',
-                pagadas: totalPagadas,
-                totalCuotas: totalCuotas,
-                cuotasAtrasadas: atrasadasAfter,
-                saldoPendiente: saldoTotal,
-                pago_id: res?.pago_id
-            })
+            const actualPayment = (pRes.data || []).find(p => p.id === res.pago_id) || {
+                id: res.pago_id,
+                monto_pagado: payAmount,
+                created_at: new Date().toISOString(),
+                prestamo_id: prestamo.id
+            }
+
+            setLastPayment(actualPayment)
+            setResult(res) 
 
             toast.success('Pago registrado correctamente')
             if (onSuccess) onSuccess(res)
@@ -458,61 +518,14 @@ export function QuickPayModal({
                     </div>
                 ) : (
                     <div className="bg-slate-900 border-slate-800 text-white w-full overflow-hidden p-0">
-                        <div ref={receiptRef} className="bg-slate-900">
-                            <div className="bg-emerald-600 p-6 text-center">
-                                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
-                                    <CheckCircle className="w-10 h-10 text-white" />
-                                </div>
-                                <DialogTitle className="text-2xl font-bold text-white">¡Pago Exitoso!</DialogTitle>
-                                <p className="text-emerald-100 text-sm mt-1">La transacción se procesó correctamente.</p>
-                            </div>
-                            
-                            <div className="p-6 space-y-6 pt-4">
-                                {lastPayment && (
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between items-center border-b border-white/5 pb-4">
-                                            <span className="text-slate-400 text-sm">Monto Pagado</span>
-                                            <span className="text-2xl font-bold text-white">S/ {lastPayment.monto.toFixed(2)}</span>
-                                        </div>
-                                        
-                                        <div className="bg-slate-800/80 rounded-lg p-3 border border-white/10">
-                                            <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-2">Estado Actual</p>
-                                            <div className="flex justify-between text-sm mb-1">
-                                                <span className="text-slate-300">Progreso</span>
-                                                <span className="text-emerald-400 font-bold">{lastPayment.pagadas} de {lastPayment.totalCuotas} cuotas</span>
-                                            </div>
-                                            <div className="flex justify-between text-sm">
-                                                <span className="text-slate-300">Atrasadas</span>
-                                                <div className="text-right">
-                                                    {lastPayment.cuotasAtrasadas > 0 && (
-                                                         <span className="block text-xs text-red-400 font-bold mb-0.5">
-                                                            {lastPayment.cuotasAtrasadas} Cuotas Atrasadas
-                                                         </span>
-                                                    )}
-                                                    <span className="block text-white font-bold">
-                                                        Deuda Restante: S/ {lastPayment.saldoPendiente?.toFixed(2)}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-3 pt-2">
-                                            <div className="flex justify-between text-sm">
-                                                <span className="text-slate-500">Operación</span>
-                                                <span className="font-mono text-slate-300">{lastPayment.operacion}</span>
-                                            </div>
-                                            <div className="flex justify-between text-sm">
-                                                <span className="text-slate-500">Cliente</span>
-                                                <span className="text-slate-300 font-medium text-right">{lastPayment.cliente}</span>
-                                            </div>
-                                            <div className="flex justify-between text-sm">
-                                                <span className="text-slate-500">Fecha</span>
-                                                <span className="text-slate-300">{lastPayment.fecha} - {lastPayment.hora}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                        <div ref={receiptRef}>
+                            <VoucherContent 
+                                payment={lastPayment}
+                                loan={prestamo}
+                                client={prestamo?.clientes}
+                                cronograma={fullCronograma}
+                                allPayments={historyPayments}
+                            />
                         </div>
 
                         <div className="p-4 bg-slate-950 flex gap-3">

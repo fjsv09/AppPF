@@ -90,8 +90,12 @@ export async function GET(request: Request) {
             const prestamo = Array.isArray(c.prestamos) ? c.prestamos[0] : c.prestamos
             const cliente = Array.isArray(prestamo?.clientes) ? prestamo.clientes[0] : prestamo?.clientes
             
-            // Un préstamo es auditable si está ACTIVO y tiene DEUDA
+            const isMigrado = (prestamo?.observacion_supervisor || '').includes('Préstamo migrado del sistema anterior')
+            const isExempt = cliente?.excepcion_voucher === true || isMigrado
+            
+            // Un préstamo es auditable si está ACTIVO, tiene DEUDA y NO es migrado
             const isActivo = prestamo?.estado?.toLowerCase() === 'activo'
+            const isAuditable = isActivo && !isMigrado
             
             let tieneDeuda = false
             if (prestamo?.cronograma_cuotas) {
@@ -102,8 +106,8 @@ export async function GET(request: Request) {
             }
 
             cuotaAuditMap[c.id] = {
-                isExempt: cliente?.excepcion_voucher === true,
-                isAuditable: isActivo && tieneDeuda,
+                isExempt,
+                isAuditable: isAuditable && tieneDeuda,
                 clienteNombre: cliente?.nombres || 'Cliente Desconocido',
                 clienteTelefono: cliente?.telefono,
                 numeroCuota: c.numero_cuota,

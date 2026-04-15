@@ -105,7 +105,10 @@ export function ProfileForm({ perfil, isAdmin }: ProfileFormProps) {
             <div className="relative inline-block group">
               <div className="w-32 h-32 rounded-full border-4 border-blue-500/20 overflow-hidden bg-slate-800 flex items-center justify-center mx-auto mb-4">
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  </>
                 ) : (
                   <User className="w-16 h-16 text-slate-500" />
                 )}

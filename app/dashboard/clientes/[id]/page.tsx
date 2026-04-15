@@ -122,11 +122,14 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                         alt={cliente.nombres}
                                         className="w-full h-full"
                                         thumbnail={
-                                            <img 
-                                                src={cliente.foto_perfil} 
-                                                alt={cliente.nombres} 
-                                                className="w-full h-full object-cover"
-                                            />
+                                            <>
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img 
+                                                    src={cliente.foto_perfil} 
+                                                    alt={cliente.nombres} 
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            </>
                                         }
                                     />
                                 ) : (
@@ -182,15 +185,25 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
  
                     <div className="flex flex-col gap-1.5 min-w-[170px] w-full md:w-auto">
                         <div className="grid grid-cols-2 gap-1.5">
-                            <div className="p-1.5 rounded-lg bg-slate-900/40 border border-slate-800/40 flex flex-col items-center justify-center group">
+                             <div className="p-1.5 rounded-lg bg-slate-900/40 border border-slate-800/40 flex flex-col items-center justify-center group">
                                 <div className="text-[7px] text-slate-500 uppercase tracking-widest font-bold mb-0.5">Historial</div>
                                 <div className="text-base font-bold text-white leading-none">
-                                    {loans?.filter((l: any) => l.estado === 'completado' || l.estado === 'renovado' || l.estado === 'finalizado' || (l.saldo_pendiente !== null && l.saldo_pendiente <= 0.01 && l.estado !== 'anulado')).length || 0}
+                                    {loans?.filter((l: any) => {
+                                        const isMigrado = l.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+                                        const isEffectivelyFinalized = l.estado === 'finalizado' || (isMigrado && l.saldo_pendiente <= 0.01)
+                                        return l.estado === 'completado' || l.estado === 'renovado' || isEffectivelyFinalized || (l.saldo_pendiente !== null && l.saldo_pendiente <= 0.01 && l.estado !== 'anulado')
+                                    }).length || 0}
                                 </div>
                             </div>
                              <div className="p-1.5 rounded-lg bg-blue-500/5 border border-blue-500/10 flex flex-col items-center justify-center group">
                                 <div className="text-[7px] text-blue-400/80 uppercase tracking-widest font-bold mb-0.5">Activos</div>
-                                <div className="text-base font-bold text-blue-100 leading-none">{loans?.filter((l: any) => l.estado === 'activo').length || 0}</div>
+                                <div className="text-base font-bold text-blue-100 leading-none">
+                                    {loans?.filter((l: any) => {
+                                        const isMigrado = l.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+                                        const isEffectivelyFinalized = isMigrado && l.saldo_pendiente <= 0.01
+                                        return l.estado === 'activo' && !isEffectivelyFinalized
+                                    }).length || 0}
+                                </div>
                             </div>
                         </div>
                          
@@ -262,7 +275,9 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
 
                         <TabsContent value="historial" className="space-y-4 m-0 animate-in fade-in duration-300 overflow-x-hidden">
                             {loans?.map((loan: any) => {
-                                 const isPaid = loan.estado === 'pagado' || loan.estado === 'finalizado';
+                                 const isMigrado = loan.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+                                 const isEffectivelyFinalized = loan.estado === 'finalizado' || (isMigrado && loan.saldo_pendiente <= 0.01)
+                                 const isPaid = loan.estado === 'pagado' || isEffectivelyFinalized;
                                  
                                  return (
                                 <Link key={loan.id} href={`/dashboard/prestamos/${loan.id}`}>
@@ -293,11 +308,11 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                                     <div className="text-[11px] font-medium text-slate-300">{loan.interes}%</div>
                                                 </div>
                                                 <Badge variant="outline" className={`px-1.5 py-0 text-[8px] h-4 border ${
-                                                    loan.estado === 'activo' ? 'bg-blue-950/30 text-blue-400 border-blue-900/50' : 
-                                                    loan.estado === 'pagado' || loan.estado === 'finalizado' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' : 
+                                                    !isEffectivelyFinalized && loan.estado === 'activo' ? 'bg-blue-950/30 text-blue-400 border-blue-900/50' : 
+                                                    isPaid ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' : 
                                                     'bg-slate-800.50 text-slate-400 border-slate-700'
                                                 }`}>
-                                                    {loan.estado.toUpperCase()}
+                                                    {isEffectivelyFinalized ? 'FINALIZADO' : loan.estado.toUpperCase()}
                                                 </Badge>
                                             </div>
                                         </div>
@@ -347,7 +362,13 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                         </div>
                                         <div className="p-3 rounded-lg bg-slate-950/50 border border-slate-800/50 hover:border-emerald-500/20 transition-colors">
                                             <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Préstamos Activos</div>
-                                            <div className="text-xl font-bold text-emerald-400">{loans?.filter((l: any) => l.estado === 'activo').length || 0}</div>
+                                            <div className="text-xl font-bold text-emerald-400">
+                                                {loans?.filter((l: any) => {
+                                                    const isMigrado = l.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+                                                    const isEffectivelyFinalized = isMigrado && l.saldo_pendiente <= 0.01
+                                                    return l.estado === 'activo' && !isEffectivelyFinalized
+                                                }).length || 0}
+                                            </div>
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -431,7 +452,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                                                 </div>
                                                                 {item.motivo && (
                                                                     <div className="mt-2 pt-2 border-t border-slate-800/30 text-[10px] text-slate-500 italic">
-                                                                        "{item.motivo}"
+                                                                        &quot;{item.motivo}&quot;
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -471,7 +492,11 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                 <div className="p-3 rounded-lg bg-slate-950/50 border border-slate-800/50 hover:border-emerald-500/20 transition-colors">
                                     <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Préstamos Activos</div>
                                     <div className="text-xl font-bold text-emerald-400">
-                                        {loans?.filter((l: any) => l.estado === 'activo').length || 0}
+                                        {loans?.filter((l: any) => {
+                                            const isMigrado = l.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+                                            const isEffectivelyFinalized = isMigrado && l.saldo_pendiente <= 0.01
+                                            return l.estado === 'activo' && !isEffectivelyFinalized
+                                        }).length || 0}
                                     </div>
                                 </div>
                             </CardContent>

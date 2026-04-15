@@ -16,16 +16,8 @@ import { Input } from "../ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table"
 import { Progress } from "../ui/progress"
 import { toast } from "sonner"
-import { FileUp, Download, CheckCircle2, AlertCircle, Loader2, FileSpreadsheet, Wallet, Info } from 'lucide-react'
+import { FileUp, Download, CheckCircle2, AlertCircle, Loader2, FileSpreadsheet, Users, Banknote, Receipt, ArrowRightLeft, TrendingUp, TrendingDown, Info } from 'lucide-react'
 import { Badge } from '../ui/badge'
-import { createClient } from '../../utils/supabase/client'
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "../ui/select"
 
 interface BulkImportModalProps {
   isOpen: boolean
@@ -33,45 +25,16 @@ interface BulkImportModalProps {
   onSuccess?: () => void
 }
 
+type ImportTab = 'clientes' | 'prestamos' | 'gastos'
+
 export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalProps) {
+  const [activeTab, setActiveTab] = useState<ImportTab>('clientes')
   const [file, setFile] = useState<File | null>(null)
   const [data, setData] = useState<any[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [progress, setProgress] = useState(0)
-  const [results, setResults] = useState<{ success: number, skipped: number, errors: string[] } | null>(null)
-  
-  const [accounts, setAccounts] = useState<any[]>([])
-  const [selectedAccountId, setSelectedAccountId] = useState<string>('')
-  const [isLoadingAccounts, setIsLoadingAccounts] = useState(false)
-  
+  const [results, setResults] = useState<any | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const supabase = createClient()
-
-  // Fetch accounts on open
-  useEffect(() => {
-    if (isOpen) {
-        fetchAccounts()
-    }
-  }, [isOpen])
-
-  const fetchAccounts = async () => {
-    setIsLoadingAccounts(true)
-    try {
-        // Obtenemos todas las cuentas disponibles
-        const { data, error } = await supabase
-            .from('cuentas_financieras')
-            .select('id, nombre, saldo, tipo')
-            .order('nombre')
-        
-        if (error) throw error
-        setAccounts(data || [])
-    } catch (err: any) {
-        console.error("Error fetchAccounts:", err)
-        toast.error("Error cargando cuentas financieras")
-    } finally {
-        setIsLoadingAccounts(false)
-    }
-  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
@@ -90,7 +53,6 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
       const ws = wb.Sheets[wsname]
       const jsonData: any[] = XLSX.utils.sheet_to_json(ws)
       
-      // Formatear fechas si vienen como objeto Date de Excel
       const formattedData = jsonData.map(row => {
           const newRow = { ...row }
           for (const key in newRow) {
@@ -106,63 +68,132 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
     reader.readAsBinaryString(file)
   }
 
-  // Calculate totals
-  const totalImportMonto = useMemo(() => {
-      return data.reduce((acc, row) => acc + (parseFloat(row.monto_solicitado || row.monto || row.Monto || 0)), 0)
-  }, [data])
-
-  const selectedAccount = useMemo(() => {
-      return accounts.find(a => a.id === selectedAccountId)
-  }, [selectedAccountId, accounts])
-
-  const isBalanceInsufficient = selectedAccount && totalImportMonto > selectedAccount.saldo
-
+  // ===== TEMPLATES =====
   const downloadTemplate = () => {
-    const templateData = [
-      {
-        dni: '12345678',
-        nombres: 'Juan Perez',
-        telefono: '987654321',
-        direccion: 'Av. Principal 123, Lima',
-        referencia: 'Frente al parque',
-        sector: 'Centro',
-        giro_negocio: 'Bodega',
-        fuentes_ingresos: 'Venta de abarrotes',
-        ingresos_mensuales: 2500,
-        motivo_prestamo: 'Ampliación de stock',
-        monto_solicitado: 1000,
-        interes: 20,
-        cuotas: 30,
-        modalidad: 'diario',
-        fecha_inicio: new Date().toISOString().split('T')[0]
-      }
-    ]
+    let templateData: any[] = []
+    let sheetName = ''
+    let fileName = ''
+
+    switch (activeTab) {
+      case 'clientes':
+        templateData = [{
+          dni: '12345678',
+          nombres: 'Juan Perez',
+          telefono: '987654321',
+          direccion: 'Av. Principal 123',
+          referencia: 'Frente al parque',
+          sector: 'Centro',
+          giro_negocio: 'Bodega',
+          fuentes_ingresos: 'Venta de abarrotes',
+          ingresos_mensuales: 2500,
+          asesor_nombre: 'Franklin Ferre'
+        }]
+        sheetName = 'Clientes Migración'
+        fileName = 'plantilla_migracion_clientes.xlsx'
+        break
+
+      case 'prestamos':
+        templateData = [{
+          dni_cliente: '12345678',
+          monto: 1000,
+          interes: 20,
+          cuotas: 30,
+          modalidad: 'diario',
+          fecha_inicio: '2025-01-15',
+          ya_pagado: 'NO',
+          monto_abonado: 350,
+          asesor_nombre: 'Franklin Ferre'
+        }]
+        sheetName = 'Préstamos Migración'
+        fileName = 'plantilla_migracion_prestamos.xlsx'
+        break
+
+      case 'gastos':
+        templateData = [{
+          descripcion: 'Pago de luz oficina',
+          monto: 150,
+          categoria: 'Servicios',
+          registrado_por_nombre: 'Franklin Ferre',
+          fecha_registro: '2025-02-10'
+        }]
+        sheetName = 'Gastos Migración'
+        fileName = 'plantilla_migracion_gastos.xlsx'
+        break
+    }
 
     const ws = XLSX.utils.json_to_sheet(templateData)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Plantilla Importacion")
-    XLSX.writeFile(wb, "plantilla_importacion_prestamos.xlsx")
-    toast.info("Descargando plantilla Excel...")
+    XLSX.utils.book_append_sheet(wb, ws, sheetName)
+    XLSX.writeFile(wb, fileName)
+    toast.info(`Descargando plantilla: ${fileName}`)
   }
 
-  const handleUpload = async () => {
-    if (data.length === 0 || !selectedAccountId) return
-    if (isBalanceInsufficient) {
-        toast.error("Saldo insuficiente en la cuenta seleccionada para completar el lote.")
-        return
-    }
+  // ===== CALCULATIONS =====
+  const loanSummary = useMemo(() => {
+    if (activeTab !== 'prestamos') return null
+    let totalDesembolsos = 0
+    let totalIngresos = 0
+    let pagados = 0
+    let activos = 0
 
+    data.forEach(l => {
+      const monto = parseFloat(l.monto || l.Monto || 0)
+      const interes = parseFloat(l.interes || l.Interes || 0)
+      const yaPagado = (l.ya_pagado || l.YaPagado || 'NO').toString().toUpperCase().trim()
+      const esPagado = yaPagado === 'SI' || yaPagado === 'SÍ' || yaPagado === 'YES'
+      const montoAbonado = parseFloat(l.monto_abonado || l.MontoAbonado || 0)
+
+      if (monto > 0) {
+        totalDesembolsos += monto
+        if (esPagado) {
+          totalIngresos += monto * (1 + interes / 100)
+          pagados++
+        } else {
+          if (montoAbonado > 0) totalIngresos += montoAbonado
+          activos++
+        }
+      }
+    })
+
+    return { totalDesembolsos, totalIngresos, neto: totalDesembolsos - totalIngresos, pagados, activos }
+  }, [data, activeTab])
+
+  const totalGastos = useMemo(() => {
+    if (activeTab !== 'gastos') return 0
+    return data.reduce((acc, e) => acc + parseFloat(e.monto || e.Monto || 0), 0)
+  }, [data, activeTab])
+
+  // ===== UPLOAD =====
+  const handleUpload = async () => {
+    if (data.length === 0) return
     setIsUploading(true)
-    setProgress(5)
+    setProgress(10)
 
     try {
-      const response = await fetch('/api/clientes/import', {
+      let endpoint = ''
+      let body: any = {}
+
+      switch (activeTab) {
+        case 'clientes':
+          endpoint = '/api/migracion/clientes'
+          body = { clients: data }
+          break
+        case 'prestamos':
+          endpoint = '/api/migracion/prestamos'
+          body = { loans: data }
+          break
+        case 'gastos':
+          endpoint = '/api/migracion/gastos'
+          body = { expenses: data }
+          break
+      }
+
+      setProgress(30)
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            clients: data,
-            cuentaOrigenId: selectedAccountId 
-        })
+        body: JSON.stringify(body)
       })
 
       setProgress(90)
@@ -170,15 +201,10 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
 
       if (!response.ok) throw new Error(res.error || 'Error al importar')
 
-      setResults({
-        success: res.success,
-        skipped: res.skipped,
-        errors: res.errors
-      })
-      
-      toast.success(`Importación terminada: ${res.success} préstamos creados.`)
+      setResults(res)
+      toast.success(`Migración completada: ${res.success} registros procesados.`)
       if (onSuccess) onSuccess()
-      
+
     } catch (error: any) {
       toast.error(error.message)
     } finally {
@@ -192,9 +218,22 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
     setData([])
     setResults(null)
     setProgress(0)
-    setSelectedAccountId('')
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
+
+  const switchTab = (tab: ImportTab) => {
+    reset()
+    setActiveTab(tab)
+  }
+
+  // ===== TAB CONFIG =====
+  const tabs: { id: ImportTab; label: string; icon: React.ReactNode; accent: string; desc: string }[] = [
+    { id: 'clientes', label: 'Clientes', icon: <Users className="w-4 h-4" />, accent: 'blue', desc: 'Solo registro de cartera' },
+    { id: 'prestamos', label: 'Préstamos', icon: <Banknote className="w-4 h-4" />, accent: 'emerald', desc: 'Con movimientos financieros' },
+    { id: 'gastos', label: 'Gastos', icon: <Receipt className="w-4 h-4" />, accent: 'amber', desc: 'Descuenta de Efectivo Global' },
+  ]
+
+  const currentAccent = tabs.find(t => t.id === activeTab)?.accent || 'blue'
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
@@ -206,124 +245,227 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
       <DialogContent className="max-w-6xl bg-slate-900 border-slate-800 text-slate-100 max-h-[95vh] overflow-hidden flex flex-col p-0">
         <DialogHeader className="p-6 pb-2">
           <DialogTitle className="flex items-center gap-2 text-xl">
-            <FileUp className="w-6 h-6 text-blue-400" />
-            Importación Masiva: Aprobación y Desembolso
+            <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/20">
+              <ArrowRightLeft className="w-5 h-5 text-blue-400" />
+            </div>
+            Migración de Datos — Sistema Anterior
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            Carga clientes y aprueba sus préstamos automáticamente. El dinero se deducirá de la cuenta financiera seleccionada.
+            Importa clientes, préstamos históricos y gastos desde archivos Excel.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto py-4 space-y-6 px-6">
-          {/* Step 1: Account Selection & File Upload */}
-          {!results && (
-            <div className="space-y-6">
-              <div className="grid md:grid-cols-2 gap-4">
-                {/* Account Selection */}
-                <div className="p-6 rounded-2xl border border-slate-800 bg-slate-950/50 space-y-4">
-                  <div className="flex items-center gap-2 text-blue-400">
-                    <Wallet className="w-5 h-5" />
-                    <h4 className="font-bold text-sm uppercase tracking-wider">1. Cuenta de Desembolso</h4>
-                  </div>
-                  <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
-                    <SelectTrigger className="bg-slate-900 border-slate-700 text-white h-12">
-                      <SelectValue placeholder="Seleccione cuenta de origen..." />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                      {accounts.map((acc) => (
-                        <SelectItem key={acc.id} value={acc.id} className="focus:bg-slate-800 focus:text-white">
-                             <div className="flex justify-between w-full gap-8">
-                                <span>{acc.nombre}</span>
-                                <span className="font-mono text-emerald-400 font-bold">${acc.saldo.toFixed(2)}</span>
-                             </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedAccount && (
-                    <div className="flex justify-between items-center px-2 py-1 rounded bg-slate-900/50 border border-slate-800">
-                        <span className="text-xs text-slate-500">Saldo Disponible:</span>
-                        <span className="text-sm font-black text-emerald-400">${selectedAccount.saldo.toFixed(2)}</span>
-                    </div>
-                  )}
-                </div>
+        {/* TABS */}
+        <div className="px-6 pb-2">
+          <div className="flex gap-2 p-1 bg-slate-950/50 rounded-xl border border-slate-800/50">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => switchTab(tab.id)}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200",
+                  activeTab === tab.id
+                    ? `bg-${tab.accent}-500/15 text-${tab.accent}-400 border border-${tab.accent}-500/30 shadow-lg shadow-${tab.accent}-500/5`
+                    : "text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 border border-transparent"
+                )}
+                style={activeTab === tab.id ? {
+                  backgroundColor: tab.accent === 'blue' ? 'rgba(59,130,246,0.15)' :
+                                    tab.accent === 'emerald' ? 'rgba(16,185,129,0.15)' :
+                                    'rgba(245,158,11,0.15)',
+                  color: tab.accent === 'blue' ? '#60a5fa' :
+                          tab.accent === 'emerald' ? '#34d399' :
+                          '#fbbf24',
+                  borderColor: tab.accent === 'blue' ? 'rgba(59,130,246,0.3)' :
+                                tab.accent === 'emerald' ? 'rgba(16,185,129,0.3)' :
+                                'rgba(245,158,11,0.3)',
+                } : {}}
+              >
+                {tab.icon}
+                <span className="hidden sm:inline">{tab.label}</span>
+                {data.length > 0 && activeTab === tab.id && (
+                  <Badge variant="outline" className="text-[9px] h-4 px-1.5 ml-1 border-current/30 bg-current/10">{data.length}</Badge>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
 
-                {/* File Upload */}
-                <div className="p-6 rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 flex flex-col items-center justify-center text-center space-y-4">
-                  <div className="flex items-center gap-2 text-emerald-400">
-                    <FileSpreadsheet className="w-5 h-5" />
-                    <h4 className="font-bold text-sm uppercase tracking-wider">2. Archivo Excel</h4>
+        <div className="flex-1 overflow-y-auto py-4 space-y-4 px-6">
+          {/* Step: File Upload */}
+          {!results && (
+            <div className="space-y-4">
+              {/* File Upload Card */}
+              <div className="p-5 rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 flex flex-col md:flex-row items-center gap-4">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="p-2.5 rounded-xl bg-slate-800/50 shrink-0">
+                    <FileSpreadsheet className="w-6 h-6 text-slate-400" />
                   </div>
-                  <div className="flex gap-2 w-full">
-                    <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="flex-1 border-slate-700 text-slate-400 hover:text-white h-10"
-                        onClick={downloadTemplate}
-                    >
-                      <Download className="w-4 h-4 mr-2" /> Plantilla
-                    </Button>
-                    <label className="flex-[2] cursor-pointer">
-                      <Input 
-                        type="file" 
-                        className="hidden" 
-                        accept=".xlsx,.xls,.csv" 
-                        onChange={handleFileChange}
-                        ref={fileInputRef}
-                      />
-                      <div className="bg-emerald-600 hover:bg-emerald-500 text-white h-10 flex items-center justify-center rounded-lg font-bold text-sm transition-colors">
-                        {file ? file.name : "Subir Archivo"}
-                      </div>
-                    </label>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-bold text-slate-300">Archivo Excel</h4>
+                    <p className="text-[10px] text-slate-500 mt-0.5">{tabs.find(t => t.id === activeTab)?.desc}</p>
                   </div>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="border-slate-700 text-slate-400 hover:text-white h-9"
+                      onClick={downloadTemplate}
+                  >
+                    <Download className="w-4 h-4 mr-1.5" /> Plantilla
+                  </Button>
+                  <label className="cursor-pointer">
+                    <Input 
+                      type="file" 
+                      className="hidden" 
+                      accept=".xlsx,.xls,.csv" 
+                      onChange={handleFileChange}
+                      ref={fileInputRef}
+                    />
+                    <div className={cn(
+                      "h-9 px-4 flex items-center justify-center rounded-lg font-bold text-sm transition-colors text-white",
+                      currentAccent === 'blue' ? 'bg-blue-600 hover:bg-blue-500' :
+                      currentAccent === 'emerald' ? 'bg-emerald-600 hover:bg-emerald-500' :
+                      'bg-amber-600 hover:bg-amber-500'
+                    )}>
+                      <FileUp className="w-4 h-4 mr-1.5" />
+                      {file ? file.name : "Subir Archivo"}
+                    </div>
+                  </label>
                 </div>
               </div>
 
-              {/* Totals Banner */}
-              {data.length > 0 && (
-                <div className={`p-4 rounded-xl border flex items-center justify-between ${isBalanceInsufficient ? 'bg-red-500/10 border-red-500/30' : 'bg-blue-500/10 border-blue-500/30'}`}>
-                    <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${isBalanceInsufficient ? 'bg-red-500/20' : 'bg-blue-500/20'}`}>
-                            {isBalanceInsufficient ? <AlertCircle className="w-6 h-6 text-red-400" /> : <Info className="w-6 h-6 text-blue-400" />}
-                        </div>
-                        <div>
-                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Resumen de Importación</p>
-                            <h4 className="text-lg font-black text-white">Total a Desembolsar: <span className={isBalanceInsufficient ? 'text-red-400' : 'text-emerald-400'}>${totalImportMonto.toFixed(2)}</span></h4>
-                        </div>
+              {/* ===== LOAN FINANCIAL SUMMARY ===== */}
+              {activeTab === 'prestamos' && data.length > 0 && loanSummary && (
+                <div className={cn(
+                  "p-4 rounded-xl border",
+                  loanSummary.neto > 0 ? "bg-amber-500/5 border-amber-500/20" : "bg-emerald-500/5 border-emerald-500/20"
+                )}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Info className="w-4 h-4 text-slate-400" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Resumen Contable del Lote</p>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div className="p-3 rounded-lg bg-slate-950/50 border border-slate-800">
+                      <p className="text-[9px] text-slate-500 font-bold uppercase">Registros</p>
+                      <p className="text-lg font-black text-white">{data.length}</p>
+                      <div className="flex gap-2 mt-1">
+                        <span className="text-[9px] text-emerald-400">✅ {loanSummary.pagados} pagados</span>
+                        <span className="text-[9px] text-blue-400">🔄 {loanSummary.activos} activos</span>
+                      </div>
                     </div>
-                    {isBalanceInsufficient && (
-                        <Badge variant="destructive" className="h-8 px-4 text-xs font-black animate-pulse">
-                            BLOQUEADO: SALDO INSUFICIENTE
-                        </Badge>
-                    )}
+                    <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/20">
+                      <div className="flex items-center gap-1">
+                        <TrendingDown className="w-3 h-3 text-red-400" />
+                        <p className="text-[9px] text-red-400 font-bold uppercase">Desembolsos</p>
+                      </div>
+                      <p className="text-lg font-black text-red-400">${loanSummary.totalDesembolsos.toFixed(2)}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                      <div className="flex items-center gap-1">
+                        <TrendingUp className="w-3 h-3 text-emerald-400" />
+                        <p className="text-[9px] text-emerald-400 font-bold uppercase">Ingresos Pagos</p>
+                      </div>
+                      <p className="text-lg font-black text-emerald-400">${loanSummary.totalIngresos.toFixed(2)}</p>
+                    </div>
+                    <div className={cn("p-3 rounded-lg border col-span-2 md:col-span-2",
+                      loanSummary.neto > 0 ? "bg-amber-500/10 border-amber-500/30" : "bg-emerald-500/10 border-emerald-500/30"
+                    )}>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Neto Requerido</p>
+                      <p className={cn("text-xl font-black", loanSummary.neto > 0 ? "text-amber-400" : "text-emerald-400")}>
+                        ${loanSummary.neto.toFixed(2)}
+                      </p>
+                      <p className="text-[9px] text-slate-500 mt-0.5">
+                        {loanSummary.neto <= 0 ? "✅ No requiere saldo adicional (más ingresos que egresos)" : "⚠️ Se descontará de Efectivo Global"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ===== EXPENSE SUMMARY ===== */}
+              {activeTab === 'gastos' && data.length > 0 && (
+                <div className="p-4 rounded-xl border bg-amber-500/5 border-amber-500/20">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-amber-500/20">
+                        <Receipt className="w-5 h-5 text-amber-400" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Total a Descontar de Efectivo Global</p>
+                        <h4 className="text-lg font-black text-amber-400">${totalGastos.toFixed(2)}</h4>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] bg-slate-800/50 text-slate-400 border-slate-700">
+                      {data.length} gastos
+                    </Badge>
+                  </div>
+                </div>
+              )}
+
+              {/* ===== CLIENT SUMMARY ===== */}
+              {activeTab === 'clientes' && data.length > 0 && (
+                <div className="p-4 rounded-xl border bg-blue-500/5 border-blue-500/20">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-blue-500/20">
+                        <Users className="w-5 h-5 text-blue-400" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Clientes a Importar</p>
+                        <h4 className="text-lg font-black text-blue-400">{data.length} registros</h4>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-slate-500">Solo registro de cartera — Sin préstamo ni desembolso</p>
+                  </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* Results Summary */}
+          {/* ===== RESULTS ===== */}
           {results && (
             <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
-               <div className="grid grid-cols-3 gap-3">
-                  <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-center">
-                     <p className="text-[10px] text-emerald-500/70 font-bold uppercase tracking-tight">Préstamos Creados</p>
-                     <h3 className="text-2xl font-black text-emerald-400">{results.success}</h3>
-                  </div>
-                  <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-center">
-                     <p className="text-[10px] text-amber-500/70 font-bold uppercase tracking-tight">Omitidos (DNI Duplicado)</p>
-                     <h3 className="text-2xl font-black text-amber-400">{results.skipped}</h3>
-                  </div>
-                  <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 text-center">
-                     <p className="text-[10px] text-red-500/70 font-bold uppercase tracking-tight">Errores</p>
-                     <h3 className="text-2xl font-black text-red-400">{results.errors.length}</h3>
-                  </div>
+               <div className={cn("grid gap-3", 
+                 activeTab === 'prestamos' ? "grid-cols-2 md:grid-cols-5" : "grid-cols-3"
+               )}>
+                 <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-center">
+                    <p className="text-[10px] text-emerald-500/70 font-bold uppercase tracking-tight">Exitosos</p>
+                    <h3 className="text-2xl font-black text-emerald-400">{results.success}</h3>
+                 </div>
+                 <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-center">
+                    <p className="text-[10px] text-amber-500/70 font-bold uppercase tracking-tight">Omitidos</p>
+                    <h3 className="text-2xl font-black text-amber-400">{results.skipped || 0}</h3>
+                 </div>
+                 <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 text-center">
+                    <p className="text-[10px] text-red-500/70 font-bold uppercase tracking-tight">Errores</p>
+                    <h3 className="text-2xl font-black text-red-400">{results.errors?.length || 0}</h3>
+                 </div>
+                 {activeTab === 'prestamos' && (
+                   <>
+                     <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 text-center">
+                        <p className="text-[10px] text-red-400/70 font-bold uppercase tracking-tight">Desembolsado</p>
+                        <h3 className="text-lg font-black text-red-400">${(results.totalDesembolsado || 0).toFixed(2)}</h3>
+                     </div>
+                     <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-center">
+                        <p className="text-[10px] text-emerald-400/70 font-bold uppercase tracking-tight">Ingresado</p>
+                        <h3 className="text-lg font-black text-emerald-400">${(results.totalIngresado || 0).toFixed(2)}</h3>
+                     </div>
+                   </>
+                 )}
+                 {activeTab === 'gastos' && results.totalDescontado > 0 && (
+                   <div className="col-span-3 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-center">
+                      <p className="text-[10px] text-amber-400/70 font-bold uppercase tracking-tight">Total Descontado Efectivo Global</p>
+                      <h3 className="text-lg font-black text-amber-400">${results.totalDescontado.toFixed(2)}</h3>
+                   </div>
+                 )}
                </div>
 
-               {results.errors.length > 0 && (
+               {results.errors?.length > 0 && (
                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
                     <h5 className="text-xs font-bold text-slate-400 mb-2 uppercase">Detalle de Errores</h5>
                     <div className="max-h-48 overflow-y-auto space-y-1 pr-2">
-                       {results.errors.map((err, i) => (
+                       {results.errors.map((err: string, i: number) => (
                          <p key={i} className="text-[10px] text-red-400 flex items-start gap-2">
                             <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
                             {err}
@@ -335,95 +477,143 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
             </div>
           )}
 
-          {/* Preview Table */}
+          {/* ===== PREVIEW TABLE ===== */}
           {data.length > 0 && !results && (
             <div className="space-y-2">
               <div className="flex items-center justify-between px-1">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Previsualización del Lote ({data.length} registros)</h4>
-                <div className="flex gap-2">
-                    <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-400 border-blue-500/20">Identidad</Badge>
-                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/20">Negocio</Badge>
-                    <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Préstamo</Badge>
-                </div>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Previsualización ({data.length} registros)</h4>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/30 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <Table className="min-w-[1800px]">
-                      <TableHeader className="bg-slate-900/50">
-                        <TableRow className="border-slate-800 hover:bg-transparent">
-                          {/* Datos de Identidad */}
-                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">DNI</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Nombre</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Teléfono</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Dirección</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Referencia</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Sector</TableHead>
-
-                          {/* Datos de Negocio */}
-                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Negocio</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Fuentes</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Ingresos</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Motivo</TableHead>
-                          
-                          {/* Datos Financieros */}
-                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Monto</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Cuotas</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Interés</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Modalidad</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Inicio</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {data.slice(0, 10).map((row, i) => (
-                          <TableRow key={i} className="border-slate-800 hover:bg-slate-900/30">
-                            {/* Identidad */}
-                            <TableCell className="text-xs font-mono">{row.dni || row.DNI || '---'}</TableCell>
-                            <TableCell className="text-xs font-bold text-slate-300">{row.nombres || row.NOMBRES || row.Nombre || '---'}</TableCell>
-                            <TableCell className="text-xs text-slate-500">{row.telefono || row.Telefono || '---'}</TableCell>
-                            <TableCell className="text-xs text-slate-600 truncate max-w-[150px]">{row.direccion || row.Direccion || '---'}</TableCell>
-                            <TableCell className="text-xs text-slate-600 truncate max-w-[120px]">{row.referencia || row.Referencia || '---'}</TableCell>
-                            <TableCell className="text-xs text-slate-500 uppercase">{row.sector || row.Sector || '---'}</TableCell>
-
-                            {/* Negocio */}
-                            <TableCell className="text-xs text-slate-500 truncate max-w-[120px]">{row.giro_negocio || row.GiroNegocio || '---'}</TableCell>
-                            <TableCell className="text-xs text-slate-500 truncate max-w-[120px]">{row.fuentes_ingresos || row.Fuentes || '---'}</TableCell>
-                            <TableCell className="text-xs text-amber-500 font-bold">{row.ingresos_mensuales || row.Ingresos || '0'}</TableCell>
-                            <TableCell className="text-xs text-slate-600 truncate max-w-[150px]">{row.motivo_prestamo || row.Motivo || '---'}</TableCell>
-
-                            {/* Financieros */}
-                            <TableCell className="text-xs text-emerald-400 font-black">
-                                ${parseFloat(row.monto_solicitado || row.monto || row.Monto || 0).toFixed(2)}
-                            </TableCell>
-                            <TableCell className="text-xs text-blue-400 font-bold">{row.cuotas || row.Cuotas || '0'}</TableCell>
-                            <TableCell className="text-xs text-slate-400">{row.interes || row.Interes || '0'}%</TableCell>
-                            <TableCell className="text-xs text-slate-400 uppercase">{row.modalidad || row.modalidad || row.frecuencia || '---'}</TableCell>
-                            <TableCell className="text-xs text-slate-500 font-mono italic">
-                                {row.fecha_inicio || row.fecha_inicio_propuesta || row.Fecha || '---'}
-                            </TableCell>
+                    {/* ===== CLIENTES TABLE ===== */}
+                    {activeTab === 'clientes' && (
+                      <Table className="min-w-[1000px]">
+                        <TableHeader className="bg-slate-900/50">
+                          <TableRow className="border-slate-800 hover:bg-transparent">
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">DNI</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Nombre</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Teléfono</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Dirección</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Referencia</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Sector</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Negocio</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Asesor</TableHead>
                           </TableRow>
-                        ))}
-                        {data.length > 10 && (
-                          <TableRow className="border-none hover:bg-transparent">
-                            <TableCell colSpan={16} className="text-center py-4 text-[10px] text-slate-600 font-bold italic bg-slate-900/20">
-                              ... y {data.length - 10} registros adicionales detectados en el archivo.
-                            </TableCell>
+                        </TableHeader>
+                        <TableBody>
+                          {data.slice(0, 10).map((row, i) => (
+                            <TableRow key={i} className="border-slate-800 hover:bg-slate-900/30">
+                              <TableCell className="text-xs font-mono text-blue-400">{row.dni || row.DNI || '---'}</TableCell>
+                              <TableCell className="text-xs font-bold text-slate-200">{row.nombres || row.NOMBRES || row.Nombre || '---'}</TableCell>
+                              <TableCell className="text-xs text-slate-500">{row.telefono || row.Telefono || '---'}</TableCell>
+                              <TableCell className="text-xs text-slate-600 truncate max-w-[150px]">{row.direccion || row.Direccion || '---'}</TableCell>
+                              <TableCell className="text-xs text-slate-600 truncate max-w-[120px]">{row.referencia || row.Referencia || '---'}</TableCell>
+                              <TableCell className="text-xs text-purple-400 uppercase">{row.sector || row.Sector || '---'}</TableCell>
+                              <TableCell className="text-xs text-slate-500">{row.giro_negocio || row.GiroNegocio || '---'}</TableCell>
+                              <TableCell className="text-xs text-slate-300 font-medium">{row.asesor_nombre || row.asesor || row.Asesor || '---'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+
+                    {/* ===== PRESTAMOS TABLE ===== */}
+                    {activeTab === 'prestamos' && (
+                      <Table className="min-w-[1200px]">
+                        <TableHeader className="bg-slate-900/50">
+                          <TableRow className="border-slate-800 hover:bg-transparent">
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">DNI</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Monto</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Interés</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Cuotas</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Modalidad</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Fecha Inicio</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Estado</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Abonado</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Asesor</TableHead>
                           </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {data.slice(0, 10).map((row, i) => {
+                            const yaPagado = (row.ya_pagado || row.YaPagado || 'NO').toString().toUpperCase().trim()
+                            const esPagado = yaPagado === 'SI' || yaPagado === 'SÍ' || yaPagado === 'YES'
+                            return (
+                              <TableRow key={i} className="border-slate-800 hover:bg-slate-900/30">
+                                <TableCell className="text-xs font-mono text-blue-400">{row.dni_cliente || row.DNI || row.dni || '---'}</TableCell>
+                                <TableCell className="text-xs text-emerald-400 font-black">${parseFloat(row.monto || row.Monto || 0).toFixed(2)}</TableCell>
+                                <TableCell className="text-xs text-slate-400">{row.interes || row.Interes || '0'}%</TableCell>
+                                <TableCell className="text-xs text-slate-400 font-bold">{row.cuotas || row.Cuotas || '0'}</TableCell>
+                                <TableCell className="text-xs text-slate-400 uppercase">{row.modalidad || row.Modalidad || '---'}</TableCell>
+                                <TableCell className="text-xs text-slate-500 font-mono">{row.fecha_inicio || row.FechaInicio || '---'}</TableCell>
+                                <TableCell>
+                                  <Badge className={cn(
+                                    "text-[9px] h-5 px-2 font-black border",
+                                    esPagado 
+                                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" 
+                                      : "bg-blue-500/15 text-blue-400 border-blue-500/30"
+                                  )}>
+                                    {esPagado ? '✅ PAGADO' : '🔄 ACTIVO'}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-xs text-amber-400 font-bold">${parseFloat(row.monto_abonado || row.MontoAbonado || 0).toFixed(2)}</TableCell>
+                                <TableCell className="text-xs text-slate-300 font-medium">{row.asesor_nombre || row.asesor || row.Asesor || '---'}</TableCell>
+                              </TableRow>
+                            )
+                          })}
+                        </TableBody>
+                      </Table>
+                    )}
+
+                    {/* ===== GASTOS TABLE ===== */}
+                    {activeTab === 'gastos' && (
+                      <Table className="min-w-[800px]">
+                        <TableHeader className="bg-slate-900/50">
+                          <TableRow className="border-slate-800 hover:bg-transparent">
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Descripción</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Monto</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Categoría</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Registrado Por</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Fecha</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {data.slice(0, 10).map((row, i) => (
+                            <TableRow key={i} className="border-slate-800 hover:bg-slate-900/30">
+                              <TableCell className="text-xs text-slate-200 font-medium truncate max-w-[200px]">{row.descripcion || row.Descripcion || '---'}</TableCell>
+                              <TableCell className="text-xs text-amber-400 font-black">${parseFloat(row.monto || row.Monto || 0).toFixed(2)}</TableCell>
+                              <TableCell className="text-xs text-purple-400">{row.categoria || row.Categoria || '---'}</TableCell>
+                              <TableCell className="text-xs text-slate-300">{row.registrado_por_nombre || row.registrado_por || row.RegistradoPor || '---'}</TableCell>
+                              <TableCell className="text-xs text-slate-500 font-mono">{row.fecha_registro || row.FechaRegistro || row.fecha || '---'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+
+                    {/* Overflow indicator */}
+                    {data.length > 10 && (
+                      <div className="text-center py-3 text-[10px] text-slate-600 font-bold italic bg-slate-900/20 border-t border-slate-800">
+                        ... y {data.length - 10} registros adicionales detectados.
+                      </div>
+                    )}
                 </div>
               </div>
             </div>
           )}
 
+          {/* Progress */}
           {isUploading && (
             <div className="pt-4 space-y-3">
-              <div className="flex justify-between text-[10px] font-bold text-blue-400 uppercase tracking-widest">
-                <span>Ejecutando Ciclo de Préstamos ({results ? results.success : 0}/{data.length})...</span>
+              <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest" style={{ color: currentAccent === 'blue' ? '#60a5fa' : currentAccent === 'emerald' ? '#34d399' : '#fbbf24' }}>
+                <span>Procesando migración de {activeTab}...</span>
                 <span>{progress}%</span>
               </div>
               <Progress value={progress} className="h-2 bg-slate-800" />
-              <p className="text-[10px] text-slate-500 italic text-center">Este proceso crea clientes, aprueba préstamos, genera cronogramas y desembolsa fondos.</p>
+              <p className="text-[10px] text-slate-500 italic text-center">
+                {activeTab === 'clientes' && 'Creando registros de prospectos y clientes...'}
+                {activeTab === 'prestamos' && 'Creando préstamos, cronogramas, movimientos financieros...'}
+                {activeTab === 'gastos' && 'Registrando gastos y actualizando saldos...'}
+              </p>
             </div>
           )}
         </div>
@@ -440,13 +630,18 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
           {!results && (
             <Button 
                 onClick={handleUpload} 
-                disabled={data.length === 0 || !selectedAccountId || isUploading || isBalanceInsufficient}
-                className="bg-blue-600 hover:bg-blue-500 text-white min-w-[200px] shadow-lg shadow-blue-900/20 font-bold"
+                disabled={data.length === 0 || isUploading}
+                className={cn(
+                  "text-white min-w-[200px] shadow-lg font-bold",
+                  currentAccent === 'blue' && "bg-blue-600 hover:bg-blue-500 shadow-blue-900/20",
+                  currentAccent === 'emerald' && "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20",
+                  currentAccent === 'amber' && "bg-amber-600 hover:bg-amber-500 shadow-amber-900/20",
+                )}
             >
                 {isUploading ? (
                     <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Procesando...</>
                 ) : (
-                    <><CheckCircle2 className="w-4 h-4 mr-2" /> Iniciar Carga Masiva</>
+                    <><CheckCircle2 className="w-4 h-4 mr-2" /> Iniciar Migración ({data.length || 0})</>
                 )}
             </Button>
           )}

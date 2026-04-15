@@ -34,6 +34,7 @@ export async function POST(request: Request) {
             .select(`
                 id,
                 created_by,
+                observacion_supervisor,
                 clientes:cliente_id(id, nombres, dni, excepcion_voucher)
             `)
             .eq('estado', 'activo')
@@ -58,6 +59,9 @@ export async function POST(request: Request) {
 
              let priority = 0
              let detail = ''
+
+             const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado del sistema anterior')
+             if (isMigrado) continue // [AISLAMIENTO] Los migrados no generan tareas de auditoría
 
              // Manejo de la relación con el cliente (puede venir como objeto o array de 1 elemento)
              const cliente = Array.isArray(p.clientes) ? p.clientes[0] : p.clientes;

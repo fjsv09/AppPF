@@ -112,7 +112,10 @@ export function ExpenseList({ expenses, onEdit, userRole, isPending }: ExpenseLi
                           </DialogTrigger>
                           <DialogContent className="bg-slate-950 border-slate-800 p-0 overflow-hidden sm:max-w-xl mx-2">
                              <div className="relative aspect-video w-full">
-                                <img src={expense.evidencia_url} alt="Evidencia" className="object-contain w-full h-full" />
+                                <>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={expense.evidencia_url} alt="Evidencia" className="object-contain w-full h-full" />
+                                </>
                              </div>
                           </DialogContent>
                         </Dialog>
@@ -193,11 +196,14 @@ export function ExpenseList({ expenses, onEdit, userRole, isPending }: ExpenseLi
                         </DialogTrigger>
                         <DialogContent className="bg-slate-950 border-slate-800 p-0 overflow-hidden sm:max-w-xl">
                           <div className="relative aspect-video w-full">
-                            <img 
-                              src={expense.evidencia_url} 
-                              alt="Evidencia de gasto" 
-                              className="object-contain w-full h-full"
-                            />
+                            <>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img 
+                                  src={expense.evidencia_url} 
+                                  alt="Evidencia de gasto" 
+                                  className="object-contain w-full h-full"
+                                />
+                            </>
                             <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
                               <p className="text-white text-xs font-bold">{expense.descripcion}</p>
                               <p className="text-slate-400 text-[10px]">

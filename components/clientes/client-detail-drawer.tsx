@@ -74,11 +74,14 @@ export function ClientDetailDrawer({ cliente, isOpen, onClose, userRol = "asesor
                       onClick={() => setProfileImageOpen(true)}
                   >
                      {cliente.foto_perfil ? (
-                        <img 
-                            src={cliente.foto_perfil} 
-                            alt={cliente.nombres} 
-                            className="w-full h-full object-cover" 
-                        />
+                        <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img 
+                                src={cliente.foto_perfil} 
+                                alt={cliente.nombres} 
+                                className="w-full h-full object-cover" 
+                            />
+                        </>
                      ) : (
                         <span className="text-xl font-bold text-slate-400">{cliente.nombres?.charAt(0)}</span>
                      )}

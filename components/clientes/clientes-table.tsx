@@ -220,7 +220,7 @@ export function ClientesTable({ clientes, perfiles = [], userRol = 'asesor', use
                     )}
                 </div>
 
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     {/* Status Filter (Dropdown) */}
                     <div className="w-auto shrink-0">
                         <Select 
@@ -343,11 +343,14 @@ export function ClientesTable({ clientes, perfiles = [], userRol = 'asesor', use
                                                     alt={cliente.nombres}
                                                     className="w-full h-full"
                                                     thumbnail={
-                                                        <img 
-                                                            src={cliente.foto_perfil} 
-                                                            alt={cliente.nombres} 
-                                                            className="w-full h-full object-cover"
-                                                        />
+                                                        <>
+                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                            <img 
+                                                                src={cliente.foto_perfil} 
+                                                                alt={cliente.nombres} 
+                                                                className="w-full h-full object-cover" 
+                                                            />
+                                                        </>
                                                     }
                                                 />
                                             </div>

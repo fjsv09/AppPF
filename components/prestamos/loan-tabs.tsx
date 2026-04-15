@@ -225,11 +225,14 @@ export function LoanTabs({
                                                     src={tareaEvidencia.evidencia_url}
                                                     alt="Evidencia del préstamo"
                                                     thumbnail={
-                                                        <img 
-                                                            src={tareaEvidencia.evidencia_url} 
-                                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-                                                            alt="Miniatura evidencia" 
-                                                        />
+                                                        <>
+                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                            <img 
+                                                                src={tareaEvidencia.evidencia_url} 
+                                                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                                                                alt="Miniatura evidencia" 
+                                                            />
+                                                        </>
                                                     }
                                                 />
                                             </div>

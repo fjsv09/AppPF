@@ -47,9 +47,18 @@ export default function GlobalError({
               </button>
             </div>
             
+            {error.message && (
+              <div className="mt-8 p-3 bg-rose-500/5 border border-rose-500/10 rounded-xl text-left">
+                <p className="text-[10px] font-bold text-rose-400 uppercase mb-1">Detalle Técnico:</p>
+                <p className="text-xs text-slate-500 font-mono break-words">
+                  {error.name}: {error.message}
+                </p>
+              </div>
+            )}
+            
             {error.digest && (
               <p className="mt-4 text-[10px] font-mono text-slate-700">
-                ID Error: {error.digest}
+                ID Digest: {error.digest}
               </p>
             )}
           </div>

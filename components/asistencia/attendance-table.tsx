@@ -235,7 +235,7 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
             </div>            {/* Filter Bar - Responsive Logic */}
             <div className="flex flex-col lg:flex-row gap-3 bg-slate-900/40 border border-slate-800/50 p-2.5 md:p-3 rounded-2xl backdrop-blur-sm shadow-xl shadow-black/20 overflow-hidden">
                 {/* 1. Buscador - Full width en móvil, Flex-1 en desktop */}
-                <div className="relative w-full lg:flex-1 group">
+                <div className="relative w-full lg:flex-1 lg:max-w-none min-w-[180px] group">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
                     <Input 
                         placeholder="Filtrar por nombre..." 

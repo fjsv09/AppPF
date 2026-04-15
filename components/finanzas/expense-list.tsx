@@ -142,7 +142,7 @@ export function ExpenseList({ expenses, onEdit, userRole, isPending }: ExpenseLi
 
         {/* Desktop View: Table */}
         <div className="hidden md:block overflow-x-auto">
-          <Table>
+          <Table className="min-w-[800px]">
             <TableHeader className="bg-slate-950/30">
               <TableRow className="border-slate-800 hover:bg-transparent">
                 <TableHead className="text-slate-400 font-bold text-[10px] md:text-xs h-9">Fecha</TableHead>

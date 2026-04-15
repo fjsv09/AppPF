@@ -92,7 +92,13 @@ export function DailyCollectorLog({
     const virtualCronograma = useMemo(() => {
         if (!cronograma) return [];
         const sorted = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota);
-        const totalPagadoHistorico = (pagos || []).reduce((acc: number, p: any) => acc + (parseFloat(p.monto_pagado) || 0), 0);
+        
+        // [SINCRONIZACIÓN] Para préstamos migrados, es posible que no existan registros en 'pagos'
+        // pero sí montos pagados en 'cronograma_cuotas'. Usamos el máximo para ser resilientes.
+        const totalPagadoEnPagos = (pagos || []).reduce((acc: number, p: any) => acc + (parseFloat(p.monto_pagado) || 0), 0);
+        const totalPagadoEnCronograma = (cronograma || []).reduce((acc: number, c: any) => acc + (parseFloat(c.monto_pagado) || 0), 0);
+        const totalPagadoHistorico = Math.max(totalPagadoEnPagos, totalPagadoEnCronograma);
+        
         let remaining = totalPagadoHistorico;
         
         return sorted.map(c => {
@@ -220,7 +226,7 @@ export function DailyCollectorLog({
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden shadow-2xl">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse min-w-[900px]">
                         <thead className="bg-slate-950/80 uppercase font-black text-slate-500 border-b border-slate-800 text-[9px]">
                             <tr>
                                 <th className="px-3 py-4 text-center w-10">#</th>
@@ -239,17 +245,18 @@ export function DailyCollectorLog({
                             {allRows.map(({ date, cuota, physical }) => {
                                 const totalDay = physical.reduce((s: any, p: any) => s + Number(p.monto_pagado), 0)
                                 const qDate = startOfDay(new Date(date + 'T12:00:00')), isFuture = isAfter(qDate, today), isVirtual = !cuota
+                                const isMigrado = prestamo.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
                                 const cVal = cuota ? Number(cuota.monto_cuota || 0) : 0, pVal = cuota ? Number(cuota.monto_pagado || 0) : 0
                                 const isFull = cuota ? (pVal >= (cVal - 0.01)) : false, isPart = cuota ? (pVal > 0 && !isFull) : false
-
+                                
                                 let st = { l: "NO PAGÓ", c: "text-rose-500 bg-rose-500/10", bg: "bg-rose-500/5" }
                                 if (isVirtual) st = { l: "EXTRA", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
                                 else if (isFull) {
                                   if (totalDay > 0) st = { l: "CUMPLIÓ", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
-                                  else st = { l: "SISTEMA", c: "text-rose-500 bg-rose-500/10", bg: "bg-rose-500/5" }
+                                  else st = { l: "SISTEMA", c: isMigrado ? "text-sky-400 bg-sky-500/10" : "text-rose-500 bg-rose-500/10", bg: isMigrado ? "bg-sky-500/5" : "bg-rose-500/5" }
                                 } else if (isPart) {
                                   if (totalDay > 0) st = { l: "ABONÓ", c: "text-amber-400 bg-amber-500/10", bg: "bg-amber-500/5" }
-                                  else st = { l: "SISTEMA", c: "text-rose-500 bg-rose-500/10", bg: "bg-rose-500/5" }
+                                  else st = { l: "SISTEMA", c: isMigrado ? "text-sky-400 bg-sky-500/10" : "text-rose-500 bg-rose-500/10", bg: isMigrado ? "bg-sky-500/5" : "bg-rose-500/5" }
                                 } else if (totalDay > 0) {
                                   // Regla de Recaudación Física: Si se cobró dinero pero se aplicó a deudas anteriores
                                   if (totalDay >= (cVal - 0.01)) st = { l: "CUMPLIÓ", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }

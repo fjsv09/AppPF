@@ -607,7 +607,8 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                 </div>
             ) : (
             <div className="md:bg-slate-900/50 md:border md:border-slate-800 md:rounded-2xl md:overflow-hidden bg-transparent border-0">
-                
+                <div className="hidden md:block overflow-x-auto">
+                    <div className="min-w-[1200px]">
                 {/* Desktop Header */}
                 <div 
                     className="hidden md:grid gap-4 px-6 py-3 bg-slate-950/50 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500 items-center"
@@ -991,6 +992,8 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                     )})}
                     </>
                     )}
+                    </div>
+                </div>
                 </div>
 
                 {/* Empty State */}

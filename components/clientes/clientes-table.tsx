@@ -187,7 +187,7 @@ export function ClientesTable({ clientes, perfiles = [], userRol = 'asesor', use
              {/* Main Filter Bar: Search + Status + Date + Supervisor + Advisor */}
              <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
                 {/* Search */}
-                <div className="relative w-full md:flex-1 md:max-w-none">
+                <div className="relative w-full md:flex-1 md:max-w-none min-w-[180px]">
                     {isPending ? (
                         <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500 animate-spin z-10" />
                     ) : (

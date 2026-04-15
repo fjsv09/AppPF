@@ -229,7 +229,7 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
         <CardContent className="p-0">
           {/* Desktop View */}
           <div className="hidden md:block overflow-x-auto">
-            <Table>
+            <Table className="min-w-[900px]">
               <TableHeader className="bg-slate-950/50">
                 <TableRow className="hover:bg-transparent border-slate-800">
                   <TableHead className="text-slate-500 font-bold uppercase text-[10px]">Colaborador</TableHead>

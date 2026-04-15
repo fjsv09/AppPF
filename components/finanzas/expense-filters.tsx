@@ -62,7 +62,7 @@ export function ExpenseFilters({ advisors, categories, userRole, isPending, star
   return (
     <div className="flex flex-col md:flex-row items-center gap-3 w-full">
         {/* Search */}
-        <div className="relative w-full md:flex-1 group">
+        <div className="relative w-full md:flex-1 md:max-w-none min-w-[180px] group">
             {isPending ? (
                  <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500 animate-spin z-10" />
             ) : (

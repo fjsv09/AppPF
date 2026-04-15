@@ -37,7 +37,7 @@ export function CuadreHistoryTable({ history }: CuadreHistoryTableProps) {
     <div className="space-y-4">
       {/* Filters bar */}
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between p-4 bg-slate-900/50 border border-slate-800 rounded-xl backdrop-blur-sm">
-        <div className="relative w-full md:w-96">
+        <div className="relative w-full md:flex-1 md:max-w-none min-w-[180px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <Input 
             placeholder="Buscar por asesor..." 

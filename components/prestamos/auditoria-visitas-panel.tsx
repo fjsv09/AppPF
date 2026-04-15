@@ -271,7 +271,7 @@ export function AuditoriaVisitasPanel({ userRol, userId, perfiles }: AuditoriaVi
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
-                            <Table>
+                            <Table className="min-w-[900px]">
                                 <TableHeader className="bg-white/5">
                                     <TableRow className="hover:bg-transparent border-white/5">
                                         <TableHead className="text-[10px] uppercase font-black text-slate-500 h-10 px-4">Asesor</TableHead>

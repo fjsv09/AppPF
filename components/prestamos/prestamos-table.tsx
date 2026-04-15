@@ -1826,9 +1826,9 @@ export function PrestamosTable({
              {/* -------------------- HIGHER RES TABLE VIEW -------------------- */}
             <div className={cn(
                  "bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl",
-                 viewType === 'table' ? "block overflow-x-auto" : "hidden md:block"
+                 viewType === 'table' ? "block overflow-x-auto" : "hidden md:block md:overflow-x-auto"
              )}>
-                <div className={cn(viewType === 'table' && "min-w-[1000px]")}>
+                <div className="min-w-[1200px]">
                 {/* Table Header */}
                 <div className={cn(
                     "grid grid-cols-[repeat(13,minmax(0,1fr))] gap-2 px-6 py-4 bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-400",
@@ -2242,9 +2242,12 @@ export function PrestamosTable({
 
                                  {/* Pago (Frecuencia + Día) */}
                                  <div className="col-span-1 flex flex-col items-center justify-center gap-0.5">
-                                     <Badge variant="secondary" className="bg-slate-800 text-slate-400 hover:bg-slate-700 text-[10px] px-1.5 h-4.5">
-                                         {prestamo.frecuencia?.toLowerCase()}
-                                     </Badge>
+                                     <span className={cn(
+                                         "text-[9px] font-bold uppercase tracking-wide border px-1.5 py-0.5 rounded-md",
+                                         getFrequencyBadgeStyles(prestamo.frecuencia)
+                                     )}>
+                                         {prestamo.frecuencia}
+                                     </span>
                                      <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">
                                          {getDiaPago(prestamo)}
                                      </span>

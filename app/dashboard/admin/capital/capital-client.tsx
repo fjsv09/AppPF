@@ -275,8 +275,8 @@ export default function CapitalClient({
                 <Plus className="w-3 h-3 mr-1" /> Registrar Pago/Gasto
               </Button>
             </CardHeader>
-            <CardContent className="p-0">
-              <Table>
+            <CardContent className="p-0 overflow-x-auto">
+              <Table className="min-w-[800px]">
                 <TableHeader className="bg-slate-800/30">
                   <TableRow className="border-slate-800 hover:bg-transparent">
                     <TableHead className="text-slate-400 font-bold uppercase text-[10px]">Nombre</TableHead>
@@ -463,8 +463,8 @@ export default function CapitalClient({
               <CardTitle className="text-xl font-bold text-white uppercase tracking-tighter">Historial de Movimientos</CardTitle>
               <CardDescription>Registro auditado de todas las operaciones de capital.</CardDescription>
             </CardHeader>
-            <CardContent className="p-0">
-              <Table>
+            <CardContent className="p-0 overflow-x-auto">
+              <Table className="min-w-[800px]">
                 <TableHeader className="bg-slate-800/30">
                   <TableRow className="border-slate-800 hover:bg-transparent">
                     <TableHead className="text-slate-400 font-bold uppercase text-[10px]">Fecha</TableHead>

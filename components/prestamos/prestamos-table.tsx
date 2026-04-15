@@ -381,6 +381,50 @@ export function PrestamosTable({
         }
     }
 
+    const handleQuickPay = (prestamo: any, e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault()
+            e.stopPropagation()
+        }
+        setSelectedLoanForPay(prestamo)
+        setQuickPayOpen(true)
+    }
+
+    const handleOpenGestion = (prestamo: any) => {
+        setSelectedLoanForGestion(prestamo)
+        setGestionOpen(true)
+    }
+
+    const handleOpenAsignarTarea = (prestamo: any, e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault()
+            e.stopPropagation()
+        }
+        setSelectedLoanForAsignar(prestamo)
+        setAsignarTareaOpen(true)
+    }
+
+    const handleViewContract = async (prestamo: any) => {
+        setSelectedContractLoan(prestamo)
+        setIsLoadingContract(true)
+        try {
+            const supabase = createClient()
+            const { data, error } = await supabase
+                .from('cronograma_cuotas')
+                .select('*')
+                .eq('prestamo_id', prestamo.id)
+                .order('numero_cuota', { ascending: true })
+
+            if (error) throw error
+            setSelectedContractCronograma(data || [])
+            setContractOpen(true)
+        } catch (error: any) {
+            toast.error("Error al cargar cronograma", { description: error.message })
+        } finally {
+            setIsLoadingContract(false)
+        }
+    }
+
     // Sectores Logic
     const sectoresList = useMemo(() => {
         const unique = new Map<string, string>()

@@ -407,146 +407,150 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
             </div>
 
             {/* -------------------- HIGHER RES TABLE VIEW -------------------- */}
-            <div className="hidden md:block bg-slate-950/40 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-                {/* Desktop Header */}
-                <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-400">
-                    <div className="col-span-3">Cliente</div>
-                    <div className="col-span-2 text-right">Solicitado</div>
-                    <div className="col-span-2 text-center">Fecha</div>
-                    <div className="col-span-2 text-left pl-4">Asesor</div>
-                    <div className="col-span-1 text-center">Estado</div>
-                    <div className="col-span-2 text-right">Acciones</div>
-                </div>
+            <div className="hidden md:block bg-slate-950/40 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+                <div className="overflow-x-auto custom-scrollbar">
+                    <div className="min-w-[900px]">
+                        {/* Desktop Header */}
+                        <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-400">
+                            <div className="col-span-3">Cliente</div>
+                            <div className="col-span-2 text-right">Solicitado</div>
+                            <div className="col-span-2 text-center">Fecha</div>
+                            <div className="col-span-2 text-left pl-4">Asesor</div>
+                            <div className="col-span-1 text-center">Estado</div>
+                            <div className="col-span-2 text-right">Acciones</div>
+                        </div>
 
-                {/* Content */}
-                <div className="divide-y divide-slate-800/50 text-sm">
-                    {filteredSolicitudes.map((sol) => {
-                        const estado = estadoConfig[sol.estado_solicitud] || estadoConfig['pendiente_supervision']
-                        const IconEstado = estado.icon
+                        {/* Content */}
+                        <div className="divide-y divide-slate-800/50 text-sm">
+                            {filteredSolicitudes.map((sol) => {
+                                const estado = estadoConfig[sol.estado_solicitud] || estadoConfig['pendiente_supervision']
+                                const IconEstado = estado.icon
 
-                        return (
-                            <div 
-                                key={sol.id} 
-                                style={{
-                                    borderLeftWidth: '6px',
-                                    borderLeftStyle: 'solid',
-                                    borderLeftColor: sol.estado_solicitud === 'aprobado' ? '#10b981' :
-                                        sol.estado_solicitud === 'rechazado' ? '#ef4444' :
-                                        sol.estado_solicitud === 'en_correccion' ? '#f97316' : '#fbbf24'
-                                }}
-                                className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-800/40 transition-all items-center group relative pl-[calc(1.5rem-6px)]"
-                            >
-                                {/* Cliente */}
-                                <div className="col-span-3 flex items-center gap-3 min-w-0">
-                                    <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 shadow-lg transition-transform group-hover:scale-105">
-                                        <span className="font-bold text-slate-300 text-xs">{sol.cliente?.nombres?.charAt(0)}</span>
-                                    </div>
-                                    <div className="min-w-0 flex flex-col justify-center">
-                                        <div className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors truncate leading-tight">{sol.cliente?.nombres}</div>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <span className="text-[10px] text-slate-500 font-mono bg-slate-950/50 px-1.5 py-0.5 rounded border border-slate-800/50 truncate">
-                                                {sol.cliente?.dni}
+                                return (
+                                    <div 
+                                        key={sol.id} 
+                                        style={{
+                                            borderLeftWidth: '6px',
+                                            borderLeftStyle: 'solid',
+                                            borderLeftColor: sol.estado_solicitud === 'aprobado' ? '#10b981' :
+                                                sol.estado_solicitud === 'rechazado' ? '#ef4444' :
+                                                sol.estado_solicitud === 'en_correccion' ? '#f97316' : '#fbbf24'
+                                        }}
+                                        className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-800/40 transition-all items-center group relative pl-[calc(1.5rem-6px)]"
+                                    >
+                                        {/* Cliente */}
+                                        <div className="col-span-3 flex items-center gap-3 min-w-0">
+                                            <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 shadow-lg transition-transform group-hover:scale-105">
+                                                <span className="font-bold text-slate-300 text-xs">{sol.cliente?.nombres?.charAt(0)}</span>
+                                            </div>
+                                            <div className="min-w-0 flex flex-col justify-center">
+                                                <div className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors truncate leading-tight">{sol.cliente?.nombres}</div>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    <span className="text-[10px] text-slate-500 font-mono bg-slate-950/50 px-1.5 py-0.5 rounded border border-slate-800/50 truncate">
+                                                        {sol.cliente?.dni}
+                                                    </span>
+                                                    <span className={cn(
+                                                        "text-[10px] font-mono font-medium px-1.5 py-0.5 rounded border",
+                                                        sol.score_al_solicitar >= 80 ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/10" :
+                                                        sol.score_al_solicitar >= 60 ? "text-blue-400 border-blue-500/20 bg-blue-500/10" :
+                                                        sol.score_al_solicitar >= 40 ? "text-amber-400 border-amber-500/20 bg-amber-500/10" :
+                                                        "text-red-400 border-red-500/20 bg-red-500/10"
+                                                    )}>
+                                                        Score: {sol.score_al_solicitar}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Solicitado */}
+                                        <div className="col-span-2 text-right flex flex-col items-end justify-center min-w-0">
+                                            <div className="text-sm font-mono font-bold text-slate-300">${sol.monto_solicitado.toLocaleString('en-US')}</div>
+                                            <div className="text-[10px] text-slate-400 mt-0.5 flex items-center justify-end gap-1 leading-tight">
+                                                <span>{sol.cuotas}</span>
+                                                <Badge 
+                                                    variant="outline" 
+                                                    className={cn(
+                                                        "text-[8px] h-3.5 px-1 border-0 font-bold uppercase",
+                                                        getFrequencyBadgeStyles(sol.modalidad)
+                                                    )}
+                                                >
+                                                    {sol.modalidad}
+                                                </Badge>
+                                                <span>al {sol.interes}%</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Fecha */}
+                                        <div className="col-span-2 flex flex-col items-center justify-center text-center">
+                                            <span className="text-xs font-medium text-slate-300">
+                                                {new Date(sol.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                             </span>
-                                            <span className={cn(
-                                                "text-[10px] font-mono font-medium px-1.5 py-0.5 rounded border",
-                                                sol.score_al_solicitar >= 80 ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/10" :
-                                                sol.score_al_solicitar >= 60 ? "text-blue-400 border-blue-500/20 bg-blue-500/10" :
-                                                sol.score_al_solicitar >= 40 ? "text-amber-400 border-amber-500/20 bg-amber-500/10" :
-                                                "text-red-400 border-red-500/20 bg-red-500/10"
-                                            )}>
-                                                Score: {sol.score_al_solicitar}
+                                            <span className="text-[10px] text-slate-500 font-mono" suppressHydrationWarning>
+                                                {new Date(sol.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
                                             </span>
                                         </div>
-                                    </div>
-                                </div>
 
-                                {/* Solicitado */}
-                                <div className="col-span-2 text-right flex flex-col items-end justify-center min-w-0">
-                                    <div className="text-sm font-mono font-bold text-slate-300">${sol.monto_solicitado.toLocaleString('en-US')}</div>
-                                    <div className="text-[10px] text-slate-400 mt-0.5 flex items-center justify-end gap-1 leading-tight">
-                                        <span>{sol.cuotas}</span>
-                                        <Badge 
-                                            variant="outline" 
-                                            className={cn(
-                                                "text-[8px] h-3.5 px-1 border-0 font-bold uppercase",
-                                                getFrequencyBadgeStyles(sol.modalidad)
+                                        {/* Asesor */}
+                                        <div className="col-span-2 text-left pl-4 flex items-center gap-2 min-w-0">
+                                            <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                                            <span className="text-sm text-slate-300 truncate">{sol.asesor?.nombre_completo}</span>
+                                        </div>
+
+                                        {/* Estado */}
+                                        <div className="col-span-1 flex justify-center items-center min-w-0">
+                                            <div className="flex flex-col gap-1 items-center justify-center">
+                                                <Badge className={cn('text-[10px] py-0 h-5 border px-2 flex items-center gap-1 w-max', estado.bg, estado.color)}>
+                                                    {estado.label}
+                                                </Badge>
+                                                {sol.requiere_excepcion && (
+                                                    <Badge className="bg-amber-500/10 border-amber-500/20 text-amber-400 text-[9px] py-0 h-4 flex items-center w-max">
+                                                        <AlertTriangle className="h-2.5 w-2.5 mr-1" /> Exc
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Acciones */}
+                                        <div className="col-span-2 flex items-center justify-end gap-1.5">
+                                            {userRole === 'supervisor' && sol.estado_solicitud === 'pendiente_supervision' && (
+                                                <>
+                                                    <Button size="sm" variant="outline" className="h-8 px-2 border-orange-600/50 text-orange-400 hover:bg-orange-900/40 text-[10px]" onClick={() => openAction('observar', sol)}>
+                                                        <MessageSquare className="h-3.5 w-3.5 mr-1" /> Obs
+                                                    </Button>
+                                                    <Button size="sm" className="h-8 px-2 bg-blue-600/20 text-blue-400 border border-blue-600/30 hover:bg-blue-600/40 text-[10px]" onClick={() => openAction('preprobar', sol)}>
+                                                        Pre-aprobar
+                                                    </Button>
+                                                </>
                                             )}
-                                        >
-                                            {sol.modalidad}
-                                        </Badge>
-                                        <span>al {sol.interes}%</span>
-                                    </div>
-                                </div>
-
-                                {/* Fecha */}
-                                <div className="col-span-2 flex flex-col items-center justify-center text-center">
-                                    <span className="text-xs font-medium text-slate-300">
-                                        {new Date(sol.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                                    </span>
-                                    <span className="text-[10px] text-slate-500 font-mono" suppressHydrationWarning>
-                                        {new Date(sol.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                </div>
-
-                                {/* Asesor */}
-                                <div className="col-span-2 text-left pl-4 flex items-center gap-2 min-w-0">
-                                    <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                                    <span className="text-sm text-slate-300 truncate">{sol.asesor?.nombre_completo}</span>
-                                </div>
-
-                                {/* Estado */}
-                                <div className="col-span-1 flex justify-center items-center min-w-0">
-                                    <div className="flex flex-col gap-1 items-center justify-center">
-                                        <Badge className={cn('text-[10px] py-0 h-5 border px-2 flex items-center gap-1 w-max', estado.bg, estado.color)}>
-                                            {estado.label}
-                                        </Badge>
-                                        {sol.requiere_excepcion && (
-                                            <Badge className="bg-amber-500/10 border-amber-500/20 text-amber-400 text-[9px] py-0 h-4 flex items-center w-max">
-                                                <AlertTriangle className="h-2.5 w-2.5 mr-1" /> Exc
-                                            </Badge>
+                                            {userRole === 'admin' && sol.estado_solicitud === 'pre_aprobado' && (
+                                                <>
+                                                    <Button size="sm" variant="outline" className="h-8 px-2 border-red-600/50 text-red-400 hover:bg-red-900/40 text-[10px]" onClick={() => openAction('rechazar', sol)}>
+                                                        Rechazar
+                                                    </Button>
+                                                    <Button size="sm" className="h-8 px-2 bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/40 text-[10px]" onClick={() => openAction('aprobar', sol)}>
+                                                        Aprobar
+                                                    </Button>
+                                                </>
+                                            )}
+                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all" onClick={() => router.push(`/dashboard/renovaciones/${sol.id}`)}>
+                                                <Eye className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                        
+                                        {sol.observacion_supervisor && sol.estado_solicitud === 'en_correccion' && (
+                                            <div className="col-span-12 mt-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 flex gap-2 items-start opacity-90">
+                                                <AlertTriangle className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />
+                                                <div>
+                                                    <p className="text-[10px] text-orange-400 font-bold uppercase tracking-wider mb-0.5">Observación del Supervisor</p>
+                                                    <p className="text-xs text-orange-200">{sol.observacion_supervisor}</p>
+                                                </div>
+                                            </div>
                                         )}
                                     </div>
-                                </div>
-
-                                {/* Acciones */}
-                                <div className="col-span-2 flex items-center justify-end gap-1.5">
-                                    {userRole === 'supervisor' && sol.estado_solicitud === 'pendiente_supervision' && (
-                                        <>
-                                            <Button size="sm" variant="outline" className="h-8 px-2 border-orange-600/50 text-orange-400 hover:bg-orange-900/40 text-[10px]" onClick={() => openAction('observar', sol)}>
-                                                <MessageSquare className="h-3.5 w-3.5 mr-1" /> Obs
-                                            </Button>
-                                            <Button size="sm" className="h-8 px-2 bg-blue-600/20 text-blue-400 border border-blue-600/30 hover:bg-blue-600/40 text-[10px]" onClick={() => openAction('preprobar', sol)}>
-                                                Pre-aprobar
-                                            </Button>
-                                        </>
-                                    )}
-                                    {userRole === 'admin' && sol.estado_solicitud === 'pre_aprobado' && (
-                                        <>
-                                            <Button size="sm" variant="outline" className="h-8 px-2 border-red-600/50 text-red-400 hover:bg-red-900/40 text-[10px]" onClick={() => openAction('rechazar', sol)}>
-                                                Rechazar
-                                            </Button>
-                                            <Button size="sm" className="h-8 px-2 bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/40 text-[10px]" onClick={() => openAction('aprobar', sol)}>
-                                                Aprobar
-                                            </Button>
-                                        </>
-                                    )}
-                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all" onClick={() => router.push(`/dashboard/renovaciones/${sol.id}`)}>
-                                        <Eye className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                                
-                                {sol.observacion_supervisor && sol.estado_solicitud === 'en_correccion' && (
-                                    <div className="col-span-12 mt-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 flex gap-2 items-start opacity-90">
-                                        <AlertTriangle className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />
-                                        <div>
-                                            <p className="text-[10px] text-orange-400 font-bold uppercase tracking-wider mb-0.5">Observación del Supervisor</p>
-                                            <p className="text-xs text-orange-200">{sol.observacion_supervisor}</p>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )
-                    })}
+                                )
+                            })}
+                        </div>
+                    </div>
                 </div>
             </div>
 

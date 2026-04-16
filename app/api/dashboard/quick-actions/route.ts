@@ -48,14 +48,17 @@ export async function GET() {
 
         // 2. RENOVACIONES PENDIENTES
         let renQuery = supabaseAdmin
-            .from('renovaciones')
-            .select('id, monto_nuevo, created_at, cliente:cliente_id(nombres)')
-            .eq('estado', 'pendiente')
+            .from('solicitudes_renovacion')
+            .select('id, monto_solicitado, created_at, estado_solicitud, cliente:cliente_id(nombres)')
             .order('created_at', { ascending: false })
             .limit(5)
 
-        if (perfil.rol !== 'admin') {
-            renQuery = renQuery.in('asesor_id', asesorIds)
+        if (perfil.rol === 'supervisor') {
+            renQuery = renQuery.eq('estado_solicitud', 'pendiente_supervision').in('asesor_id', asesorIds)
+        } else if (perfil.rol === 'admin') {
+            renQuery = renQuery.eq('estado_solicitud', 'pre_aprobado')
+        } else if (perfil.rol === 'asesor') {
+            renQuery = renQuery.eq('estado_solicitud', 'en_correccion').eq('asesor_id', user.id)
         }
 
         const { data: renovaciones } = await renQuery

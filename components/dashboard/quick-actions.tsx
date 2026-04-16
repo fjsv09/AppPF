@@ -124,9 +124,14 @@ export function QuickActions({ rol }: QuickActionsProps) {
                                         {ren.cliente?.nombres || 'Cliente'}
                                     </p>
                                     <div className="flex items-center gap-2 mt-0.5">
-                                        <p className="text-[8px] text-slate-500 font-bold">{formatMoney(ren.monto_nuevo)}</p>
-                                        <span className="text-[7px] px-1 bg-purple-500/10 text-purple-400 rounded border border-purple-500/20 uppercase font-black text-center">
-                                            RENOV.
+                                        <p className="text-[8px] text-slate-500 font-bold">{formatMoney(ren.monto_solicitado)}</p>
+                                        <span className={cn(
+                                            "text-[7px] px-1 rounded border uppercase font-black text-center",
+                                            ren.estado_solicitud === 'pendiente_supervision' ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
+                                            ren.estado_solicitud === 'pre_aprobado' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
+                                            "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                                        )}>
+                                            {ren.estado_solicitud?.replace('_', ' ') || 'RENOV.'}
                                         </span>
                                     </div>
                                 </div>

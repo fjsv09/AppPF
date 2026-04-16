@@ -354,7 +354,12 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
              {/* Hero Stats */}
              <div className="kpi-grid lg:grid-cols-5">
                  {/* Card 1: Total */}
-                 <Link href="?tab=todos" className="block h-full">
+                 <Link 
+                    href={{
+                        query: { ...sParams, tab: 'todos', page: '1' }
+                    }} 
+                    className="block h-full"
+                >
                      <div className="kpi-card group hover:border-blue-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
                         <div className="kpi-card-icon">
                             <Users className="w-16 h-16 text-blue-500" />
@@ -368,7 +373,12 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
                  </Link>
 
                  {/* Card 2: Con Deuda */}
-                 <Link href="?tab=con_deuda" className="block h-full">
+                 <Link 
+                    href={{
+                        query: { ...sParams, tab: 'con_deuda', page: '1' }
+                    }} 
+                    className="block h-full"
+                >
                      <div className="kpi-card group hover:border-amber-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
                         <div className="kpi-card-icon">
                             <HandCoins className="w-16 h-16 text-amber-500" />
@@ -382,7 +392,12 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
                  </Link>
 
                  {/* Card 3: Activos con Deuda (Excluye vencidos y bloqueados) */}
-                 <Link href="?tab=activos_deuda" className="block h-full">
+                 <Link 
+                    href={{
+                        query: { ...sParams, tab: 'activos_deuda', page: '1' }
+                    }} 
+                    className="block h-full"
+                >
                      <div className="kpi-card group hover:border-emerald-500/50 hover:scale-[1.02] active:scale-95 cursor-pointer h-full relative overflow-hidden border-emerald-500/20 shadow-[0_0_15px_-5px_rgba(16,185,129,0.1)] hover:shadow-[0_0_25px_-5px_rgba(16,185,129,0.3)] transition-all">
                         {/* Subtle inner glow */}
                         <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/10 blur-3xl group-hover:bg-emerald-500/20 transition-colors" />
@@ -399,7 +414,12 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
                  </Link>
 
                  {/* Card 4: Sin Préstamos */}
-                 <Link href="?tab=sin_prestamos" className="block h-full">
+                 <Link 
+                    href={{
+                        query: { ...sParams, tab: 'sin_prestamos', page: '1' }
+                    }} 
+                    className="block h-full"
+                >
                      <div className="kpi-card group hover:border-slate-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
                         <div className="kpi-card-icon">
                             <Zap className="w-16 h-16 text-slate-500 opacity-50" />
@@ -407,52 +427,67 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
                         <p className="kpi-label">Sin Préstamos</p>
                         <h2 className="kpi-value">{clientsSinPrestamos}</h2>
                         <div className="mt-2 text-slate-400 flex items-center gap-1">
-                            <span className="kpi-badge bg-slate-900/50 text-slate-500 border border-slate-800">SIN ACTIVIDAD</span>
+                             <span className="kpi-badge bg-slate-900/50 text-slate-500 border border-slate-800">SIN ACTIVIDAD</span>
                         </div>
                      </div>
                  </Link>
 
-                 {/* Card 4: Control / Reasignados */}
+                 {/* Card 5: Control / Reasignados */}
                  {userRole === 'admin' ? (
-                     <Link href="?tab=reasignados" className="block h-full">
-                         <div className="kpi-card group hover:border-purple-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                     <Link 
+                        href={{
+                            query: { ...sParams, tab: 'reasignados', page: '1' }
+                        }} 
+                        className="block h-full"
+                    >
+                          <div className="kpi-card group hover:border-purple-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                             <div className="kpi-card-icon">
+                                 <Users className="w-16 h-16 text-purple-500" />
+                             </div>
+                             <p className="kpi-label">Reasignados</p>
+                             <h2 className="kpi-value">{reasignadosCount}</h2>
+                             <div className="mt-2 text-purple-400 flex items-center gap-1">
+                                  <span className="kpi-badge bg-purple-950/50 text-purple-400 border border-purple-900/50">CAMBIO ASESOR</span>
+                             </div>
+                          </div>
+                      </Link>
+                  ) : (userRole === 'supervisor' ? (
+                     <Link 
+                        href={{
+                            query: { ...sParams, tab: 'bloqueados', page: '1' }
+                        }} 
+                        className="block h-full"
+                    >
+                         <div className="kpi-card group hover:border-rose-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
                             <div className="kpi-card-icon">
-                                <Users className="w-16 h-16 text-purple-500" />
+                                <Lock className="w-16 h-16 text-rose-500" />
                             </div>
-                            <p className="kpi-label">Reasignados</p>
-                            <h2 className="kpi-value">{reasignadosCount}</h2>
-                            <div className="mt-2 text-purple-400 flex items-center gap-1">
-                                 <span className="kpi-badge bg-purple-950/50 text-purple-400 border border-purple-900/50">CAMBIO ASESOR</span>
+                            <p className="kpi-label">Bloqueados</p>
+                            <h2 className="kpi-value">{bloqueadosCount}</h2>
+                            <div className="mt-2 text-rose-400 flex items-center gap-1">
+                                 <span className="kpi-badge bg-rose-950/50 text-rose-400 border border-rose-900/50">RESTRICCIÓN</span>
                             </div>
                          </div>
                      </Link>
-                 ) : (userRole === 'supervisor' ? (
-                    <Link href="?tab=bloqueados" className="block h-full">
-                        <div className="kpi-card group hover:border-rose-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
-                           <div className="kpi-card-icon">
-                               <Lock className="w-16 h-16 text-rose-500" />
-                           </div>
-                           <p className="kpi-label">Bloqueados</p>
-                           <h2 className="kpi-value">{bloqueadosCount}</h2>
-                           <div className="mt-2 text-rose-400 flex items-center gap-1">
-                                <span className="kpi-badge bg-rose-950/50 text-rose-400 border border-rose-900/50">RESTRICCIÓN</span>
-                           </div>
-                        </div>
-                    </Link>
-                 ) : (
-                    <Link href="?tab=todos" className="block h-full">
-                        <div className="kpi-card group hover:border-blue-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
-                           <div className="kpi-card-icon">
-                               <TrendingUp className="w-16 h-16 text-blue-500" />
-                           </div>
-                           <p className="kpi-label">Crecimiento</p>
-                           <h2 className="kpi-value">{totalClients}</h2>
-                           <div className="mt-2 text-blue-400 flex items-center gap-1">
-                                <span className="kpi-badge bg-blue-950/50 text-blue-400 border border-blue-900/50">CLIENTES TOTAL</span>
-                           </div>
-                        </div>
-                    </Link>
-                 ))}
+                  ) : (
+                     <Link 
+                        href={{
+                            query: { ...sParams, tab: 'todos', page: '1' }
+                        }} 
+                        className="block h-full"
+                    >
+                         <div className="kpi-card group hover:border-blue-500/30 hover:scale-[1.02] active:scale-95 cursor-pointer h-full">
+                            <div className="kpi-card-icon">
+                                <TrendingUp className="w-16 h-16 text-blue-500" />
+                            </div>
+                            <p className="kpi-label">Crecimiento</p>
+                            <h2 className="kpi-value">{totalClients}</h2>
+                            <div className="mt-2 text-blue-400 flex items-center gap-1">
+                                 <span className="kpi-badge bg-blue-950/50 text-blue-400 border border-blue-900/50">CLIENTES TOTAL</span>
+                            </div>
+                         </div>
+                     </Link>
+                  ))}
              </div>
 
              {/* Client Directory with Detail View */}

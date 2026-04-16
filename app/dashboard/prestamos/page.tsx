@@ -559,7 +559,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                 userRole === 'admin' ? "lg:grid-cols-6" : "lg:grid-cols-5"
             )}>
                 {/* Meta Hoy Card (Uniform Size) */}
-                <Link href="/dashboard/prestamos?tab=ruta_hoy" className="bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] transition-all group">
+                <Link href={{ query: { ...sParams, tab: 'ruta_hoy', page: '1' } }} className="bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] transition-all group">
                      {/* Decorative background wallet icon */}
                      <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12 group-hover:opacity-[0.03] transition-opacity">
                         <Wallet className="w-20 h-20 md:w-24 md:h-24 text-white" />
@@ -594,7 +594,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                 </Link>
 
                 {/* KPI: ACTIVOS (NUEVO) */}
-                <Link href="/dashboard/prestamos?tab=activos" className="bg-[#090e16] border border-emerald-500/20 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] hover:border-emerald-500/40 transition-all group">
+                <Link href={{ query: { ...sParams, tab: 'activos', page: '1' } }} className="bg-[#090e16] border border-emerald-500/20 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] hover:border-emerald-500/40 transition-all group">
                      {/* Decorative background wallet icon */}
                      <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12 group-hover:opacity-[0.03] transition-opacity">
                         <Users className="w-20 h-20 md:w-24 md:h-24 text-emerald-500" />
@@ -649,7 +649,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                 </div>
 
                 {/* Renovaciones Card */}
-                <Link href="/dashboard/prestamos?tab=renovaciones" className="bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between hover:bg-[#0d1421] transition-all group min-h-[90px] md:min-h-[120px]">
+                <Link href={{ query: { ...sParams, tab: 'renovaciones', page: '1' } }} className="bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between hover:bg-[#0d1421] transition-all group min-h-[90px] md:min-h-[120px]">
                     <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12 group-hover:opacity-[0.03] transition-opacity">
                         <TrendingUp className="w-20 h-20 md:w-24 md:h-24 text-white" />
                     </div>
@@ -706,14 +706,14 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             {/* Admin/Supervisor Alerts Bar - More Compact */}
             {['admin', 'supervisor'].includes(userRole) && (
                 <div className="grid grid-cols-2 gap-3 mb-4">
-                    <Link href="/dashboard/prestamos?tab=notificar" className="bg-slate-900/40 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between hover:bg-slate-900/60 transition-colors border-l-2 border-l-rose-500/40">
+                    <Link href={{ query: { ...sParams, tab: 'notificar', page: '1' } }} className="bg-slate-900/40 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between hover:bg-slate-900/60 transition-colors border-l-2 border-l-rose-500/40">
                         <div>
                             <p className="text-rose-500/80 font-bold text-[8px] uppercase tracking-tighter">Alertas Críticas</p>
                             <p className="text-lg font-black text-white">{alertasGraves}</p>
                         </div>
                         <AlertCircle className="w-5 h-5 text-rose-500/20" />
                     </Link>
-                    <Link href="/dashboard/prestamos?tab=morosos" className="bg-slate-900/40 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between hover:bg-slate-900/60 transition-colors border-l-2 border-l-amber-500/40">
+                    <Link href={{ query: { ...sParams, tab: 'morosos', page: '1' } }} className="bg-slate-900/40 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between hover:bg-slate-900/60 transition-colors border-l-2 border-l-amber-500/40">
                         <div>
                             <p className="text-amber-500/80 font-bold text-[8px] uppercase tracking-tighter">Advertencia</p>
                             <p className="text-lg font-black text-white">{clientesEnMora}</p>

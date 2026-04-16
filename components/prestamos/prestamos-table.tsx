@@ -876,58 +876,34 @@ export function PrestamosTable({
                             <SelectGroup>
                                 <SelectLabel className="text-[10px] uppercase text-slate-500">Operativas</SelectLabel>
                                 <SelectItem value="ruta_hoy" className="focus:bg-slate-800 focus:text-white">
-                                    <div className="flex items-center justify-between w-full gap-2">
-                                        <span className="text-emerald-400">Ruta de Hoy</span>
-                                        <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.ruta_hoy}</Badge>
-                                    </div>
+                                    <span className="text-emerald-400">Ruta de Hoy</span>
                                 </SelectItem>
                                 {(userRol === 'admin' || userRol === 'supervisor') && (
                                     <SelectItem value="visitas_control" className="focus:bg-slate-800 focus:text-white">
-                                        <div className="flex items-center justify-between w-full gap-2">
-                                            <span className="text-blue-400">Control Ruta</span>
-                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.visitas_control}</Badge>
-                                        </div>
+                                        <span className="text-blue-400">Control Ruta</span>
                                     </SelectItem>
                                 )}
                                 <SelectItem value="cobranza" className="focus:bg-slate-800 focus:text-white">
-                                    <div className="flex items-center justify-between w-full gap-2">
-                                        <span className="text-amber-400">Cobranza</span>
-                                        <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.cobranza}</Badge>
-                                    </div>
+                                    <span className="text-amber-400">Cobranza</span>
                                 </SelectItem>
                                 <SelectItem value="morosos" className="focus:bg-slate-800 focus:text-white">
-                                    <div className="flex items-center justify-between w-full gap-2">
-                                        <span className="text-amber-400">Advertencia</span>
-                                        <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.morosos}</Badge>
-                                    </div>
+                                    <span className="text-amber-400">Advertencia</span>
                                 </SelectItem>
                                 <SelectItem value="notificar" className="focus:bg-slate-800 focus:text-white">
-                                    <div className="flex items-center justify-between w-full gap-2">
-                                        <span className="text-rose-400">Alerta Crítica</span>
-                                        <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.notificar}</Badge>
-                                    </div>
+                                    <span className="text-rose-400">Alerta Crítica</span>
                                 </SelectItem>
                             </SelectGroup>
                             
                             <SelectGroup>
                                 <SelectLabel className="text-[10px] uppercase text-slate-500 mt-2">Gestión</SelectLabel>
                                 <SelectItem value="semana" className="focus:bg-slate-800 focus:text-white">
-                                    <div className="flex items-center justify-between w-full gap-2">
-                                        <span>Esta Semana</span>
-                                        <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.semana}</Badge>
-                                    </div>
+                                    <span>Esta Semana</span>
                                 </SelectItem>
                                 <SelectItem value="en_curso" className="focus:bg-slate-800 focus:text-white">
-                                    <div className="flex items-center justify-between w-full gap-2">
-                                        <span>En Proceso</span>
-                                        <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.en_curso}</Badge>
-                                    </div>
+                                    <span>En Proceso</span>
                                 </SelectItem>
                                 <SelectItem value="renovaciones" className="focus:bg-slate-800 focus:text-white">
-                                    <div className="flex items-center justify-between w-full gap-2">
-                                        <span className="text-yellow-400">Renovaciones</span>
-                                        <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.renovaciones}</Badge>
-                                    </div>
+                                    <span className="text-yellow-400">Renovaciones</span>
                                 </SelectItem>
                             </SelectGroup>
                             
@@ -935,40 +911,22 @@ export function PrestamosTable({
                                 <SelectGroup>
                                     <SelectLabel className="text-[10px] uppercase text-slate-500 mt-2">Historial</SelectLabel>
                                     <SelectItem value="finalizados" className="focus:bg-slate-800 focus:text-white">
-                                        <div className="flex items-center justify-between w-full gap-2">
-                                            <span>Finalizados</span>
-                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.finalizados}</Badge>
-                                        </div>
+                                        <span>Finalizados</span>
                                     </SelectItem>
                                     <SelectItem value="renovados" className="focus:bg-slate-800 focus:text-white">
-                                        <div className="flex items-center justify-between w-full gap-2">
-                                            <span>Renovados</span>
-                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.renovados}</Badge>
-                                        </div>
+                                        <span>Renovados</span>
                                     </SelectItem>
                                     <SelectItem value="refinanciados" className="focus:bg-slate-800 focus:text-white">
-                                        <div className="flex items-center justify-between w-full gap-2">
-                                            <span>Refinanciados</span>
-                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.refinanciados}</Badge>
-                                        </div>
+                                        <span>Refinanciados</span>
                                     </SelectItem>
                                     <SelectItem value="anulados" className="focus:bg-slate-800 focus:text-white">
-                                        <div className="flex items-center justify-between w-full gap-2">
-                                            <span>Anulados</span>
-                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.anulados}</Badge>
-                                        </div>
+                                        <span>Anulados</span>
                                     </SelectItem>
                                     <SelectItem value="pendientes" className="focus:bg-slate-800 focus:text-white">
-                                        <div className="flex items-center justify-between w-full gap-2">
-                                            <span>Pendientes</span>
-                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.pendientes}</Badge>
-                                        </div>
+                                        <span>Pendientes</span>
                                     </SelectItem>
                                     <SelectItem value="todos" className="focus:bg-slate-800 focus:text-white">
-                                        <div className="flex items-center justify-between w-full gap-2">
-                                            <span>Todos</span>
-                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">{filterCounts.todos}</Badge>
-                                        </div>
+                                        <span>Todos</span>
                                     </SelectItem>
                                 </SelectGroup>
                             )}

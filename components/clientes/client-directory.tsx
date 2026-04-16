@@ -514,12 +514,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                             <SelectContent className="bg-slate-900 border-slate-700">
                                 {tabs.map((tab) => (
                                     <SelectItem key={tab.id} value={tab.id} className="focus:bg-slate-800 focus:text-white">
-                                        <div className="flex items-center justify-between w-full gap-2">
-                                            <span>{tab.label}</span>
-                                            <Badge variant="secondary" className="bg-slate-800 text-slate-400 text-[10px] px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center">
-                                                {tab.count}
-                                            </Badge>
-                                        </div>
+                                             <span>{tab.label}</span>
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -791,7 +786,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                     <Edit className="w-4 h-4 mr-2" /> Editar Datos
                                                 </DropdownMenuItem>
                                             )}
-                                            <DropdownMenuItem onClick={() => router.push(`?client=${cliente.id}`)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
+                                            <DropdownMenuItem onClick={() => updateParams({ client: cliente.id })} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
                                                 <Eye className="w-4 h-4 mr-2" /> Ver Detalle Rápido
                                             </DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => router.push(`/dashboard/clientes/${cliente.id}`)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
@@ -978,7 +973,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                     <Edit className="w-4 h-4 mr-2" /> Editar Datos
                                                 </DropdownMenuItem>
                                             )}
-                                            <DropdownMenuItem onClick={() => router.push(`?client=${cliente.id}`)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
+                                            <DropdownMenuItem onClick={() => updateParams({ client: cliente.id })} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
                                                 <Eye className="w-4 h-4 mr-2" /> Ver Detalle Rápido
                                             </DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => router.push(`/dashboard/clientes/${cliente.id}`)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">

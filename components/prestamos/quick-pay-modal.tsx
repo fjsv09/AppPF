@@ -111,30 +111,35 @@ export function QuickPayModal({
     const apertura = systemSchedule?.horario_apertura || '10:00'
     const cierre = systemSchedule?.horario_cierre || '19:00'
 
+    // --- LOGICA DE INICIALIZACION Y GPS ---
     useEffect(() => {
         if (open && !result) {
-            if (initialPrestamo) {
-                // Saneamos el ID por si viene del mapa con sufijos (-official, etc)
-                const cleanId = initialPrestamo.id?.split('-')?.length > 5 
-                    ? initialPrestamo.id.substring(0, 36) 
-                    : initialPrestamo.id.replace('-official', '').replace(/-payment-\d+$/, '');
+            const currentId = prestamoId || initialPrestamo?.id;
+            if (currentId) {
+                const cleanId = currentId.split('-')?.length > 5 
+                    ? currentId.substring(0, 36) 
+                    : currentId.replace('-official', '').replace(/-payment-\d+$/, '');
                 
-                const sanitizedPrestamo = { ...initialPrestamo, id: cleanId };
-                setPrestamo(sanitizedPrestamo)
-                fetchSmartQuota(cleanId)
-            } else if (prestamoId) {
-                const cleanId = prestamoId.split('-')?.length > 5 
-                    ? prestamoId.substring(0, 36) 
-                    : prestamoId.replace('-official', '').replace(/-payment-\d+$/, '');
-                fetchPrestamoData(cleanId)
+                if (initialPrestamo) {
+                    const sanitizedPrestamo = { ...initialPrestamo, id: cleanId };
+                    setPrestamo(sanitizedPrestamo)
+                    fetchSmartQuota(cleanId)
+                } else {
+                    fetchPrestamoData(cleanId)
+                }
             }
             setLastPayment(null)
+        }
+        // Dependemos de IDs estables para evitar recargas si el objeto cambia de referencia
+    }, [open, prestamoId, initialPrestamo?.id, result])
 
-            // Priorizar ubicación pasada por prop (más rápida y confiable)
+    useEffect(() => {
+        if (open && !result) {
+            // Sincronizar ubicación sin disparar recarga de datos
             if (userLoc) {
                 setLocation({ lat: userLoc[0], lng: userLoc[1] })
-            } else if (navigator.geolocation) {
-                // Fallback a captura manual si no viene por prop
+            } else if (navigator.geolocation && !location) {
+                // Solo capturar si no tenemos ubicación aún (fallback)
                 navigator.geolocation.getCurrentPosition(
                     (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
                     (err) => console.warn("GPS access denied or error:", err),
@@ -142,7 +147,7 @@ export function QuickPayModal({
                 )
             }
         }
-    }, [open, prestamoId, initialPrestamo, result, userLoc])
+    }, [open, result, userLoc])
 
     useEffect(() => {
         if (!open) {

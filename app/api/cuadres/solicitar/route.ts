@@ -5,6 +5,8 @@ import { createFullNotification } from '@/services/notification-service'
 import { checkSystemAccess } from '@/utils/systemRestrictions'
 import { calculateMetasForUser } from '@/lib/metas-logic'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
     const supabase = await createClient()
     const supabaseAdmin = createAdminClient()

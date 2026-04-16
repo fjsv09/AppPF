@@ -5,6 +5,8 @@ import { revalidatePath } from 'next/cache'
 import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
 import { checkSystemAccess } from '@/utils/systemRestrictions'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
     const supabase = await createClient()
 

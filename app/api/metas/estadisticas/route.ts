@@ -3,6 +3,8 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { calculateMetasForUser } from '@/lib/metas-logic'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: Request) {
     try {
         const supabase = await createClient()

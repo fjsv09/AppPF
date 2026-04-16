@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createFullNotification } from '@/services/notification-service'
 
+export const dynamic = 'force-dynamic'
+
 // PATCH - Actualizar estado de una tarea (para visitas_asignadas completadas sin evidencia_url)
 export async function PATCH(
     request: Request,

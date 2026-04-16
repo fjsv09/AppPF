@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createFullNotification } from '@/services/notification-service'
 
+export const dynamic = 'force-dynamic'
+
 // POST - Admin asigna una tarea de visita a un asesor/supervisor (se guarda en tareas_evidencia)
 export async function POST(request: Request) {
     const supabase = await createClient()

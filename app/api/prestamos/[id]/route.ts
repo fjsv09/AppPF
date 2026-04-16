@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 import { addDays } from 'date-fns'
 import { revalidatePath } from 'next/cache'
 
+export const dynamic = 'force-dynamic'
+
 
 // Helper para fechas - MISMA LÓGICA QUE EN /api/prestamos/route.ts
 function parseUTCDate(dateStr: string): Date {

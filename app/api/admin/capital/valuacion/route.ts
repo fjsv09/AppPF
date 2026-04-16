@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 import { addMonths, isBefore, addDays, startOfDay, format } from 'date-fns'
 import { createFullNotification } from '@/services/notification-service'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const supabase = await createClient()

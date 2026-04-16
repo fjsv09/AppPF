@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createFullNotification } from '@/services/notification-service'
 
+export const dynamic = 'force-dynamic'
+
 // PATCH - Aprobar solicitud final (solo Admin)
 // Esto crea el préstamo y genera el cronograma
 export async function PATCH(

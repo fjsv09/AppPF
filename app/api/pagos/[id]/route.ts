@@ -3,6 +3,8 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { format } from 'date-fns'
 
+export const dynamic = 'force-dynamic'
+
 export async function PUT(
     request: Request,
     { params }: { params: { id: string } }

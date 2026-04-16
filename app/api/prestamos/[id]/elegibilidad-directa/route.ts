@@ -92,6 +92,29 @@ export async function GET(
         // [NUEVO] CALCULAR EVALUACIÓN INTEGRAL CENTRALIZADA (con optimización de pagos e ID específico)
         const evaluation = getComprehensiveEvaluation(loanFull.clientes as any, allClientLoans || [], qAllPayments || [], id)
 
+        // Límites según Score (reusando lógica original de elegibilidad)
+        const montoOriginal = Number(prestamo.monto) || 0;
+        let montoMaximo = montoOriginal;
+        let montoMinimo = montoOriginal * 0.5;
+
+        // Reglas de negocio básicas para Admin (flexibles)
+        if (evaluation.healthScore >= 80) montoMaximo = montoOriginal * 1.40;
+        else if (evaluation.healthScore >= 60) montoMaximo = montoOriginal * 1.20;
+        else if (evaluation.healthScore < 40) montoMaximo = montoOriginal * 0.8;
+
+        if (saldoPendiente > 0) {
+            montoMinimo = Math.max(montoMinimo, saldoPendiente);
+        }
+
+        const clientLimit = parseFloat((prestamo.clientes as any)?.limite_prestamo || 0);
+        if (clientLimit > 0 && montoMaximo > clientLimit) {
+            montoMaximo = clientLimit;
+        }
+
+        if (montoMaximo < montoMinimo) {
+            montoMaximo = montoMinimo;
+        }
+
         // Respuesta siempre elegible para el Admin
         const elegibilidadMock = {
             elegible: true,
@@ -99,7 +122,7 @@ export async function GET(
             healthScore: evaluation.healthScore,
             reputationScore: evaluation.reputationScore,
             loanScoreData: evaluation.healthScoreData,
-            score_detalle: scoreDetalle, // Legacy support
+            score_detalle: evaluation.healthScoreData, // Legacy support fix
             porcentaje_pagado: parseFloat(porcentajePagado.toFixed(2)),
             monto_original: prestamo.monto,
             saldo_pendiente: parseFloat(saldoPendiente.toFixed(2)),

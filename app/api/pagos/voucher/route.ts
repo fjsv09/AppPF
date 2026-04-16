@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 
+export const dynamic = 'force-dynamic'
+
 export async function PATCH(request: Request) {
     try {
         const { pago_id } = await request.json()

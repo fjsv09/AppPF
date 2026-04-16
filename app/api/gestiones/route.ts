@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createFullNotification } from '@/services/notification-service'
 
+export const dynamic = 'force-dynamic'
+
 // GET - Obtener gestiones de un préstamo
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)

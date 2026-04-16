@@ -3,6 +3,8 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import webpush from 'web-push'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
     const supabase = await createClient()
     const supabaseAdmin = createAdminClient()

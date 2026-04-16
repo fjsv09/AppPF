@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 import { addDays, addWeeks, addMonths } from 'date-fns'
 import { checkSystemAccess } from '@/utils/systemRestrictions'
 
+export const dynamic = 'force-dynamic'
+
 // Helper for dates - STRICT UTC
 function parseUTCDate(dateStr: string): Date {
     const [y, m, d] = dateStr.split('-').map(Number)

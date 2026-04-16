@@ -3,6 +3,8 @@ import { createClient } from '@/utils/supabase/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { revalidatePath } from 'next/cache';
 
+export const dynamic = 'force-dynamic'
+
 export async function PATCH(request: Request) {
     try {
         const { cliente_id, excepcion_voucher } = await request.json();

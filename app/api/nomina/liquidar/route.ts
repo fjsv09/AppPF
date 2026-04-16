@@ -2,6 +2,8 @@ import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * POST /api/nomina/liquidar — Calcular y ejecutar liquidación por renuncia
  * Body: { trabajadorId, cuentaOrigenId, notas? }

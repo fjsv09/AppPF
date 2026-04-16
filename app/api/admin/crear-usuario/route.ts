@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { requireAdmin, createAdminClient } from '@/utils/supabase/admin'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
     try {
         const { email, password, nombre, rol, supervisor_id, sueldo_base, fecha_nacimiento, fecha_ingreso, frecuencia_pago, dni, direccion } = await request.json()

@@ -2,6 +2,8 @@ import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 // GET - Devuelve el asesor del cliente y su supervisor para asignar una gestión
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)

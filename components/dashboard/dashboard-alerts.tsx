@@ -94,6 +94,7 @@ export function DashboardAlerts({ userId, blockInfo, accessInfo }: DashboardAler
                     <CuadreModal 
                         userId={userId}
                         isDebtBlocked={true}
+                        debtAmount={blockInfo?.leftover}
                         systemConfig={accessInfo?.config}
                         trigger={
                             <button className="w-full md:w-auto px-8 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-colors text-center whitespace-nowrap shadow-[0_0_20px_rgba(220,38,38,0.4)]">

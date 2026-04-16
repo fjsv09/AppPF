@@ -43,7 +43,12 @@ export default function NotificacionesPage() {
     const [unreadCount, setUnreadCount] = useState(0)
     const { refreshUnread } = useNotifications()
     const [activeTab, setActiveTab] = useState<'unread' | 'history'>('unread')
+    const [isMounted, setIsMounted] = useState(false)
     const router = useRouter()
+
+    useEffect(() => {
+        setIsMounted(true)
+    }, [])
 
     // PUSH STATE
     const [isSubscribed, setIsSubscribed] = useState(false)
@@ -261,7 +266,7 @@ export default function NotificacionesPage() {
                             </div>
                         </div>
                     </div>
-                    {unreadCount > 0 && (
+                    {isMounted && unreadCount > 0 && (
                         <button 
                             onClick={markAllAsRead}
                             className="text-[10px] font-bold text-slate-500 hover:text-purple-400 uppercase tracking-tighter"
@@ -271,41 +276,30 @@ export default function NotificacionesPage() {
                     )}
                 </div>
 
-                {/* PUSH STATUS - Más compacto e integrado */}
-                <div 
-                    onClick={isSubscribed ? unsubscribePush : subscribePush}
-                    className={cn(
-                        "mb-5 p-4 rounded-xl border transition-all active:scale-[0.98] cursor-pointer",
-                        isSubscribed 
-                            ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-400" 
-                            : "bg-orange-500/5 border-orange-500/10 text-orange-400"
-                    )}
-                >
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className={cn(
-                                "p-2 rounded-lg",
-                                isSubscribed ? "bg-emerald-500/20" : "bg-orange-500/20"
-                            )}>
-                                {isSubscribed ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+                {/* PUSH STATUS - Hidden if already subscribed */}
+                {isMounted && !isSubscribed && (
+                    <div 
+                        onClick={subscribePush}
+                        className="mb-5 p-4 rounded-xl border transition-all active:scale-[0.98] cursor-pointer bg-orange-500/5 border-orange-500/10 text-orange-400"
+                    >
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-orange-500/20">
+                                    <BellOff className="h-4 w-4" />
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-bold leading-none">Alertas de Navegador</span>
+                                    <span className="text-[10px] opacity-70 mt-1">
+                                        Actívalas para no perderte nada
+                                    </span>
+                                </div>
                             </div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold leading-none">Alertas de Navegador</span>
-                                <span className="text-[10px] opacity-70 mt-1">
-                                    {isSubscribed ? 'Recibirás avisos push en este equipo' : 'Actívalas para no perderte nada'}
-                                </span>
+                            <div className="px-3 py-1.5 rounded-lg text-[10px] font-bold border bg-orange-500 text-white border-orange-400 shadow-lg shadow-orange-500/20">
+                                ACTIVAR
                             </div>
-                        </div>
-                        <div className={cn(
-                            "px-3 py-1.5 rounded-lg text-[10px] font-bold border",
-                            isSubscribed 
-                                ? "bg-emerald-500 text-white border-emerald-400 shadow-lg shadow-emerald-500/20" 
-                                : "bg-orange-500 text-white border-orange-400 shadow-lg shadow-orange-500/20"
-                        )}>
-                            {isSubscribed ? "ACTIVO" : "ACTIVAR"}
                         </div>
                     </div>
-                </div>
+                )}
 
                 {/* TAB NAVIGATION */}
                 <div className="flex p-1 bg-slate-900/50 border border-slate-800 rounded-2xl mb-8">

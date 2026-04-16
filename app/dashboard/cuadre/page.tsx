@@ -10,7 +10,6 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
 import { DashboardAlerts } from '@/components/dashboard/dashboard-alerts'
-import { AlertTriangle, Lock } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -111,6 +110,7 @@ export default async function CuadrePage() {
             isDebtBlocked={isDebtBlocked} 
             isMorningBlocked={isMorningBlocked} 
             isNightBlocked={isNightBlocked}
+            debtAmount={blockStatusData?.leftover}
             systemConfig={access?.config}
           />
         </div>

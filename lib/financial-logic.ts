@@ -7,7 +7,14 @@
  * Retorna la fecha actual en formato YYYY-MM-DD ajustada a la zona horaria de Perú.
  */
 export function getTodayPeru(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+  // ISO format YYYY-MM-DD in Lima time
+  const date = new Date();
+  return new Intl.DateTimeFormat('en-CA', { 
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
 }
 
 interface SystemConfig {
@@ -17,6 +24,13 @@ interface SystemConfig {
   umbralMoroso?: number; // Ej: 7
   umbralCppOtros?: number; // Ej: 1
   umbralMorosoOtros?: number; // Ej: 2
+}
+
+interface LoanScore {
+  score: number;
+  increases: number;
+  penalties: number;
+  details: { label: string; value: number; type: 'increase' | 'penalty' }[];
 }
 
 interface LoanMetrics {
@@ -40,6 +54,7 @@ interface LoanMetrics {
   saldoCuotaParcial: number; // Balance restante de la primera cuota que tenga pago parcial (>0 y <total)
   totalCuotas: number;
   cuotasPagadas: number;
+  loanScore?: LoanScore; // Nuevo
 }
 
 /**
@@ -273,7 +288,196 @@ export function calculateLoanMetrics(
     valorCuotaPromedio,
     saldoCuotaParcial,
     totalCuotas: loan.numero_cuotas || loan.cuotas || (valorCuotaPromedio > 0 ? Math.round(totalPagar / valorCuotaPromedio) : 0) || cronograma.length,
-    cuotasPagadas: valorCuotaPromedio > 0 ? Math.floor(totalPagadoAcumulado / valorCuotaPromedio) : 0
+    cuotasPagadas: valorCuotaPromedio > 0 ? Math.floor(totalPagadoAcumulado / valorCuotaPromedio) : 0,
+    loanScore: calculateLoanScore(loan, pagos, today) // Integración del nuevo score
+  };
+}
+
+/**
+ * Calcula el score individual de un préstamo (0-100).
+ * Basado en aumentos por puntualidad y castigos por atrasos.
+ */
+export function calculateLoanScore(loan: any, pagos: any[], today: string = getTodayPeru()): LoanScore {
+  let score = 100;
+  let increases = 0;
+  let penalties = 0;
+  const details: { label: string; value: number; type: 'increase' | 'penalty' }[] = [];
+
+  const cronograma = loan.cronograma_cuotas || [];
+  if (cronograma.length === 0) return { score: 100, increases: 0, penalties: 0, details: [] };
+
+  let maxHistoricalDelay = 0;
+
+  // 1. Aumentos por pago puntual (+1 por cuota) y Penalizaciones por mora
+  cronograma.forEach((c: any) => {
+    const cuotaPagos = (c.pagos || pagos.filter((p: any) => p.cuota_id === c.id));
+    const isPaid = c.estado === 'pagado' || Number(c.monto_pagado) >= (Number(c.monto_cuota) - 0.01);
+    
+    if (isPaid) {
+        // Verificar puntualidad histórica (Basada en el momento en que se completó el saldo de la cuota)
+        // Evitamos que ajustes del sistema posteriores (ruido) penalicen una cuota ya saldada a tiempo.
+        const sortedCuotaPagos = [...cuotaPagos].sort((a, b) => {
+          const tA = new Date(a.created_at || a.fecha_pago).getTime();
+          const tB = new Date(b.created_at || b.fecha_pago).getTime();
+          return tA - tB;
+        });
+
+        let accumulated = 0;
+        let completionPayment = null;
+        const targetAmount = Number(c.monto_cuota) - 0.01;
+
+        for (const p of sortedCuotaPagos) {
+          accumulated += (Number(p.monto_pagado) || 0);
+          if (accumulated >= targetAmount) {
+            completionPayment = p;
+            break;
+          }
+        }
+
+        // Si por alguna razón no se encuentra el pago que completa (datos inconsistentes), usamos el último
+        const focusPayment = completionPayment || (sortedCuotaPagos.length > 0 ? sortedCuotaPagos[sortedCuotaPagos.length - 1] : null);
+
+        if (focusPayment) {
+          try {
+            const rawDate = focusPayment.created_at || focusPayment.fecha_pago;
+            if (!rawDate) return;
+            
+            const fechaPagoObj = new Date(rawDate);
+            const fechaVencObj = new Date(c.fecha_vencimiento + 'T12:00:00');
+
+            const fechaPagoStr = new Intl.DateTimeFormat('en-CA', { 
+                timeZone: 'America/Lima',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).format(fechaPagoObj);
+
+            const vDate = c.fecha_vencimiento || '';
+            
+            if (fechaPagoStr <= vDate) {
+               increases += 1;
+            } else {
+               // Pago tarde (-5)
+               penalties += 5;
+               
+               // Calcular cuántos días de atraso tuvo al ser pagada para el histórico
+               const diffTime = fechaPagoObj.getTime() - fechaVencObj.getTime();
+               const diffDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+               maxHistoricalDelay = Math.max(maxHistoricalDelay, diffDays);
+
+               const isSystem = !focusPayment.asesor_id || 
+                               focusPayment.metodo_pago === 'Sistema' || 
+                               focusPayment.metodo_pago === 'Excedente' ||
+                               focusPayment.es_autopago_renovacion;
+                               
+               const label = isSystem 
+                ? `Regularización Tardía (Mora) - Cuota ${c.numero_cuota}`
+                : `Pago Tarde Cuota ${c.numero_cuota}`;
+
+               details.push({ label, value: 5, type: 'penalty' });
+            }
+          } catch (e) {
+            console.error('Error parsing payment date:', e);
+          }
+        }
+    } else if (c.fecha_vencimiento < today) {
+        // Cuota vencida activa
+        const diffTime = new Date(today).getTime() - new Date(c.fecha_vencimiento).getTime();
+        const diffDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+        
+        maxHistoricalDelay = Math.max(maxHistoricalDelay, diffDays);
+        
+        // Peso: -2 por día, tope -15 por cuota
+        const dayPenalty = Math.min(15, diffDays * 2); 
+        penalties += dayPenalty;
+        details.push({ label: `Atraso Cuota ${c.numero_cuota} (${diffDays}d)`, value: dayPenalty, type: 'penalty' });
+    }
+  });
+
+  // 2. Castigos por Riesgo Histórico Máximo (No acumulativos entre sí, se aplica el mayor)
+  if (maxHistoricalDelay > 30) {
+    penalties += 35;
+    details.push({ label: 'Riesgo Histórico: VENCIDO', value: 35, type: 'penalty' });
+  } else if (maxHistoricalDelay > 8) {
+    penalties += 20;
+    details.push({ label: 'Riesgo Histórico: MOROSO', value: 20, type: 'penalty' });
+  } else if (maxHistoricalDelay >= 2) {
+    penalties += 10;
+    details.push({ label: 'Riesgo Histórico: CPP', value: 10, type: 'penalty' });
+  }
+
+  score = Math.max(0, Math.min(100, score + increases - penalties));
+  
+  return { score, increases, penalties, details };
+}
+
+export function calculateClientReputation(client: any, allLoans: any[]) {
+  if (!client) return { score: 0, details: [], metrics: {} };
+
+  const finishedLoans = allLoans.filter(l => ['finalizado', 'liquidado'].includes(l.estado));
+  const totalFinished = finishedLoans.length;
+  const details = [];
+
+  // 1. Desempeño Histórico (60%) - Basado en scores de préstamos pasados
+  let totalHistoricalScore = 0;
+  finishedLoans.forEach(l => {
+     // Aplanar pagos si vienen anidados en cronograma_cuotas
+     let flatPagos = l.pagos || [];
+     if (flatPagos.length === 0 && l.cronograma_cuotas) {
+       flatPagos = l.cronograma_cuotas.flatMap((c: any) => c.pagos || []);
+     }
+     
+     const meta = calculateLoanScore(l, flatPagos, getTodayPeru());
+     totalHistoricalScore += meta.score;
+  });
+  
+  const avgPerformance = totalFinished > 0 ? (totalHistoricalScore / totalFinished) : 100;
+  const performanceWeight = avgPerformance * 0.6;
+  details.push({ 
+    label: `Desempeño Histórico (${Math.round(avgPerformance)}% base)`, 
+    value: Math.round(performanceWeight), 
+    type: 'increase',
+    description: `Promedio de salud de ${totalFinished} préstamos anteriores.`
+  });
+
+  // 2. Antigüedad (10%) - +1 pto por mes (máx 10)
+  let seniorityBonus = 0;
+  let months = 0;
+  if (client.created_at) {
+    const createdAt = new Date(client.created_at);
+    if (!isNaN(createdAt.getTime())) {
+      months = Math.floor((new Date().getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24 * 30));
+      seniorityBonus = Math.min(10, Math.max(0, months));
+    }
+  }
+  if (seniorityBonus > 0) {
+    details.push({ 
+      label: `Antigüedad como Cliente (${months} meses)`, 
+      value: seniorityBonus, 
+      type: 'increase' 
+    });
+  }
+
+  // 3. Volumen (30%) - +2 pts por cada préstamo finalizado (máx 30)
+  const volumeBonus = Math.min(30, totalFinished * 2);
+  if (volumeBonus > 0) {
+    details.push({ 
+      label: `Volumen: ${totalFinished} Préstamos Finalizados`, 
+      value: volumeBonus, 
+      type: 'increase' 
+    });
+  }
+
+  const finalScore = Math.round(Math.max(0, Math.min(100, performanceWeight + seniorityBonus + volumeBonus)));
+
+  return { 
+    score: finalScore, 
+    details, 
+    metrics: {
+      avgPerformance,
+      totalFinished,
+      months
+    } 
   };
 }
 /**
@@ -558,3 +762,95 @@ export function getLoanStatusUI(loan: any) {
         animate: false
     }
 }
+
+/**
+ * ORQUESTADOR CENTRALIZADO DE EVALUACIÓN
+ * Procesa la data cruda de Supabase y devuelve todos los scores necesarios.
+ * Úsalo en perfiles de cliente, APIs de elegibilidad y modales de renovación.
+ * @param allPayments Opcional - Un array plano con TODOS los pagos del cliente para optimizar consultas.
+ * @param targetLoanId Opcional - ID del préstamo específico que se desea evaluar para "Salud del Préstamo".
+ */
+export function getComprehensiveEvaluation(client: any, loans: any[], allPayments?: any[], targetLoanId?: string) {
+    const today = getTodayPeru();
+    
+    // 1. Encontrar el préstamo para evaluar Salud
+    // Prioridad: 1. targetLoanId, 2. Primer préstamo activo no liquidado
+    const activeLoan = (loans || []).find((l: any) => {
+        if (targetLoanId) return l.id === targetLoanId;
+        
+        const isMigrado = (l.observacion_supervisor || '').includes('Préstamo migrado del sistema anterior');
+        const isEffectivelyFinalized = isMigrado && (l.saldo_pendiente || 0) <= 0.01;
+        return l.estado === 'activo' && !isEffectivelyFinalized;
+    });
+
+    // Inyectar pagos si se proveen de forma externa (optimización)
+    const enrichedLoans = (loans || []).map(l => {
+        if (allPayments && allPayments.length > 0) {
+            // Filtrar pagos que pertenecen a este préstamo
+            const loanPayments = allPayments.filter(p => 
+                p.prestamo_id === l.id || 
+                p.cronograma_cuotas?.prestamo_id === l.id
+            );
+            return { ...l, pagos: loanPayments };
+        }
+        return l;
+    });
+
+    const targetActiveLoan = activeLoan ? enrichedLoans.find(l => l.id === activeLoan.id) : null;
+
+    let healthScoreData = null;
+    if (targetActiveLoan) {
+        // Asegurar que tenemos los pagos aplanados para este préstamo
+        let flatPagos = targetActiveLoan.pagos || [];
+        // Si no vienen aplanados, buscar en las cuotas (formato Supabase anidado)
+        if (flatPagos.length === 0 && targetActiveLoan.cronograma_cuotas) {
+            flatPagos = targetActiveLoan.cronograma_cuotas.flatMap((c: any) => c.pagos || []);
+        }
+        healthScoreData = calculateLoanScore(targetActiveLoan, flatPagos, today);
+    }
+
+    // 2. Calcular Reputación con TODO el historial enriquecido
+    const reputationData = calculateClientReputation(client, enrichedLoans);
+
+    // 3. Calcular hábito de pago consolidado
+    let countEfectivo = 0;
+    let countDigital = 0;
+    let totalPaymentsCount = 0;
+
+    if (allPayments && allPayments.length > 0) {
+        allPayments.forEach(p => {
+            totalPaymentsCount++;
+            if ((p.metodo_pago || 'Efectivo') === 'Efectivo') countEfectivo++;
+            else countDigital++;
+        });
+    } else {
+        enrichedLoans.forEach(l => {
+            const cronograma = l.cronograma_cuotas || [];
+            cronograma.forEach((c: any) => {
+                const cuotaPagos = c.pagos || [];
+                cuotaPagos.forEach((p: any) => {
+                    totalPaymentsCount++;
+                    const method = p.metodo_pago || 'Efectivo';
+                    if (method === 'Efectivo') countEfectivo++;
+                    else countDigital++;
+                });
+            });
+        });
+    }
+
+    return {
+        healthScore: healthScoreData?.score || 100,
+        healthScoreData,
+        reputationData,
+        reputationScore: reputationData.score,
+        paymentHabits: {
+            totalPayments: totalPaymentsCount,
+            countEfectivo,
+            countDigital,
+            pctEfectivo: totalPaymentsCount > 0 ? Math.round((countEfectivo / totalPaymentsCount) * 100) : 0,
+            pctDigital: totalPaymentsCount > 0 ? Math.round((countDigital / totalPaymentsCount) * 100) : 0
+        },
+        today
+    };
+}
+

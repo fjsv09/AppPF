@@ -41,10 +41,15 @@ export function NotificationsDropdown() {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(true)
     const [notifications, setNotifications] = useState<Notification[]>([])
+    const [isMounted, setIsMounted] = useState(false)
     const [activeTab, setActiveTab] = useState<'unread' | 'history'>('unread')
     const { unreadCount, refreshUnread } = useNotifications()
     const dropdownRef = useRef<HTMLDivElement>(null)
     const router = useRouter()
+
+    useEffect(() => {
+        setIsMounted(true)
+    }, [])
 
     // PUSH STATE
     const [isSubscribed, setIsSubscribed] = useState(false)
@@ -255,7 +260,7 @@ export function NotificationsDropdown() {
                 }`}
             >
                 <Bell className="h-5 w-5" />
-                {unreadCount > 0 && (
+                {isMounted && unreadCount > 0 && (
                     <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center animate-pulse border-2 border-slate-900">
                         {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
@@ -270,13 +275,13 @@ export function NotificationsDropdown() {
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="font-bold text-white flex items-center gap-2">
                                 Notificaciones
-                                {unreadCount > 0 && (
+                                {isMounted && unreadCount > 0 && (
                                     <span className="bg-purple-600 text-[9px] px-1.5 py-0.5 rounded-full text-white animate-pulse">
                                         NUEVAS
                                     </span>
                                 )}
                             </h3>
-                            {unreadCount > 0 && (
+                            {isMounted && unreadCount > 0 && (
                                 <button 
                                     onClick={markAllAsRead}
                                     className="text-[10px] font-bold text-slate-500 hover:text-purple-400 uppercase tracking-tight transition-colors"
@@ -286,102 +291,88 @@ export function NotificationsDropdown() {
                             )}
                         </div>
 
-                        {/* Push Activation UI */}
-                        <div 
-                            onClick={isSubscribed ? unsubscribePush : subscribePush}
-                            className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border group ${
-                                isSubscribed 
-                                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
-                                    : "bg-amber-500/10 border-amber-500/20 text-amber-400"
-                            }`}
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg ${isSubscribed ? 'bg-emerald-500/20' : 'bg-amber-500/20'}`}>
-                                    {isSubscribed ? <Signal className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+                        {/* Push Activation UI & Tests - Hidden if already subscribed to keep the dropdown clean */}
+                        {isMounted && !isSubscribed && (
+                            <>
+                                <div 
+                                    onClick={subscribePush}
+                                    className="flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border group bg-amber-500/10 border-amber-500/20 text-amber-400"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 rounded-lg bg-amber-500/20">
+                                            <BellOff className="h-4 w-4" />
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-xs font-bold leading-none">Notificaciones Navegador</span>
+                                            <span className="text-[10px] opacity-70 mt-1">
+                                                Habilitar alertas nativas
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="px-2 py-1 rounded-md text-[9px] font-black border transition-all bg-amber-500 text-white border-amber-400 animate-pulse">
+                                        ACTIVAR
+                                    </div>
                                 </div>
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-bold leading-none">Notificaciones Navegador</span>
-                                    <span className="text-[10px] opacity-70 mt-1">
-                                        {isSubscribed ? 'Vínculo activo' : 'Habilitar alertas nativas'}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className={`px-2 py-1 rounded-md text-[9px] font-black border transition-all ${
-                                isSubscribed 
-                                    ? 'bg-emerald-500 text-white border-emerald-400' 
-                                    : 'bg-amber-500 text-white border-amber-400 animate-pulse'
-                            }`}>
-                                {isSubscribed ? 'ON' : 'ACTIVAR'}
-                            </div>
-                        </div>
 
-                        {/* Manual Tests */}
-                        <div className="mt-3 flex gap-2">
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    if (Notification.permission === 'granted') {
-                                        new Notification("🔔 Prueba Local", { 
-                                            body: "Las notificaciones locales funcionan.", 
-                                            icon: '/favicon.ico' 
-                                        });
-                                    } else {
-                                        Notification.requestPermission()
-                                    }
-                                }}
-                                className="flex-1 py-1 px-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-[10px] text-slate-400 hover:bg-slate-800 hover:text-white transition-all flex items-center justify-center gap-1.5"
-                            >
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                Test Local
-                            </button>
-                            <button
-                                 onClick={async (e) => {
-                                    e.stopPropagation()
-                                    try {
-                                        const sb = createClient()
-                                        const { data: { user } } = await sb.auth.getUser()
-                                        if (!user) {
-                                            console.error('[PUSH TEST] No hay usuario logueado.');
-                                            return;
-                                        }
-
-                                        console.log('[PUSH TEST] Iniciando prueba para:', user.id);
-                                        const sub = await registration?.pushManager.getSubscription();
-                                        console.log('[PUSH TEST] Suscripción actual en navegador:', sub ? 'Existe' : 'No existe (null)');
-                                        
-                                        toast.promise(
-                                            fetch('/api/notificaciones/manual', {
-                                                method: 'POST',
-                                                headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify({
-                                                    usuario_id: user.id,
-                                                    titulo: '🚀 Prueba del Sistema',
-                                                    mensaje: 'Validando canal de notificaciones push y realtime.',
-                                                    tipo: 'success',
-                                                    link: '/dashboard'
-                                                })
-                                            }).then(async (res) => {
-                                                const data = await res.json();
-                                                console.log('[PUSH TEST] Respuesta servidor:', data);
-                                                if (!res.ok) throw new Error(data.error || 'Server error');
-                                                return data;
-                                            }),
-                                            {
-                                                loading: 'Enviando...',
-                                                success: 'Prueba enviada - Revisa la consola si no llega el pop-up',
-                                                error: 'Error de envío (ver consola)'
+                                {/* Manual Tests */}
+                                <div className="mt-3 flex gap-2">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (Notification.permission === 'granted') {
+                                                new Notification("🔔 Prueba Local", { 
+                                                    body: "Las notificaciones locales funcionan.", 
+                                                    icon: '/favicon.ico' 
+                                                });
+                                            } else {
+                                                Notification.requestPermission()
                                             }
-                                        )
-                                    } catch (err) {
-                                        console.error('[PUSH TEST] Error capturado:', err);
-                                    }
-                                }}
-                                className="flex-1 py-1 px-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-[10px] text-slate-400 hover:bg-slate-800 hover:text-white transition-all flex items-center justify-center gap-1.5"
-                            >
-                                <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-                                Test Sistema
-                            </button>
-                        </div>
+                                        }}
+                                        className="flex-1 py-1 px-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-[10px] text-slate-400 hover:bg-slate-800 hover:text-white transition-all flex items-center justify-center gap-1.5"
+                                    >
+                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                        Test Local
+                                    </button>
+                                    <button
+                                        onClick={async (e) => {
+                                            e.stopPropagation()
+                                            try {
+                                                const sb = createClient()
+                                                const { data: { user } } = await sb.auth.getUser()
+                                                if (!user) return;
+                                                
+                                                toast.promise(
+                                                    fetch('/api/notificaciones/manual', {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({
+                                                            usuario_id: user.id,
+                                                            titulo: '🚀 Prueba del Sistema',
+                                                            mensaje: 'Validando canal de notificaciones push y realtime.',
+                                                            tipo: 'success',
+                                                            link: '/dashboard'
+                                                        })
+                                                    }).then(async (res) => {
+                                                        const data = await res.json();
+                                                        if (!res.ok) throw new Error(data.error);
+                                                        return data;
+                                                    }),
+                                                    {
+                                                        loading: 'Enviando...',
+                                                        success: 'Prueba enviada',
+                                                        error: 'Error de envío'
+                                                    }
+                                                )
+                                            } catch (err) {}
+                                        }}
+                                        className="flex-1 py-1 px-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-[10px] text-slate-400 hover:bg-slate-800 hover:text-white transition-all flex items-center justify-center gap-1.5"
+                                    >
+                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                                        Test Sistema
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     {/* Tabs for Dropdown */}

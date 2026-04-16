@@ -1,4 +1,4 @@
-
+import { Suspense } from "react";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { format } from "date-fns";
@@ -11,12 +11,13 @@ import { SolicitudRenovacionModal } from "@/components/prestamos/solicitud-renov
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { ClientMiniCard } from "@/components/prestamos/client-mini-card";
 import { UploadEvidenceButton } from '@/components/dashboard/upload-evidence-button'
-import { Calendar, DollarSign, Percent, User, Users, CreditCard, AlertTriangle, Lock } from "lucide-react";
+import { Calendar, DollarSign, Percent, User, Users, CreditCard, AlertTriangle, Lock, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { LoanTabs } from "@/components/prestamos/loan-tabs";
 import { BackButton } from "@/components/ui/back-button";
-import { getTodayPeru, calculateLoanMetrics, getLoanStatusUI } from "@/lib/financial-logic";
+import { getTodayPeru, calculateLoanMetrics, getLoanStatusUI, calculateLoanScore } from "@/lib/financial-logic";
 import { cn, getFrequencyBadgeStyles } from "@/lib/utils";
+
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -192,6 +193,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
     }
 
     const todayPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+
     const metrics = calculateLoanMetrics({ 
         ...prestamo, 
         cronograma_cuotas: cronograma || [] 
@@ -202,6 +204,12 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
         umbralCppOtros: 1, 
         umbralMorosoOtros: 2 
     }, pagos)
+
+    // [NUEVO] Calcular Salud del Préstamo (Score Individual)
+    const loanScore = calculateLoanScore({ 
+        ...prestamo, 
+        cronograma_cuotas: cronograma || [] 
+    }, pagos, todayPeru)
 
     // [BLOQUEO MIGRACIÓN] Si es un préstamo migrado ya pagado (o sin saldo), 
     // solo permitimos renovar si es el más reciente de todo su historial.
@@ -519,19 +527,27 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                 </div>
             </div>
 
-            <LoanTabs 
-                prestamo={prestamo} 
-                cronograma={cronograma || []} 
-                pagos={pagos || []}
-                cuadresHoy={cuadresHoy}
-                userRole={userRole as any} 
-                cliente={prestamo.clientes}
-                tareaEvidencia={tareaEvidencia}
-                systemSchedule={currentSystemSchedule}
-                isBlockedByCuadre={isBlockedByCuadre}
-                blockReasonCierre={blockReasonCierre}
-                systemAccess={systemAccess}
-            />
+            <Suspense fallback={
+                <div className="flex flex-col items-center justify-center p-20 bg-slate-900/20 rounded-3xl border border-slate-800">
+                    <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-4" />
+                    <p className="text-slate-500 text-sm font-medium">Cargando detalles del préstamo...</p>
+                </div>
+            }>
+                <LoanTabs 
+                    prestamo={prestamo} 
+                    cronograma={cronograma || []} 
+                    pagos={pagos || []}
+                    cuadresHoy={cuadresHoy}
+                    userRole={userRole as any} 
+                    cliente={prestamo.clientes}
+                    tareaEvidencia={tareaEvidencia}
+                    systemSchedule={currentSystemSchedule}
+                    isBlockedByCuadre={isBlockedByCuadre}
+                    blockReasonCierre={blockReasonCierre}
+                    systemAccess={systemAccess}
+                    loanScore={loanScore}
+                />
+            </Suspense>
         </div>
     )
 }

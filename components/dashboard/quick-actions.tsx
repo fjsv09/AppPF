@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Zap, Briefcase, RefreshCw, AlertCircle, Landmark } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { PendingTasks } from './pending-tasks'
 import { formatMoney } from '@/utils/format'
 import { cn } from '@/lib/utils'
@@ -14,6 +15,7 @@ interface QuickActionsProps {
 export function QuickActions({ rol }: QuickActionsProps) {
     const [data, setData] = useState<{solicitudes: any[], renovaciones: any[], cuadres: any[]}>({ solicitudes: [], renovaciones: [], cuadres: [] })
     const [loading, setLoading] = useState(true)
+    const router = useRouter()
 
     const fetchItems = async () => {
         try {
@@ -67,7 +69,11 @@ export function QuickActions({ rol }: QuickActionsProps) {
                         ) : data.solicitudes.length === 0 ? (
                             <div className="px-5 py-4 text-center text-slate-600 text-[10px] italic">Sin pendientes</div>
                         ) : data.solicitudes.map((sol: any) => (
-                            <div key={sol.id} className="px-3 py-2 hover:bg-white/5 transition-colors group flex items-center gap-3">
+                            <div 
+                                key={sol.id} 
+                                className="px-3 py-2 hover:bg-white/5 transition-colors cursor-pointer group flex items-center gap-3"
+                                onClick={() => router.push(`/dashboard/solicitudes/${sol.id}`)}
+                            >
                                 <div className="min-w-0 flex-1">
                                     <p className="text-[9px] md:text-[10px] font-bold text-white truncate uppercase">
                                         {sol.cliente?.nombres || sol.prospecto_nombres || 'Cliente'}
@@ -79,9 +85,17 @@ export function QuickActions({ rol }: QuickActionsProps) {
                                         </span>
                                     </div>
                                 </div>
-                                <Link href={`/dashboard/solicitudes/${sol.id}`} className="shrink-0">
-                                    <button className="h-6 px-2 bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white text-[9px] font-black uppercase rounded-lg border border-blue-500/20 transition-all">VER</button>
-                                </Link>
+                                <div className="shrink-0">
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            router.push(`/dashboard/solicitudes/${sol.id}`);
+                                        }}
+                                        className="h-6 px-2 bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white text-[9px] font-black uppercase rounded-lg border border-blue-500/20 transition-all font-sans"
+                                    >
+                                        VER
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -100,7 +114,11 @@ export function QuickActions({ rol }: QuickActionsProps) {
                         ) : data.renovaciones.length === 0 ? (
                             <div className="px-5 py-4 text-center text-slate-600 text-[10px] italic">Sin pendientes</div>
                         ) : data.renovaciones.map((ren: any) => (
-                            <div key={ren.id} className="px-3 py-2 hover:bg-white/5 transition-colors group flex items-center gap-3">
+                            <div 
+                                key={ren.id} 
+                                className="px-3 py-2 hover:bg-white/5 transition-colors cursor-pointer group flex items-center gap-3"
+                                onClick={() => router.push(`/dashboard/renovaciones/${ren.id}`)}
+                            >
                                 <div className="min-w-0 flex-1">
                                     <p className="text-[9px] md:text-[10px] font-bold text-white group-hover:text-purple-400 transition-colors truncate uppercase">
                                         {ren.cliente?.nombres || 'Cliente'}
@@ -112,9 +130,17 @@ export function QuickActions({ rol }: QuickActionsProps) {
                                         </span>
                                     </div>
                                 </div>
-                                <Link href={`/dashboard/renovaciones/${ren.id}`} className="shrink-0">
-                                    <button className="h-6 px-2 bg-purple-600/10 hover:bg-purple-600 text-purple-400 hover:text-white text-[9px] font-black uppercase rounded-lg border border-purple-500/20 transition-all">VER</button>
-                                </Link>
+                                <div className="shrink-0">
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            router.push(`/dashboard/renovaciones/${ren.id}`);
+                                        }}
+                                        className="h-6 px-2 bg-purple-600/10 hover:bg-purple-600 text-purple-400 hover:text-white text-[9px] font-black uppercase rounded-lg border border-purple-500/20 transition-all font-sans"
+                                    >
+                                        VER
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -135,7 +161,11 @@ export function QuickActions({ rol }: QuickActionsProps) {
                             ) : !data.cuadres || data.cuadres.length === 0 ? (
                                 <div className="px-5 py-4 text-center text-slate-600 text-[10px] italic">Sin pendientes</div>
                             ) : data.cuadres.map((cuad: any) => (
-                                <div key={cuad.id} className="px-4 py-2.5 hover:bg-white/5 transition-colors group flex items-center gap-3">
+                                <div 
+                                    key={cuad.id} 
+                                    className="px-4 py-2.5 hover:bg-white/5 transition-colors cursor-pointer group flex items-center gap-3"
+                                    onClick={() => router.push('/dashboard/admin/cuadres')}
+                                >
                                     <div className="min-w-0 flex-1">
                                         <p className="text-[10px] md:text-[11px] font-bold text-white group-hover:text-emerald-400 transition-colors truncate uppercase">
                                             {cuad.perfiles?.nombre_completo || 'Asesor'}
@@ -147,9 +177,17 @@ export function QuickActions({ rol }: QuickActionsProps) {
                                             </span>
                                         </div>
                                     </div>
-                                    <Link href="/dashboard/admin/cuadres" className="shrink-0">
-                                        <button className="h-6 px-2 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-400 hover:text-white text-[9px] font-black uppercase rounded-lg border border-emerald-500/20 transition-all">VER</button>
-                                    </Link>
+                                    <div className="shrink-0">
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                router.push('/dashboard/admin/cuadres');
+                                            }}
+                                            className="h-6 px-2 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-400 hover:text-white text-[9px] font-black uppercase rounded-lg border border-emerald-500/20 transition-all font-sans"
+                                        >
+                                            VER
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>

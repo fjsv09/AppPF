@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
@@ -55,10 +55,12 @@ interface CuadreFormProps {
   isDebtBlocked?: boolean
   isMorningBlocked?: boolean
   isNightBlocked?: boolean
+  debtAmount?: number
   systemConfig?: any
+  trigger?: React.ReactNode
 }
 
-export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, isNightBlocked, systemConfig }: CuadreFormProps) {
+export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, isNightBlocked, debtAmount, systemConfig }: CuadreFormProps) {
   const [loading, setLoading] = useState(false)
   const [hasPending, setHasPending] = useState(false)
   const [stats, setStats] = useState({ cobrado: 0, gastos: 0, neto: 0 })
@@ -220,7 +222,20 @@ export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, 
     fetchStats()
   }, [fetchStats])
 
+  // --- FIX: Sync selectedCarteraId when carteras loaded ---
+  useEffect(() => {
+    if (carteras.length > 0 && !form.getValues('cartera_id')) {
+      form.setValue('cartera_id', carteras[0].id)
+    }
+  }, [carteras, form])
+
   // Real-time subscription to catch approval/rejection
+  // --- STABLE REF HOOK ---
+  const fetchStatsRef = useRef(fetchStats)
+  useEffect(() => {
+    fetchStatsRef.current = fetchStats
+  }, [fetchStats])
+
   useEffect(() => {
     const channel = supabase
       .channel('cuadres-sync-global')
@@ -234,7 +249,7 @@ export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, 
         },
         () => {
           console.log('🔄 Actualizando estado de cuadre (DB)...')
-          fetchStats()
+          if (fetchStatsRef.current) fetchStatsRef.current()
           router.refresh()
         }
       )
@@ -244,7 +259,7 @@ export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, 
         (payload) => {
           if (payload.payload?.asesor_id === userId) {
             console.log('🚀 Actualizando estado de cuadre (BC)...')
-            fetchStats()
+            if (fetchStatsRef.current) fetchStatsRef.current()
             router.refresh()
           }
         }
@@ -254,7 +269,7 @@ export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [supabase, userId, router, fetchStats])
+  }, [supabase, userId, router])
 
   const hasMovements = stats.cobrado > 0 || stats.gastos > 0;
 
@@ -377,16 +392,24 @@ export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, 
           {/* Stats Preview */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-8">
               <div className="p-3 md:p-4 rounded-xl bg-slate-950 border border-slate-800 flex sm:flex-col items-center sm:text-center justify-between sm:justify-center">
-                  <p className="text-[10px] text-slate-500 font-bold uppercase sm:mb-1">Cobrado</p>
-                  <p className="text-base md:text-lg font-bold text-emerald-400">S/ {stats.cobrado.toFixed(2)}</p>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase sm:mb-1">
+                    {form.watch('tipo_cuadre') === 'saldo_pendiente' ? 'Deuda Anterior' : 'Cobrado'}
+                  </p>
+                  <p className={`text-base md:text-lg font-bold ${form.watch('tipo_cuadre') === 'saldo_pendiente' ? 'text-amber-400' : 'text-emerald-400'}`}>
+                    S/ {(form.watch('tipo_cuadre') === 'saldo_pendiente' && debtAmount) ? debtAmount.toFixed(2) : stats.cobrado.toFixed(2)}
+                  </p>
               </div>
               <div className="p-3 md:p-4 rounded-xl bg-slate-950 border border-slate-800 flex sm:flex-col items-center sm:text-center justify-between sm:justify-center">
                   <p className="text-[10px] text-slate-500 font-bold uppercase sm:mb-1">Gastos</p>
                   <p className="text-base md:text-lg font-bold text-rose-400">S/ {stats.gastos.toFixed(2)}</p>
               </div>
               <div className="p-3 md:p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex sm:flex-col items-center sm:text-center justify-between sm:justify-center">
-                  <p className="text-[10px] text-blue-400 font-bold uppercase sm:mb-1">Neto Final</p>
-                  <p className="text-base md:text-lg font-bold text-white">S/ {stats.neto.toFixed(2)}</p>
+                  <p className="text-[10px] text-blue-400 font-bold uppercase sm:mb-1">
+                    {form.watch('tipo_cuadre') === 'saldo_pendiente' ? 'Neto a Pagar' : 'Neto Final'}
+                  </p>
+                  <p className="text-base md:text-lg font-bold text-white">
+                    S/ {(form.watch('tipo_cuadre') === 'saldo_pendiente' && debtAmount) ? debtAmount.toFixed(2) : stats.neto.toFixed(2)}
+                  </p>
               </div>
           </div>
  

@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
+import { getComprehensiveEvaluation, getTodayPeru } from '@/lib/financial-logic'
 
 export const dynamic = 'force-dynamic'
 
@@ -158,78 +159,43 @@ export async function GET(
             }
         }
 
-        // --- PARCHE SCORE: CORREGIR HISTORIAL DE MORA/VENCIDO Y MIGRACIÓN NO CONTABILIZADO POR LA BD ---
-        if (responseElegibilidad?.score_detalle) {
-            const clienteId = prestamo?.cliente_id || responseElegibilidad.cliente_id || (responseElegibilidad.score_detalle.cliente_id);
-            if (clienteId) {
-                // 1. Obtener todos los préstamos del cliente
-                const { data: todosPrestamos } = await supabaseAdmin
-                    .from('prestamos')
-                    .select('id, estado_mora, observacion_supervisor')
-                    .eq('cliente_id', clienteId);
-                
-                if (todosPrestamos) {
-                    // Fix Historial Mora (Regla ya existente)
-                    const realMoraCount = todosPrestamos.filter(p => ['vencido', 'castigado', 'legal'].includes(p.estado_mora?.toLowerCase())).length;
-                    const dbMoraCount = responseElegibilidad.score_detalle.historial_mora || 0;
-                    
-                    if (realMoraCount > dbMoraCount) {
-                        const diff = realMoraCount - dbMoraCount;
-                        responseElegibilidad.score_detalle.historial_mora = realMoraCount;
-                        let currentScore = typeof responseElegibilidad.score === 'number' ? responseElegibilidad.score : parseInt(responseElegibilidad.score || '50');
-                        currentScore = Math.max(0, currentScore - (diff * 20));
-                        responseElegibilidad.score = currentScore;
-                        responseElegibilidad.score_detalle.score = currentScore;
-                    }
+        // [NUEVO] CALCULAR SCORES DUALES USANDO LÓGICA CENTRALIZADA (lib/financial-logic)
+        const todayPeru = getTodayPeru()
+        
+        // 1. Fetch full loan data for score
+        const { data: loanFull } = await supabaseAdmin
+            .from('prestamos')
+            .select('*, cronograma_cuotas(*), clientes(*)')
+            .eq('id', id)
+            .single()
+        
+        // 2. Fetch all client loans for reputation (Sencillo, sin pagos anidados)
+        const { data: allClientLoans } = await supabaseAdmin
+            .from('prestamos')
+            .select('*, cronograma_cuotas(*)')
+            .eq('cliente_id', prestamo?.cliente_id || responseElegibilidad.cliente_id)
 
-                    // 2. EXCLUIR DATOS DE MIGRACIÓN DEL SCORE
-                    const prestamosMigradosIds = todosPrestamos
-                        .filter(p => p.observacion_supervisor?.includes('Préstamo migrado del sistema anterior'))
-                        .map(p => p.id);
+        // 3. Fetch TODOS los pagos del cliente en una sola query plana (MUCHO más rápido)
+        const prestamoIds = allClientLoans?.map(l => l.id) || []
+        const { data: qAllPayments } = await supabaseAdmin
+            .from('pagos')
+            .select('*, cronograma_cuotas!inner(prestamo_id)')
+            .in('cronograma_cuotas.prestamo_id', prestamoIds)
 
-                    if (prestamosMigradosIds.length > 0) {
-                        console.log(`[PATCH SCORE] Detectados ${prestamosMigradosIds.length} préstamos migrados para el cliente ${clienteId}`);
-                        
-                        // Obtenemos el total de cuotas de migración
-                        const { data: cuotasMigracion } = await supabaseAdmin
-                            .from('cronograma_cuotas')
-                            .select('id')
-                            .in('prestamo_id', prestamosMigradosIds);
-                        
-                        const totalCuotasMigradas = cuotasMigracion?.length || 0;
-                        console.log(`[PATCH SCORE] Total cuotas migratorias a ignorar: ${totalCuotasMigradas}`);
-                        
-                        // Si el score reporta pagos tardíos, restamos las cuotas migratorias que ya pasaron
-                        const originalLatePayments = responseElegibilidad.score_detalle.pagos_tardios || 0;
-                        if (originalLatePayments > 0) {
-                            const cleanLatePayments = Math.max(0, originalLatePayments - totalCuotasMigradas);
-                            const impactRemoved = originalLatePayments - cleanLatePayments;
-                            
-                            responseElegibilidad.score_detalle.pagos_tardios = cleanLatePayments;
-                            
-                            let currentScore = typeof responseElegibilidad.score === 'number' ? responseElegibilidad.score : parseInt(responseElegibilidad.score || '50');
-                            const restoredPoints = Math.floor(impactRemoved * 0.5);
-                            currentScore = Math.min(100, currentScore + restoredPoints);
-                            
-                            responseElegibilidad.score = currentScore;
-                            responseElegibilidad.score_detalle.score = currentScore;
-                            
-                            console.log(`[PATCH SCORE] Pagos tardíos ajustados: ${originalLatePayments} -> ${cleanLatePayments}. Score restaurado en ${restoredPoints} puntos.`);
-                        }
-                    }
-                }
-            }
-        }
-        // -----------------------------------------------------------------------------------
+        // [NUEVO] CALCULAR EVALUACIÓN INTEGRAL CENTRALIZADA (con optimización de pagos y ID específico)
+        const evaluation = getComprehensiveEvaluation(loanFull.clientes, allClientLoans || [], qAllPayments || [], id)
 
-        if (!responseElegibilidad.elegible) {
-            return NextResponse.json({ 
-                error: responseElegibilidad.razon_bloqueo,
-                elegibilidad: responseElegibilidad 
-            }, { status: 400 })
+        // Actualizar respuesta con los nuevos scores
+        const finalResponse = {
+            ...responseElegibilidad,
+            healthScore: evaluation.healthScore,
+            reputationScore: evaluation.reputationScore,
+            loanScoreData: evaluation.healthScoreData, // Para el desglose en el modal
+            // Sobrescribir el score legacy si existe
+            score: evaluation.healthScore 
         }
 
-        return NextResponse.json(responseElegibilidad)
+        return NextResponse.json(finalResponse)
 
     } catch (e: any) {
         console.error('Unexpected error:', e)

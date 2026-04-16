@@ -14,11 +14,13 @@ import { User, CreditCard, Phone, MapPin, Activity, DollarSign, Calendar, FileTe
 import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ClienteTabs } from '@/components/clientes/cliente-tabs'
 import { cn, getFrequencyBadgeStyles } from '@/lib/utils'
-import { calculateLoanMetrics, getLoanStatusUI } from '@/lib/financial-logic'
+import { calculateLoanMetrics, getLoanStatusUI, calculateClientReputation, getComprehensiveEvaluation } from '@/lib/financial-logic'
+import { ClientReputationGauge } from '@/components/ui/client-reputation-gauge'
+import { ReputationBreakdown } from '@/components/ui/score-indicator'
 import { ClientGestiones } from '@/components/clientes/client-gestiones'
 import { ClientExpediente } from '@/components/clientes/client-expediente'
 import { ClientProfileActions } from '@/components/clientes/client-profile-actions'
-import { Edit } from 'lucide-react'
+import { Edit, Scale, ShieldCheck, Award } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,7 +61,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
             *,
             cronograma_cuotas (
                 *,
-                pagos (created_at, monto_pagado)
+                pagos (created_at, monto_pagado, metodo_pago, registrado_por)
             )
         `)
         .eq('cliente_id', id)
@@ -78,36 +80,16 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
         .map((r: any) => r.prestamo_nuevo_id as string)
         .filter(Boolean)
 
-    // Fetch payments to calculate payment habits
-    const prestamoIds = loans?.map((l: any) => l.id) || []
-    
-    let countEfectivo = 0
-    let countDigital = 0
-    let totalPayments = 0
+    // [NUEVO] Evaluación Integral Centralizada
+    const { 
+        healthScore, 
+        healthScoreData, 
+        reputationData, 
+        reputationScore, 
+        paymentHabits 
+    } = getComprehensiveEvaluation(cliente, loans || [])
 
-    if (prestamoIds.length > 0) {
-        // Query payments associated with these loans via cronograma_cuotas
-        const { data: pagos } = await supabaseAdmin
-            .from('pagos')
-            .select('metodo_pago, cronograma_cuotas!inner(prestamo_id)')
-            .in('cronograma_cuotas.prestamo_id', prestamoIds)
-            
-        if (pagos) {
-            pagos.forEach((p: any) => {
-                totalPayments++
-                // Legacy payments (null) default to Efectivo
-                const method = p.metodo_pago || 'Efectivo'
-                if (method === 'Efectivo') {
-                    countEfectivo++
-                } else {
-                    countDigital++
-                }
-            })
-        }
-    }
-
-    const pctEfectivo = totalPayments > 0 ? Math.round((countEfectivo / totalPayments) * 100) : 0
-    const pctDigital = totalPayments > 0 ? Math.round((countDigital / totalPayments) * 100) : 0
+    const { pctEfectivo, pctDigital, totalPayments } = paymentHabits
 
     // Fetch reassignment history
     const { data: reassignmentHistory } = await supabaseAdmin
@@ -186,7 +168,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                             </p>
                         </div>
  
-                        <div className="flex flex-wrap gap-1.5 justify-center md:justify-start">
+                        <div className="flex flex-wrap gap-2 justify-center md:justify-start">
                               <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-800/30 border border-slate-700/30 backdrop-blur-md max-w-full">
                                  <Phone className="w-3 h-3 text-blue-400 shrink-0" />
                                  <span className="text-[10px] text-slate-300 truncate">{cliente.telefono || 'Sin teléfono'}</span>
@@ -199,33 +181,50 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                  <Users className="w-3 h-3 text-blue-400 shrink-0" />
                                  <span className="text-[10px] text-slate-300 truncate">Asesor: {cliente.asesor?.nombre_completo || 'No asignado'}</span>
                               </div>
-                             {cliente.sectores?.nombre && (
+                              {cliente.sectores?.nombre && (
                                 <div className="flex items-center gap-2 px-2 py-0.5 rounded-lg bg-purple-900/20 border border-purple-500/20 backdrop-blur-md shrink-0">
                                     <span className="text-[10px] text-purple-300 uppercase tracking-wider font-semibold">{cliente.sectores.nombre}</span>
                                 </div>
-                             )}
+                              )}
+                              
+                              <div className="hidden md:flex items-center gap-3 ml-2 pl-3 border-l border-white/5">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest leading-none">Historial</span>
+                                    <span className="text-sm font-bold text-white leading-none">{loans?.filter((l: any) => l.estado !== 'anulado').length || 0}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-[8px] text-emerald-500/60 font-bold uppercase tracking-widest leading-none">Activos</span>
+                                    <span className="text-sm font-bold text-emerald-400 leading-none">
+                                        {loans?.filter((l: any) => {
+                                            const isMigrado = l.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+                                            const isEffectivelyFinalized = isMigrado && l.saldo_pendiente <= 0.01
+                                            return l.estado === 'activo' && !isEffectivelyFinalized
+                                        }).length || 0}
+                                    </span>
+                                </div>
+                              </div>
                         </div>
                     </div>
  
-                    <div className="flex flex-col gap-1.5 min-w-[170px] w-full md:w-auto">
-                        <div className="grid grid-cols-2 gap-1.5">
-                             <div className="p-1.5 rounded-lg bg-slate-900/40 border border-slate-800/40 flex flex-col items-center justify-center group">
-                                <div className="text-[7px] text-slate-500 uppercase tracking-widest font-bold mb-0.5">Historial</div>
-                                <div className="text-base font-bold text-white leading-none">
-                                    {loans?.filter((l: any) => l.estado !== 'anulado').length || 0}
-                                </div>
+                    <div className="flex flex-col items-center md:items-end gap-3 min-w-[200px] w-full md:w-auto self-center">
+                        {/* Mobile Metrics Inline */}
+                        <div className="md:hidden flex items-center gap-6 py-1 px-4 bg-slate-950/40 rounded-xl border border-white/5">
+                            <div className="flex flex-col items-center">
+                                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest leading-none mb-1">Historial</span>
+                                <span className="text-sm font-black text-white leading-none">{loans?.filter((l: any) => l.estado !== 'anulado').length || 0}</span>
                             </div>
-                             <div className="p-1.5 rounded-lg bg-blue-500/5 border border-blue-500/10 flex flex-col items-center justify-center group">
-                                <div className="text-[7px] text-blue-400/80 uppercase tracking-widest font-bold mb-0.5">Activos</div>
-                                <div className="text-base font-bold text-blue-100 leading-none">
+                            <div className="flex flex-col items-center">
+                                <span className="text-[8px] text-emerald-500/60 font-bold uppercase tracking-widest leading-none mb-1">Activos</span>
+                                <span className="text-sm font-black text-emerald-400 leading-none">
                                     {loans?.filter((l: any) => {
                                         const isMigrado = l.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
                                         const isEffectivelyFinalized = isMigrado && l.saldo_pendiente <= 0.01
                                         return l.estado === 'activo' && !isEffectivelyFinalized
                                     }).length || 0}
-                                </div>
+                                </span>
                             </div>
                         </div>
+
                          
                          {(userRole === 'admin' || userRole === 'supervisor') && (
                              <div className="w-full">
@@ -269,6 +268,10 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                     </TabsTrigger>
                                     <TabsTrigger value="expediente" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
                                         <FileStack className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Expediente
+                                    </TabsTrigger>
+
+                                    <TabsTrigger value="reputacion" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
+                                        <Award className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Reputación
                                     </TabsTrigger>
                                     
                                     {userRole === 'admin' && (
@@ -470,6 +473,47 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
 
                             <TabsContent value="expediente" className="m-0 animate-in fade-in duration-300 overflow-x-hidden">
                                  <ClientExpediente documentos={documentos} />
+                            </TabsContent>
+
+                            <TabsContent value="reputacion" className="m-0 animate-in fade-in duration-300">
+                                <Card className="bg-slate-900/40 border-slate-800 backdrop-blur-sm overflow-hidden relative">
+                                    <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-transparent pointer-events-none" />
+                                    <CardHeader className="py-2.5 px-4 border-b border-white/5 relative">
+                                        <CardTitle className="text-white text-sm flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <Award className="w-4 h-4 text-blue-400" />
+                                                Reputación y Comportamiento
+                                            </div>
+                                            <Badge variant="outline" className="text-[9px] bg-blue-500/10 text-blue-300 border-blue-500/20 px-2">Historial Consolidado</Badge>
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="p-6 relative">
+                                        <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-8">
+                                            {/* Left side: The Gauge */}
+                                            <div className="flex flex-col items-center justify-center bg-slate-950/40 rounded-2xl p-6 border border-white/5 shadow-inner">
+                                                <ClientReputationGauge 
+                                                    score={reputationScore} 
+                                                    size="lg" 
+                                                    showLabel={true}
+                                                />
+                                                <div className="mt-4 text-center">
+                                                    <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Estatus Global</p>
+                                                    <p className="text-xs text-slate-300 font-medium max-w-[150px]">
+                                                        {reputationScore >= 80 ? 'Cliente de excelente cumplimiento y trayectoria.' :
+                                                         reputationScore >= 60 ? 'Cliente confiable con buen historial de pagos.' :
+                                                         reputationScore >= 40 ? 'Cliente con cumplimiento regular.' :
+                                                         'Cliente con factores de riesgo detectados.'}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* Right side: The Breakdown */}
+                                            <div className="bg-slate-950/20 rounded-2xl p-4 border border-white/5">
+                                                <ReputationBreakdown reputationData={reputationData} />
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
                             </TabsContent>
 
                             <TabsContent value="resumen" className="md:hidden animate-in fade-in space-y-4 duration-300">

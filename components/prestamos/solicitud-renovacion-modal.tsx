@@ -10,9 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RefreshCw, Loader2, AlertTriangle, CheckCircle2, XCircle, Lock, ChevronDown, ChevronUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
-import { ScoreIndicator, BehaviorSummary, ScoreBreakdown, ScoreLimitRules } from '@/components/ui/score-indicator'
+import { ScoreIndicator, ScoreBreakdown, ScoreLimitRules } from '@/components/ui/score-indicator'
+import { ClientReputationGauge } from '@/components/ui/client-reputation-gauge'
 import { cn } from '@/lib/utils'
 import { formatMoney } from '@/utils/format'
+import { calculateLoanScore, calculateClientReputation } from '@/lib/financial-logic'
 
 interface SolicitudRenovacionModalProps {
     prestamoId: string
@@ -396,34 +398,61 @@ export function SolicitudRenovacionModal({
                     </div>
                 ) : elegibilidad ? (
                     <>
-                        {/* Score y Resumen */}
-                        <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl p-4 border border-slate-700/50">
-                            <div className="flex items-start gap-4">
-                                <ScoreIndicator score={elegibilidad.score} size="lg" />
-                                <div className="flex-1">
-                                    <h3 className="font-semibold text-white mb-2">Comportamiento de Pago</h3>
-                                    <BehaviorSummary data={elegibilidad.score_detalle} />
-                                    
-                                    {/* Botón para ver desglose */}
-                                    <button 
-                                        type="button"
-                                        onClick={() => setShowScoreBreakdown(!showScoreBreakdown)}
-                                        className="mt-3 flex items-center gap-1.5 text-[11px] font-bold text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-wider"
-                                    >
-                                        {showScoreBreakdown ? (
-                                            <><ChevronUp className="w-3.5 h-3.5" /> Ocultar detalle de cálculo</>
-                                        ) : (
-                                            <><ChevronDown className="w-3.5 h-3.5" /> Ver detalle de cálculo</>
-                                        )}
-                                    </button>
+                        {/* Dual Score Summary */}
+                        <div className="bg-slate-950/40 rounded-2xl p-4 border border-slate-800/60 shadow-inner relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-purple-500/5 pointer-events-none" />
+                            
+                            <div className="relative flex flex-col gap-6">
+                                <div className="grid grid-cols-2 sm:grid-cols-[1fr_1fr_auto_1.5fr] items-center gap-4 sm:gap-6">
+                                    {/* Left: Health Score (Current Loan) */}
+                                    <div className="flex flex-col items-center gap-2 p-2 bg-white/5 rounded-2xl border border-white/5">
+                                        <span className="text-[8px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Salud Préstamo</span>
+                                        <ScoreIndicator score={elegibilidad.healthScore || elegibilidad.score} size="md" />
+                                    </div>
+
+                                    {/* Right: Reputation Score (Client History) */}
+                                    <div className="flex flex-col items-center gap-2 p-2 bg-white/5 rounded-2xl border border-white/5">
+                                        <span className="text-[8px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Reputación Cliente</span>
+                                        <ClientReputationGauge score={elegibilidad.reputationScore || elegibilidad.score} size="md" showLabel={true} />
+                                    </div>
+
+                                    <div className="hidden sm:block w-px h-24 bg-slate-800/80" />
+
+                                    {/* Right Panel: Decision Summary */}
+                                    <div className="col-span-2 sm:col-span-1 space-y-3">
+                                        <div className="p-3 rounded-xl bg-slate-900/60 border border-white/5 shadow-sm">
+                                            <h4 className="text-[9px] font-black text-blue-400 uppercase tracking-tighter mb-2 flex items-center justify-between">
+                                                Capacidad Renovación
+                                                <span className="bg-blue-500/10 text-blue-300 px-1.5 py-0.5 rounded-[4px] text-[7px] animate-pulse">Dual-Score Activo</span>
+                                            </h4>
+                                            <ScoreLimitRules 
+                                                healthScore={elegibilidad.healthScore || elegibilidad.score} 
+                                                reputationScore={elegibilidad.reputationScore || elegibilidad.score} 
+                                            />
+                                        </div>
+                                        
+                                        <button 
+                                            type="button"
+                                            onClick={() => setShowScoreBreakdown(!showScoreBreakdown)}
+                                            className="w-full flex items-center justify-center gap-1.5 py-1 text-[9px] font-black text-slate-500 hover:text-slate-300 transition-all uppercase tracking-widest border border-dashed border-slate-800 rounded-lg hover:bg-slate-800/50"
+                                        >
+                                            {showScoreBreakdown ? (
+                                                <><ChevronUp className="w-3.5 h-3.5" /> Cerrar Detalle</>
+                                            ) : (
+                                                <><ChevronDown className="w-3.5 h-3.5" /> Auditoría de Puntos</>
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Panel de Desglose */}
+                            {/* Panel de Desglose (Salud) */}
                             {showScoreBreakdown && (
-                                <div className="mt-4 pt-4 border-t border-slate-700/50">
-                                    <ScoreBreakdown data={elegibilidad.score_detalle} currentScore={elegibilidad.score} />
-                                    <ScoreLimitRules currentScore={elegibilidad.score} />
+                                <div className="mt-4 pt-4 border-t border-slate-700/50 animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <ScoreBreakdown loanScore={elegibilidad.loanScoreData} />
+                                    <p className="text-[9px] text-slate-500 italic mt-3 text-center border-t border-white/5 pt-2">
+                                        * El desglose muestra los factores individuales del préstamo actual.
+                                    </p>
                                 </div>
                             )}
                         </div>

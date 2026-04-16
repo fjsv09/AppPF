@@ -41,7 +41,20 @@ export function TaskItem({ tarea, variant, userId, onSelect, onAction }: TaskIte
 
     if (variant === 'compact') {
         return (
-            <div className="px-4 py-2 hover:bg-white/5 transition-colors group flex items-center gap-3">
+            <div 
+                className={cn(
+                    "px-4 py-2 hover:bg-white/5 transition-colors group flex items-center gap-3",
+                    isOwner && "cursor-pointer"
+                )}
+                onClick={() => {
+                    if (!isOwner) return
+                    if (isEvidenceTask) {
+                        onSelect(tarea)
+                    } else {
+                        onAction(`/dashboard/tareas?tab=${tarea.tipo === 'auditoria_dirigida' ? 'auditoria' : 'gestiones'}`)
+                    }
+                }}
+            >
                 <Badge className={cn("h-4 px-1 py-0 text-[7px] uppercase shrink-0 font-black tracking-widest", typeLabel.color)}>
                     {typeLabel.short}
                 </Badge>
@@ -60,7 +73,10 @@ export function TaskItem({ tarea, variant, userId, onSelect, onAction }: TaskIte
                         isEvidenceTask ? (
                             <Button 
                                 size="sm"
-                                onClick={() => onSelect(tarea)}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSelect(tarea);
+                                }}
                                 className="h-7 w-7 p-0 bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-500/20 rounded-lg transition-all"
                             >
                                 <Camera className="w-3.5 h-3.5" />
@@ -68,7 +84,10 @@ export function TaskItem({ tarea, variant, userId, onSelect, onAction }: TaskIte
                         ) : (
                             <Button 
                                 size="sm"
-                                onClick={() => onAction(`/dashboard/tareas?tab=${tarea.tipo === 'auditoria_dirigida' ? 'auditoria' : 'gestiones'}`)}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onAction(`/dashboard/tareas?tab=${tarea.tipo === 'auditoria_dirigida' ? 'auditoria' : 'gestiones'}`);
+                                }}
                                 className="h-7 px-2 text-[9px] bg-emerald-600/10 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/20 font-black uppercase rounded-lg transition-all flex items-center gap-1.5"
                             >
                                 <ClipboardList className="w-3.5 h-3.5" />

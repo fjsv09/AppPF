@@ -1,11 +1,12 @@
 'use client'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CronogramaClient } from "./cronograma-client"
 import { PaymentHistory } from "./payment-history"
 import { ClientGestiones } from "@/components/clientes/client-gestiones"
-import { CalendarDays, History, MessageSquare, Camera, AlertCircle, ShieldCheck, Loader2, MapPin } from "lucide-react"
+import { CalendarDays, History, MessageSquare, Camera, AlertCircle, ShieldCheck, Loader2, MapPin, Activity } from "lucide-react"
+import { ScoreIndicator, ScoreBreakdown } from "@/components/ui/score-indicator"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { UploadEvidenceButton } from "@/components/dashboard/upload-evidence-button"
 import { DailyCollectorLog } from "./daily-collector-log"
@@ -28,6 +29,7 @@ interface LoanTabsProps {
     blockReasonCierre?: string
     systemAccess?: any
     cuadresHoy?: any[]
+    loanScore?: any
 }
 
 import { VisitadosList } from "./visitados-list"
@@ -43,7 +45,8 @@ export function LoanTabs({
     isBlockedByCuadre,
     blockReasonCierre,
     systemAccess,
-    cuadresHoy = []
+    cuadresHoy = [],
+    loanScore
 }: LoanTabsProps) {
     const searchParams = useSearchParams()
     const router = useRouter()
@@ -52,7 +55,7 @@ export function LoanTabs({
     // Validar el tab de la URL o usar el default
     const isAdmin = userRole === 'admin'
     const isAdvisor = userRole === 'asesor'
-    const allowedTabs = ["historial", "evidencia", "gestiones"]
+    const allowedTabs = ["salud", "historial", "evidencia", "gestiones"]
     
     // Solo admin puede ver/gestionar cronograma
     if (isAdmin) {
@@ -69,7 +72,7 @@ export function LoanTabs({
         if (tabParam && allowedTabs.includes(tabParam)) {
             return tabParam
         }
-        return "historial"
+        return "salud"
     })
     
     // Sincronizar estado si la URL cambia (ej: por botones de navegación)
@@ -99,7 +102,10 @@ export function LoanTabs({
                     {isPending && (
                         <div className="absolute inset-0 bg-blue-500/5 animate-pulse" />
                     )}
-                    <TabsTrigger value="historial" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">
+                    <TabsTrigger value="salud" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
+                        <Activity className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Salud
+                    </TabsTrigger>
+                    <TabsTrigger value="historial" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
                         <History className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Historial
                     </TabsTrigger>
                     {isAdmin && (
@@ -120,6 +126,50 @@ export function LoanTabs({
                     </TabsTrigger>
                 </TabsList>
             </div>
+
+            <TabsContent value="salud" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 animate-in fade-in duration-300">
+                {loanScore ? (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Card className="bg-slate-900/40 border-slate-800 backdrop-blur-sm md:col-span-1">
+                            <CardHeader className="py-2.5 px-4 border-b border-white/5">
+                                <CardTitle className="text-white text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                                    <Activity className="w-4 h-4 text-emerald-400" />
+                                    Salud del Préstamo
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-6 flex flex-col items-center justify-center">
+                                <ScoreIndicator score={loanScore.score} size="lg" className="mb-2" />
+                                <div className="flex gap-4 mt-4">
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-[9px] text-slate-500 uppercase font-black">Puntualidad</span>
+                                        <span className="text-xs font-bold text-emerald-400">+{loanScore.increases}</span>
+                                    </div>
+                                    <div className="flex flex-col items-center border-l border-white/5 pl-4">
+                                        <span className="text-[9px] text-slate-500 uppercase font-black">Penalizaciones</span>
+                                        <span className="text-xs font-bold text-rose-400">-{loanScore.penalties}</span>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="bg-slate-900/40 border-slate-800 backdrop-blur-sm md:col-span-2">
+                            <CardHeader className="py-2.5 px-4 border-b border-white/5">
+                                <CardTitle className="text-white text-xs font-black uppercase tracking-widest">
+                                    Desglose de Puntos
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-4">
+                                <ScoreBreakdown loanScore={loanScore} />
+                            </CardContent>
+                        </Card>
+                    </div>
+                ) : (
+                    <div className="text-center py-20 bg-slate-900/20 rounded-2xl border border-dashed border-slate-800">
+                        <Loader2 className="w-8 h-8 text-slate-500 animate-spin mx-auto mb-4" />
+                        <p className="text-slate-400 text-sm">Calculando salud del préstamo...</p>
+                    </div>
+                )}
+            </TabsContent>
 
             <TabsContent value="historial" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
                 {isPending ? (

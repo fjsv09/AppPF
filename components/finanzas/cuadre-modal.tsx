@@ -18,11 +18,12 @@ interface CuadreModalProps {
     isDebtBlocked?: boolean
     isMorningBlocked?: boolean
     isNightBlocked?: boolean
+    debtAmount?: number
     systemConfig?: any
     trigger?: React.ReactNode
 }
 
-export function CuadreModal({ userId, isDebtBlocked, isMorningBlocked, isNightBlocked, systemConfig, trigger }: CuadreModalProps) {
+export function CuadreModal({ userId, isDebtBlocked, isMorningBlocked, isNightBlocked, debtAmount, systemConfig, trigger }: CuadreModalProps) {
     const [open, setOpen] = useState(false)
     const [carteras, setCarteras] = useState<any[]>([])
     const [config, setConfig] = useState<any>(systemConfig)
@@ -77,6 +78,7 @@ export function CuadreModal({ userId, isDebtBlocked, isMorningBlocked, isNightBl
                         isDebtBlocked={isDebtBlocked} 
                         isMorningBlocked={isMorningBlocked} 
                         isNightBlocked={isNightBlocked}
+                        debtAmount={debtAmount}
                         systemConfig={config}
                     />
                 </div>

@@ -335,8 +335,8 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
   const rawPagos = (pagos || []);
 
   // Calcular Saldo de Sistema (Diferencia acumulada para resiliencia en migraciones)
-  const totalPagadoEnPagos = rawPagos.reduce((s, p) => s + (Number(p.monto_pagado) || 0), 0);
-  const totalPagadoEnCronograma = cronograma.reduce((s, c) => s + (Number(c.monto_pagado) || 0), 0);
+  const totalPagadoEnPagos = rawPagos.reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
+  const totalPagadoEnCronograma = cronograma.reduce((s: number, c: any) => s + (Number(c.monto_pagado) || 0), 0);
   let systemMoney = Math.max(0, totalPagadoEnCronograma - totalPagadoEnPagos);
 
   const pool = [...rawPagos]
@@ -355,14 +355,14 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
   const remainingNeeded: Record<string, number> = {};
   const quotaAssignments: Record<string, { amount: number, date: string, p: any }[]> = {};
 
-  cronograma.forEach(q => {
+  cronograma.forEach((q: any) => {
     remainingNeeded[q.id] = Number(q.monto_cuota) || 0;
     quotaAssignments[q.id] = [];
   });
 
   // FASE 1: Saldo de Sistema (Prioridad Histórica 0)
   if (systemMoney > 0.01) {
-    cronograma.forEach(q => {
+    cronograma.forEach((q: any) => {
       if (systemMoney <= 0.01 || remainingNeeded[q.id] <= 0.01) return;
       const take = Math.min(systemMoney, remainingNeeded[q.id]);
       remainingNeeded[q.id] -= take;
@@ -373,8 +373,8 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
 
   // FASE 2: Prioridad Día (Puntualidad - Misma Fecha)
   // Si un pago se hizo hoy, cubrir la cuota de hoy primero.
-  pool.forEach(p => {
-    const sameDayQuota = cronograma.find(q => q.fecha_vencimiento === p.date);
+  pool.forEach((p: any) => {
+    const sameDayQuota = cronograma.find((q: any) => q.fecha_vencimiento === p.date);
     if (sameDayQuota && remainingNeeded[sameDayQuota.id] > 0.01) {
       const take = Math.min(p.rem, remainingNeeded[sameDayQuota.id]);
       remainingNeeded[sameDayQuota.id] -= take;
@@ -384,8 +384,8 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
   });
 
   // FASE 3: Cascada FIFO Residual (Cubrir deudas antiguas o adelantar futuras)
-  cronograma.forEach(q => {
-    pool.forEach(p => {
+  cronograma.forEach((q: any) => {
+    pool.forEach((p: any) => {
       if (remainingNeeded[q.id] <= 0.01 || p.rem <= 0.01) return;
       const take = Math.min(p.rem, remainingNeeded[q.id]);
       remainingNeeded[q.id] -= take;

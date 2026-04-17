@@ -141,8 +141,9 @@ export function DailyCollectorLog({
         const rawPagos = (pagos || []);
         
         // 1. Calcular Saldo de Sistema (Diferencia acumulada)
-        const totalPagadoEnPagos = rawPagos.reduce((s, p) => s + (parseFloat(p.monto_pagado) || 0), 0);
-        const totalPagadoEnCronograma = cronograma.reduce((s, c) => s + (parseFloat(c.monto_pagado) || 0), 0);
+        const totalPagadoEnPagos = rawPagos.reduce((s: number, p: any) => s + (parseFloat(p.monto_pagado) || 0), 0);
+        const totalPagadoEnCronograma = cronograma.reduce((s: number, c: any) => s + (parseFloat(c.monto_pagado) || 0), 0);
+
         let systemMoney = Math.max(0, totalPagadoEnCronograma - totalPagadoEnPagos);
 
         const sortedPagos = [...rawPagos].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -397,14 +398,14 @@ export function DailyCollectorLog({
                                         <td className="px-3 py-4">
                                             <div className="space-y-1.5">
                                                 {/* 1. Destino del dinero recibido HOY */}
-                                                {physical.map(p => {
+                                                {physical.map((p: any) => {
                                                     const dests = (waterfallData.paymentDestinations[p.id] || [])
                                                     return (
                                                         <div key={p.id} className="pl-1.5 border-l border-emerald-500/30">
                                                             <div className="flex items-center gap-1 text-emerald-400 font-black text-[10px] uppercase">
                                                                 <CheckCircle2 className="w-3 h-3" /> Cobro en ruta
                                                             </div>
-                                                            {dests.map((d, i) => (
+                                                            {dests.map((d: any, i: number) => (
                                                                 <p key={i} className="text-[9px] text-slate-300 font-bold leading-tight ml-4">
                                                                     → S/ {Math.round(d.amount)} a {d.type === 'arrear' ? 'Atraso' : d.type === 'advance' ? 'Adelanto' : 'Cuota'} #{d.quotaNum}
                                                                 </p>

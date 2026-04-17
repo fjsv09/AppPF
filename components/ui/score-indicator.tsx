@@ -380,12 +380,13 @@ export function ScoreLimitRules({ healthScore, reputationScore }: { healthScore:
                         <div key={idx} className="flex flex-col py-1.5 border-b border-white/5 last:border-0 group">
                             <div className="flex justify-between items-center mb-0.5">
                                 <div className="flex items-center gap-2">
-                                    {(icons[rule.factor] || Info) && <div className={cn("w-3 h-3 opacity-60", rule.pct > 0 ? 'text-emerald-400' : rule.pct < 0 ? 'text-red-400' : 'text-slate-400')}>
+                                    <div className={cn("w-3 h-3 opacity-60", rule.pct > 0 ? 'text-emerald-400' : rule.pct < 0 ? 'text-red-400' : 'text-slate-400')}>
                                         {(() => {
                                             const Icon = icons[rule.factor] || Info;
                                             return <Icon className="w-full h-full" />;
                                         })()}
-                                    </div>}
+                                    </div>
+
                                     <span className="text-[10px] text-slate-300 font-black uppercase tracking-tight group-hover:text-blue-400 transition-colors">{rule.factor}</span>
                                 </div>
                                 <span className={cn(

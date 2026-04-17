@@ -125,6 +125,72 @@ const CONFIG_LABELS: Record<string, { nombre: string; descripcion: string; min?:
         descripcion: 'Distancia máxima permitida entre el asesor y el cliente para iniciar/finalizar una visita',
         min: 10,
         max: 5000
+    },
+    'score_peso_puntual': {
+        nombre: 'Peso: Puntualidad (+)',
+        descripcion: 'Puntos que se SUMAN por cada cuota pagada a tiempo o adelantada',
+        min: 0,
+        max: 20
+    },
+    'score_peso_adelantado': {
+        nombre: 'Peso: Adelanto (+)',
+        descripcion: 'Puntos que se SUMAN por adelantar cuotas',
+        min: 0,
+        max: 20
+    },
+    'score_peso_diario_atraso': {
+        nombre: 'Penalidad: Día Atrasado (-)',
+        descripcion: 'Puntos que se RESTAN por cada día que una cuota esté vencida',
+        min: 0,
+        max: 10
+    },
+    'score_tope_atraso_cuota': {
+        nombre: 'Tope: Penalidad por Cuota (-)',
+        descripcion: 'Punto máximo de descuento por una sola cuota con atraso',
+        min: 0,
+        max: 100
+    },
+    'score_peso_tarde': {
+        nombre: 'Peso: Pago Tarde (-)',
+        descripcion: 'Puntos que se RESTAN por cada cuota pagada fuera de fecha',
+        min: 0,
+        max: 50
+    },
+    'score_peso_cpp': {
+        nombre: 'Peso: Riesgo CPP (-)',
+        descripcion: 'Puntos que se RESTAN si el atraso máximo es de 2 a 8 días',
+        min: 0,
+        max: 50
+    },
+    'score_peso_moroso': {
+        nombre: 'Peso: Riesgo Moroso (-)',
+        descripcion: 'Puntos que se RESTAN si el atraso máximo es de 8 a 30 días',
+        min: 0,
+        max: 100
+    },
+    'score_peso_vencido': {
+        nombre: 'Peso: Riesgo Vencido (-)',
+        descripcion: 'Puntos que se RESTAN si el atraso supera los 30 días o el contrato expiró',
+        min: 0,
+        max: 100
+    },
+    'score_mult_semanal': {
+        nombre: 'Multiplicador Semanal',
+        descripcion: 'Factor por el que se multiplican los puntos en préstamos semanales',
+        min: 1,
+        max: 10
+    },
+    'score_mult_quincenal': {
+        nombre: 'Multiplicador Quincenal',
+        descripcion: 'Factor por el que se multiplican los puntos en préstamos quincenales',
+        min: 1,
+        max: 20
+    },
+    'score_mult_mensual': {
+        nombre: 'Multiplicador Mensual',
+        descripcion: 'Factor por el que se multiplican los puntos en préstamos mensuales',
+        min: 1,
+        max: 50
     }
 }
 
@@ -285,6 +351,7 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         if (clave.includes('moroso')) return '⚠️'
         if (clave.includes('horario')) return '🕒'
         if (clave.includes('desbloqueo')) return '🔓'
+        if (clave.includes('score')) return '📈'
         if (clave.includes('nombre')) return '🏷️'
         if (clave.includes('logo')) return '🖼️'
         if (clave.includes('visita')) return '📍'
@@ -314,7 +381,17 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         'asistencia_tolerancia_minutos',
         'oficina_lat',
         'oficina_lon',
-        'visita_radio_maximo'
+        'visita_radio_maximo',
+        'score_peso_puntual',
+        'score_peso_tarde',
+        'score_peso_cpp',
+        'score_peso_moroso',
+        'score_peso_vencido',
+        'score_peso_diario_atraso',
+        'score_tope_atraso_cuota',
+        'score_mult_semanal',
+        'score_mult_quincenal',
+        'score_mult_mensual'
     ]
 
     const displayConfig = [...initialConfig]
@@ -392,7 +469,7 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
                                         type={
                                             (item.clave.includes('horario') || item.clave.includes('cuadre') || item.clave.includes('nombre') || item.clave.includes('logo')) 
                                                 ? 'text' 
-                                                : (item.clave.includes('desbloqueo') || item.clave.includes('umbral') || item.clave.includes('renovacion') || item.clave.includes('visita') || item.clave.includes('radio') || item.clave.includes('asistencia') || item.clave.includes('tolerancia'))
+                                                : (item.clave.includes('desbloqueo') || item.clave.includes('umbral') || item.clave.includes('renovacion') || item.clave.includes('visita') || item.clave.includes('radio') || item.clave.includes('asistencia') || item.clave.includes('tolerancia') || item.clave.includes('score'))
                                                     ? 'number' 
                                                     : 'text'
                                         }

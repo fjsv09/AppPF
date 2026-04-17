@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { RefreshCw, Loader2, AlertTriangle, CheckCircle2, XCircle, Lock, ChevronDown, ChevronUp } from 'lucide-react'
+import { RefreshCw, Loader2, AlertTriangle, CheckCircle2, XCircle, Lock, ChevronDown, ChevronUp, TrendingUp, TrendingDown } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { ScoreIndicator, ScoreBreakdown, ScoreLimitRules } from '@/components/ui/score-indicator'
@@ -172,6 +173,13 @@ export function SolicitudRenovacionModal({
                 }
             } else {
                 setElegibilidad(data)
+                // [NUEVO] Auto-sugerir el monto máximo recomendado (Ajuste por Score)
+                if (data.monto_maximo) {
+                    setSimulacion(prev => ({
+                        ...prev,
+                        monto: data.monto_maximo
+                    }))
+                }
             }
         } catch (e: any) {
             if (e.name === 'AbortError') {
@@ -515,7 +523,20 @@ export function SolicitudRenovacionModal({
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="monto_solicitado">Nuevo Monto</Label>
+                                    <div className="flex justify-between items-end">
+                                        <Label htmlFor="monto_solicitado">Nuevo Monto</Label>
+                                        {elegibilidad.ajuste_recomendado_pct !== undefined && (
+                                            <Badge variant="outline" className={cn(
+                                                "text-[9px] font-black h-5 px-1.5 border-0",
+                                                elegibilidad.ajuste_recomendado_pct > 0 ? "bg-emerald-500/10 text-emerald-400" : 
+                                                elegibilidad.ajuste_recomendado_pct < 0 ? "bg-rose-500/10 text-rose-400" : 
+                                                "bg-slate-800 text-slate-400"
+                                            )}>
+                                                {elegibilidad.ajuste_recomendado_pct > 0 ? <TrendingUp className="w-2.5 h-2.5 mr-1" /> : elegibilidad.ajuste_recomendado_pct < 0 ? <TrendingDown className="w-2.5 h-2.5 mr-1" /> : null}
+                                                Recomendado: {elegibilidad.ajuste_recomendado_pct > 0 ? `+${elegibilidad.ajuste_recomendado_pct}%` : `${elegibilidad.ajuste_recomendado_pct}%`}
+                                            </Badge>
+                                        )}
+                                    </div>
                                     <Input 
                                         id="monto_solicitado" 
                                         name="monto_solicitado" 

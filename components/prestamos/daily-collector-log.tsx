@@ -133,6 +133,93 @@ export function DailyCollectorLog({
     }, [virtualCronograma, todayStr])
     // --- FIN LOGICA CUOTA ACTIVA ---
 
+    // --- WATERFALL DISTRIBUTION LOGIC (Trazabilidad Real) ---
+    const waterfallData = useMemo(() => {
+        if (!cronograma) return { assignments: [], quotaSources: {}, paymentDestinations: {} };
+        
+        const sortedQuotas = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota);
+        const rawPagos = (pagos || []);
+        
+        // 1. Calcular Saldo de Sistema (Diferencia acumulada)
+        const totalPagadoEnPagos = rawPagos.reduce((s, p) => s + (parseFloat(p.monto_pagado) || 0), 0);
+        const totalPagadoEnCronograma = cronograma.reduce((s, c) => s + (parseFloat(c.monto_pagado) || 0), 0);
+        let systemMoney = Math.max(0, totalPagadoEnCronograma - totalPagadoEnPagos);
+
+        const sortedPagos = [...rawPagos].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        
+        let pool = sortedPagos.map(p => ({ 
+            ...p, 
+            rem: parseFloat(p.monto_pagado) || 0,
+            date: formatDatePeru(p.created_at, 'isoDate')
+        }));
+
+        const assignments: any[] = [];
+        const qSources: any = {};
+        const pDests: any = {};
+        const remainingNeeded = {} as any;
+
+        sortedQuotas.forEach(q => {
+            remainingNeeded[q.id] = parseFloat(q.monto_cuota) || 0;
+            qSources[q.id] = [];
+        });
+
+        const assign = (pay: any, quota: any, amt: number, type?: string) => {
+            if (amt <= 0.001) return;
+            let finalType = type;
+            if (!finalType) {
+                if (pay.isSystem) finalType = 'system';
+                else if (pay.date < quota.fecha_vencimiento) finalType = 'advance';
+                else if (pay.date > quota.fecha_vencimiento) finalType = 'arrear';
+                else finalType = 'direct';
+            }
+            const a = {
+                quotaId: quota.id, quotaNum: quota.numero_cuota,
+                paymentId: pay.id, paymentDate: pay.date,
+                amount: amt, type: finalType, isSystem: pay.isSystem
+            };
+            assignments.push(a);
+            qSources[quota.id].push(a);
+            if (!pDests[pay.id]) pDests[pay.id] = [];
+            pDests[pay.id].push(a);
+            remainingNeeded[quota.id] -= amt;
+        };
+
+        // FASE 1: Saldo de Sistema/Legado (Prioridad Histórica 0)
+        if (systemMoney > 0.01) {
+            const sysPay = { id: 'system-init', date: '0000-00-00', isSystem: true };
+            sortedQuotas.forEach(q => {
+                if (systemMoney <= 0.01 || remainingNeeded[q.id] <= 0.01) return;
+                const take = Math.min(systemMoney, remainingNeeded[q.id]);
+                assign(sysPay, q, take, 'system');
+                systemMoney -= take;
+            });
+        }
+
+        // FASE 2: Prioridad Día (Intent - Misma Fecha)
+        // Si hay un pago realizado el mismo día que una cuota, cubrir esa primero para asegurar status "CUMPLIÓ"
+        pool.forEach(p => {
+             const sameDayQuota = sortedQuotas.find(q => q.fecha_vencimiento === p.date);
+             if (sameDayQuota && remainingNeeded[sameDayQuota.id] > 0.01) {
+                 const take = Math.min(p.rem, remainingNeeded[sameDayQuota.id]);
+                 assign(p, sameDayQuota, take, 'direct');
+                 p.rem -= take;
+             }
+        });
+
+        // FASE 3: Cascada FIFO Residual (Cubrir deudas antiguas o adelantar futuras)
+        sortedQuotas.forEach(q => {
+            pool.forEach(p => {
+                if (remainingNeeded[q.id] <= 0.01 || p.rem <= 0.01) return;
+                const take = Math.min(p.rem, remainingNeeded[q.id]);
+                assign(p, q, take);
+                p.rem -= take;
+            });
+        });
+
+        return { assignments, quotaSources: qSources, paymentDestinations: pDests };
+    }, [cronograma, pagos]);
+    // --- FIN WATERFALL ---
+
     const allRows = useMemo(() => {
         if (virtualCronograma.length === 0) return []
         const qDates = virtualCronograma.map((c: any) => c.fecha_vencimiento)
@@ -308,11 +395,55 @@ export function DailyCollectorLog({
                                             </div>
                                         </td>
                                         <td className="px-3 py-4">
-                                            <div className="space-y-0.5">
-                                                {totalDay > 0 && <div className="text-emerald-500/80 font-black uppercase text-[8px] flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Cobro en ruta</div>}
-                                                {isVirtual && <p className="text-[8px] text-emerald-400/60 leading-tight italic">Dinero aplicado a deudas.</p>}
-                                                {cuota && isFull && totalDay === 0 && <p className="text-[8px] text-sky-400 leading-tight italic flex items-center gap-1"><ArrowRightCircle className="w-3 h-3" /> Saldada mediante excedente previo.</p>}
-                                                {cuota && !isFuture && totalDay === 0 && !isFull && <p className="text-[8px] text-rose-500/50 uppercase font-black flex items-center gap-1"><XCircle className="w-3 h-3" /> Faltante</p>}
+                                            <div className="space-y-1.5">
+                                                {/* 1. Destino del dinero recibido HOY */}
+                                                {physical.map(p => {
+                                                    const dests = (waterfallData.paymentDestinations[p.id] || [])
+                                                    return (
+                                                        <div key={p.id} className="pl-1.5 border-l border-emerald-500/30">
+                                                            <div className="flex items-center gap-1 text-emerald-400 font-black text-[10px] uppercase">
+                                                                <CheckCircle2 className="w-3 h-3" /> Cobro en ruta
+                                                            </div>
+                                                            {dests.map((d, i) => (
+                                                                <p key={i} className="text-[9px] text-slate-300 font-bold leading-tight ml-4">
+                                                                    → S/ {Math.round(d.amount)} a {d.type === 'arrear' ? 'Atraso' : d.type === 'advance' ? 'Adelanto' : 'Cuota'} #{d.quotaNum}
+                                                                </p>
+                                                            ))}
+                                                            {dests.length === 0 && <p className="text-[9px] text-slate-500 ml-4">Dinero en bolsa (Excedente Final)</p>}
+                                                        </div>
+                                                    )
+                                                })}
+
+                                                {/* 2. Origen del pago de la cuota de HOY (si no fue pagada totalmente con dinero de hoy) */}
+                                                {cuota && (pVal > 0) && (
+                                                    <div className="pl-1.5 border-l border-sky-500/30">
+                                                        {waterfallData.quotaSources[cuota.id]?.filter((s: any) => s.paymentDate !== date).map((s: any, i: number) => (
+                                                            <p key={i} className="text-[9px] text-sky-400 font-bold leading-tight flex items-center gap-1">
+                                                                <ArrowRightCircle className="w-3 h-3" /> 
+                                                                {s.type === 'system' 
+                                                                    ? 'Saldada con Excedente Anterior (Sistema)' 
+                                                                    : `Cubierta con ${s.type === 'advance' ? 'Adelanto' : 'Excedente'} del ${s.paymentDate.split('-').reverse().slice(0,2).join('/')}`
+                                                                }
+                                                            </p>
+                                                        ))}
+                                                        {/* Fallback para migración o inconsistencias */}
+                                                        {(!waterfallData.quotaSources[cuota.id]?.some((s: any) => s.paymentDate !== date)) && totalDay === 0 && isFull && isMigrado && (
+                                                            <p className="text-[8px] text-sky-400 leading-tight italic flex items-center gap-1 uppercase font-black">
+                                                                <ArrowRightCircle className="w-2.5 h-2.5" /> Saldada (Sistema/Migración)
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* 3. Caso Extra (Cobros sin cuota asociada en esa fecha pero que no son pagos físicos hoy) */}
+                                                {isVirtual && totalDay === 0 && <p className="text-[9px] text-emerald-400/60 leading-tight font-bold">Regularización automática de saldos.</p>}
+
+                                                {/* 4. Faltantes */}
+                                                {cuota && !isFuture && !isFull && totalDay === 0 && (
+                                                    <p className="text-[9px] text-rose-500 uppercase font-bold flex items-center gap-1">
+                                                        <XCircle className="w-3 h-3" /> Faltante de cuota
+                                                    </p>
+                                                )}
                                             </div>
                                         </td>
                                         {userRole !== 'asesor' && <td className="px-3 py-4 text-center"><div className="flex flex-col gap-2 items-center">{physical.map((p: any) => <div key={p.id}>{p.voucher_compartido ? <CheckCircle className="w-2.5 h-2.5 text-emerald-500" /> : <ShieldAlert className="w-2.5 h-2.5 text-red-500" />}</div>)}</div></td>}

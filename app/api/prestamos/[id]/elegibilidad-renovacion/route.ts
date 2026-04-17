@@ -1,7 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
-import { getComprehensiveEvaluation, getTodayPeru } from '@/lib/financial-logic'
+import { getComprehensiveEvaluation, getTodayPeru, calculateRenovationAdjustment, getLoanHealthScoreAction } from '@/lib/financial-logic'
 
 export const dynamic = 'force-dynamic'
 
@@ -175,24 +175,46 @@ export async function GET(
             .select('*, cronograma_cuotas(*)')
             .eq('cliente_id', prestamo?.cliente_id || responseElegibilidad.cliente_id)
 
-        // 3. Fetch TODOS los pagos del cliente en una sola query plana (MUCHO más rápido)
-        const prestamoIds = allClientLoans?.map(l => l.id) || []
+        // 3. Fetch TODOS los pagos del cliente de forma plana e inclusiva
+        const allClientCuotasIds = (allClientLoans || []).flatMap(l => (l.cronograma_cuotas || []).map((c: any) => c.id))
+        
         const { data: qAllPayments } = await supabaseAdmin
             .from('pagos')
-            .select('*, cronograma_cuotas!inner(prestamo_id)')
-            .in('cronograma_cuotas.prestamo_id', prestamoIds)
+            .select('*, cronograma_cuotas(prestamo_id)')
+            .in('cuota_id', allClientCuotasIds)
 
-        // [NUEVO] CALCULAR EVALUACIÓN INTEGRAL CENTRALIZADA (con optimización de pagos y ID específico)
+        // [NUEVO] CALCULAR EVALUACIÓN INTEGRAL CENTRALIZADA (Garantiza paridad con el Dashboard)
         const evaluation = getComprehensiveEvaluation(loanFull.clientes, allClientLoans || [], qAllPayments || [], id)
 
-        // Actualizar respuesta con los nuevos scores
+        // [NUEVO] CALCULAR AJUSTE DE CAPITAL SEGÚN REGLAS DE NEGOCIO ACTUALIZADAS
+        const adjustment = calculateRenovationAdjustment(
+            evaluation.healthScore, 
+            evaluation.reputationScore, 
+            responseElegibilidad.monto_original || loanFull.monto
+        )
+
+        // [ATOMICO] Obtener Salud del Préstamo (La "Verdad" de 18 PTS)
+        const atomicHealthScore = await getLoanHealthScoreAction(supabaseAdmin, id)
+
+        // Actualizar respuesta con los nuevos scores y LÍMITES sincronizados
         const finalResponse = {
             ...responseElegibilidad,
-            healthScore: evaluation.healthScore,
+            healthScore: atomicHealthScore.score,
             reputationScore: evaluation.reputationScore,
-            loanScoreData: evaluation.healthScoreData, // Para el desglose en el modal
+            loanScoreData: atomicHealthScore, // Usamos la data atómica para el desglose
+            // Ajustar Limites según la nueva lógica
+            monto_maximo: adjustment.montoSugerido,
+            monto_minimo: Math.max(responseElegibilidad.monto_minimo || 0, responseElegibilidad.saldo_pendiente || 0, (loanFull.monto * 0.5)),
+            ajuste_recomendado_pct: adjustment.totalPotentialPct,
+            ajuste_detalles: adjustment.detalles,
             // Sobrescribir el score legacy si existe
-            score: evaluation.healthScore 
+            score: atomicHealthScore.score 
+        }
+
+        // Respetar Límite Global del Cliente (Techo máximo absoluto)
+        const clientLimit = parseFloat((loanFull.clientes as any)?.limite_prestamo || 0)
+        if (clientLimit > 0 && finalResponse.monto_maximo > clientLimit) {
+            finalResponse.monto_maximo = clientLimit
         }
 
         return NextResponse.json(finalResponse)

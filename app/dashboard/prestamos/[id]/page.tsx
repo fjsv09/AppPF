@@ -15,7 +15,7 @@ import { Calendar, DollarSign, Percent, User, Users, CreditCard, AlertTriangle, 
 import Link from "next/link";
 import { LoanTabs } from "@/components/prestamos/loan-tabs";
 import { BackButton } from "@/components/ui/back-button";
-import { getTodayPeru, calculateLoanMetrics, getLoanStatusUI, calculateLoanScore } from "@/lib/financial-logic";
+import { getTodayPeru, calculateLoanMetrics, getLoanStatusUI, calculateLoanScore, getComprehensiveEvaluation, getLoanHealthScoreAction } from "@/lib/financial-logic";
 import { cn, getFrequencyBadgeStyles } from "@/lib/utils";
 
 
@@ -192,7 +192,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
         pagos = fullData || [];
     }
 
-    const todayPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+    const todayPeru = getTodayPeru()
 
     const metrics = calculateLoanMetrics({ 
         ...prestamo, 
@@ -205,11 +205,17 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
         umbralMorosoOtros: 2 
     }, pagos)
 
-    // [NUEVO] Calcular Salud del Préstamo (Score Individual)
-    const loanScore = calculateLoanScore({ 
-        ...prestamo, 
-        cronograma_cuotas: cronograma || [] 
-    }, pagos, todayPeru)
+    // [ATOMICO] Calcular Salud del Préstamo (La "Verdad" de 18 PTS)
+    // Este orquestadorFetch realiza su propia consulta para garantizar paridad total.
+    const loanScore = await getLoanHealthScoreAction(supabaseAdmin, prestamo.id)
+
+    // [INTEGRAL] Calcular evaluación completa para el resto del sistema (Reputación)
+    const evaluation = getComprehensiveEvaluation(
+        prestamo.clientes,
+        (todosLosPrestamos || []).map(p => p.id === prestamo.id ? { ...prestamo, cronograma_cuotas: cronograma } : p),
+        pagos,
+        prestamo.id
+    )
 
     // [BLOQUEO MIGRACIÓN] Si es un préstamo migrado ya pagado (o sin saldo), 
     // solo permitimos renovar si es el más reciente de todo su historial.

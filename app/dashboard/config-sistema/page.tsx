@@ -64,7 +64,17 @@ export default async function ConfiguracionPage() {
             'asistencia_tolerancia_minutos',
             'oficina_lat',
             'oficina_lon',
-            'visita_radio_maximo'
+            'visita_radio_maximo',
+            'score_peso_puntual',
+            'score_peso_tarde',
+            'score_peso_cpp',
+            'score_peso_moroso',
+            'score_peso_vencido',
+            'score_peso_diario_atraso',
+            'score_tope_atraso_cuota',
+            'score_mult_semanal',
+            'score_mult_quincenal',
+            'score_mult_mensual'
         ])
         .order('clave')
     

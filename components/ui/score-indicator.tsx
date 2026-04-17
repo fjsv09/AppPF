@@ -2,7 +2,8 @@
 
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import { Info, MinusCircle, PlusCircle, TrendingDown, TrendingUp, ShieldCheck, Scale, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { Info, MinusCircle, PlusCircle, TrendingDown, TrendingUp, ShieldCheck, Scale, ArrowUpRight, ArrowDownRight, Calculator } from 'lucide-react'
+import { calculateRenovationAdjustment } from '@/lib/financial-logic'
 
 interface ScoreIndicatorProps {
     score: number
@@ -340,56 +341,70 @@ export function ScoreBreakdown({ loanScore }: { loanScore: any }) {
  * Reglas de negocio para límites de monto según Score de Salud y Reputación
  */
 export function ScoreLimitRules({ healthScore, reputationScore }: { healthScore: number, reputationScore: number }) {
-    // Cálculo de incremento basado en el Plan
-    let baseIncrease = 0;
-    if (healthScore >= 90) baseIncrease = 20;
-    else if (healthScore >= 70) baseIncrease = 10;
-    else if (healthScore >= 40) baseIncrease = 0;
-    else baseIncrease = -15; // Promedio de 10-20% reducción
+    // Cálculo centralizado
+    const adjustment = calculateRenovationAdjustment(healthScore, reputationScore, 100); // Usamos 100 para obtener porcentajes base
+    
+    const { baseIncreasePct, reputationBonusPct, totalPotentialPct, detalles } = adjustment;
 
-    let plusBonus = 0;
-    if (reputationScore >= 90) plusBonus = 10;
-    else if (reputationScore >= 70) plusBonus = 5;
-
-    const totalPotential = baseIncrease + (baseIncrease >= 0 ? plusBonus : 0);
-
-    const rules = [
-        { label: 'Excelente Salud', condition: 'Health ≥ 90', effect: '+20% Base', active: healthScore >= 90, color: 'text-emerald-400' },
-        { label: 'Plus Reputación', condition: 'Reputation ≥ 70', effect: `+${plusBonus}% Plus`, active: plusBonus > 0, color: 'text-blue-400' },
-        { label: 'Estado Crítico', condition: 'Health < 40', effect: 'Reducción sugerida', active: healthScore < 40, color: 'text-rose-400' },
-    ].filter(r => r.active || (r.label === 'Excelente Salud' && healthScore < 90 && healthScore >= 40));
+    const icons: Record<string, any> = {
+        'Salud': baseIncreasePct > 0 ? TrendingUp : baseIncreasePct < 0 ? TrendingDown : Scale,
+        'Reputación': ShieldCheck
+    };
 
     return (
         <div className="space-y-3 mt-4 pt-4 border-t border-slate-700/50">
             <div className="flex items-center gap-2 mb-2">
-                <ShieldCheck className="w-4 h-4 text-blue-400" />
+                <Calculator className="w-4 h-4 text-blue-400" />
                 <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Capacidad de Renovación</span>
             </div>
 
-            <div className="bg-slate-950/40 rounded-xl p-4 border border-white/5">
-                <div className="flex justify-between items-center mb-3">
+            <div className="bg-slate-950/40 rounded-xl p-4 border border-white/5 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-2 opacity-10">
+                    <Scale className="w-12 h-12" />
+                </div>
+                
+                <div className="flex justify-between items-center mb-3 relative z-10">
                     <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Ajuste Recomendado</span>
                     <Badge className={cn(
                         "text-xs font-black px-2 py-0.5",
-                        totalPotential > 0 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : 
-                        totalPotential === 0 ? "bg-amber-500/20 text-amber-400 border-amber-500/30" : 
+                        totalPotentialPct > 0 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : 
+                        totalPotentialPct === 0 ? "bg-amber-500/20 text-amber-400 border-amber-500/30" : 
                         "bg-rose-500/20 text-rose-400 border-rose-500/30"
                     )}>
-                        {totalPotential > 0 ? `+${totalPotential}%` : totalPotential === 0 ? 'MANTENER' : `${totalPotential}%`}
+                        {totalPotentialPct > 0 ? `+${totalPotentialPct}%` : totalPotentialPct === 0 ? 'MANTENER' : `${totalPotentialPct}%`}
                     </Badge>
                 </div>
 
-                <div className="space-y-2">
-                    {rules.map((rule, idx) => (
-                        <div key={idx} className="flex justify-between items-center text-[11px] py-1 border-b border-white/5 last:border-0">
-                            <span className="text-slate-500 font-bold uppercase tracking-tight">{rule.label}</span>
-                            <span className={cn("font-bold", rule.color)}>{rule.effect}</span>
+                <div className="space-y-2 relative z-10">
+                    {detalles?.map((rule, idx) => (
+                        <div key={idx} className="flex flex-col py-1.5 border-b border-white/5 last:border-0 group">
+                            <div className="flex justify-between items-center mb-0.5">
+                                <div className="flex items-center gap-2">
+                                    {(icons[rule.factor] || Info) && <div className={cn("w-3 h-3 opacity-60", rule.pct > 0 ? 'text-emerald-400' : rule.pct < 0 ? 'text-red-400' : 'text-slate-400')}>
+                                        {(() => {
+                                            const Icon = icons[rule.factor] || Info;
+                                            return <Icon className="w-full h-full" />;
+                                        })()}
+                                    </div>}
+                                    <span className="text-[10px] text-slate-300 font-black uppercase tracking-tight group-hover:text-blue-400 transition-colors">{rule.factor}</span>
+                                </div>
+                                <span className={cn(
+                                    "font-black font-mono text-[10px]", 
+                                    rule.pct > 0 ? 'text-emerald-400' : rule.pct < 0 ? 'text-rose-400' : 'text-slate-500'
+                                )}>
+                                    {rule.pct > 0 ? `+${rule.pct}%` : rule.pct === 0 ? 'MANTENER' : `${rule.pct}%`}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 pl-5">
+                                <div className="w-1 h-1 rounded-full bg-slate-800" />
+                                <span className="text-[9px] text-slate-500 italic font-medium">{rule.razon}</span>
+                            </div>
                         </div>
                     ))}
                 </div>
 
-                <div className="mt-4 p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
-                    <p className="text-[9px] text-blue-300 leading-relaxed font-bold italic">
+                <div className="mt-4 p-2 bg-blue-500/5 rounded-lg border border-blue-500/10">
+                    <p className="text-[9px] text-blue-300/60 leading-relaxed font-bold italic">
                         * El incremento final se aplica sobre el capital del préstamo anterior.
                     </p>
                 </div>

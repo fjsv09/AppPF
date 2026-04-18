@@ -2,8 +2,9 @@
 
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import { Info, MinusCircle, PlusCircle, TrendingDown, TrendingUp, ShieldCheck, Scale, ArrowUpRight, ArrowDownRight, Calculator } from 'lucide-react'
+import { Info, MinusCircle, PlusCircle, TrendingDown, TrendingUp, ShieldCheck, Scale, ArrowUpRight, ArrowDownRight, Calculator, FileSearch } from 'lucide-react'
 import { calculateRenovationAdjustment } from '@/lib/financial-logic'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 
 interface ScoreIndicatorProps {
     score: number
@@ -23,7 +24,7 @@ export function ScoreIndicator({ score, size = 'md', showLabel = true, className
     }
 
     const colors = getScoreColor(score)
-    
+
     // Tamaños
     const sizes = {
         sm: { container: 'w-16 h-16', text: 'text-lg', label: 'text-[10px]' },
@@ -42,7 +43,7 @@ export function ScoreIndicator({ score, size = 'md', showLabel = true, className
         <div className={cn('flex flex-col items-center gap-1.5', className)}>
             <div className={cn('relative', s.container)}>
                 {/* Background circle */}
-                <svg 
+                <svg
                     className="absolute inset-0 w-full h-full -rotate-90"
                     viewBox="0 0 100 100"
                 >
@@ -100,20 +101,20 @@ export function ScoreIndicator({ score, size = 'md', showLabel = true, className
                         </linearGradient>
                     </defs>
                 </svg>
-                
+
                 {/* Score number */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <span className={cn('font-black tracking-tighter leading-none', s.text, colors.text)}>
                         {score}
                     </span>
                     {size !== 'sm' && (
-                        <span className={cn('font-bold uppercase tracking-widest opacity-60 -mt-0.5', s.label)}>
+                        <span className={cn('font-bold uppercase tracking-widest text-slate-400/80 -mt-0.5', s.label)}>
                             pts
                         </span>
                     )}
                 </div>
             </div>
-            
+
             {showLabel && (
                 <span className={cn('font-black uppercase tracking-widest mt-1', s.label, colors.text)}>
                     {colors.label}
@@ -133,22 +134,22 @@ interface ScoreDetailItemProps {
 function ScoreDetailItem({ label, value, type, icon: Icon = Info }: ScoreDetailItemProps) {
     const isPenalty = type === 'penalty';
     const isIncrease = type === 'increase';
-    
+
     return (
         <div className="flex justify-between items-center text-sm py-1.5 border-b border-white/5 last:border-0 group">
-            <div className="flex items-center gap-2 text-slate-400 group-hover:text-slate-200 transition-colors">
+            <div className="flex items-center gap-2 text-slate-300 group-hover:text-white transition-colors">
                 <Icon className={cn(
                     "w-3.5 h-3.5",
-                    isPenalty ? "text-rose-500/70" : 
-                    isIncrease ? "text-emerald-500/70" : "text-blue-500/70"
+                    isPenalty ? "text-rose-500/70" :
+                        isIncrease ? "text-emerald-500/70" : "text-blue-500/70"
                 )} />
-                <span className="text-[11px] sm:text-xs">{label}</span>
+                <span className="text-xs sm:text-[13px]">{label}</span>
             </div>
             <span className={cn(
-                "font-mono font-bold text-xs",
-                value > 0 ? "text-emerald-400" : value < 0 ? "text-rose-400" : "text-slate-500"
+                "font-mono font-bold text-xs whitespace-nowrap",
+                isPenalty ? "text-rose-400" : isIncrease ? "text-emerald-400" : "text-blue-400"
             )}>
-                {value > 0 ? `+${value}` : value}
+                {isPenalty ? value : (value > 0 ? `+${value}` : value)}
             </span>
         </div>
     )
@@ -185,8 +186,8 @@ export function BehaviorSummary({ data }: BehaviorSummaryProps) {
     } = data;
 
     const totalPagos = pagos_puntuales + pagos_tardios
-    const porcentajePuntual = totalPagos > 0 
-        ? Math.round((pagos_puntuales / totalPagos) * 100) 
+    const porcentajePuntual = totalPagos > 0
+        ? Math.round((pagos_puntuales / totalPagos) * 100)
         : 0
 
     return (
@@ -198,7 +199,7 @@ export function BehaviorSummary({ data }: BehaviorSummaryProps) {
                     <span className="text-slate-500 text-xs">({porcentajePuntual}%)</span>
                 </div>
             </div>
-            
+
             <div className="bg-slate-800/50 rounded-lg p-3">
                 <div className="text-slate-400 text-xs mb-1">Pagos Tardíos</div>
                 <div className="flex items-baseline gap-1">
@@ -210,7 +211,7 @@ export function BehaviorSummary({ data }: BehaviorSummaryProps) {
                     </span>
                 </div>
             </div>
-            
+
             <div className="bg-slate-800/50 rounded-lg p-3">
                 <div className="text-slate-400 text-xs mb-1">Cuotas Vencidas</div>
                 <div className="flex items-baseline gap-1">
@@ -222,21 +223,21 @@ export function BehaviorSummary({ data }: BehaviorSummaryProps) {
                     </span>
                 </div>
             </div>
-            
+
             <div className="bg-slate-800/50 rounded-lg p-3">
                 <div className="text-slate-400 text-xs mb-1">Préstamos Finalizados</div>
                 <div className="flex items-baseline gap-1">
                     <span className="text-lg font-bold text-blue-400">{prestamos_finalizados}</span>
                 </div>
             </div>
-            
+
             <div className="bg-slate-800/50 rounded-lg p-3">
                 <div className="text-slate-400 text-xs mb-1">Renovaciones</div>
                 <div className="flex items-baseline gap-1">
                     <span className="text-lg font-bold text-purple-400">{prestamos_renovados}</span>
                 </div>
             </div>
-            
+
             <div className="bg-slate-800/50 rounded-lg p-3">
                 <div className="text-slate-400 text-xs mb-1">Antigüedad</div>
                 <div className="flex items-baseline gap-1">
@@ -244,7 +245,7 @@ export function BehaviorSummary({ data }: BehaviorSummaryProps) {
                     <span className="text-slate-500 text-xs">meses</span>
                 </div>
             </div>
-            
+
             {(historial_mora > 0 || historial_cpp > 0 || (refinanciamientos ?? 0) > 0) && (
                 <div className="col-span-2 bg-red-900/20 border border-red-800/50 rounded-lg p-3">
                     <div className="text-red-400 text-xs mb-1">⚠️ Historial de Riesgo</div>
@@ -291,37 +292,37 @@ export function ScoreBreakdown({ loanScore }: { loanScore: any }) {
             <div className="flex items-center justify-between border-b border-slate-700 pb-2">
                 <div className="flex items-center gap-2">
                     <TrendingUp className="w-4 h-4 text-emerald-400" />
-                    <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Salud del Préstamo</span>
+                    <span className="text-[11px] sm:text-xs font-black text-slate-200 uppercase tracking-widest">Capacidad de Renovación</span>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="flex flex-col items-end">
-                        <span className="text-[9px] text-slate-500 uppercase font-black">Aumentos</span>
+                        <span className="text-[10px] sm:text-[11px] text-slate-400 uppercase font-black">Aumentos</span>
                         <span className="text-xs font-bold text-emerald-400">+{increases}</span>
                     </div>
                     <div className="flex flex-col items-end">
-                        <span className="text-[9px] text-slate-500 uppercase font-black">Castigos</span>
+                        <span className="text-[10px] sm:text-[11px] text-slate-400 uppercase font-black">Castigos</span>
                         <span className="text-xs font-bold text-rose-400">-{penalties}</span>
                     </div>
                 </div>
             </div>
-            
+
             <div className="space-y-1 max-h-[200px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-800">
                 <ScoreDetailItem label="Puntaje Base" value={100} type="base" icon={ShieldCheck} />
                 {details.map((item: any, idx: number) => (
-                    <ScoreDetailItem 
-                        key={idx} 
-                        label={item.label} 
-                        value={item.type === 'penalty' ? -item.value : item.value} 
-                        type={item.type} 
-                        icon={item.type === 'penalty' ? MinusCircle : PlusCircle} 
+                    <ScoreDetailItem
+                        key={idx}
+                        label={item.label}
+                        value={item.type === 'penalty' ? -item.value : item.value}
+                        type={item.type}
+                        icon={item.type === 'penalty' ? MinusCircle : PlusCircle}
                     />
                 ))}
             </div>
 
             <div className="pt-2 mt-2 border-t border-slate-700 flex justify-between items-center bg-slate-900/40 p-3 rounded-xl border border-white/5">
                 <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider leading-none mb-1">Score Salud</span>
-                    <span className="text-[9px] text-slate-500 italic">Cálculo dinámico individual</span>
+                    <span className="text-[11px] sm:text-xs font-black text-slate-300 uppercase tracking-wider leading-none mb-1">Score Salud</span>
+                    <span className="text-[10px] text-slate-400 italic">Cálculo dinámico individual</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <span className={cn(
@@ -338,74 +339,186 @@ export function ScoreBreakdown({ loanScore }: { loanScore: any }) {
 }
 
 /**
+ * Visualización de las escalas de ajuste (Tiers)
+ */
+export function AdjustmentScales({ currentHealth, currentReputation }: { currentHealth: number, currentReputation: number }) {
+    const healthTiers = [
+        { min: 90, label: 'Excelente', pct: '+20%', color: 'from-emerald-600 to-emerald-400', threshold: '≥90 pts' },
+        { min: 75, label: 'Muy Bueno', pct: '+15%', color: 'from-blue-600 to-blue-400', threshold: '≥75 pts' },
+        { min: 60, label: 'Bueno', pct: '+10%', color: 'from-cyan-600 to-cyan-400', threshold: '≥60 pts' },
+        { min: 40, label: 'Regular', pct: '0%', color: 'from-slate-600 to-slate-400', threshold: '≥40 pts' },
+        { min: 0, label: 'Riesgo', pct: '-15%', color: 'from-rose-600 to-rose-400', threshold: '<40 pts' },
+    ];
+
+    const repBonuses = [
+        { min: 90, label: 'Excelente', pct: '+10%', color: 'text-emerald-400', threshold: '≥90 pts' },
+        { min: 75, label: 'Bueno', pct: '+5%', color: 'text-blue-400', threshold: '≥75 pts' },
+    ];
+
+    return (
+        <div className="space-y-7">
+            <div>
+                <h5 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                    Escala por Salud (Base)
+                </h5>
+                <div className="grid grid-cols-5 gap-2">
+                    {healthTiers.map((tier, idx) => {
+                        const nextTierMin = healthTiers[idx - 1]?.min || 101;
+                        const isActive = currentHealth >= tier.min && currentHealth < nextTierMin;
+                        return (
+                            <div key={tier.label} className="flex flex-col gap-2">
+                                <div className={cn(
+                                    "h-2 rounded-full transition-all duration-700 ease-out",
+                                    isActive ? cn("bg-gradient-to-r shadow-[0_0_12px] shadow-current opacity-100", tier.color) : "bg-slate-800 opacity-20"
+                                )} />
+                                <div className="flex flex-col items-center gap-0.5">
+                                    <span className={cn(
+                                        "text-sm font-black leading-none transition-colors",
+                                        isActive ? "text-white" : "text-slate-500"
+                                    )}>{tier.pct}</span>
+                                    <span className={cn(
+                                        "text-[10px] uppercase font-black transition-colors",
+                                        isActive ? "text-slate-200" : "text-slate-600"
+                                    )}>{tier.label}</span>
+                                    <span className={cn(
+                                        "text-[9px] font-black transition-colors",
+                                        isActive ? "text-blue-400" : "text-slate-700"
+                                    )}>{tier.threshold}</span>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            <div className={cn("transition-all duration-500", currentHealth < 40 ? "opacity-30 grayscale" : "opacity-100")}>
+                <h5 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                    Bonos por Reputación
+                </h5>
+                <div className="flex gap-3">
+                    {repBonuses.map((bonus) => {
+                        const isActive = currentHealth >= 40 && currentReputation >= bonus.min && (bonus.min === 90 || currentReputation < 90);
+                        return (
+                            <div key={bonus.label} className={cn(
+                                "flex-1 p-3 rounded-2xl border flex flex-col items-center gap-1 transition-all duration-500",
+                                isActive ? "bg-blue-500/10 border-blue-500/30 shadow-[0_0_20px_rgba(59,130,246,0.1)]" : "bg-slate-900/40 border-white/5 opacity-50"
+                            )}>
+                                <span className={cn("text-sm font-black", isActive ? bonus.color : "text-slate-600")}>{bonus.pct}</span>
+                                <span className={cn("text-[10px] uppercase font-black tracking-widest", isActive ? "text-slate-200" : "text-slate-700")}>{bonus.label}</span>
+                                <span className={cn("text-[9px] font-black", isActive ? "text-blue-400" : "text-slate-700")}>{bonus.threshold}</span>
+                            </div>
+                        );
+                    })}
+                    <div className={cn(
+                        "flex-1 p-3 rounded-2xl border flex flex-col items-center justify-center transition-all duration-500",
+                        currentHealth >= 40 && currentReputation < 75 ? "bg-slate-800 border-slate-700 shadow-lg" : "bg-slate-900/40 border-white/5 opacity-50"
+                    )}>
+                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-none">Sin Bono</span>
+                        <span className="text-[9px] font-black text-slate-700 mt-1">{"< 75 pts"}</span>
+                    </div>
+                </div>
+                {currentHealth < 40 && (
+                    <div className="bg-rose-500/5 border border-rose-500/10 rounded-lg p-2 mt-2">
+                        <p className="text-[8px] text-rose-400 italic text-center font-black uppercase tracking-widest">
+                            ⚠️ Bonos bloqueados: Salud en riesgo
+                        </p>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+/**
  * Reglas de negocio para límites de monto según Score de Salud y Reputación
  */
 export function ScoreLimitRules({ healthScore, reputationScore }: { healthScore: number, reputationScore: number }) {
     // Cálculo centralizado
     const adjustment = calculateRenovationAdjustment(healthScore, reputationScore, 100); // Usamos 100 para obtener porcentajes base
-    
-    const { baseIncreasePct, reputationBonusPct, totalPotentialPct, detalles } = adjustment;
+
+    const { totalPotentialPct, detalles } = adjustment;
 
     const icons: Record<string, any> = {
-        'Salud': baseIncreasePct > 0 ? TrendingUp : baseIncreasePct < 0 ? TrendingDown : Scale,
+        'Salud': totalPotentialPct > 0 ? TrendingUp : totalPotentialPct < 0 ? TrendingDown : Scale,
         'Reputación': ShieldCheck
     };
 
     return (
-        <div className="space-y-3 mt-4 pt-4 border-t border-slate-700/50">
-            <div className="flex items-center gap-2 mb-2">
-                <Calculator className="w-4 h-4 text-blue-400" />
-                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Capacidad de Renovación</span>
-            </div>
+        <div className="space-y-6">
+            <div className="bg-slate-950/40 rounded-2xl p-5 border border-white/5 relative overflow-hidden shadow-2xl">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-[60px] pointer-events-none" />
 
-            <div className="bg-slate-950/40 rounded-xl p-4 border border-white/5 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-2 opacity-10">
-                    <Scale className="w-12 h-12" />
-                </div>
-                
-                <div className="flex justify-between items-center mb-3 relative z-10">
-                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Ajuste Recomendado</span>
+                <div className="flex justify-between items-center mb-5 relative z-10">
+                    <div className="flex flex-col">
+                        <span className="text-[11px] sm:text-xs text-slate-300 font-bold uppercase tracking-wider">Ajuste Recomendado</span>
+                        <span className="text-[9px] text-slate-500 font-medium italic mt-0.5">Basado en comportamiento Dual-Score</span>
+                    </div>
                     <Badge className={cn(
-                        "text-xs font-black px-2 py-0.5",
-                        totalPotentialPct > 0 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : 
-                        totalPotentialPct === 0 ? "bg-amber-500/20 text-amber-400 border-amber-500/30" : 
-                        "bg-rose-500/20 text-rose-400 border-rose-500/30"
+                        "text-xs sm:text-sm font-black px-3 py-1 rounded-lg border-2",
+                        totalPotentialPct > 0 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                            totalPotentialPct === 0 ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                                "bg-rose-500/10 text-rose-400 border-rose-500/20"
                     )}>
                         {totalPotentialPct > 0 ? `+${totalPotentialPct}%` : totalPotentialPct === 0 ? 'MANTENER' : `${totalPotentialPct}%`}
                     </Badge>
                 </div>
 
-                <div className="space-y-2 relative z-10">
+                <div className="space-y-3 relative z-10 mb-6">
                     {detalles?.map((rule, idx) => (
-                        <div key={idx} className="flex flex-col py-1.5 border-b border-white/5 last:border-0 group">
-                            <div className="flex justify-between items-center mb-0.5">
-                                <div className="flex items-center gap-2">
-                                    <div className={cn("w-3 h-3 opacity-60", rule.pct > 0 ? 'text-emerald-400' : rule.pct < 0 ? 'text-red-400' : 'text-slate-400')}>
+                        <div key={idx} className="flex flex-col py-2 border-b border-white/5 last:border-0 group">
+                            <div className="flex justify-between items-center mb-1">
+                                <div className="flex items-center gap-2.5">
+                                    <div className={cn(
+                                        "w-4 h-4 p-0.5 rounded-md flex items-center justify-center",
+                                        rule.pct > 0 ? 'bg-emerald-500/10 text-emerald-400' :
+                                            rule.pct < 0 ? 'bg-rose-500/10 text-rose-400' : 'bg-slate-800 text-slate-500'
+                                    )}>
                                         {(() => {
                                             const Icon = icons[rule.factor] || Info;
                                             return <Icon className="w-full h-full" />;
                                         })()}
                                     </div>
-
-                                    <span className="text-[10px] text-slate-300 font-black uppercase tracking-tight group-hover:text-blue-400 transition-colors">{rule.factor}</span>
+                                    <span className="text-[11px] sm:text-xs text-slate-200 font-bold uppercase tracking-tight group-hover:text-blue-400 transition-colors">
+                                        Impacto {rule.factor}
+                                    </span>
                                 </div>
                                 <span className={cn(
-                                    "font-black font-mono text-[10px]", 
-                                    rule.pct > 0 ? 'text-emerald-400' : rule.pct < 0 ? 'text-rose-400' : 'text-slate-500'
+                                    "font-black font-mono text-[11px] sm:text-xs",
+                                    rule.status === 'BLOQUEADO' ? 'text-amber-500' :
+                                        rule.pct > 0 ? 'text-emerald-400' : rule.pct < 0 ? 'text-rose-400' : 'text-slate-400'
                                 )}>
-                                    {rule.pct > 0 ? `+${rule.pct}%` : rule.pct === 0 ? 'MANTENER' : `${rule.pct}%`}
+                                    {rule.status ? rule.status : (rule.pct > 0 ? `+${rule.pct}%` : rule.pct === 0 ? 'MANTENER' : `${rule.pct}%`)}
                                 </span>
                             </div>
-                            <div className="flex items-center gap-1.5 pl-5">
-                                <div className="w-1 h-1 rounded-full bg-slate-800" />
-                                <span className="text-[9px] text-slate-500 italic font-medium">{rule.razon}</span>
+                            <div className="flex items-center gap-2 pl-6.5">
+                                <span className="text-[10px] sm:text-[11px] text-slate-400 italic font-medium">{rule.razon}</span>
                             </div>
                         </div>
                     ))}
                 </div>
 
-                <div className="mt-4 p-2 bg-blue-500/5 rounded-lg border border-blue-500/10">
-                    <p className="text-[9px] text-blue-300/60 leading-relaxed font-bold italic">
+                {/* ESCALAS VISUALES - Colapsables */}
+                <div className="pt-2 border-t border-white/5">
+                    <Accordion type="single" collapsible className="border-none">
+                        <AccordionItem value="escalas" className="border-none">
+                            <AccordionTrigger className="hover:no-underline py-2.5">
+                                <div className="flex items-center gap-2">
+                                    <Calculator className="w-3.5 h-3.5 text-slate-500" />
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Ver Escalas de Score</span>
+                                </div>
+                            </AccordionTrigger>
+                            <AccordionContent className="pt-2">
+                                <AdjustmentScales currentHealth={healthScore} currentReputation={reputationScore} />
+                            </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
+                </div>
+
+                <div className="mt-6 p-3 bg-blue-500/5 rounded-xl border border-blue-500/10 flex items-center gap-3">
+                    <Info className="w-4 h-4 text-blue-400 shrink-0" />
+                    <p className="text-[10px] sm:text-[11px] text-blue-300/80 leading-snug font-medium italic">
                         * El incremento final se aplica sobre el capital del préstamo anterior.
                     </p>
                 </div>
@@ -443,42 +556,75 @@ export function ReputationBreakdown({ reputationData }: { reputationData: any })
                     </div>
                 </div>
             </div>
-            
+
             <div className="space-y-1">
-                {details.map((item: any, idx: number) => (
-                    <div key={idx} className="flex justify-between items-center text-sm py-2 border-b border-white/5 last:border-0 group">
-                        <div className="flex flex-col">
-                            <div className="flex items-center gap-2 text-slate-300 group-hover:text-blue-400 transition-colors">
-                                <ShieldCheck className="w-3.5 h-3.5 text-blue-500/70" />
-                                <span className="text-[11px] sm:text-xs font-bold uppercase tracking-tight">{item.label}</span>
+                {details.map((item: any, idx: number) => {
+                    const isPenalty = item.type === 'penalty'
+                    const isIncrease = item.type === 'increase'
+                    const isBase = item.type === 'base'
+                    const isCapped = item.isCapped && item.effectivelyAdded === 0
+                    const isPartiallyCapped = item.isCapped && item.effectivelyAdded > 0 && item.effectivelyAdded < item.value
+
+                    return (
+                        <div key={idx} className="flex justify-between items-center text-sm py-2 border-b border-white/5 last:border-0 group">
+                            <div className="flex flex-col">
+                                <div className="flex items-center gap-2 transition-colors">
+                                    <div className={cn(
+                                        "w-3.5 h-3.5 flex items-center justify-center rounded-full text-[10px]",
+                                        isPenalty ? "bg-rose-500/20 text-rose-500" :
+                                            isIncrease ? "bg-emerald-500/20 text-emerald-500" : "bg-blue-500/20 text-blue-500"
+                                    )}>
+                                        {isPenalty ? <MinusCircle className="w-2.5 h-2.5" /> : isIncrease ? <PlusCircle className="w-2.5 h-2.5" /> : <ShieldCheck className="w-2.5 h-2.5" />}
+                                    </div>
+                                    <span className={cn(
+                                        "text-[11px] sm:text-xs font-bold uppercase tracking-tight",
+                                        isPenalty ? "text-slate-400 group-hover:text-rose-400" :
+                                            isIncrease ? "text-slate-300 group-hover:text-emerald-400" : "text-blue-400"
+                                    )}>
+                                        {item.label}
+                                    </span>
+                                </div>
+                                {isCapped && (
+                                    <span className="text-[9px] text-amber-500/60 ml-5 font-bold italic leading-none mt-1">
+                                        ⚠️ Ganó +{item.value} pero ya está en el tope de 100
+                                    </span>
+                                )}
+                                {isPartiallyCapped && (
+                                    <span className="text-[9px] text-amber-500/60 ml-5 font-bold italic leading-none mt-1">
+                                        ⚠️ Ganó +{item.value} pero solo sumó +{item.effectivelyAdded} por el tope
+                                    </span>
+                                )}
+                                {item.description && !item.isCapped && (
+                                    <span className="text-[9px] text-slate-500 ml-5 leading-none mt-1">{item.description}</span>
+                                )}
                             </div>
-                            {item.description && (
-                                <span className="text-[9px] text-slate-500 ml-5 leading-none">{item.description}</span>
-                            )}
+                            <span className={cn(
+                                "font-mono font-bold text-xs",
+                                isPenalty ? "text-rose-400" : isIncrease ? "text-emerald-400" : "text-blue-400"
+                            )}>
+                                {isPenalty ? item.value : (item.value > 0 ? `+${item.value}` : item.value)}
+                            </span>
                         </div>
-                        <span className="font-mono font-bold text-xs text-blue-400">
-                            +{item.value}
-                        </span>
-                    </div>
-                ))}
+                    )
+                })}
             </div>
 
             <div className="grid grid-cols-3 gap-2 mt-4">
-               <div className="bg-slate-950/60 p-2 rounded-lg border border-white/5 text-center transition-colors hover:border-blue-500/20">
-                   <div className="text-[8px] text-slate-500 font-bold uppercase tracking-wider mb-1 leading-none">Desempeño</div>
-                   <div className="text-xs font-black text-white">{Math.round(metrics.avgPerformance || 100)}%</div>
-                   <div className="text-[6px] text-slate-600 uppercase font-bold">Avg Salud</div>
-               </div>
-               <div className="bg-slate-950/60 p-2 rounded-lg border border-white/5 text-center transition-colors hover:border-blue-500/20">
-                   <div className="text-[8px] text-slate-500 font-bold uppercase tracking-wider mb-1 leading-none">Antigüedad</div>
-                   <div className="text-xs font-black text-white">{metrics.months || 0}m</div>
-                   <div className="text-[6px] text-slate-600 uppercase font-bold">Meses activo</div>
-               </div>
-               <div className="bg-slate-950/60 p-2 rounded-lg border border-white/5 text-center transition-colors hover:border-blue-500/20">
-                   <div className="text-[8px] text-slate-500 font-bold uppercase tracking-wider mb-1 leading-none">Volumen</div>
-                   <div className="text-xs font-black text-white">{metrics.totalFinished || 0}</div>
-                   <div className="text-[6px] text-slate-600 uppercase font-bold">Préstamos pagados</div>
-               </div>
+                <div className="bg-slate-950/60 p-2 rounded-lg border border-white/5 text-center transition-colors hover:border-blue-500/20">
+                    <div className="text-[8px] text-slate-500 font-bold uppercase tracking-wider mb-1 leading-none">Desempeño</div>
+                    <div className="text-xs font-black text-white">{Math.round(metrics.avgPerformance || 100)}%</div>
+                    <div className="text-[6px] text-slate-600 uppercase font-bold">Avg Salud</div>
+                </div>
+                <div className="bg-slate-950/60 p-2 rounded-lg border border-white/5 text-center transition-colors hover:border-blue-500/20">
+                    <div className="text-[8px] text-slate-500 font-bold uppercase tracking-wider mb-1 leading-none">Antigüedad</div>
+                    <div className="text-xs font-black text-white">{metrics.months || 0}m</div>
+                    <div className="text-[6px] text-slate-600 uppercase font-bold">Meses activo</div>
+                </div>
+                <div className="bg-slate-950/60 p-2 rounded-lg border border-white/5 text-center transition-colors hover:border-blue-500/20">
+                    <div className="text-[8px] text-slate-500 font-bold uppercase tracking-wider mb-1 leading-none">Volumen</div>
+                    <div className="text-xs font-black text-white">{metrics.totalFinished || 0}</div>
+                    <div className="text-[6px] text-slate-600 uppercase font-bold">Préstamos pagados</div>
+                </div>
             </div>
         </div>
     );

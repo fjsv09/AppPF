@@ -490,70 +490,161 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
 export function calculateClientReputation(client: any, allLoans: any[], config: any = {}) {
   if (!client) return { score: 0, details: [], metrics: {} };
 
-  const finishedLoans = allLoans.filter(l => ['finalizado', 'liquidado'].includes(l.estado));
-  const totalFinished = finishedLoans.length;
-  const details = [];
+  // 1. Obtención de parámetros dinámicos con fallbacks robustos
+  const startScore = 100;
+  const getConfigValue = (key: string, fallback: number) => {
+    const val = config[key];
+    if (val === undefined || val === null || val === '') return fallback;
+    const num = Number(val);
+    return isNaN(num) ? fallback : Math.abs(num);
+  };
 
-  // 1. Desempeño Histórico (60%) - Basado en scores de préstamos pasados
-  let totalHistoricalScore = 0;
-  finishedLoans.forEach(l => {
-    // Aplanar pagos si vienen anidados en cronograma_cuotas
+  const bFinalizado = getConfigValue('reputation_bonus_finalizado', 10);
+  const bRenovado = getConfigValue('reputation_bonus_renovado', 15);
+  const bSaludExcelencia = getConfigValue('reputation_bonus_salud_excelente', 10);
+  const bAntiguedadMensual = getConfigValue('reputation_bonus_antiguedad_mensual', 1);
+
+  const pRefinanciado = getConfigValue('reputation_penalty_refinanciado', 20);
+  const pVencido = getConfigValue('reputation_penalty_vencido', 40);
+  const pSaludPobre = getConfigValue('reputation_penalty_salud_pobre', 25);
+
+  const finishedLoans = allLoans.filter(l => ['finalizado', 'liquidado', 'renovado', 'refinanciado'].includes(l.estado));
+  const totalProcessed = finishedLoans.length;
+  const metrics: any = {
+    totalFinished: 0,
+    totalRenovated: 0,
+    totalRefinanced: 0,
+    totalVencido: 0,
+    avgPerformance: 0,
+    months: 0
+  };
+
+  const details: any[] = [
+    { 
+      label: 'Puntaje Base Histórico', 
+      value: startScore, 
+      type: 'base', 
+      date: client.created_at || new Date(0).toISOString(),
+      description: 'Todo cliente inicia con un récord impecable.' 
+    }
+  ];
+
+  let currentScore = startScore;
+  let totalHistoricalHealth = 0;
+
+  // 2. Evaluación de Historial de Préstamos (Orden cronológico por fecha de creación)
+  const sortedLoans = [...finishedLoans].sort((a, b) => 
+    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+
+  sortedLoans.forEach(l => {
+    // Calcular salud individual para el promedio histórico
     let flatPagos = l.pagos || [];
     if (flatPagos.length === 0 && l.cronograma_cuotas) {
       flatPagos = l.cronograma_cuotas.flatMap((c: any) => c.pagos || []);
     }
+    const loanScore = calculateLoanScore(l, flatPagos, getTodayPeru(), config);
+    totalHistoricalHealth += loanScore.score;
 
-    const meta = calculateLoanScore(l, flatPagos, getTodayPeru(), config);
-    totalHistoricalScore += meta.score;
+    // APLICAR BONOS (Con tope estricto de 100 en cada paso)
+    if (l.estado === 'renovado') {
+      metrics.totalRenovated++;
+      const valToAdd = bRenovado;
+      const prev = currentScore;
+      currentScore = Math.min(100, currentScore + valToAdd);
+      const effectivelyAdded = currentScore - prev;
+      details.push({ 
+        label: `Renovación Exitosa (P#${l.id.split('-')[0]})`, 
+        value: valToAdd, 
+        effectivelyAdded, 
+        type: 'increase',
+        date: l.created_at,
+        isCapped: valToAdd > effectivelyAdded
+      });
+    } else if (l.estado === 'finalizado' || l.estado === 'liquidado') {
+      metrics.totalFinished++;
+      const valToAdd = bFinalizado;
+      const prev = currentScore;
+      currentScore = Math.min(100, currentScore + valToAdd);
+      const effectivelyAdded = currentScore - prev;
+      details.push({ 
+        label: `Préstamo Pagado (P#${l.id.split('-')[0]})`, 
+        value: valToAdd, 
+        effectivelyAdded, 
+        type: 'increase',
+        date: l.created_at,
+        isCapped: valToAdd > effectivelyAdded
+      });
+    }
+
+    // APLICAR PENALIDADES (Resta directa)
+    if (l.estado === 'refinanciado') {
+      metrics.totalRefinanced++;
+      currentScore = Math.max(0, currentScore - pRefinanciado);
+      details.push({ label: `Refinanciación por Mora (P#${l.id.split('-')[0]})`, value: -pRefinanciado, effectivelyAdded: -pRefinanciado, type: 'penalty', date: l.created_at });
+    }
+
+    if (l.estado_mora === 'vencido' || l.estado === 'vencido') {
+      metrics.totalVencido++;
+      currentScore = Math.max(0, currentScore - pVencido);
+      details.push({ label: `Riesgo: Préstamo Vencido (P#${l.id.split('-')[0]})`, value: -pVencido, effectivelyAdded: -pVencido, type: 'penalty', date: l.created_at });
+    }
   });
 
-  const avgPerformance = totalFinished > 0 ? (totalHistoricalScore / totalFinished) : 100;
-  const performanceWeight = avgPerformance * 0.6;
-  details.push({
-    label: `Desempeño Histórico (${Math.round(avgPerformance)}% base)`,
-    value: Math.round(performanceWeight),
-    type: 'increase',
-    description: `Promedio de salud de ${totalFinished} préstamos anteriores.`
-  });
+  // 3. Evaluación de Salud Promedio
+  const avgPerformance = totalProcessed > 0 ? (totalHistoricalHealth / totalProcessed) : 100;
+  metrics.avgPerformance = avgPerformance;
 
-  // 2. Antigüedad (10%) - +1 pto por mes (máx 10)
-  let seniorityBonus = 0;
+  if (avgPerformance >= 85 && totalProcessed > 0) {
+    const prev = currentScore;
+    currentScore = Math.min(100, currentScore + bSaludExcelencia);
+    const added = currentScore - prev;
+    details.push({ 
+      label: 'Excelencia en Salud Histórica', 
+      value: bSaludExcelencia, 
+      effectivelyAdded: added, 
+      type: 'increase', 
+      date: new Date().toISOString(),
+      isCapped: bSaludExcelencia > added
+    });
+  } else if (avgPerformance < 50 && totalProcessed > 0) {
+    currentScore = Math.max(0, currentScore - pSaludPobre);
+    details.push({ label: 'Riesgo: Historial de Baja Salud', value: -pSaludPobre, effectivelyAdded: -pSaludPobre, type: 'penalty', date: new Date().toISOString() });
+  }
+
+  // 4. Antigüedad
   let months = 0;
   if (client.created_at) {
     const createdAt = new Date(client.created_at);
     if (!isNaN(createdAt.getTime())) {
       months = Math.floor((new Date().getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24 * 30));
-      seniorityBonus = Math.min(10, Math.max(0, months));
+      metrics.months = months;
+      if (months > 0 && bAntiguedadMensual > 0) {
+        const bonusTotal = months * bAntiguedadMensual;
+        const prev = currentScore;
+        currentScore = Math.min(100, currentScore + bonusTotal);
+        const effectivelyAdded = currentScore - prev;
+        details.push({ 
+          label: `Meses de Continuidad (${months}m)`, 
+          value: bonusTotal, 
+          effectivelyAdded, 
+          type: 'increase',
+          date: new Date().toISOString(),
+          isCapped: bonusTotal > effectivelyAdded
+        });
+      }
     }
   }
-  if (seniorityBonus > 0) {
-    details.push({
-      label: `Antigüedad como Cliente (${months} meses)`,
-      value: seniorityBonus,
-      type: 'increase'
-    });
-  }
 
-  // 3. Volumen (30%) - +2 pts por cada préstamo finalizado (máx 30)
-  const volumeBonus = Math.min(30, totalFinished * 2);
-  if (volumeBonus > 0) {
-    details.push({
-      label: `Volumen: ${totalFinished} Préstamos Finalizados`,
-      value: volumeBonus,
-      type: 'increase'
-    });
-  }
+  // 5. Ordenamiento Final por fecha
+  details.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  const finalScore = Math.round(Math.max(0, Math.min(100, performanceWeight + seniorityBonus + volumeBonus)));
+  const finalScore = Math.round(currentScore);
 
   return {
     score: finalScore,
     details,
-    metrics: {
-      avgPerformance,
-      totalFinished,
-      months
-    }
+    metrics
   };
 }
 /**
@@ -984,16 +1075,47 @@ export function calculateRenovationAdjustment(healthScore: number, reputationSco
         razon: healthScore >= 90 ? 'Excelente (>=90 pts)' :
           healthScore >= 75 ? 'Muy Bueno (>=75 pts)' :
             healthScore >= 60 ? 'Bueno (>=60 pts)' :
-              healthScore >= 40 ? 'Regular (>=40 pts)' : 'Riesgo (<40 pts)'
+              healthScore >= 40 ? 'Regular (>=40 pts)' : 'Riesgo crítico (<40 pts)'
       },
       {
         factor: 'Reputación',
         pct: reputationBonusPct,
-        razon: reputationBonusPct > 0 ? (reputationScore >= 90 ? 'Excelente (>=90 pts)' : 'Bueno (>=75 pts)') :
-          (healthScore < 40 ? 'Bloqueado por Salud' : 'Sin Bonus (<75 pts)')
+        razon: reputationBonusPct > 0 ? (reputationScore >= 90 ? 'Bono Excelente (>=90 pts)' : 'Bono Bueno (>=75 pts)') :
+          (healthScore < 40 ? 'Bono bloqueado: Se requiere Salud >= 40 pts para aplicar beneficios de reputación.' : 'Sin bono: Puntaje insuficiente (<75 pts).'),
+        status: healthScore < 40 ? 'BLOQUEADO' : undefined
       }
     ]
   };
+}
+
+/**
+ * Obtiene toda la configuración financiera (scores y reputación) de forma centralizada.
+ */
+export async function getFinancialConfig(supabase: any) {
+  const { data: configRows } = await supabase
+    .from('configuracion_sistema')
+    .select('clave, valor')
+    .in('clave', [
+      'score_peso_puntual',
+      'score_peso_tarde',
+      'score_peso_cpp',
+      'score_peso_moroso',
+      'score_peso_vencido',
+      'score_peso_diario_atraso',
+      'score_tope_atraso_cuota',
+      'score_mult_semanal',
+      'score_mult_quincenal',
+      'score_mult_mensual',
+      'reputation_bonus_finalizado',
+      'reputation_bonus_renovado',
+      'reputation_bonus_salud_excelente',
+      'reputation_penalty_refinanciado',
+      'reputation_penalty_vencido',
+      'reputation_penalty_salud_pobre',
+      'reputation_bonus_antiguedad_mensual'
+    ]);
+
+  return (configRows || []).reduce((acc: any, row: any) => ({ ...acc, [row.clave]: row.valor }), {});
 }
 
 /**
@@ -1028,24 +1150,8 @@ export async function getLoanHealthScoreAction(supabase: any, loanId: string) {
     pagos = qPagos || [];
   }
 
-  // 3. Obtener configuracion de pesos dinámicos
-  const { data: configRows } = await supabase
-    .from('configuracion_sistema')
-    .select('clave, valor')
-    .in('clave', [
-      'score_peso_puntual',
-      'score_peso_tarde',
-      'score_peso_cpp',
-      'score_peso_moroso',
-      'score_peso_vencido',
-      'score_peso_diario_atraso',
-      'score_tope_atraso_cuota',
-      'score_mult_semanal',
-      'score_mult_quincenal',
-      'score_mult_mensual'
-    ]);
-
-  const config = (configRows || []).reduce((acc: any, row: any) => ({ ...acc, [row.clave]: row.valor }), {});
+  // 3. Obtener configuracion centralizada
+  const config = await getFinancialConfig(supabase);
 
   // 4. Ejecutar formula centralizada con pesos dinamicos
   return calculateLoanScore(

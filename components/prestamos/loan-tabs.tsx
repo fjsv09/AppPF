@@ -55,7 +55,7 @@ export function LoanTabs({
     // Validar el tab de la URL o usar el default
     const isAdmin = userRole === 'admin'
     const isAdvisor = userRole === 'asesor'
-    const allowedTabs = ["salud", "historial", "evidencia", "gestiones"]
+    const allowedTabs = ["historial", "salud", "evidencia", "gestiones"]
     
     // Solo admin puede ver/gestionar cronograma
     if (isAdmin) {
@@ -72,7 +72,7 @@ export function LoanTabs({
         if (tabParam && allowedTabs.includes(tabParam)) {
             return tabParam
         }
-        return "salud"
+        return "historial"
     })
     
     // Sincronizar estado si la URL cambia (ej: por botones de navegación)
@@ -102,11 +102,11 @@ export function LoanTabs({
                     {isPending && (
                         <div className="absolute inset-0 bg-blue-500/5 animate-pulse" />
                     )}
-                    <TabsTrigger value="salud" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
-                        <Activity className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Salud
-                    </TabsTrigger>
                     <TabsTrigger value="historial" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
                         <History className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Historial
+                    </TabsTrigger>
+                    <TabsTrigger value="salud" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white transition-all">
+                        <Activity className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" /> Salud
                     </TabsTrigger>
                     {isAdmin && (
                         <TabsTrigger value="cronograma" className="h-7 px-2 md:px-4 text-[10px] md:text-xs data-[state=active]:bg-slate-800 whitespace-nowrap text-slate-400 data-[state=active]:text-white">

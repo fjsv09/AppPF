@@ -80,6 +80,32 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
         .map((r: any) => r.prestamo_nuevo_id as string)
         .filter(Boolean)
 
+    // [NUEVO] Obtener configuración de reputación para evaluación precisa
+    const { data: configRows } = await supabaseAdmin
+        .from('configuracion_sistema')
+        .select('clave, valor')
+        .in('clave', [
+            'reputation_bonus_finalizado',
+            'reputation_bonus_renovado',
+            'reputation_bonus_salud_excelente',
+            'reputation_penalty_refinanciado',
+            'reputation_penalty_vencido',
+            'reputation_penalty_salud_pobre',
+            'reputation_bonus_antiguedad_mensual',
+            'score_peso_puntual',
+            'score_peso_tarde',
+            'score_peso_cpp',
+            'score_peso_moroso',
+            'score_peso_vencido',
+            'score_peso_diario_atraso',
+            'score_tope_atraso_cuota',
+            'score_mult_semanal',
+            'score_mult_quincenal',
+            'score_mult_mensual'
+        ])
+    
+    const systemConfig = (configRows || []).reduce((acc: any, row: any) => ({ ...acc, [row.clave]: row.valor }), {})
+
     // [NUEVO] Evaluación Integral Centralizada
     const { 
         healthScore, 
@@ -87,7 +113,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
         reputationData, 
         reputationScore, 
         paymentHabits 
-    } = getComprehensiveEvaluation(cliente, loans || [])
+    } = getComprehensiveEvaluation(cliente, loans || [], [], undefined, systemConfig)
 
     const { pctEfectivo, pctDigital, totalPayments } = paymentHabits
 

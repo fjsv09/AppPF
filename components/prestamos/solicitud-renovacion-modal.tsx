@@ -7,12 +7,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { RefreshCw, Loader2, AlertTriangle, CheckCircle2, XCircle, Lock, ChevronDown, ChevronUp, TrendingUp, TrendingDown } from 'lucide-react'
+import { RefreshCw, Loader2, AlertTriangle, CheckCircle2, XCircle, Lock, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, ShieldCheck, FileSearch } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
-import { ScoreIndicator, ScoreBreakdown, ScoreLimitRules } from '@/components/ui/score-indicator'
+import { ScoreIndicator, ScoreBreakdown, ScoreLimitRules, ReputationBreakdown } from '@/components/ui/score-indicator'
 import { ClientReputationGauge } from '@/components/ui/client-reputation-gauge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { cn } from '@/lib/utils'
 import { formatMoney } from '@/utils/format'
 import { calculateLoanScore, calculateClientReputation } from '@/lib/financial-logic'
@@ -101,7 +103,6 @@ export function SolicitudRenovacionModal({
     const [elegibilidad, setElegibilidad] = useState<any>(null)
     const [error, setError] = useState<string | null>(null)
     const [selectedCuenta, setSelectedCuenta] = useState<string>('')
-    const [showScoreBreakdown, setShowScoreBreakdown] = useState(false)
     const router = useRouter()
 
     // Lógica de Horario Síncrona para bloqueo preventivo inmediato
@@ -411,58 +412,81 @@ export function SolicitudRenovacionModal({
                             <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-purple-500/5 pointer-events-none" />
                             
                             <div className="relative flex flex-col gap-6">
-                                <div className="grid grid-cols-2 sm:grid-cols-[1fr_1fr_auto_1.5fr] items-center gap-4 sm:gap-6">
+                                <div className="grid grid-cols-2 items-center gap-4">
                                     {/* Left: Health Score (Current Loan) */}
-                                    <div className="flex flex-col items-center gap-2 p-2 bg-white/5 rounded-2xl border border-white/5">
-                                        <span className="text-[8px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Salud Préstamo</span>
+                                    <div className="flex flex-col items-center gap-2 p-3 bg-white/5 rounded-2xl border border-white/5">
+                                        <span className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-widest leading-none">Salud Préstamo</span>
                                         <ScoreIndicator score={elegibilidad.healthScore || elegibilidad.score} size="md" />
                                     </div>
 
                                     {/* Right: Reputation Score (Client History) */}
-                                    <div className="flex flex-col items-center gap-2 p-2 bg-white/5 rounded-2xl border border-white/5">
-                                        <span className="text-[8px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Reputación Cliente</span>
+                                    <div className="flex flex-col items-center gap-2 p-3 bg-white/5 rounded-2xl border border-white/5">
+                                        <span className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-widest leading-none">Reputación Cliente</span>
                                         <ClientReputationGauge score={elegibilidad.reputationScore || elegibilidad.score} size="md" showLabel={true} />
                                     </div>
-
-                                    <div className="hidden sm:block w-px h-24 bg-slate-800/80" />
-
-                                    {/* Right Panel: Decision Summary */}
-                                    <div className="col-span-2 sm:col-span-1 space-y-3">
-                                        <div className="p-3 rounded-xl bg-slate-900/60 border border-white/5 shadow-sm">
-                                            <h4 className="text-[9px] font-black text-blue-400 uppercase tracking-tighter mb-2 flex items-center justify-between">
-                                                Capacidad Renovación
-                                                <span className="bg-blue-500/10 text-blue-300 px-1.5 py-0.5 rounded-[4px] text-[7px] animate-pulse">Dual-Score Activo</span>
-                                            </h4>
-                                            <ScoreLimitRules 
-                                                healthScore={elegibilidad.healthScore || elegibilidad.score} 
-                                                reputationScore={elegibilidad.reputationScore || elegibilidad.score} 
-                                            />
-                                        </div>
-                                        
-                                        <button 
-                                            type="button"
-                                            onClick={() => setShowScoreBreakdown(!showScoreBreakdown)}
-                                            className="w-full flex items-center justify-center gap-1.5 py-1 text-[9px] font-black text-slate-500 hover:text-slate-300 transition-all uppercase tracking-widest border border-dashed border-slate-800 rounded-lg hover:bg-slate-800/50"
-                                        >
-                                            {showScoreBreakdown ? (
-                                                <><ChevronUp className="w-3.5 h-3.5" /> Cerrar Detalle</>
-                                            ) : (
-                                                <><ChevronDown className="w-3.5 h-3.5" /> Auditoría de Puntos</>
-                                            )}
-                                        </button>
-                                    </div>
                                 </div>
+
+                                <Accordion type="single" collapsible className="w-full">
+                                    <AccordionItem value="analisis" className="border-none">
+                                        <AccordionTrigger className="hover:no-underline py-2 bg-blue-500/5 hover:bg-blue-500/10 rounded-xl px-4 border border-white/5 transition-all">
+                                            <div className="flex items-center gap-2">
+                                                <FileSearch className="w-4 h-4 text-blue-400" />
+                                                <span className="text-[11px] font-black text-slate-300 uppercase tracking-[0.2em]">Ver Análisis de Score y Reglas</span>
+                                            </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent className="pt-6">
+                                            <Tabs defaultValue="recomendacion" className="w-full">
+                                                <TabsList className="grid w-full grid-cols-2 bg-slate-900/80 border border-white/5 h-11 p-1 rounded-xl">
+                                                    <TabsTrigger value="recomendacion" className="rounded-lg text-[10px] uppercase font-black tracking-widest data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all">
+                                                        Recomendación
+                                                    </TabsTrigger>
+                                                    <TabsTrigger value="auditoria" className="rounded-lg text-[10px] uppercase font-black tracking-widest data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all">
+                                                        Detalle Auditado
+                                                    </TabsTrigger>
+                                                </TabsList>
+                                                
+                                                <TabsContent value="recomendacion" className="mt-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                                                    <ScoreLimitRules 
+                                                        healthScore={elegibilidad.healthScore || elegibilidad.score} 
+                                                        reputationScore={elegibilidad.reputationScore || elegibilidad.score} 
+                                                    />
+                                                </TabsContent>
+                                                
+                                                <TabsContent value="auditoria" className="mt-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                                                    <Accordion type="multiple" defaultValue={['salud']} className="w-full space-y-2">
+                                                        <AccordionItem value="salud" className="border border-white/5 bg-white/[0.02] rounded-xl overflow-hidden px-4">
+                                                            <AccordionTrigger className="hover:no-underline py-3">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Activity className="w-4 h-4 text-emerald-400" />
+                                                                    <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Auditoría Salud</span>
+                                                                </div>
+                                                            </AccordionTrigger>
+                                                            <AccordionContent>
+                                                                <ScoreBreakdown loanScore={elegibilidad.loanScoreData} />
+                                                            </AccordionContent>
+                                                        </AccordionItem>
+
+                                                        <AccordionItem value="reputacion" className="border border-white/5 bg-white/[0.02] rounded-xl overflow-hidden px-4">
+                                                            <AccordionTrigger className="hover:no-underline py-3">
+                                                                <div className="flex items-center gap-2">
+                                                                    <ShieldCheck className="w-4 h-4 text-blue-400" />
+                                                                    <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Auditoría Reputación</span>
+                                                                </div>
+                                                            </AccordionTrigger>
+                                                            <AccordionContent>
+                                                                <ReputationBreakdown reputationData={elegibilidad.reputationData} />
+                                                            </AccordionContent>
+                                                        </AccordionItem>
+                                                    </Accordion>
+                                                    <p className="text-[9px] text-slate-500 italic text-center pt-4 border-t border-white/5 mt-4">
+                                                        * Los datos auditados combinan puntualidad actual e historial acumulado.
+                                                    </p>
+                                                </TabsContent>
+                                            </Tabs>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                </Accordion>
                             </div>
-
-                            {/* Panel de Desglose (Salud) */}
-                            {showScoreBreakdown && (
-                                <div className="mt-4 pt-4 border-t border-slate-700/50 animate-in fade-in slide-in-from-top-2 duration-300">
-                                    <ScoreBreakdown loanScore={elegibilidad.loanScoreData} />
-                                    <p className="text-[9px] text-slate-500 italic mt-3 text-center border-t border-white/5 pt-2">
-                                        * El desglose muestra los factores individuales del préstamo actual.
-                                    </p>
-                                </div>
-                            )}
                         </div>
 
                         {/* Alerta: Producto de Refinanciamiento */}
@@ -484,11 +508,11 @@ export function SolicitudRenovacionModal({
                             <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-3 flex items-start gap-3">
                                 <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
                                 <div>
-                                    <p className="text-amber-400 font-medium text-sm">Requiere Excepción</p>
+                                    <p className="text-amber-400 font-medium text-sm">Requiere Verificación</p>
                                     <p className="text-slate-400 text-xs mt-0.5">
-                                        {elegibilidad.tipo_excepcion === 'mora' && 'El préstamo está en estado de mora. Un supervisor o admin debe aprobar la excepción.'}
-                                        {elegibilidad.tipo_excepcion === 'vencido' && 'El préstamo está vencido. Se requiere excepción o refinanciamiento.'}
-                                        {elegibilidad.tipo_excepcion === 'score_bajo' && 'El score crediticio es bajo. Un supervisor o admin debe aprobar la excepción.'}
+                                        {elegibilidad.tipo_excepcion === 'mora' && 'El préstamo está en estado de mora. Un supervisor o admin debe aprobar la verificación.'}
+                                        {elegibilidad.tipo_excepcion === 'vencido' && 'El préstamo está vencido. Se requiere verificación o refinanciamiento.'}
+                                        {elegibilidad.tipo_excepcion === 'score_bajo' && 'El score crediticio es bajo. Un supervisor o admin debe aprobar la verificación.'}
                                     </p>
                                 </div>
                             </div>

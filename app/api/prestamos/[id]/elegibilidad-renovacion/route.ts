@@ -1,7 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
-import { getComprehensiveEvaluation, getTodayPeru, calculateRenovationAdjustment, getLoanHealthScoreAction } from '@/lib/financial-logic'
+import { getComprehensiveEvaluation, getTodayPeru, calculateRenovationAdjustment, getLoanHealthScoreAction, getFinancialConfig } from '@/lib/financial-logic'
 
 export const dynamic = 'force-dynamic'
 
@@ -183,18 +183,24 @@ export async function GET(
             .select('*, cronograma_cuotas(prestamo_id)')
             .in('cuota_id', allClientCuotasIds)
 
-        // [NUEVO] CALCULAR EVALUACIÓN INTEGRAL CENTRALIZADA (Garantiza paridad con el Dashboard)
-        const evaluation = getComprehensiveEvaluation(loanFull.clientes, allClientLoans || [], qAllPayments || [], id)
+        // [ATOMICO] Obtener Salud del Préstamo (La "Verdad" de 18 PTS)
+        // Obtenemos primero el score atómico para garantizar que el ajuste se base en la realidad del dashboard.
+        const atomicHealthScore = await getLoanHealthScoreAction(supabaseAdmin, id)
+
+        // [NUEVO] Obtener configuración centralizada para parámetros de score/reputación
+        const systemConfig = await getFinancialConfig(supabaseAdmin)
+
+        // [NUEVO] CALCULAR EVALUACIÓN INTEGRAL CENTRALIZADA (Garantiza paridad con el Dashboard para reputación)
+        const evaluation = getComprehensiveEvaluation(loanFull.clientes, allClientLoans || [], qAllPayments || [], id, systemConfig)
 
         // [NUEVO] CALCULAR AJUSTE DE CAPITAL SEGÚN REGLAS DE NEGOCIO ACTUALIZADAS
+        // CRÍTICO: Usar el score atómico (27 en el caso del usuario) para que calculateRenovationAdjustment 
+        // detecte el riesgo y aplique la reducción del -15%.
         const adjustment = calculateRenovationAdjustment(
-            evaluation.healthScore, 
+            atomicHealthScore.score, 
             evaluation.reputationScore, 
             responseElegibilidad.monto_original || loanFull.monto
         )
-
-        // [ATOMICO] Obtener Salud del Préstamo (La "Verdad" de 18 PTS)
-        const atomicHealthScore = await getLoanHealthScoreAction(supabaseAdmin, id)
 
         // Actualizar respuesta con los nuevos scores y LÍMITES sincronizados
         const finalResponse = {

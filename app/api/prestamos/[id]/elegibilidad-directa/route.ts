@@ -1,7 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
-import { getComprehensiveEvaluation, getTodayPeru } from '@/lib/financial-logic'
+import { getComprehensiveEvaluation, getTodayPeru, calculateRenovationAdjustment, getLoanHealthScoreAction, getFinancialConfig } from '@/lib/financial-logic'
 
 export const dynamic = 'force-dynamic'
 
@@ -89,18 +89,25 @@ export async function GET(
             .select('*, cronograma_cuotas!inner(prestamo_id)')
             .in('cronograma_cuotas.prestamo_id', prestamoIds)
 
+        // [ATOMICO] Obtener Salud del Préstamo (La "Verdad" de 18 PTS)
+        const atomicHealthScore = await getLoanHealthScoreAction(supabaseAdmin, id)
+
+        // [NUEVO] Obtener configuración centralizada
+        const systemConfig = await getFinancialConfig(supabaseAdmin)
+
         // [NUEVO] CALCULAR EVALUACIÓN INTEGRAL CENTRALIZADA (con optimización de pagos e ID específico)
-        const evaluation = getComprehensiveEvaluation(loanFull.clientes as any, allClientLoans || [], qAllPayments || [], id)
+        const evaluation = getComprehensiveEvaluation(loanFull.clientes as any, allClientLoans || [], qAllPayments || [], id, systemConfig)
 
-        // Límites según Score (reusando lógica original de elegibilidad)
-        const montoOriginal = Number(prestamo.monto) || 0;
-        let montoMaximo = montoOriginal;
+        // [NUEVO] CALCULAR AJUSTE DE CAPITAL SEGÚN REGLAS DE NEGOCIO ACTUALIZADAS
+        const adjustment = calculateRenovationAdjustment(
+            atomicHealthScore.score, 
+            evaluation.reputationScore, 
+            prestamo.monto
+        )
+
+        const montoOriginal = prestamo.monto;
+        let montoMaximo = adjustment.montoSugerido;
         let montoMinimo = montoOriginal * 0.5;
-
-        // Reglas de negocio básicas para Admin (flexibles)
-        if (evaluation.healthScore >= 80) montoMaximo = montoOriginal * 1.40;
-        else if (evaluation.healthScore >= 60) montoMaximo = montoOriginal * 1.20;
-        else if (evaluation.healthScore < 40) montoMaximo = montoOriginal * 0.8;
 
         if (saldoPendiente > 0) {
             montoMinimo = Math.max(montoMinimo, saldoPendiente);
@@ -118,16 +125,17 @@ export async function GET(
         // Respuesta siempre elegible para el Admin
         const elegibilidadMock = {
             elegible: true,
-            score: evaluation.healthScore, // Legacy support
-            healthScore: evaluation.healthScore,
+            score: atomicHealthScore.score, // Legacy support
+            healthScore: atomicHealthScore.score,
             reputationScore: evaluation.reputationScore,
-            loanScoreData: evaluation.healthScoreData,
-            score_detalle: evaluation.healthScoreData, // Legacy support fix
+            loanScoreData: atomicHealthScore,
+            score_detalle: atomicHealthScore, // Legacy support fix
             porcentaje_pagado: parseFloat(porcentajePagado.toFixed(2)),
             monto_original: prestamo.monto,
             saldo_pendiente: parseFloat(saldoPendiente.toFixed(2)),
             monto_maximo: parseFloat(montoMaximo.toFixed(2)),
             monto_minimo: parseFloat(montoMinimo.toFixed(2)),
+            ajuste_recomendado_pct: adjustment.totalPotentialPct, // Sincronizado
             requiere_excepcion: true,
             tipo_excepcion: 'mora_critica',
             estado_prestamo: prestamo.estado,

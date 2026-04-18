@@ -32,6 +32,10 @@ interface Visita {
         cliente_id?: string
         cliente?: { nombres: string; dni: string; id: string; telefono: string } | null
     } | null
+    // Enriquesimiento (opcional)
+    gestion_resultado?: string
+    gestion_notas?: string
+    gestion_tipo?: string
 }
 
 interface VisitasListProps {
@@ -130,7 +134,13 @@ export function VisitasList({ visitas, userId }: VisitasListProps) {
 
             if (resGestion.ok) {
                 setVisitasState(prev =>
-                    prev.map(v => v.id === visitaActiva.id ? { ...v, estado: 'completada' } : v)
+                    prev.map(v => v.id === visitaActiva.id ? { 
+                        ...v, 
+                        estado: 'completada',
+                        gestion_resultado: resultado,
+                        gestion_notas: notas,
+                        gestion_tipo: tipoGestion
+                    } : v)
                 )
                 handleCerrar()
                 toast.success('Gestión completada y registrada correctamente')
@@ -257,25 +267,49 @@ export function VisitasList({ visitas, userId }: VisitasListProps) {
                     {completadas.map(visita => {
                         const cliente = visita.prestamo?.cliente
                         return (
-                            <div key={visita.id} className="bg-slate-900/30 border border-slate-800/50 rounded-2xl p-4 opacity-70">
-                                <div className="flex items-center justify-between gap-3">
+                            <div key={visita.id} className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 transition-all hover:bg-slate-900/60 group">
+                                <div className="flex items-start justify-between gap-3">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-emerald-900/20 border border-emerald-800/30 flex items-center justify-center shrink-0">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-950/20 border border-emerald-900/30 flex items-center justify-center shrink-0">
                                             <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                                         </div>
                                         <div>
-                                            <p className="text-sm font-medium text-slate-400">
+                                            <p className="text-sm font-bold text-slate-300">
                                                 {cliente?.nombres || 'Cliente'}
                                             </p>
-                                            <p className="text-[10px] text-slate-600">
-                                                Completada {formatDatePeru(visita.created_at)}
-                                            </p>
+                                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                                                <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[9px] h-4 py-0 uppercase">
+                                                    {visita.gestion_tipo || 'Gestión'}
+                                                </Badge>
+                                                <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
+                                                    <span>{formatDatePeru(visita.created_at)}</span>
+                                                    {visita.asesor?.nombre_completo && (
+                                                        <>
+                                                            <span className="w-1 h-1 rounded-full bg-slate-800" />
+                                                            <div className="flex items-center gap-1">
+                                                                <User className="w-2.5 h-2.5" />
+                                                                <span className="font-medium text-slate-500">{visita.asesor.nombre_completo}</span>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px]">
-                                        COMPLETADA
+                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-[10px] font-bold">
+                                        {visita.gestion_resultado || 'COMPLETADA'}
                                     </Badge>
                                 </div>
+
+                                {/* Notas del asesor si existen */}
+                                {visita.gestion_notas && (
+                                    <div className="mt-2.5 ml-[3.25rem] flex flex-col gap-1 border-l-2 border-slate-800/50 pl-3">
+                                        <p className="text-[10px] font-bold text-slate-600 uppercase tracking-tight">Observaciones</p>
+                                        <p className="text-xs text-slate-500 italic leading-snug">
+                                            &quot;{visita.gestion_notas}&quot;
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         )
                     })}

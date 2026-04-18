@@ -74,7 +74,14 @@ export default async function ConfiguracionPage() {
             'score_tope_atraso_cuota',
             'score_mult_semanal',
             'score_mult_quincenal',
-            'score_mult_mensual'
+            'score_mult_mensual',
+            'reputation_bonus_finalizado',
+            'reputation_bonus_renovado',
+            'reputation_bonus_salud_excelente',
+            'reputation_penalty_refinanciado',
+            'reputation_penalty_vencido',
+            'reputation_penalty_salud_pobre',
+            'reputation_bonus_antiguedad_mensual'
         ])
         .order('clave')
     

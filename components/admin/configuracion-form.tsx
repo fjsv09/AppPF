@@ -4,11 +4,19 @@ import { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Settings, Save, AlertCircle, CheckCircle2, Loader2, Lock, Upload, Image as ImageIcon, X } from 'lucide-react'
+import { 
+    Settings, Save, AlertCircle, Loader2, Lock, Upload, X, 
+    Clock, MapPin, Scale, Activity, Award, Layout, ChevronRight
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { cn } from '@/lib/utils'
+import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from "@/components/ui/accordion"
 
 interface ConfigItem {
     clave: string
@@ -54,7 +62,7 @@ const CONFIG_LABELS: Record<string, { nombre: string; descripcion: string; min?:
     },
     'refinanciacion_min_mora': {
         nombre: 'Límite de Refinanciación Directa (Admin)',
-        descripcion: 'Porcentaje mínimo de mora (cuotas vencidas vs totales) para permitir botón de refinanciación directa (Aprobación automática)',
+        descripcion: 'Mora mínima para permitir botón de refinanciación directa',
         min: 10,
         max: 100
     },
@@ -80,7 +88,7 @@ const CONFIG_LABELS: Record<string, { nombre: string; descripcion: string; min?:
         nombre: 'Sesión de Emergencia (Minutos)',
         descripcion: 'Ingresa los minutos que deseas desbloquear el sistema desde ahora',
         min: 1,
-        max: 480 // Máximo 8 horas
+        max: 480
     },
     'nombre_sistema': {
         nombre: 'Nombre del Sistema',
@@ -92,13 +100,13 @@ const CONFIG_LABELS: Record<string, { nombre: string; descripcion: string; min?:
     },
     'visita_tiempo_minimo': {
         nombre: 'Tiempo Mínimo de Visita (min)',
-        descripcion: 'Minutos que el asesor debe permanecer en la ubicación para dar por válida la visita',
+        descripcion: 'Minutos que el asesor debe permanecer en la ubicación',
         min: 1,
         max: 60
     },
     'asistencia_radio_metros': {
         nombre: 'Radio de Asistencia (metros)',
-        descripcion: 'Distancia máxima permitida desde la oficina para marcar asistencia GPS',
+        descripcion: 'Distancia máxima permitida desde la oficina',
         min: 10,
         max: 500
     },
@@ -108,102 +116,199 @@ const CONFIG_LABELS: Record<string, { nombre: string; descripcion: string; min?:
     },
     'asistencia_tolerancia_minutos': {
         nombre: 'Tolerancia de Asistencia (min)',
-        descripcion: 'Minutos de gracia después de la hora de apertura antes de marcar tardanza',
+        descripcion: 'Minutos de gracia antes de marcar tardanza',
         min: 0,
         max: 60
     },
     'oficina_lat': {
         nombre: 'Latitud de la Oficina',
-        descripcion: 'Coordenada GPS latitud del centro de la oficina principal',
+        descripcion: 'Coordenada GPS latitud',
     },
     'oficina_lon': {
         nombre: 'Longitud de la Oficina',
-        descripcion: 'Coordenada GPS longitud del centro de la oficina principal',
+        descripcion: 'Coordenada GPS longitud',
     },
     'visita_radio_maximo': {
         nombre: 'Radio Máximo de Visita (metros)',
-        descripcion: 'Distancia máxima permitida entre el asesor y el cliente para iniciar/finalizar una visita',
+        descripcion: 'Distancia máxima permitida para iniciar/finalizar visita',
         min: 10,
         max: 5000
     },
     'score_peso_puntual': {
         nombre: 'Peso: Puntualidad (+)',
-        descripcion: 'Puntos que se SUMAN por cada cuota pagada a tiempo o adelantada',
+        descripcion: 'Puntos por cuota pagada a tiempo',
         min: 0,
         max: 20
     },
     'score_peso_adelantado': {
         nombre: 'Peso: Adelanto (+)',
-        descripcion: 'Puntos que se SUMAN por adelantar cuotas',
+        descripcion: 'Puntos por adelantar cuotas',
         min: 0,
         max: 20
     },
     'score_peso_diario_atraso': {
         nombre: 'Penalidad: Día Atrasado (-)',
-        descripcion: 'Puntos que se RESTAN por cada día que una cuota esté vencida',
+        descripcion: 'Puntos que se RESTAN por cada día vencido',
         min: 0,
         max: 10
     },
     'score_tope_atraso_cuota': {
         nombre: 'Tope: Penalidad por Cuota (-)',
-        descripcion: 'Punto máximo de descuento por una sola cuota con atraso',
+        descripcion: 'Punto máximo de descuento por una sola cuota',
         min: 0,
         max: 100
     },
     'score_peso_tarde': {
         nombre: 'Peso: Pago Tarde (-)',
-        descripcion: 'Puntos que se RESTAN por cada cuota pagada fuera de fecha',
+        descripcion: 'Puntos que se RESTAN por cuota fuera de fecha',
         min: 0,
         max: 50
     },
     'score_peso_cpp': {
         nombre: 'Peso: Riesgo CPP (-)',
-        descripcion: 'Puntos que se RESTAN si el atraso máximo es de 2 a 8 días',
+        descripcion: 'Puntos que se RESTAN por riesgo bajo (2 a 8 días)',
         min: 0,
         max: 50
     },
     'score_peso_moroso': {
         nombre: 'Peso: Riesgo Moroso (-)',
-        descripcion: 'Puntos que se RESTAN si el atraso máximo es de 8 a 30 días',
+        descripcion: 'Puntos que se RESTAN por riesgo medio (8 a 30 días)',
         min: 0,
         max: 100
     },
     'score_peso_vencido': {
         nombre: 'Peso: Riesgo Vencido (-)',
-        descripcion: 'Puntos que se RESTAN si el atraso supera los 30 días o el contrato expiró',
+        descripcion: 'Puntos que se RESTAN por riesgo alto (> 30 días)',
         min: 0,
         max: 100
     },
     'score_mult_semanal': {
         nombre: 'Multiplicador Semanal',
-        descripcion: 'Factor por el que se multiplican los puntos en préstamos semanales',
+        descripcion: 'Factor para préstamos semanales',
         min: 1,
         max: 10
     },
     'score_mult_quincenal': {
         nombre: 'Multiplicador Quincenal',
-        descripcion: 'Factor por el que se multiplican los puntos en préstamos quincenales',
+        descripcion: 'Factor para préstamos quincenales',
         min: 1,
         max: 20
     },
     'score_mult_mensual': {
         nombre: 'Multiplicador Mensual',
-        descripcion: 'Factor por el que se multiplican los puntos en préstamos mensuales',
+        descripcion: 'Factor para préstamos mensuales',
         min: 1,
         max: 50
+    },
+    'reputation_bonus_finalizado': {
+        nombre: 'Bono por Finalizado (+)',
+        descripcion: 'Puntos cuando un préstamo se liquida con éxito.',
+        min: 0,
+        max: 50
+    },
+    'reputation_bonus_renovado': {
+        nombre: 'Bono por Renovación (+)',
+        descripcion: 'Puntos al renovar un préstamo activo.',
+        min: 0,
+        max: 50
+    },
+    'reputation_bonus_salud_excelente': {
+        nombre: 'Bono Salud Excelente (+)',
+        descripcion: 'Puntos extra si el promedio de salud es > 85%.',
+        min: 0,
+        max: 30
+    },
+    'reputation_penalty_refinanciado': {
+        nombre: 'Castigo Refinanciado (-)',
+        descripcion: 'Puntos que se RESTAN por préstamo refinanciado.',
+        min: 0,
+        max: 100
+    },
+    'reputation_penalty_vencido': {
+        nombre: 'Castigo Vencido (-)',
+        descripcion: 'Puntos que se RESTAN por préstamo vencido.',
+        min: 0,
+        max: 100
+    },
+    'reputation_penalty_salud_pobre': {
+        nombre: 'Castigo Salud Pobre (-)',
+        descripcion: 'Puntos que se RESTAN si salud histórica < 50%.',
+        min: 0,
+        max: 100
+    },
+    'reputation_bonus_antiguedad_mensual': {
+        nombre: 'Bono Antigüedad (+)',
+        descripcion: 'Puntos por cada mes de antigüedad.',
+        min: 0,
+        max: 10
     }
 }
+
+const CATEGORIES = [
+    {
+        id: 'horarios',
+        nombre: 'Configuración Horarios',
+        descripcion: 'Control de apertura, cierre y sesiones de emergencia.',
+        icon: Clock,
+        iconColor: 'text-blue-400',
+        bgColor: 'bg-blue-500/10',
+        keys: ['horario_apertura', 'horario_cierre', 'horario_fin_turno_1', 'tiempo_gracia_post_cuadre', 'desbloqueo_hasta']
+    },
+    {
+        id: 'asistencia',
+        nombre: 'Configuración de Asistencia',
+        descripcion: 'Parámetros de puntualidad y ubicación de oficina.',
+        icon: MapPin,
+        iconColor: 'text-emerald-400',
+        bgColor: 'bg-emerald-500/10',
+        keys: ['asistencia_descuento_por_minuto', 'asistencia_radio_metros', 'asistencia_tolerancia_minutos', 'oficina_lat', 'oficina_lon']
+    },
+    {
+        id: 'politicas',
+        nombre: 'Políticas de Crédito',
+        descripcion: 'Reglas para renovaciones y refinanciaciones.',
+        icon: Scale,
+        iconColor: 'text-amber-400',
+        bgColor: 'bg-amber-500/10',
+        keys: ['renovacion_min_pagado', 'refinanciacion_min_mora', 'umbral_cpp_cuotas', 'umbral_moroso_cuotas', 'umbral_cpp_otros', 'umbral_moroso_otros']
+    },
+    {
+        id: 'salud',
+        nombre: 'Health Score (Salud)',
+        descripcion: 'Pesos y multiplicadores para el cálculo de salud del préstamo.',
+        icon: Activity,
+        iconColor: 'text-rose-400',
+        bgColor: 'bg-rose-500/10',
+        keys: ['score_peso_puntual', 'score_peso_adelantado', 'score_peso_tarde', 'score_peso_cpp', 'score_peso_moroso', 'score_peso_vencido', 'score_peso_diario_atraso', 'score_tope_atraso_cuota', 'score_mult_semanal', 'score_mult_quincenal', 'score_mult_mensual']
+    },
+    {
+        id: 'reputacion',
+        nombre: 'Reputación del Cliente',
+        descripcion: 'Bonos y penalidades del sistema de reputación.',
+        icon: Award,
+        iconColor: 'text-purple-400',
+        bgColor: 'bg-purple-500/10',
+        keys: ['reputation_bonus_finalizado', 'reputation_bonus_renovado', 'reputation_bonus_salud_excelente', 'reputation_penalty_refinanciado', 'reputation_penalty_vencido', 'reputation_penalty_salud_pobre', 'reputation_bonus_antiguedad_mensual']
+    },
+    {
+        id: 'sistema',
+        nombre: 'Sistema & Seguimiento',
+        descripcion: 'Personalización básica y límites de visitas.',
+        icon: Layout,
+        iconColor: 'text-slate-400',
+        bgColor: 'bg-slate-500/10',
+        keys: ['nombre_sistema', 'logo_sistema_url', 'visita_tiempo_minimo', 'visita_radio_maximo']
+    }
+]
 
 export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
     const router = useRouter()
     const [config, setConfig] = useState<Record<string, string>>(() => {
         return initialConfig.reduce((acc: any, item) => {
             let val = item.valor;
-            // Normalizar horarios (ej: "3" -> "03:00")
             if ((item.clave.includes('horario') || item.clave.includes('cuadre')) && val && !val.includes(':') && !isNaN(Number(val))) {
                 val = `${val.padStart(2, '0')}:00`;
             }
-            // [NUEVO] Si es desbloqueo, calcular minutos restantes para mostrar
             if (item.clave === 'desbloqueo_hasta' && val && val.includes('T')) {
                 const target = new Date(val)
                 const now = new Date()
@@ -251,36 +356,27 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         setUploadingLogo(true)
 
         try {
-            // Validar tipo de archivo
             if (!file.type.startsWith('image/')) {
                 throw new Error('El archivo debe ser una imagen')
             }
-
-            // Validar tamaño (2MB)
             if (file.size > 2 * 1024 * 1024) {
                 throw new Error('La imagen es demasiado grande (máx 2MB)')
             }
-
             const formData = new FormData()
             formData.append('file', file)
-
             const response = await fetch('/api/configuracion/upload-logo', {
                 method: 'POST',
                 body: formData
             })
-
             if (!response.ok) {
                 const error = await response.json()
                 throw new Error(error.error || 'Error al subir el logo')
             }
-
             const data = await response.json()
             const freshUrl = data.publicUrl
-            
             setConfig(prev => ({ ...prev, logo_sistema_url: freshUrl }))
-            
             toast.success('Logo subido', {
-                description: 'La imagen ha sido cargada. Recuerda guardar el cambio para aplicarlo permanentemente.'
+                description: 'La imagen ha sido cargada. Recuerda guardar el cambio.'
             })
         } catch (error: any) {
             toast.error('Error al subir logo', {
@@ -297,25 +393,22 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
             let valor = config[clave]
             const meta = CONFIG_LABELS[clave]
 
-            // Formateo automático de horarios
             if (clave.includes('horario')) {
-                // Si solo pone un número (ej: "3" o "15"), convertir a "03:00" o "15:00"
                 if (valor && !valor.includes(':') && !isNaN(Number(valor))) {
                     const hour = valor.padStart(2, '0')
                     valor = `${hour}:00`
                 }
             }
 
-            // Validación (Solo para números)
             if (!clave.includes('horario') && !clave.includes('desbloqueo') && !clave.includes('nombre') && !clave.includes('logo')) {
                 const numValor = parseInt(valor)
                 if (isNaN(numValor)) {
                     throw new Error('El valor debe ser un número')
                 }
-                if (meta?.min && numValor < meta.min) {
+                if (meta?.min !== undefined && numValor < meta.min) {
                     throw new Error(`El valor mínimo es ${meta.min}`)
                 }
-                if (meta?.max && numValor > meta.max) {
+                if (meta?.max !== undefined && numValor > meta.max) {
                     throw new Error(`El valor máximo es ${meta.max}`)
                 }
             }
@@ -351,7 +444,7 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         if (clave.includes('moroso')) return '⚠️'
         if (clave.includes('horario')) return '🕒'
         if (clave.includes('desbloqueo')) return '🔓'
-        if (clave.includes('score')) return '📈'
+        if (clave.includes('score') || clave.includes('reputation')) return '📈'
         if (clave.includes('nombre')) return '🏷️'
         if (clave.includes('logo')) return '🖼️'
         if (clave.includes('visita')) return '📍'
@@ -360,40 +453,7 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         return '⚙️'
     }
 
-    // Ensure all required keys exist in the display list
-    const requiredKeys = [
-        'renovacion_min_pagado', 
-        'umbral_cpp_cuotas', 
-        'umbral_moroso_cuotas', 
-        'umbral_cpp_otros',
-        'umbral_moroso_otros',
-        'refinanciacion_min_mora',
-        'horario_apertura',
-        'horario_cierre',
-        'horario_fin_turno_1',
-        'tiempo_gracia_post_cuadre',
-        'desbloqueo_hasta',
-        'nombre_sistema',
-        'logo_sistema_url',
-        'visita_tiempo_minimo',
-        'asistencia_radio_metros',
-        'asistencia_descuento_por_minuto',
-        'asistencia_tolerancia_minutos',
-        'oficina_lat',
-        'oficina_lon',
-        'visita_radio_maximo',
-        'score_peso_puntual',
-        'score_peso_tarde',
-        'score_peso_cpp',
-        'score_peso_moroso',
-        'score_peso_vencido',
-        'score_peso_diario_atraso',
-        'score_tope_atraso_cuota',
-        'score_mult_semanal',
-        'score_mult_quincenal',
-        'score_mult_mensual'
-    ]
-
+    const requiredKeys = CATEGORIES.flatMap(c => c.keys)
     const displayConfig = [...initialConfig]
     requiredKeys.forEach(key => {
         if (!displayConfig.find(item => item.clave === key)) {
@@ -403,7 +463,7 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
                     key === 'horario_apertura' ? '10:00' : 
                     key === 'horario_cierre' ? '19:00' : 
                     key === 'horario_fin_turno_1' ? '13:30' :
-                    'N/A',
+                    '0',
                 descripcion: CONFIG_LABELS[key]?.descripcion || 'Configuración del sistema',
                 tipo: 'string'
             })
@@ -411,180 +471,208 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
     })
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-12">
-            {displayConfig.map((item) => {
-                const meta = CONFIG_LABELS[item.clave]
-                const isEditing = editingKey === item.clave
-                const currentValue = config[item.clave] || item.valor
-
-                return (
-                    <div 
-                        key={item.clave}
-                        className={cn(
-                            "bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-4 transition-all flex flex-col justify-between group",
-                            isEditing ? "border-blue-500/30 bg-slate-900/60 ring-1 ring-blue-500/10" : "hover:border-slate-700"
-                        )}
+        <div className="pb-12">
+            <Accordion type="multiple" defaultValue={['horarios']} className="space-y-4">
+                {CATEGORIES.map((cat) => (
+                    <AccordionItem 
+                        key={cat.id} 
+                        value={cat.id}
+                        className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-2xl overflow-hidden px-1"
                     >
-                        <div>
-                            <div className="flex items-start justify-between gap-3 mb-3">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-9 h-9 shrink-0 rounded-lg bg-slate-800/50 flex items-center justify-center text-xl border border-slate-700/30">
-                                        {getIcon(item.clave)}
-                                    </div>
-                                    <div>
-                                        <h3 className="text-sm font-bold text-slate-200 leading-tight">
-                                            {meta?.nombre || item.clave}
-                                        </h3>
-                                        <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">
-                                            {meta?.descripcion || item.descripcion}
-                                        </p>
-                                    </div>
+                        <AccordionTrigger className="hover:no-underline py-4 px-4 group">
+                            <div className="flex items-center gap-4 text-left">
+                                <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center transition-all group-data-[state=open]:scale-110", cat.bgColor)}>
+                                    <cat.icon className={cn("h-6 w-6 transition-colors", cat.iconColor)} />
                                 </div>
-                                {!isEditing && (
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => setEditingKey(item.clave)}
-                                        className="h-7 w-7 text-slate-600 hover:text-blue-400 hover:bg-slate-800 rounded-md"
-                                    >
-                                        <Settings className="h-4 w-4" />
-                                    </Button>
-                                )}
-                            </div>
-
-                            <div className="space-y-3">
                                 <div>
-                                    <div className="flex items-center justify-between mb-1.5">
-                                        <Label htmlFor={item.clave} className="text-[9px] uppercase font-black tracking-widest text-slate-600">
-                                            Valor
-                                        </Label>
-                                        {meta?.min !== undefined && isEditing && (
-                                            <span className="text-[9px] text-slate-500 italic">
-                                                Min: {meta.min} - Max: {meta.max}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <Input
-                                        id={item.clave}
-                                        type={
-                                            (item.clave.includes('horario') || item.clave.includes('cuadre') || item.clave.includes('nombre') || item.clave.includes('logo')) 
-                                                ? 'text' 
-                                                : (item.clave.includes('desbloqueo') || item.clave.includes('umbral') || item.clave.includes('renovacion') || item.clave.includes('visita') || item.clave.includes('radio') || item.clave.includes('asistencia') || item.clave.includes('tolerancia') || item.clave.includes('score'))
-                                                    ? 'number' 
-                                                    : 'text'
-                                        }
-                                        placeholder={
-                                            item.clave.includes('horario') ? 'HH:MM' : 
-                                            item.clave.includes('nombre') ? 'Ej: Sistema PF' : 
-                                            item.clave.includes('desbloqueo') ? 'Ej: 15' : ''
-                                        }
-                                        value={
-                                            (isEditing) 
-                                                ? currentValue 
-                                                : ((item.clave.includes('horario') || item.clave.includes('cuadre')) && currentValue && !currentValue.includes(':') && !isNaN(Number(currentValue))) 
-                                                    ? `${currentValue.padStart(2, '0')}:00` 
-                                                    : currentValue
-                                        }
-                                        onChange={(e) => setConfig({ ...config, [item.clave]: e.target.value })}
-                                        disabled={!isEditing}
-                                        className={cn(
-                                            "h-9 bg-slate-950/40 border-slate-800 text-white text-sm font-mono transition-all",
-                                            isEditing ? "border-blue-500/40 bg-slate-950" : "opacity-60 cursor-default",
-                                            item.clave === 'logo_sistema_url' && "pr-10"
-                                        )}
-                                    />
-                                    {item.clave === 'logo_sistema_url' && isEditing && (
-                                        <div className="mt-2 flex items-center gap-2">
-                                            <input
-                                                type="file"
-                                                accept="image/*"
-                                                className="hidden"
-                                                ref={fileInputRef}
-                                                onChange={handleLogoUpload}
-                                            />
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                disabled={uploadingLogo}
-                                                onClick={() => fileInputRef.current?.click()}
-                                                className="w-full bg-slate-800 text-xs text-slate-300 border-slate-700 hover:bg-slate-700"
-                                            >
-                                                {uploadingLogo ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <Upload className="h-3 w-3 mr-2" />}
-                                                {uploadingLogo ? 'Subiendo...' : 'Subir Imagen'}
-                                            </Button>
-                                        </div>
-                                    )}
-                                    {item.clave === 'logo_sistema_url' && currentValue && (
-                                        <div className="mt-2 relative group/logo">
-                                            <div className="flex justify-center p-2 bg-slate-800/20 rounded-lg border border-slate-700/30">
-                                                <>
-                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                    <img src={currentValue} alt="Logo Preview" className="h-16 object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                                                </>
-                                                {isEditing && (
-                                                    <button 
-                                                        onClick={() => setConfig({ ...config, [item.clave]: '' })}
-                                                        className="absolute -top-1 -right-1 bg-red-600 rounded-full p-0.5 text-white shadow-lg opacity-0 group-hover/logo:opacity-100 transition-opacity"
+                                    <h3 className="text-lg font-bold text-slate-100 tracking-tight leading-none mb-1">
+                                        {cat.nombre}
+                                    </h3>
+                                    <p className="text-xs text-slate-500 font-medium opacity-70">
+                                        {cat.descripcion}
+                                    </p>
+                                </div>
+                            </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-4 pb-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4 border-t border-slate-800/50 mt-2">
+                                {cat.keys.map((key) => {
+                                    const item = displayConfig.find(i => i.clave === key)
+                                    if (!item) return null
+                                    
+                                    const meta = CONFIG_LABELS[item.clave]
+                                    const isEditing = editingKey === item.clave
+                                    const currentValue = config[item.clave] || item.valor
+
+                                    return (
+                                        <div 
+                                            key={item.clave}
+                                            className={cn(
+                                                "bg-slate-950/40 border border-slate-800/50 rounded-xl p-4 transition-all flex flex-col justify-between group/card",
+                                                isEditing ? "border-blue-500/30 bg-slate-900/60 ring-1 ring-blue-500/10" : "hover:border-slate-700/50"
+                                            )}
+                                        >
+                                            <div>
+                                                <div className="flex items-start justify-between gap-3 mb-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-9 h-9 shrink-0 rounded-lg bg-slate-800/50 flex items-center justify-center text-xl border border-slate-700/30">
+                                                            {getIcon(item.clave)}
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-sm font-bold text-slate-200 leading-tight">
+                                                                {meta?.nombre || item.clave}
+                                                            </h3>
+                                                            <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">
+                                                                {meta?.descripcion || item.descripcion}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    {!isEditing && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => setEditingKey(item.clave)}
+                                                            className="h-7 w-7 text-slate-600 hover:text-blue-400 hover:bg-slate-800 rounded-md"
+                                                        >
+                                                            <Settings className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <div className="flex items-center justify-between mb-1.5">
+                                                            <Label htmlFor={item.clave} className="text-[9px] uppercase font-black tracking-widest text-slate-600">
+                                                                Valor
+                                                            </Label>
+                                                            {meta?.min !== undefined && isEditing && (
+                                                                <span className="text-[9px] text-slate-500 italic">
+                                                                    Min: {meta.min} - Max: {meta.max}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <Input
+                                                            id={item.clave}
+                                                            type={
+                                                                (item.clave.includes('horario') || item.clave.includes('cuadre') || item.clave.includes('nombre') || item.clave.includes('logo')) 
+                                                                    ? 'text' 
+                                                                    : 'number'
+                                                            }
+                                                            placeholder={
+                                                                item.clave.includes('horario') ? 'HH:MM' : 
+                                                                item.clave.includes('nombre') ? 'Ej: Sistema PF' : 
+                                                                item.clave.includes('desbloqueo') ? 'Ej: 15' : ''
+                                                            }
+                                                            value={
+                                                                (isEditing) 
+                                                                    ? currentValue 
+                                                                    : ((item.clave.includes('horario') || item.clave.includes('cuadre')) && currentValue && !currentValue.includes(':') && !isNaN(Number(currentValue))) 
+                                                                        ? `${currentValue.padStart(2, '0')}:00` 
+                                                                        : currentValue
+                                                            }
+                                                            onChange={(e) => setConfig({ ...config, [item.clave]: e.target.value })}
+                                                            disabled={!isEditing}
+                                                            className={cn(
+                                                                "h-9 bg-slate-950/40 border-slate-800 text-white text-sm font-mono transition-all",
+                                                                isEditing ? "border-blue-500/40 bg-slate-950" : "opacity-60 cursor-default",
+                                                                item.clave === 'logo_sistema_url' && "pr-10"
+                                                            )}
+                                                        />
+                                                        {item.clave === 'logo_sistema_url' && isEditing && (
+                                                            <div className="mt-2 flex items-center gap-2">
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    className="hidden"
+                                                                    ref={fileInputRef}
+                                                                    onChange={handleLogoUpload}
+                                                                />
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    disabled={uploadingLogo}
+                                                                    onClick={() => fileInputRef.current?.click()}
+                                                                    className="w-full bg-slate-800 text-xs text-slate-300 border-slate-700 hover:bg-slate-700"
+                                                                >
+                                                                    {uploadingLogo ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <Upload className="h-3 w-3 mr-2" />}
+                                                                    {uploadingLogo ? 'Subiendo...' : 'Subir Imagen'}
+                                                                </Button>
+                                                            </div>
+                                                        )}
+                                                        {item.clave === 'logo_sistema_url' && currentValue && (
+                                                            <div className="mt-2 relative group/logo">
+                                                                <div className="flex justify-center p-2 bg-slate-800/20 rounded-lg border border-slate-700/30">
+                                                                    <>
+                                                                        <img src={currentValue} alt="Logo Preview" className="h-16 object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                                                                    </>
+                                                                    {isEditing && (
+                                                                        <button 
+                                                                            onClick={() => setConfig({ ...config, [item.clave]: '' })}
+                                                                            className="absolute -top-1 -right-1 bg-red-600 rounded-full p-0.5 text-white shadow-lg opacity-0 group-hover/logo:opacity-100 transition-opacity"
+                                                                        >
+                                                                            <X className="h-3 w-3" />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {(item.clave === 'renovacion_min_pagado' || item.clave === 'refinanciacion_min_mora') && (
+                                                        <div className="flex items-center gap-2 p-2 bg-slate-800/30 border border-slate-700/30 rounded-lg">
+                                                            <AlertCircle className="h-3 w-3 text-slate-500 shrink-0" />
+                                                            <p className="text-[9px] text-slate-400 leading-tight">
+                                                                {item.clave === 'renovacion_min_pagado' 
+                                                                    ? `Requiere ${currentValue}% pagado para renovar.`
+                                                                    : `Mora > ${currentValue}% para refinanciar.`}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-4">
+                                                {isEditing ? (
+                                                    <div className="flex gap-2">
+                                                        <Button
+                                                            onClick={() => handleSave(item.clave)}
+                                                            disabled={saving}
+                                                            className="flex-1 h-8 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg shadow-emerald-900/20"
+                                                        >
+                                                            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3 mr-2" />}
+                                                            {saving ? '' : 'Guardar'}
+                                                        </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                                setConfig({ ...config, [item.clave]: item.valor || '' })
+                                                                setEditingKey(null)
+                                                            }}
+                                                            disabled={saving}
+                                                            className="h-8 bg-transparent border-slate-700 text-slate-400 hover:text-white text-xs"
+                                                        >
+                                                            X
+                                                        </Button>
+                                                    </div>
+                                                ) : item.clave === 'desbloqueo_hasta' ? (
+                                                    <Button 
+                                                        onClick={handleUnlock} 
+                                                        disabled={unlocking}
+                                                        className="w-full h-8 bg-purple-600/90 hover:bg-purple-600 text-white text-[10px] font-black uppercase tracking-wider rounded-lg shadow-lg shadow-purple-900/20 group/unlock"
                                                     >
-                                                        <X className="h-3 w-3" />
-                                                    </button>
-                                                )}
+                                                        {unlocking ? <Loader2 className="animate-spin mr-2 h-3 w-3" /> : <Lock className="mr-2 h-3 w-3 group-hover/unlock:animate-bounce" />}
+                                                        DESBLOQUEAR SISTEMA ({parseInt(config['desbloqueo_hasta']) || 15}M)
+                                                    </Button>
+                                                ) : null}
                                             </div>
                                         </div>
-                                    )}
-                                </div>
-
-                                {/* Compact Info Blocks */}
-                                {(item.clave === 'renovacion_min_pagado' || item.clave === 'refinanciacion_min_mora') && (
-                                    <div className="flex items-center gap-2 p-2 bg-slate-800/30 border border-slate-700/30 rounded-lg">
-                                        <AlertCircle className="h-3 w-3 text-slate-500 shrink-0" />
-                                        <p className="text-[9px] text-slate-400 leading-tight">
-                                            {item.clave === 'renovacion_min_pagado' 
-                                                ? `Requiere ${currentValue}% pagado para renovar.`
-                                                : `Mora > ${currentValue}% para refinanciar.`}
-                                        </p>
-                                    </div>
-                                )}
+                                    )
+                                })}
                             </div>
-                        </div>
-
-                        <div className="mt-4">
-                            {isEditing ? (
-                                <div className="flex gap-2">
-                                    <Button
-                                        onClick={() => handleSave(item.clave)}
-                                        disabled={saving}
-                                        className="flex-1 h-8 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg shadow-emerald-900/20"
-                                    >
-                                        {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3 mr-2" />}
-                                        {saving ? '' : 'Guardar'}
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => {
-                                            setConfig({ ...config, [item.clave]: item.valor })
-                                            setEditingKey(null)
-                                        }}
-                                        disabled={saving}
-                                        className="h-8 bg-transparent border-slate-700 text-slate-400 hover:text-white text-xs"
-                                    >
-                                        X
-                                    </Button>
-                                </div>
-                            ) : item.clave === 'desbloqueo_hasta' ? (
-                                <Button 
-                                    onClick={handleUnlock} 
-                                    disabled={unlocking}
-                                    className="w-full h-8 bg-purple-600/90 hover:bg-purple-600 text-white text-[10px] font-black uppercase tracking-wider rounded-lg shadow-lg shadow-purple-900/20 group"
-                                >
-                                    {unlocking ? <Loader2 className="animate-spin mr-2 h-3 w-3" /> : <Lock className="mr-2 h-3 w-3 group-hover:animate-bounce" />}
-                                    DESBLOQUEAR SISTEMA ({parseInt(config['desbloqueo_hasta']) || 15}M)
-                                </Button>
-                            ) : null}
-                        </div>
-                    </div>
-                )
-            })}
+                        </AccordionContent>
+                    </AccordionItem>
+                ))}
+            </Accordion>
         </div>
     )
 }

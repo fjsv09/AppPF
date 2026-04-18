@@ -177,6 +177,43 @@ export default async function TareasHistoryPage({
         }
     }
 
+    // --- ENRIQUECIMIENTO DE RESULTADOS DE GESTIÓN ---
+    const completadasVisita = tareasVisita.filter(t => t.estado === 'completada')
+    if (completadasVisita.length > 0) {
+        const prestamoIds = [...new Set(completadasVisita.map(t => t.prestamo_id))]
+        
+        // Buscamos gestiones recientes de estos préstamos
+        const { data: gestionesResultados } = await supabaseAdmin
+            .from('gestiones')
+            .select('prestamo_id, resultado, notas, created_at, usuario_id, tipo_gestion')
+            .in('prestamo_id', prestamoIds)
+            .order('created_at', { ascending: false })
+
+        if (gestionesResultados && gestionesResultados.length > 0) {
+            tareasVisita = tareasVisita.map(task => {
+                if (task.estado !== 'completada') return task
+
+                // Encontrar la gestión que coincida con el asesor y que sea posterior a la creación de la tarea
+                // O simplemente la más reciente del asesor para ese préstamo
+                const g = gestionesResultados.find(res => 
+                    res.prestamo_id === task.prestamo_id && 
+                    res.usuario_id === task.asesor_id &&
+                    new Date(res.created_at) >= new Date(task.created_at)
+                )
+
+                if (g) {
+                    return {
+                        ...task,
+                        gestion_resultado: g.resultado,
+                        gestion_notas: g.notas,
+                        gestion_tipo: g.tipo_gestion
+                    }
+                }
+                return task
+            })
+        }
+    }
+
 
     return (
         <div className="page-container">

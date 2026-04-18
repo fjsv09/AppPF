@@ -27,9 +27,9 @@ export function ClientReputationGauge({
   const colors = getColor(score)
 
   const sizeClasses = {
-    sm: { container: 'w-16 h-16', text: 'text-lg', label: 'text-[10px]' },
-    md: { container: 'w-24 h-24', text: 'text-2xl', label: 'text-xs' },
-    lg: { container: 'w-32 h-32', text: 'text-4xl', label: 'text-sm' }
+    sm: { container: 'w-16 h-16', text: 'text-lg', label: 'text-xs' },
+    md: { container: 'w-24 h-24', text: 'text-2xl', label: 'text-sm' },
+    lg: { container: 'w-32 h-32', text: 'text-4xl', label: 'text-base' }
   }
 
   const s = sizeClasses[size]
@@ -72,7 +72,7 @@ export function ClientReputationGauge({
             {Math.round(score)}
           </span>
           {size !== 'sm' && (
-            <span className={cn("font-bold uppercase tracking-widest opacity-60 -mt-0.5", s.label)}>
+            <span className={cn("font-bold uppercase tracking-widest text-slate-400 -mt-0.5", s.label)}>
               pts
             </span>
           )}

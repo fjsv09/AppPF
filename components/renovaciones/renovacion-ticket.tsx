@@ -64,77 +64,51 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
             // Capturar el ticket como imagen para garantizar que se imprima correctamente
             const dataUrl = await captureTicketAsImage(ticketEl)
 
-            // Crear iframe oculto con la imagen optimizada para 58mm térmico
-            const iframe = document.createElement('iframe')
-            iframe.style.position = 'fixed'
-            iframe.style.right = '0'
-            iframe.style.bottom = '0'
-            iframe.style.width = '0'
-            iframe.style.height = '0'
-            iframe.style.border = '0'
-            iframe.style.opacity = '0'
-            document.body.appendChild(iframe)
+            // 1. Crear contenedor temporal para la imagen de impresión
+            const printContainer = document.createElement('div')
+            printContainer.id = 'print-container-native'
+            printContainer.style.display = 'none' // Solo visible en @media print
+            printContainer.innerHTML = `<img src="${dataUrl}" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />`
+            
+            // 2. Inyectar estilos para ocultar todo lo demás durante la impresión
+            const style = document.createElement('style')
+            style.id = 'print-style-native'
+            style.innerHTML = `
+                @media print {
+                    body > *:not(#print-container-native) { display: none !important; }
+                    #print-container-native { 
+                        display: block !important; 
+                        position: absolute !important; 
+                        top: 0 !important; 
+                        left: 0 !important; 
+                        width: 100% !important;
+                    }
+                    @page { margin: 2mm; }
+                }
+            `
+            
+            document.head.appendChild(style)
+            document.body.appendChild(printContainer)
 
-            const printDoc = iframe.contentWindow?.document
-            if (!printDoc) {
-                toast.error('Error al preparar impresión', { id: 'print-ticket' })
-                setIsPrinting(false)
-                return
-            }
-
-            printDoc.write(`
-                <html>
-                    <head>
-                        <title>Renovación #${ticketId} | ProFinanzas</title>
-                        <style>
-                            @page {
-                                margin: 2mm;
-                            }
-                            * { margin: 0; padding: 0; box-sizing: border-box; }
-                            body {
-                                margin: 0 auto;
-                                background: white;
-                                text-align: center;
-                            }
-                            img {
-                                max-width: 100%;
-                                height: auto;
-                                display: block;
-                                margin: 0 auto;
-                            }
-                            @media print {
-                                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <img src="${dataUrl}" />
-                    </body>
-                </html>
-            `)
-            printDoc.close()
-
-            // Esperar a que la imagen cargue en el iframe antes de imprimir
-            const imgElement = printDoc.querySelector('img')
-            if (imgElement) {
-                await new Promise<void>((resolve) => {
-                    imgElement.onload = () => resolve()
-                    // Si la imagen ya se cargó (cache)
-                    if (imgElement.complete) resolve()
-                })
-            }
-
+            // 3. Disparar impresión nativa del sistema
             setTimeout(() => {
-                iframe.contentWindow?.focus()
-                iframe.contentWindow?.print()
-
+                window.print()
+                
+                // 4. Limpieza (Remover elementos temporales)
                 setTimeout(() => {
-                    try { document.body.removeChild(iframe) } catch {}
-                }, 2000)
+                    try {
+                        const s = document.getElementById('print-style-native')
+                        const c = document.getElementById('print-container-native')
+                        if (s) document.head.removeChild(s)
+                        if (c) document.body.removeChild(c)
+                    } catch (e) {
+                        console.error('Print cleanup error:', e)
+                    }
+                    setIsPrinting(false)
+                    toast.success('Listo para imprimir', { id: 'print-ticket' })
+                }, 1000)
+            }, 500)
 
-                toast.success('Listo para imprimir', { id: 'print-ticket' })
-                setIsPrinting(false)
-            }, 400)
         } catch (err) {
             console.error('Print error:', err)
             toast.error('Error al generar impresión', { id: 'print-ticket' })

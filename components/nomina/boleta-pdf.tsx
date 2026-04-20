@@ -73,39 +73,46 @@ export function BoletaPDF({ nomina, trabajador, open, onOpenChange }: BoletaPDFP
         const content = contentRef.current
         if (!content) return
 
-        // Crear un iframe oculto para la impresión para evitar problemas en PWA iOS
-        const iframe = document.createElement('iframe');
-        iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = '0';
-        document.body.appendChild(iframe);
+        // 1. Crear contenedor temporal para la impresión (In-place strategy)
+        const printContainer = document.createElement('div')
+        printContainer.id = 'print-container-boleta'
+        printContainer.style.display = 'none'
+        printContainer.innerHTML = content.innerHTML
 
-        const printDoc = iframe.contentWindow?.document;
-        if (!printDoc) return;
-
-        printDoc.write(`
-            <html>
-                <head>
-                    <title>Boleta-${trabajador.nombre_completo}-${mesAnio}</title>
-                    <style>
-                        @page { size: A5 landscape; margin: 10mm; }
-                        body { font-family: 'Segoe UI', sans-serif; color: #000; margin: 0; padding: 0; }
-                        @media print { body { -webkit-print-color-adjust: exact; } }
-                    </style>
-                </head>
-                <body>${content.innerHTML}</body>
-            </html>
-        `)
-        printDoc.close()
+        // 2. Inyectar estilos para ocultar todo lo demás durante la impresión
+        const style = document.createElement('style')
+        style.id = 'print-style-boleta'
+        style.innerHTML = `
+            @media print {
+                body > *:not(#print-container-boleta) { display: none !important; }
+                #print-container-boleta { 
+                    display: block !important; 
+                    position: absolute !important; 
+                    top: 0 !important; 
+                    left: 0 !important; 
+                    width: 100% !important;
+                    background: white !important;
+                    color: black !important;
+                }
+                @page { size: A5 landscape; margin: 10mm; }
+            }
+        `
         
+        document.head.appendChild(style)
+        document.body.appendChild(printContainer)
+
+        // 3. Disparar impresión nativa
         setTimeout(() => {
-            iframe.contentWindow?.focus()
-            iframe.contentWindow?.print()
+            window.print()
+            
+            // 4. Limpieza
             setTimeout(() => {
-                document.body.removeChild(iframe)
+                try {
+                    const s = document.getElementById('print-style-boleta')
+                    const c = document.getElementById('print-container-boleta')
+                    if (s) document.head.removeChild(s)
+                    if (c) document.body.removeChild(c)
+                } catch (e) {}
             }, 1000)
         }, 500)
     }

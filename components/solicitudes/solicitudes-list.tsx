@@ -409,7 +409,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                         </div>
                     </>
                 )}
-            </div>
+                </div>
             </div>
         </div>
     )

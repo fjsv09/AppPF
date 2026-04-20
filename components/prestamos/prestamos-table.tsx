@@ -235,6 +235,14 @@ export function PrestamosTable({
         
         return false
     }
+ 
+    // Obtener configuración de GPS obligatorio
+    const exigirGps = useMemo(() => {
+        if (userRol !== 'asesor') return false
+        const perfil = perfiles.find(p => p.id === userId)
+        return !!perfil?.exigir_gps_cobranza
+    }, [perfiles, userId, userRol])
+ 
     // --- URL PARAMETERS & DERIVED STATE ---
     const activeFilter = (searchParams.get('tab') as FilterTab) || 'ruta_hoy'
     const searchQuery = searchParams.get('search') || ''
@@ -486,18 +494,19 @@ export function PrestamosTable({
                     c.fecha_vencimiento === hoyPeru && c.visitado === true
                   )
 
-                  return {
-                      ...p,
-                      progreso,
-                      isMoroso,
-                      isFinalizado,
-                      isRenovable,
-                      riesgo,
-                      deudaHoy,
-                      diasSinPago,
-                      valorCuota,
-                      isDiario, // Helper
-                      atrasadas, // Helper
+                      return {
+                          ...p,
+                          cliente_id: p.cliente_id || p.clientes?.id,
+                          progreso,
+                          isMoroso,
+                          isFinalizado,
+                          isRenovable,
+                          riesgo,
+                          deudaHoy,
+                          diasSinPago,
+                          valorCuota,
+                          isDiario, // Helper
+                          atrasadas, // Helper
                       totalPagar,
                       totalCuotas,
                       cuotasPagadas,
@@ -1500,7 +1509,9 @@ export function PrestamosTable({
                                                         return (
                                                                 <SolicitudRenovacionModal
                                                                     prestamoId={prestamo.id}
+                                                                    clienteId={prestamo.cliente_id || prestamo.clientes?.id}
                                                                     clienteNombre={prestamo.clientes?.nombres}
+                                                                    clienteFotoPerfil={prestamo.clientes?.foto_perfil}
                                                                     currentMonto={prestamo.monto}
                                                                     currentInteres={prestamo.interes}
                                                                     currentModalidad={prestamo.frecuencia?.toLowerCase() || 'diario'}
@@ -2286,7 +2297,9 @@ export function PrestamosTable({
                                                 <div className="flex shrink-0 items-center justify-center h-8 w-8" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
                                                     <SolicitudRenovacionModal 
                                                         prestamoId={prestamo.id} 
+                                                        clienteId={prestamo.cliente_id || prestamo.clientes?.id || ''}
                                                         clienteNombre={prestamo.clientes?.nombres || 'Cliente'} 
+                                                        clienteFotoPerfil={prestamo.clientes?.foto_perfil}
                                                         currentMonto={prestamo.monto}
                                                         currentInteres={prestamo.interes}
                                                         currentModalidad={prestamo.frecuencia?.toLowerCase() || 'diario'}
@@ -2556,6 +2569,7 @@ export function PrestamosTable({
                 blockReasonCierre={blockReasonCierre}
                 systemAccess={systemAccess}
                 userLoc={userLoc}
+                exigirGps={exigirGps}
             />
 
             {selectedContractLoan && (

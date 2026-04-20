@@ -8,13 +8,16 @@ import { ClientMiniCard } from '@/components/prestamos/client-mini-card'
 import { RenovacionTicket } from '@/components/renovaciones/renovacion-ticket'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatMoney, formatDate } from '@/utils/format'
-import { ScoreIndicator, BehaviorSummary } from '@/components/ui/score-indicator'
+import { ScoreIndicator, BehaviorSummary, ScoreBreakdown, ScoreLimitRules, ReputationBreakdown } from '@/components/ui/score-indicator'
 import { 
     User, DollarSign, Calendar, AlertTriangle, 
-    CheckCircle2, XCircle, Clock, MessageSquare 
+    CheckCircle2, XCircle, Clock, MessageSquare,
+    Activity
 } from 'lucide-react'
 import { BackButton } from '@/components/ui/back-button'
 import { RenovacionesActions } from '@/components/renovaciones/renovaciones-actions'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -91,6 +94,43 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
         notFound()
     }
 
+    // [NUEVO] OBTENER EVALUACIÓN INTEGRAL PARA EL PANEL DE REVISIÓN (Centralizado)
+    const { 
+        getClientReputationAction, 
+        getLoanHealthScoreAction
+    } = await import('@/lib/financial-logic')
+
+    // [SNAPSHOT TOTAL] Priorizar datos inmutables guardados para evitar cálculos redundantes
+    const resumenData = (solicitud as any).resumen_comportamiento || {}
+    const hasFullSnapshot = resumenData.health_evaluation && resumenData.reputation_evaluation
+
+    let evaluation: any = null
+    let atomicHealth: any = null
+
+    if (hasFullSnapshot) {
+        // Carga instantánea desde el snapshot (Total Fidelity)
+        evaluation = {
+            ...resumenData.reputation_evaluation,
+            reputationScore: solicitud.reputation_score_al_solicitar ?? resumenData.reputation_score ?? resumenData.reputation_evaluation?.score ?? 0
+        }
+        atomicHealth = {
+            ...resumenData.health_evaluation,
+            score: solicitud.score_al_solicitar ?? resumenData.health_score ?? resumenData.health_evaluation?.score ?? 0
+        }
+    } else {
+        // Fallback para registros antiguos: calculamos en tiempo real
+        const liveEvaluation = await getClientReputationAction(supabaseAdmin, solicitud.cliente_id)
+        const liveAtomicHealth = await getLoanHealthScoreAction(supabaseAdmin, solicitud.prestamo_id)
+
+        evaluation = liveEvaluation
+        atomicHealth = liveAtomicHealth
+
+        // Aún así respetamos el score de salud capturado si existe
+        if (solicitud.score_al_solicitar) {
+            atomicHealth.score = Number(solicitud.score_al_solicitar)
+        }
+    }
+
     // Datos adicionales si está aprobada
     let datosRenovacion = null
     if (solicitud.estado_solicitud === 'aprobado' && solicitud.prestamo_nuevo_id) {
@@ -144,20 +184,91 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                     </div>
                 </div>
 
-                {/* Score Card */}
-                <Card className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border-slate-700/50">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-lg text-white">Score Crediticio</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-                            <ScoreIndicator score={solicitud.score_al_solicitar} size="lg" />
-                            <div className="flex-1 w-full">
-                                <BehaviorSummary data={solicitud.resumen_comportamiento} />
+                {/* Dashboard de Evaluación Dual (NUEVO) */}
+                <div className="grid md:grid-cols-3 gap-6">
+                    <Card className="md:col-span-2 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 border-slate-700/50 relative overflow-hidden group shadow-2xl">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-[60px] pointer-events-none" />
+                        <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                            <CardTitle className="text-lg text-white flex items-center gap-2">
+                                <Activity className="w-5 h-5 text-blue-400" />
+                                Evaluación Integral
+                            </CardTitle>
+                            {solicitud.score_al_solicitar !== undefined && (
+                                <Badge variant="outline" className="text-[10px] text-slate-500 border-slate-800">
+                                    Score inicial: {solicitud.score_al_solicitar}
+                                </Badge>
+                            )}
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid sm:grid-cols-2 gap-6 items-center">
+                                {/* Salud del Préstamo */}
+                                <div className="bg-white/[0.03] rounded-3xl p-6 border border-white/5 flex flex-col items-center gap-4 relative">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Salud Préstamo</span>
+                                    <ScoreIndicator score={atomicHealth.score} size="lg" />
+                                    <div className="mt-2 w-full">
+                                        <Accordion type="single" collapsible>
+                                            <AccordionItem value="health" className="border-none">
+                                                <AccordionTrigger className="hover:no-underline py-0 h-6 flex justify-center text-[10px] font-black uppercase text-blue-400/70 tracking-widest">
+                                                    Ver Auditoría
+                                                </AccordionTrigger>
+                                                <AccordionContent className="pt-4">
+                                                    <ScoreBreakdown loanScore={atomicHealth} />
+                                                </AccordionContent>
+                                            </AccordionItem>
+                                        </Accordion>
+                                    </div>
+                                </div>
+
+                                {/* Reputación del Cliente */}
+                                <div className="bg-white/[0.03] rounded-3xl p-6 border border-white/5 flex flex-col items-center gap-4 relative">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Reputación Cliente</span>
+                                    <ScoreIndicator score={evaluation.reputationScore} size="lg" />
+                                    <div className="mt-2 w-full">
+                                        <Accordion type="single" collapsible>
+                                            <AccordionItem value="reputation" className="border-none">
+                                                <AccordionTrigger className="hover:no-underline py-0 h-6 flex justify-center text-[10px] font-black uppercase text-purple-400/70 tracking-widest">
+                                                    Ver Auditoría
+                                                </AccordionTrigger>
+                                                <AccordionContent className="pt-4">
+                                                    <ReputationBreakdown reputationData={evaluation.reputationData} />
+                                                </AccordionContent>
+                                            </AccordionItem>
+                                        </Accordion>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                        </CardContent>
+                    </Card>
+
+                    <div className="space-y-4">
+                        <Card className="bg-slate-900/50 border-slate-800 h-full">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-xs font-black text-slate-400 uppercase tracking-widest">Desempeño Historico</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <BehaviorSummary data={{
+                                    // Sincronizar metrics reales con BehaviorSummary
+                                    pagos_puntuales: evaluation.reputationData?.metrics?.pagosPuntuales || (resumenData as any).pagos_puntuales,
+                                    pagos_tardios: evaluation.reputationData?.metrics?.pagosTardios || (resumenData as any).pagos_tardios,
+                                    prestamos_finalizados: evaluation.reputationData?.metrics?.totalFinished || (resumenData as any).prestamos_finalizados,
+                                    prestamos_renovados: evaluation.reputationData?.metrics?.totalRenovated || (resumenData as any).prestamos_renovados,
+                                    meses_cliente: evaluation.reputationData?.metrics?.months || (resumenData as any).meses_cliente,
+                                    refinanciamientos: evaluation.reputationData?.metrics?.totalRefinanced || 0,
+                                    historial_mora: evaluation.reputationData?.metrics?.totalVencido || 0,
+                                    historial_cpp: 0,
+                                    cuotas_vencidas_actual: atomicHealth?.penalties > 0 ? 1 : 0 // Para alertar mora activa
+                                } as any} />
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+
+                <div className="mt-6 mb-8">
+                    <ScoreLimitRules 
+                        healthScore={atomicHealth.score} 
+                        reputationScore={evaluation.reputationScore} 
+                    />
+                </div>
 
                 {/* Excepción Alert */}
                 {solicitud.requiere_excepcion && (
@@ -263,21 +374,52 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                     </Card>
                 </div>
 
-                {/* Límites */}
-                <Card className="bg-blue-900/20 border-blue-700/50">
-                    <CardContent className="py-4">
-                        <div className="flex flex-wrap justify-center gap-8 text-center">
-                            <div>
-                                <p className="text-blue-400 text-xs font-medium mb-1">Monto Mínimo</p>
-                                <p className="text-white text-lg font-bold">${formatMoney(solicitud.monto_minimo_permitido)}</p>
-                            </div>
-                            <div>
-                                <p className="text-blue-400 text-xs font-medium mb-1">Monto Máximo</p>
-                                <p className="text-white text-lg font-bold">${formatMoney(solicitud.monto_maximo_permitido)}</p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                {/* Límites Dinámicos (Dual-Score Truth) */}
+                {(() => {
+                    const { calculateRenovationAdjustment } = require('@/lib/financial-logic');
+                    const adj = calculateRenovationAdjustment(
+                        atomicHealth.score,
+                        evaluation.reputationScore,
+                        Number(solicitud.prestamo?.monto || 0),
+                        Number(solicitud.monto_cuota_pendiente || 0) // Para asegurar el piso de deuda
+                    );
+
+                    return (
+                        <Card className="bg-blue-900/20 border-blue-700/50 shadow-lg relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+                            <CardContent className="py-5 relative z-10">
+                                <div className="flex flex-wrap justify-center gap-12 text-center">
+                                    <div className="flex flex-col items-center gap-1">
+                                        <p className="text-blue-400/60 text-[10px] font-black uppercase tracking-[0.2em]">Monto Mínimo</p>
+                                        <div className="flex items-baseline gap-1">
+                                            <span className="text-white text-2xl font-black font-mono tracking-tighter">${adj.montoMinimo}</span>
+                                            <span className="text-[10px] text-slate-500 font-bold uppercase">usd</span>
+                                        </div>
+                                        {adj.montoMinimo > Number(solicitud.prestamo?.monto || 0) * 0.5 && (
+                                            <span className="text-[9px] text-amber-500/60 italic font-medium">Cap: Saldo Pendiente</span>
+                                        )}
+                                    </div>
+
+                                    <div className="w-px h-10 bg-blue-500/10 self-center hidden sm:block" />
+
+                                    <div className="flex flex-col items-center gap-1">
+                                        <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em]">Monto Máximo</p>
+                                        <div className="flex items-baseline gap-1">
+                                            <span className="text-emerald-400 text-3xl font-black font-mono tracking-tighter shadow-emerald-500/10">${adj.montoMaximo}</span>
+                                            <span className="text-[10px] text-emerald-600 font-bold uppercase">usd</span>
+                                        </div>
+                                        <span className={cn(
+                                            "text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded",
+                                            adj.totalPotentialPct < 0 ? "bg-rose-500/10 text-rose-400" : "bg-emerald-500/10 text-emerald-400"
+                                        )}>
+                                            {adj.totalPotentialPct > 0 ? `+${adj.totalPotentialPct}%` : `${adj.totalPotentialPct}%`} (D-SCORE)
+                                        </span>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    );
+                })()}
 
                 {/* Información de Auditoría */}
                 <Card className="bg-slate-900/50 border-slate-800">

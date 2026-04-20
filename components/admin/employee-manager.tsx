@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/dialog'
 import { createClient } from '@/utils/supabase/client'
 import { toast } from 'sonner'
-import { User, Shield, ShieldAlert, Edit, Power, Calendar, Wallet, Users, UserPlus, Eye, EyeOff, Clock } from 'lucide-react'
+import { User, Shield, ShieldAlert, Edit, Power, Calendar, Wallet, Users, UserPlus, Eye, EyeOff, Clock, MapPin } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { CreateUserForm } from './create-user-form'
 
@@ -109,6 +109,7 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
       direccion: formData.get('direccion') as string || null,
       can_edit_profile: formData.get('can_edit_profile') === 'true',
       has_edited_profile: formData.get('has_edited_profile') === 'true',
+      exigir_gps_cobranza: formData.get('exigir_gps_cobranza') === 'true',
     }
 
     if (isNaN(updates.sueldo_base)) updates.sueldo_base = 0
@@ -566,19 +567,36 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
                  </div>
              </div>
 
-             <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                   <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
-                      <Calendar className="w-3 h-3" />
-                      Fecha de Nacimiento
-                   </label>
-                   <Input 
-                      name="fecha_nacimiento" 
-                      type="date" 
-                      defaultValue={editingEmployee?.fecha_nacimiento} 
-                      className="bg-slate-950 border-slate-800 h-10"
-                   />
-                </div>
+              <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                     <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
+                        <MapPin className="w-3 h-3 text-blue-500" />
+                        Exigir GPS Cobranzas
+                     </label>
+                     <Select name="exigir_gps_cobranza" defaultValue={editingEmployee?.exigir_gps_cobranza ? "true" : "false"}>
+                        <SelectTrigger className="bg-slate-950 border-slate-800 h-10">
+                           <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-950 border-slate-800 text-white">
+                           <SelectItem value="true">Obligatorio</SelectItem>
+                           <SelectItem value="false">Opcional</SelectItem>
+                        </SelectContent>
+                     </Select>
+                  </div>
+ 
+                  <div className="space-y-1.5">
+                     <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
+                        <Calendar className="w-3 h-3" />
+                        Fecha de Nacimiento
+                     </label>
+                     <Input 
+                        name="fecha_nacimiento" 
+                        type="date" 
+                        defaultValue={editingEmployee?.fecha_nacimiento} 
+                        className="bg-slate-950 border-slate-800 h-10"
+                     />
+                  </div>
+              </div>
                 <div className="space-y-1.5">
                    <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
                       <Calendar className="w-3 h-3" />
@@ -591,7 +609,6 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
                       className="bg-slate-950 border-slate-800 h-10"
                    />
                 </div>
-             </div>
 
              <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">

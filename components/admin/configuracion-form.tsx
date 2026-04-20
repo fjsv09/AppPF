@@ -120,6 +120,12 @@ const CONFIG_LABELS: Record<string, { nombre: string; descripcion: string; min?:
         min: 0,
         max: 60
     },
+    'asistencia_minutos_permanencia': {
+        nombre: 'Minutos de Permanencia Obligatoria',
+        descripcion: 'Tiempo mínimo que el usuario debe permanecer en la oficina tras marcar entrada',
+        min: 1,
+        max: 120
+    },
     'oficina_lat': {
         nombre: 'Latitud de la Oficina',
         descripcion: 'Coordenada GPS latitud',
@@ -261,7 +267,7 @@ const CATEGORIES = [
         icon: MapPin,
         iconColor: 'text-emerald-400',
         bgColor: 'bg-emerald-500/10',
-        keys: ['asistencia_descuento_por_minuto', 'asistencia_radio_metros', 'asistencia_tolerancia_minutos', 'oficina_lat', 'oficina_lon']
+        keys: ['asistencia_descuento_por_minuto', 'asistencia_radio_metros', 'asistencia_tolerancia_minutos', 'asistencia_minutos_permanencia', 'oficina_lat', 'oficina_lon']
     },
     {
         id: 'politicas',

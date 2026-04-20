@@ -938,8 +938,8 @@ export function getLoanStatusUI(loan: any) {
  * @param targetLoanId Opcional - ID del prestamo especifico que se desea evaluar para "Salud del Prestamo".
  * @param config Opcional - Objeto con pesos de score dinámicos.
  */
-export function getComprehensiveEvaluation(client: any, loans: any[], allPayments?: any[], targetLoanId?: string, config: any = {}) {
-  const today = getTodayPeru();
+export function getComprehensiveEvaluation(client: any, loans: any[], allPayments?: any[], targetLoanId?: string, config: any = {}, todayOverride?: string) {
+  const today = todayOverride || getTodayPeru();
 
   // 1. Encontrar el préstamo para evaluar Salud
   // Prioridad: 1. targetLoanId, 2. Primer préstamo activo no liquidado
@@ -1039,16 +1039,22 @@ export function getComprehensiveEvaluation(client: any, loans: any[], allPayment
  * @param healthScore Score de salud del préstamo actual (0-100)
  * @param reputationScore Score de reputación histórica del cliente (0-100)
  * @param montoOriginal Capital del préstamo anterior
- * @returns Factores de ajuste y monto máximo sugerido
+ * @param saldoPendiente Opcional - Saldo que el cliente aún debe del préstamo actual
+ * @returns Factores de ajuste y montos limites sugeridos
  */
-export function calculateRenovationAdjustment(healthScore: number, reputationScore: number, montoOriginal: number) {
+export function calculateRenovationAdjustment(
+  healthScore: number, 
+  reputationScore: number, 
+  montoOriginal: number,
+  saldoPendiente: number = 0
+) {
   // 1. Ajuste Base por Salud (Capacidad de pago demostrada hoy)
   let baseIncreasePct = 0;
   if (healthScore >= 90) baseIncreasePct = 20;
   else if (healthScore >= 75) baseIncreasePct = 15;
   else if (healthScore >= 60) baseIncreasePct = 10;
   else if (healthScore >= 40) baseIncreasePct = 0;
-  else baseIncreasePct = -15; // Reducción sugerida por riesgo
+  else baseIncreasePct = -15; // Reducción sugerida por riesgo (Estándar Dual-Score)
 
   // 2. Plus por Reputación (Confianza histórica)
   // El bonus solo aplica si la salud actual no es crítica (>= 40)
@@ -1060,12 +1066,18 @@ export function calculateRenovationAdjustment(healthScore: number, reputationSco
 
   const totalPotentialPct = baseIncreasePct + reputationBonusPct;
   const montoSugerido = montoOriginal * (1 + totalPotentialPct / 100);
+  
+  // 3. Monto Mínimo: 50% del capital anterior o el saldo pendiente (lo que sea mayor)
+  // Para evitar que el cliente pida menos de lo que ya debe.
+  const montoMinimoSugerido = Math.max(montoOriginal * 0.5, saldoPendiente);
 
   return {
     baseIncreasePct,
     reputationBonusPct,
     totalPotentialPct,
     montoSugerido: Math.round(montoSugerido * 100) / 100,
+    montoMaximo: Math.round(montoSugerido * 100) / 100, // Alias para claridad en UI
+    montoMinimo: Math.round(montoMinimoSugerido * 100) / 100,
     esReduccion: totalPotentialPct < 0,
     esAumento: totalPotentialPct > 0,
     detalles: [
@@ -1123,8 +1135,8 @@ export async function getFinancialConfig(supabase: any) {
  * Esta es la unica funcion que debe usarse para obtener el score de salud de un prestamo.
  * Encapsula el fetching de datos identico al Dashboard para garantizar paridad.
  */
-export async function getLoanHealthScoreAction(supabase: any, loanId: string) {
-  const today = getTodayPeru();
+export async function getLoanHealthScoreAction(supabase: any, loanId: string, todayOverride?: string) {
+  const today = todayOverride || getTodayPeru();
 
   // 1. Obtener prestamo y cronograma
   const { data: prestamo } = await supabase
@@ -1160,5 +1172,45 @@ export async function getLoanHealthScoreAction(supabase: any, loanId: string) {
     today,
     config
   );
+}
+
+/**
+ * ACCION ATOMICA DE EVALUACION DE REPUTACION DEL CLIENTE
+ * Centraliza la obtencion de datos y el calculo para garantizar paridad entre vistas.
+ */
+export async function getClientReputationAction(supabase: any, clienteId: string, todayOverride?: string) {
+  // 1. Obtener perfil del cliente con antiguedad
+  const { data: client } = await supabase
+    .from('clientes')
+    .select('*, asesor:asesor_id(nombre_completo)')
+    .eq('id', clienteId)
+    .single();
+
+  if (!client) throw new Error('Cliente no encontrado');
+
+  // 2. Obtener TODO el historial con cuotas y pagos anidados (Cascada Completa)
+  const { data: allLoans, error: loansError } = await supabase
+    .from('prestamos')
+    .select(`
+        *,
+        cronograma_cuotas (
+            *,
+            pagos (*)
+        )
+    `)
+    .eq('cliente_id', clienteId)
+    .order('created_at', { ascending: false });
+
+  if (loansError) {
+    console.error('❌ Error fetching allLoans for reputation:', loansError);
+    throw loansError;
+  }
+
+  // 3. Obtener configuracion centralizada
+  const systemConfig = await getFinancialConfig(supabase);
+
+  // 4. Ejecutar Evaluacion Integral (Formula que no debe alterarse)
+  // Pasamos [] como allPayments porque ya vienen anidados en los loans
+  return getComprehensiveEvaluation(client, allLoans || [], [], undefined, systemConfig, todayOverride);
 }
 

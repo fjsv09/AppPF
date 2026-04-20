@@ -63,7 +63,8 @@ export async function GET() {
                 'horario_fin_turno_1',
                 'horario_cierre',
                 'oficina_lat',
-                'oficina_lon'
+                'oficina_lon',
+                'asistencia_minutos_permanencia'
             ])
 
         const config = configRows?.reduce((acc: any, curr) => {
@@ -85,22 +86,26 @@ export async function GET() {
         let isMarked = !!asistencia?.hora_entrada
 
         // Lógica Acumulativa:
-        // 1. Si no ha marcado entrada, SIEMPRE pedir entrada primero (no importa la hora)
-        if (!asistencia?.hora_entrada) {
+        // 1. Si no ha marcado entrada Y no hay una permanencia pendiente, pedir entrada
+        if (!asistencia?.hora_entrada && asistencia?.permanencia_entrada_estado !== 'pendiente') {
             eventRequired = 'entrada'
             isMarked = false
         }
-        // 2. Si ya marcó entrada, verificar si ya es hora de pedir el Inicio del Turno Tarde
+        // 1b. Si la permanencia está pendiente, considerar "marcado" temporalmente para dejarlo pasar
+        else if (asistencia?.permanencia_entrada_estado === 'pendiente') {
+            eventRequired = 'entrada' // Sigue siendo entrada, pero desbloqueado
+            isMarked = true
+        }
+        // 2. Si ya marcó entrada (o se cumplió la permanencia), verificar Inicio del Turno Tarde
         else if (tNow >= tFinTurno1 && !asistencia?.hora_turno_tarde) {
             eventRequired = 'fin_turno_1'
             isMarked = false
         }
-        // 3. Si ya marcó entrada y fin de turno 1, verificar si es hora de pedir el Cierre Final
+        // 3. Si ya marcó entrada y fin de turno 1, verificar Cierre Final
         else if (tNow >= tCierre && !asistencia?.hora_cierre) {
             eventRequired = 'cierre'
             isMarked = false
         }
-        // 4. Si ya marcó el evento correspondiente al periodo actual, está al día
         else {
             isMarked = true
         }
@@ -119,6 +124,7 @@ export async function GET() {
                 tolerancia: parseInt(config?.asistencia_tolerancia_minutos || '15'),
                 oficina_lat: parseFloat(config?.oficina_lat || '0'),
                 oficina_lon: parseFloat(config?.oficina_lon || '0'),
+                minutos_permanencia: parseInt(config?.asistencia_minutos_permanencia || '15'),
             }
         })
     } catch (error: any) {
@@ -170,7 +176,8 @@ export async function POST(request: Request) {
                 'horario_fin_turno_1',
                 'horario_cierre',
                 'oficina_lat',
-                'oficina_lon'
+                'oficina_lon',
+                'asistencia_minutos_permanencia'
             ])
 
         const config = configRows?.reduce((acc: any, curr) => {
@@ -309,16 +316,25 @@ export async function POST(request: Request) {
             const { data, error } = await supabaseAdmin
                 .from('asistencia_personal')
                 .update({
-                    [updateField]: horaActual,
+                    // Solo registrar hora inmediata si NO es entrada (la entrada espera 15 min)
+                    ...(eventTarget !== 'entrada' ? { [updateField]: horaActual } : {}),
                     [latField]: lat,
                     [lonField]: lon,
-                    lat, // Mantener también en el general
-                    lon, // Mantener también en el general
+                    lat, 
+                    lon, 
                     distancia_oficina: Math.round(distancia),
-                    minutos_tardanza: totalMinutosTardanza,
-                    descuento_tardanza: totalDescuentoTardanza,
-                    estado: estadoFinal,
-                    [tardanzaField]: minutosTardanzaActual
+                    // No acumular tardanza en entrada todavía, se hará al cumplir la permanencia
+                    ...(eventTarget !== 'entrada' ? {
+                        minutos_tardanza: totalMinutosTardanza,
+                        descuento_tardanza: totalDescuentoTardanza,
+                        estado: estadoFinal,
+                        [tardanzaField]: minutosTardanzaActual,
+                    } : {}),
+                    // Inicializar permanencia si es entrada
+                    ...(eventTarget === 'entrada' ? {
+                        permanencia_entrada_inicio: new Date().toISOString(),
+                        permanencia_entrada_estado: 'pendiente'
+                    } : {})
                 })
                 .eq('id', existingRecord.id)
                 .select()
@@ -331,16 +347,25 @@ export async function POST(request: Request) {
             const insertData: any = {
                 usuario_id: user.id,
                 fecha: todayStr,
-                [updateField]: horaActual,
+                // Solo registrar hora inmediata si NO es entrada
+                ...(eventTarget !== 'entrada' ? { [updateField]: horaActual } : {}),
                 [latField]: lat,
                 [lonField]: lon,
                 lat,
                 lon,
                 distancia_oficina: Math.round(distancia),
-                minutos_tardanza: totalMinutosTardanza,
-                descuento_tardanza: totalDescuentoTardanza,
-                estado: estadoFinal,
-                [tardanzaField]: minutosTardanzaActual
+                // No registrar tardanza en entrada todavía
+                ...(eventTarget !== 'entrada' ? {
+                    minutos_tardanza: totalMinutosTardanza,
+                    descuento_tardanza: totalDescuentoTardanza,
+                    estado: estadoFinal,
+                    [tardanzaField]: minutosTardanzaActual,
+                } : {}),
+                // Inicializar permanencia si es entrada
+                ...(eventTarget === 'entrada' ? {
+                    permanencia_entrada_inicio: new Date().toISOString(),
+                    permanencia_entrada_estado: 'pendiente'
+                } : {})
             }
 
             const { data, error } = await supabaseAdmin
@@ -425,9 +450,11 @@ export async function POST(request: Request) {
         return NextResponse.json({
             success: true,
             record: registro,
-            message: minutosTardanzaActual > 0
-                ? `⚠️ Registro de ${readableEvent} con tardanza de ${minutosTardanzaActual} min. Descuento aplicado: S/ ${descuentoTardanzaActual.toFixed(2)}`
-                : `✅ Registro de ${readableEvent} exitoso y puntual a las ${horaActual}.`
+            message: eventTarget === 'entrada'
+                ? `⏳ Verificación de permanencia iniciada. Permanece en la oficina por 15 minutos para completar tu registro.`
+                : (minutosTardanzaActual > 0
+                    ? `⚠️ Registro de ${readableEvent} con tardanza de ${minutosTardanzaActual} min. Descuento aplicado: S/ ${descuentoTardanzaActual.toFixed(2)}`
+                    : `✅ Registro de ${readableEvent} exitoso y puntual a las ${horaActual}.`)
         })
     } catch (error: any) {
         console.error('[ASISTENCIA POST]', error)

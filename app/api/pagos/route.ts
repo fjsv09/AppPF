@@ -28,7 +28,7 @@ export async function POST(request: Request) {
         // Verify User Profile & Role (using Admin)
         const { data: perfil, error: perfilError } = await supabaseAdmin
             .from('perfiles')
-            .select('rol, supervisor_id')
+            .select('rol, supervisor_id, exigir_gps_cobranza')
             .eq('id', user.id)
             .single()
 
@@ -62,6 +62,13 @@ export async function POST(request: Request) {
 
         if (!cuota_id || !monto) {
             return NextResponse.json({ error: 'Faltan campos requeridos (cuota_id, monto)' }, { status: 400 })
+        }
+
+        // --- VERIFICACIÓN DE GPS OBLIGATORIO ---
+        if (perfil.exigir_gps_cobranza && (!latitud || !longitud)) {
+            return NextResponse.json({ 
+                error: 'Restricción de Seguridad: Se requiere ubicación GPS activa para procesar cobranzas.' 
+            }, { status: 403 })
         }
 
         // --- VERIFICACIÓN DE SCOPE (Supervisor solo puede pagar préstamos de sus asesores) ---

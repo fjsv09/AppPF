@@ -408,8 +408,8 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
 
             {/* -------------------- HIGHER RES TABLE VIEW -------------------- */}
             <div className="hidden md:block bg-slate-950/40 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
-                <div className="overflow-x-auto custom-scrollbar">
-                    <div className="min-w-[900px]">
+                <div className="overflow-x-auto custom-scrollbar pb-2">
+                    <div className="min-w-[1200px]">
                         {/* Desktop Header */}
                         <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-400">
                             <div className="col-span-3">Cliente</div>
@@ -449,15 +449,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                                                     <span className="text-[10px] text-slate-500 font-mono bg-slate-950/50 px-1.5 py-0.5 rounded border border-slate-800/50 truncate">
                                                         {sol.cliente?.dni}
                                                     </span>
-                                                    <span className={cn(
-                                                        "text-[10px] font-mono font-medium px-1.5 py-0.5 rounded border",
-                                                        sol.score_al_solicitar >= 80 ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/10" :
-                                                        sol.score_al_solicitar >= 60 ? "text-blue-400 border-blue-500/20 bg-blue-500/10" :
-                                                        sol.score_al_solicitar >= 40 ? "text-amber-400 border-amber-500/20 bg-amber-500/10" :
-                                                        "text-red-400 border-red-500/20 bg-red-500/10"
-                                                    )}>
-                                                        Score: {sol.score_al_solicitar}
-                                                    </span>
+
                                                 </div>
                                             </div>
                                         </div>
@@ -514,25 +506,25 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                                         <div className="col-span-2 flex items-center justify-end gap-1.5">
                                             {userRole === 'supervisor' && sol.estado_solicitud === 'pendiente_supervision' && (
                                                 <>
-                                                    <Button size="sm" variant="outline" className="h-8 px-2 border-orange-600/50 text-orange-400 hover:bg-orange-900/40 text-[10px]" onClick={() => openAction('observar', sol)}>
-                                                        <MessageSquare className="h-3.5 w-3.5 mr-1" /> Obs
+                                                    <Button size="sm" variant="outline" className="h-8 w-8 p-0 border-orange-600/50 text-orange-400 hover:bg-orange-900/40" onClick={() => openAction('observar', sol)} title="Enviar Observaciones">
+                                                        <MessageSquare className="h-4 w-4" />
                                                     </Button>
-                                                    <Button size="sm" className="h-8 px-2 bg-blue-600/20 text-blue-400 border border-blue-600/30 hover:bg-blue-600/40 text-[10px]" onClick={() => openAction('preprobar', sol)}>
-                                                        Pre-aprobar
+                                                    <Button size="sm" className="h-8 w-8 p-0 bg-blue-600/20 text-blue-400 border border-blue-600/30 hover:bg-blue-600/40" onClick={() => openAction('preprobar', sol)} title="Pre-aprobar">
+                                                        <CheckCircle2 className="h-4 w-4" />
                                                     </Button>
                                                 </>
                                             )}
                                             {userRole === 'admin' && sol.estado_solicitud === 'pre_aprobado' && (
                                                 <>
-                                                    <Button size="sm" variant="outline" className="h-8 px-2 border-red-600/50 text-red-400 hover:bg-red-900/40 text-[10px]" onClick={() => openAction('rechazar', sol)}>
-                                                        Rechazar
+                                                    <Button size="sm" variant="outline" className="h-8 w-8 p-0 border-red-600/50 text-red-400 hover:bg-red-900/40" onClick={() => openAction('rechazar', sol)} title="Rechazar">
+                                                        <XCircle className="h-4 w-4" />
                                                     </Button>
-                                                    <Button size="sm" className="h-8 px-2 bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/40 text-[10px]" onClick={() => openAction('aprobar', sol)}>
-                                                        Aprobar
+                                                    <Button size="sm" className="h-8 w-8 p-0 bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/40" onClick={() => openAction('aprobar', sol)} title="Aprobar Renovación">
+                                                        <CheckCircle2 className="h-4 w-4" />
                                                     </Button>
                                                 </>
                                             )}
-                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all" onClick={() => router.push(`/dashboard/renovaciones/${sol.id}`)}>
+                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all" onClick={() => router.push(`/dashboard/renovaciones/${sol.id}`)} title="Ver Detalle">
                                                 <Eye className="w-4 h-4" />
                                             </Button>
                                         </div>

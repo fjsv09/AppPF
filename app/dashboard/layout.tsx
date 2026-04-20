@@ -7,6 +7,7 @@ import { DashboardMain } from '@/components/dashboard-main'
 import { AdminTaskSync } from '@/components/dashboard/admin-task-sync'
 import { DashboardProtection } from '@/components/providers/dashboard-protection'
 import { SessionWatcher } from '@/components/providers/session-watcher'
+import { StayVerification } from '@/components/asistencia/stay-verification'
 
 export default async function DashboardLayout({
   children,
@@ -69,7 +70,8 @@ export default async function DashboardLayout({
         'oficina_lat',
         'oficina_lon',
         'nombre_sistema',
-        'logo_sistema_url'
+        'logo_sistema_url',
+        'asistencia_minutos_permanencia'
     ])
 
   const configMap = attendanceConfigRows?.reduce((acc: any, item) => {
@@ -137,6 +139,7 @@ export default async function DashboardLayout({
         tolerancia: parseInt(configMap?.asistencia_tolerancia_minutos || '15'),
         oficina_lat: parseFloat(configMap?.oficina_lat || '0'),
         oficina_lon: parseFloat(configMap?.oficina_lon || '0'),
+        minutos_permanencia: parseInt(configMap?.asistencia_minutos_permanencia || '15'),
     }
   }
 
@@ -160,6 +163,7 @@ export default async function DashboardLayout({
             {userRole === 'admin' && <AdminTaskSync />}
             {children}
           </DashboardMain>
+          <StayVerification />
         </div>
       </DashboardProtection>
     </SidebarProvider>

@@ -77,13 +77,13 @@ export function LoanTabs({
     
     // Sincronizar estado si la URL cambia (ej: por botones de navegación)
     useEffect(() => {
-        if (tabParam && allowedTabs.includes(tabParam) && tabParam !== activeTab) {
+        if (!isPending && tabParam && allowedTabs.includes(tabParam) && tabParam !== activeTab) {
             setActiveTab(tabParam)
-        } else if (tabParam && !allowedTabs.includes(tabParam)) {
+        } else if (!isPending && tabParam && !allowedTabs.includes(tabParam)) {
             setActiveTab("historial")
             // Opcional: router.replace(...) para limpiar la URL
         }
-    }, [tabParam, activeTab, allowedTabs])
+    }, [tabParam, activeTab, allowedTabs, isPending])
 
     const handleTabChange = useCallback((value: string) => {
         setActiveTab(value) // Feedback inmediato en el label
@@ -97,7 +97,7 @@ export function LoanTabs({
     return (
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-4">
             <div className={`overflow-x-auto pb-1 scrollbar-none scroll-smooth w-full min-w-0 transition-opacity duration-300 ${isPending ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-                <TabsList className="bg-slate-900/50 border border-slate-800 p-0.5 flex items-center w-max min-w-full md:min-w-0 md:w-fit gap-1 relative overflow-hidden">
+                <TabsList className="bg-slate-900/50 border border-slate-800 p-0.5 md:p-1 flex items-center justify-start w-max min-w-full md:min-w-0 md:w-fit gap-1 relative overflow-hidden">
                     {/* Indicador de carga sutil */}
                     {isPending && (
                         <div className="absolute inset-0 bg-blue-500/5 animate-pulse" />
@@ -127,7 +127,15 @@ export function LoanTabs({
                 </TabsList>
             </div>
 
-            <TabsContent value="salud" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 animate-in fade-in duration-300">
+            <TabsContent value="salud" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 animate-in fade-in slide-in-from-bottom-2 duration-500 relative">
+                {isPending && (
+                    <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-[2px] z-50 flex items-center justify-center rounded-2xl animate-in fade-in duration-300">
+                        <div className="flex flex-col items-center gap-3">
+                            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                            <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest">Sincronizando...</p>
+                        </div>
+                    </div>
+                )}
                 {loanScore ? (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <Card className="bg-slate-900/40 border-slate-800 backdrop-blur-sm md:col-span-1">
@@ -169,84 +177,80 @@ export function LoanTabs({
                         <p className="text-slate-400 text-sm">Calculando salud del préstamo...</p>
                     </div>
                 )}
-            </TabsContent>
-
-            <TabsContent value="historial" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
-                {isPending ? (
-                    <div className="flex items-center justify-center py-20 bg-slate-900/10 border border-slate-800/50 rounded-2xl animate-in fade-in duration-300">
-                        <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+            </TabsContent>            <TabsContent value="historial" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px] animate-in fade-in slide-in-from-bottom-2 duration-500 relative">
+                {isPending && (
+                    <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-[2px] z-50 flex items-center justify-center rounded-2xl animate-in fade-in duration-300">
+                        <div className="flex flex-col items-center gap-3">
+                            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                            <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest">Cargando Historial...</p>
+                        </div>
                     </div>
-                ) : (
+                )}
+                <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
+                    <CardContent className="p-3 md:p-6 space-y-8">
+                        <DailyCollectorLog 
+                            cronograma={cronograma} 
+                            pagos={pagos} 
+                            cuadresHoy={cuadresHoy}
+                            prestamo={prestamo} 
+                            cliente={cliente}
+                            userRole={userRole}
+                            systemSchedule={systemSchedule}
+                            isBlockedByCuadre={isBlockedByCuadre}
+                            blockReasonCierre={blockReasonCierre}
+                            systemAccess={systemAccess}
+                        />
+                    </CardContent>
+                </Card>
+            </TabsContent>
+            {isAdmin && (
+                <TabsContent value="cronograma" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px] animate-in fade-in slide-in-from-bottom-2 duration-500 relative">
+                    {isPending && (
+                        <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-[2px] z-50 flex items-center justify-center rounded-2xl animate-in fade-in duration-300">
+                            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                        </div>
+                    )}
                     <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
-                        <CardContent className="p-3 md:p-6 space-y-8">
-                            <DailyCollectorLog 
-                                cronograma={cronograma} 
-                                pagos={pagos} 
-                                cuadresHoy={cuadresHoy}
+                        <CardContent className="p-3 md:p-6">
+                            <CronogramaClient 
                                 prestamo={prestamo} 
-                                cliente={cliente}
-                                userRole={userRole}
+                                cronograma={cronograma} 
+                                userRol={userRole}
                                 systemSchedule={systemSchedule}
                                 isBlockedByCuadre={isBlockedByCuadre}
                                 blockReasonCierre={blockReasonCierre}
                                 systemAccess={systemAccess}
+                                pagos={pagos}
                             />
-                            
-
                         </CardContent>
                     </Card>
-                )}
-            </TabsContent>
-            {isAdmin && (
-                <TabsContent value="cronograma" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
-                    {isPending ? (
-                        <div className="flex items-center justify-center py-20 bg-slate-900/10 border border-slate-800/50 rounded-2xl animate-in fade-in duration-300">
-                            <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
-                        </div>
-                    ) : (
-                        <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
-                            <CardContent className="p-3 md:p-6">
-                                <CronogramaClient 
-                                    prestamo={prestamo} 
-                                    cronograma={cronograma} 
-                                    userRol={userRole}
-                                    systemSchedule={systemSchedule}
-                                    isBlockedByCuadre={isBlockedByCuadre}
-                                    blockReasonCierre={blockReasonCierre}
-                                    systemAccess={systemAccess}
-                                    pagos={pagos}
-                                />
-                            </CardContent>
-                        </Card>
-                    )}
                 </TabsContent>
             )}
 
             {!isAdvisor && (
-                <TabsContent value="visitas" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
-                    {isPending ? (
-                        <div className="flex items-center justify-center py-20 bg-slate-900/10 border border-slate-800/50 rounded-2xl animate-in fade-in duration-300">
-                            <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+                <TabsContent value="visitas" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px] animate-in fade-in slide-in-from-bottom-2 duration-500 relative">
+                    {isPending && (
+                        <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-[2px] z-50 flex items-center justify-center rounded-2xl animate-in fade-in duration-300">
+                            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
                         </div>
-                    ) : (
-                        <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
-                            <CardContent className="p-0">
-                                <VisitadosList prestamoId={prestamo.id} userRole={userRole} />
-                            </CardContent>
-                        </Card>
                     )}
+                    <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
+                        <CardContent className="p-0">
+                            <VisitadosList prestamoId={prestamo.id} userRole={userRole} />
+                        </CardContent>
+                    </Card>
                 </TabsContent>
             )}
 
-            <TabsContent value="evidencia" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
-                {isPending ? (
-                    <div className="flex items-center justify-center py-20 bg-slate-900/10 border border-slate-800/50 rounded-2xl animate-in fade-in duration-300">
-                        <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+            <TabsContent value="evidencia" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px] animate-in fade-in slide-in-from-bottom-2 duration-500 relative">
+                {isPending && (
+                    <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-[2px] z-50 flex items-center justify-center rounded-2xl animate-in fade-in duration-300">
+                        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
                     </div>
-                ) : (
-                    <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
-                        <CardContent className="p-4 md:p-5">
-                        {!tareaEvidencia ? (
+                )}
+                <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
+                    <CardContent className="p-4 md:p-5">
+                    {!tareaEvidencia ? (
                             <div className="flex flex-col items-center justify-center py-8 text-slate-500">
                                 <Camera className="w-10 h-10 mb-3 opacity-20" />
                                 <p className="text-sm">No hay registro de evidencia para este préstamo.</p>
@@ -331,26 +335,24 @@ export function LoanTabs({
                         )}
                     </CardContent>
                 </Card>
-                )}
             </TabsContent>
 
-            <TabsContent value="gestiones" id="gestiones-tab" className="focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px]">
-                {isPending ? (
-                    <div className="flex items-center justify-center py-20 bg-slate-900/10 border border-slate-800/50 rounded-2xl animate-in fade-in duration-300">
-                        <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+            <TabsContent value="gestiones" id="gestiones-tab" className="focus-visible:outline-none focus-visible:ring-0 mt-0 overflow-x-hidden min-h-[300px] animate-in fade-in slide-in-from-bottom-2 duration-500 relative">
+                {isPending && (
+                    <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-[2px] z-50 flex items-center justify-center rounded-2xl animate-in fade-in duration-300">
+                        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
                     </div>
-                ) : (
-                    <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
-                        <CardContent className="p-0">
-                            <ClientGestiones
-                                loans={[prestamo]}
-                                clienteId={prestamo.cliente_id}
-                                clienteNombre={cliente?.nombres || prestamo.clientes?.nombres || 'Cliente'}
-                                userRol={userRole}
-                            />
-                        </CardContent>
-                    </Card>
                 )}
+                <Card className="bg-slate-900/50 border-slate-800 shadow-xl overflow-hidden backdrop-blur-sm">
+                    <CardContent className="p-0">
+                        <ClientGestiones
+                            loans={[prestamo]}
+                            clienteId={prestamo.cliente_id}
+                            clienteNombre={cliente?.nombres || prestamo.clientes?.nombres || 'Cliente'}
+                            userRol={userRole}
+                        />
+                    </CardContent>
+                </Card>
             </TabsContent>
         </Tabs>
     )

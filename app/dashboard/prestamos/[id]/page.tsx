@@ -321,23 +321,19 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 md:gap-4 mb-6 md:mb-8">
                         <div className="flex items-center gap-2.5 w-full lg:w-auto">
                             <BackButton />
-                            <div className="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-white/10 rounded-lg md:rounded-xl backdrop-blur-md border border-white/10 shrink-0">
-                                <CreditCard className="w-4 h-4 md:w-5 md:h-5 text-blue-300" />
-                            </div>
-                            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white/95 leading-none">Préstamo Individual</h1>
+                            <ClientMiniCard 
+                                clienteId={prestamo.cliente_id}
+                                nombres={prestamo.clientes?.nombres}
+                                fotoPerfil={prestamo.clientes?.foto_perfil}
+                                className="h-10 md:h-11 shadow-sm bg-white/10 border-white/20"
+                            />
                             {esParalelo && (
                                 <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 font-bold ml-2 shadow-sm uppercase tracking-wider text-[10px] md:text-xs">PARALELO</Badge>
                             )}
                         </div>
 
-                        <div className="lg:hidden w-full flex gap-3 overflow-x-auto pb-1 scrollbar-none">
-                            <ClientMiniCard 
-                                clienteId={prestamo.cliente_id}
-                                nombres={prestamo.clientes?.nombres}
-                                fotoPerfil={prestamo.clientes?.foto_perfil}
-                                className="h-10 shrink-0 shadow-sm bg-white/10 border-white/20 min-w-[140px]"
-                            />
-                            <div className="flex items-center gap-2 md:gap-3 bg-white/5 h-10 px-3 rounded-xl border border-white/10 backdrop-blur-md hover:bg-white/10 hover:border-blue-500/30 transition-all cursor-pointer group shrink-0 min-w-[140px]">
+                        <div className="lg:hidden w-full flex justify-end">
+                            <div className="flex items-center gap-2 md:gap-3 bg-white/5 h-10 px-3 rounded-xl border border-white/10 backdrop-blur-md hover:bg-white/10 hover:border-blue-500/30 transition-all cursor-pointer group w-fit min-w-[140px]">
                                 <div className="h-7 w-7 shrink-0 rounded-full bg-slate-800 flex items-center justify-center shadow-lg border border-white/10 group-hover:scale-105 transition-transform overflow-hidden relative">
                                     <Users className="w-3.5 h-3.5 text-blue-400" />
                                 </div>
@@ -350,16 +346,20 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                             </div>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row items-center gap-3 lg:gap-4 w-full lg:w-auto">
-                            <div className="flex items-center gap-2 w-full sm:w-auto">
-                                <ContratoGenerator prestamo={prestamo} cronograma={cronograma || []} defaultOpen={isContractTab} />
+                        <div className="flex flex-row items-center gap-3 lg:gap-4 w-full lg:w-auto">
+                            <div className="flex items-center gap-2 w-full lg:w-auto">
+                                <div className="flex-1 lg:flex-none lg:w-auto">
+                                    <ContratoGenerator prestamo={prestamo} cronograma={cronograma || []} defaultOpen={isContractTab} />
+                                </div>
 
-                                <div className="flex flex-col items-center gap-1.5 w-full sm:w-auto">
+                                <div className="flex-1 lg:flex-none lg:w-auto">
                                     {mostrarBotonRenovacion && (
                                         <SolicitudRenovacionModal 
                                                 {...{ 
                                                     prestamoId: prestamo.id, 
+                                                    clienteId: prestamo.cliente_id || prestamo.clientes?.id || '',
                                                     clienteNombre: prestamo.clientes?.nombres || 'Cliente', 
+                                                    clienteFotoPerfil: prestamo.clientes?.foto_perfil,
                                                     currentMonto: prestamo.monto,
                                                     currentInteres: prestamo.interes,
                                                     currentModalidad: prestamo.frecuencia?.toLowerCase() || 'diario',
@@ -400,12 +400,6 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                             
                             <div className="hidden lg:flex items-center gap-4">
                                 <div className="w-px h-8 bg-white/10 mx-1" />
-                                <ClientMiniCard 
-                                    clienteId={prestamo.cliente_id}
-                                    nombres={prestamo.clientes?.nombres}
-                                    fotoPerfil={prestamo.clientes?.foto_perfil}
-                                    className="h-11 shadow-sm bg-white/10 border-white/20"
-                                />
                                 <div className="flex items-center gap-2 md:gap-3 bg-white/5 h-11 px-3 rounded-xl border border-white/10 backdrop-blur-md hover:bg-white/10 hover:border-blue-500/30 transition-all cursor-pointer group w-fit min-w-[140px]">
                                     <div className="h-7 w-7 md:h-8 md:w-8 shrink-0 rounded-full bg-slate-800 flex items-center justify-center shadow-lg border border-white/10 group-hover:scale-105 transition-transform overflow-hidden relative">
                                         <Users className="w-3.5 h-3.5 md:w-4 md:h-4 text-blue-400" />

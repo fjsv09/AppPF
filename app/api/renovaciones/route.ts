@@ -111,7 +111,15 @@ export async function POST(request: Request) {
             interes, 
             cuotas, 
             modalidad, 
-            fecha_inicio_propuesta
+            fecha_inicio_propuesta,
+            score_al_solicitar,
+            monto_minimo_permitido,
+            monto_maximo_permitido,
+            razon_limite,
+            health_score,
+            reputation_score,
+            detalles_score,
+            reputation_data
         } = body
 
         // Validar campos requeridos
@@ -233,11 +241,17 @@ export async function POST(request: Request) {
             cuotas,
             modalidad,
             fecha_inicio_propuesta,
-            score_al_solicitar: elegibilidad.score,
-            resumen_comportamiento: elegibilidad.score_detalle,
-            monto_maximo_permitido: elegibilidad.monto_maximo,
-            monto_minimo_permitido: elegibilidad.monto_minimo,
-            razon_limite: `Score: ${elegibilidad.score}`,
+            score_al_solicitar: score_al_solicitar || elegibilidad.score,
+            reputation_score_al_solicitar: reputation_score || 0,
+            resumen_comportamiento: {
+                health_evaluation: detalles_score || elegibilidad.score_detalle || {},
+                reputation_evaluation: reputation_data || {},
+                health_score: health_score || elegibilidad.score,
+                reputation_score: reputation_score || 0
+            },
+            monto_maximo_permitido: monto_maximo_permitido || elegibilidad.monto_maximo,
+            monto_minimo_permitido: monto_minimo_permitido || elegibilidad.monto_minimo,
+            razon_limite: razon_limite || `Score: ${elegibilidad.score}`,
             requiere_excepcion: elegibilidad.requiere_excepcion || false,
             tipo_excepcion: elegibilidad.tipo_excepcion || null,
             estado_solicitud: perfil.rol === 'admin' ? 'pre_aprobado' : 'pendiente_supervision'
@@ -290,8 +304,19 @@ export async function POST(request: Request) {
             detalle: { 
                 prestamo_id, 
                 monto: monto_solicitado, 
-                score: elegibilidad.score,
-                requiere_excepcion: elegibilidad.requiere_excepcion
+                estado_solicitud: perfil.rol === 'admin' ? 'pre_aprobado' : 'pendiente_supervision',
+                score_al_solicitar: score_al_solicitar || elegibilidad.score,
+                monto_minimo_permitido: monto_minimo_permitido || elegibilidad.monto_minimo,
+                monto_maximo_permitido: monto_maximo_permitido || elegibilidad.monto_maximo,
+                razon_limite: razon_limite || `Score: ${elegibilidad.score}`,
+                resumen_comportamiento: {
+                    health_evaluation: detalles_score,
+                    reputation_evaluation: reputation_data,
+                    health_score: health_score || elegibilidad.score,
+                    reputation_score: reputation_score || 0
+                },
+                requiere_excepcion: elegibilidad.requiere_excepcion,
+                tipo_excepcion: elegibilidad.tipo_excepcion
             }
         })
 

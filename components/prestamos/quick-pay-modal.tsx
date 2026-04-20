@@ -30,6 +30,7 @@ interface QuickPayModalProps {
     blockReasonCierre?: string
     systemAccess?: any
     userLoc?: [number, number] | null
+    exigirGps?: boolean
 }
 
 export function QuickPayModal({ 
@@ -44,7 +45,8 @@ export function QuickPayModal({
     isBlockedByCuadre, 
     blockReasonCierre,
     systemAccess,
-    userLoc
+    userLoc,
+    exigirGps = false
 }: QuickPayModalProps) {
     const [loading, setLoading] = useState(false)
     const [amount, setAmount] = useState('')
@@ -284,6 +286,10 @@ export function QuickPayModal({
             toast.error('Selecciona un método de pago')
             return
         }
+        if (exigirGps && !location) {
+            toast.error('Ubicación requerida para procesar el cobro')
+            return
+        }
         setLoading(true)
         try {
             const payAmount = parseFloat(amount)
@@ -382,6 +388,22 @@ export function QuickPayModal({
                                             </span>
                                         </DialogDescription>
                                     </DialogHeader>
+
+                                    {/* Banner advertencia GPS */}
+                                    {exigirGps && !location && (
+                                        <div className="bg-rose-950/40 border border-rose-500/30 rounded-xl p-4 flex gap-3 mb-4 animate-pulse">
+                                            <Shield className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+                                            <div className="text-sm text-rose-200 space-y-1">
+                                                <span className="font-black text-rose-500 flex items-center gap-2">
+                                                    <AlertCircle className="w-4 h-4" />
+                                                    GPS OBLIGATORIO REQUERIDO
+                                                </span>
+                                                <p className="text-slate-200 leading-tight">
+                                                    Tu cuenta requiere <span className="font-bold underline">GPS ACTIVO</span> para registrar cobranzas. Por favor, habilita la ubicación en tu dispositivo.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Banner informativo para Admin/Supervisor */}
                                     {(userRol === 'admin' || userRol === 'supervisor') && (
@@ -499,7 +521,7 @@ export function QuickPayModal({
                                     </Button>
                                     <Button 
                                         onClick={handlePayment} 
-                                        disabled={loading || !amount || parseFloat(amount) <= 0 || !metodoPago}
+                                        disabled={loading || !amount || parseFloat(amount) <= 0 || !metodoPago || (exigirGps && !location)}
                                         className={cn(
                                             "flex-1 h-14 text-lg font-bold shadow-xl transition-all duration-300",
                                             !metodoPago

@@ -165,7 +165,12 @@ export function AttendanceGate({ children, userRole, initialData }: AttendanceGa
                 event: currentEvent
             }))
 
-            if (data.record?.estado === 'puntual') {
+            if (data.record?.permanencia_entrada_estado === 'pendiente') {
+                toast.info('⏳ Verificación de permanencia iniciada', {
+                    description: 'Debes permanecer en la oficina durante 15 minutos.',
+                    duration: 5000
+                })
+            } else if (data.record?.estado === 'puntual') {
                 toast.success('¡Llegaste puntual! 🎉', {
                     description: data.message,
                     duration: 4000
@@ -239,41 +244,54 @@ export function AttendanceGate({ children, userRole, initialData }: AttendanceGa
                                  currentEvent === 'fin_turno_1' ? 'Inicio Turno Tarde' : 
                                  'Cierre Final del Día'}
                             </h2>
-                            <p className="text-sm text-slate-400 px-4">
+                            <div className="text-sm text-slate-400 px-4">
                                 {currentEvent === 'entrada' 
                                     ? 'Debes marcar tu asistencia para acceder al sistema.'
                                     : `Es hora de registrar tu ${currentEvent === 'fin_turno_1' ? 'inicio del turno tarde' : 'cierre de jornada'} desde la oficina.`
                                 }
                                 {config && currentEvent === 'entrada' && (
-                                    <span className="block mt-1 text-slate-500 text-xs">
-                                        Hora puntual: {config.hora_limite} • Radio: {config.radio_metros}m
-                                    </span>
+                                    <div className="mt-4 space-y-3">
+                                        <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-2.5">
+                                            <p className="text-slate-500 text-[10px] leading-relaxed">
+                                                Hora puntual: {config.hora_limite} • Radio: {config.radio_metros}m
+                                            </p>
+                                        </div>
+                                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex gap-3 items-start text-left shadow-lg shadow-amber-900/10">
+                                            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                                            <p className="text-[10px] text-amber-200/70 leading-relaxed">
+                                                <strong className="text-amber-400 uppercase tracking-tighter">Advertencia:</strong> Si abandonas la oficina antes de los 15 minutos, el registro quedará como incumplido y no se registrará hora de entrada, debiendo marcar de nuevo.
+                                            </p>
+                                        </div>
+                                    </div>
                                 )}
-                            </p>
+                            </div>
                         </div>
 
                         {/* Success state */}
                         {successRecord && (
                             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                                 <div className={`p-4 rounded-2xl border ${
-                                    successRecord.estado === 'puntual'
+                                    successRecord.estado === 'puntual' || successRecord.permanencia_entrada_estado === 'pendiente'
                                         ? 'bg-emerald-500/10 border-emerald-500/20'
                                         : 'bg-amber-500/10 border-amber-500/20'
                                 }`}>
                                     <div className="flex items-center gap-3 mb-3">
-                                        {successRecord.estado === 'puntual' ? (
+                                        {successRecord.estado === 'puntual' || successRecord.permanencia_entrada_estado === 'pendiente' ? (
                                             <CheckCircle2 className="w-6 h-6 text-emerald-400" />
                                         ) : (
                                             <AlertTriangle className="w-6 h-6 text-amber-400" />
                                         )}
                                         <div>
                                             <p className="font-bold text-white text-sm">
-                                                {successRecord.estado === 'tardanza' ? 'Asistencia con Tardanza' : '¡Registro Exitoso!'}
+                                                {successRecord.permanencia_entrada_estado === 'pendiente' ? '¡Verificación Iniciada!' : 
+                                                 (successRecord.estado === 'tardanza' ? 'Asistencia con Tardanza' : '¡Registro Exitoso!')}
                                             </p>
                                             <p className="text-[10px] text-slate-400">
-                                                Hora: {currentEvent === 'entrada' ? successRecord.hora_entrada : 
+                                                {successRecord.permanencia_entrada_estado === 'pendiente' 
+                                                    ? 'Permanece 15 min en el radio GPS' 
+                                                    : `Hora: ${currentEvent === 'entrada' ? successRecord.hora_entrada : 
                                                        currentEvent === 'fin_turno_1' ? successRecord.hora_turno_tarde : 
-                                                       successRecord.hora_cierre}
+                                                       successRecord.hora_cierre}`}
                                             </p>
                                         </div>
                                     </div>
@@ -369,7 +387,7 @@ export function AttendanceGate({ children, userRole, initialData }: AttendanceGa
                                     {submitting ? (
                                         <>
                                             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                            Registrando...
+                                            Iniciando Registro...
                                         </>
                                     ) : (
                                         <>

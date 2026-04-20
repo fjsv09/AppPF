@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { RefreshCw, Loader2, AlertTriangle, CheckCircle2, XCircle, Lock, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, ShieldCheck, FileSearch } from 'lucide-react'
+import { RefreshCw, Loader2, AlertTriangle, CheckCircle2, XCircle, Lock, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, ShieldCheck, FileSearch, User, ExternalLink } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { ImageLightbox } from '@/components/ui/image-lightbox'
 import { ScoreIndicator, ScoreBreakdown, ScoreLimitRules, ReputationBreakdown } from '@/components/ui/score-indicator'
 import { ClientReputationGauge } from '@/components/ui/client-reputation-gauge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -21,7 +23,9 @@ import { calculateLoanScore, calculateClientReputation } from '@/lib/financial-l
 
 interface SolicitudRenovacionModalProps {
     prestamoId: string
+    clienteId: string
     clienteNombre: string
+    clienteFotoPerfil?: string | null
     currentMonto: number
     currentInteres: number
     currentModalidad: string
@@ -79,7 +83,9 @@ const CUOTAS_ESTANDAR: Record<string, number> = {
 
 export function SolicitudRenovacionModal({ 
     prestamoId, 
+    clienteId,
     clienteNombre, 
+    clienteFotoPerfil,
     currentMonto,
     currentInteres,
     currentModalidad,
@@ -209,8 +215,16 @@ export function SolicitudRenovacionModal({
             modalidad: simulacion.modalidad,
             fecha_inicio_propuesta: fecha_inicio,
             cuenta_id: selectedCuenta,
-            score_al_solicitar: elegibilidad?.score || 0,
-            detalles_score: elegibilidad?.score_detalle || {}
+            // [NUEVO] Persistencia de parámetros financieros según solicitud del usuario
+            score_al_solicitar: elegibilidad?.healthScore || elegibilidad?.score || 0,
+            monto_minimo_permitido: elegibilidad?.monto_minimo || 0,
+            monto_maximo_permitido: elegibilidad?.monto_maximo || 0,
+            razon_limite: elegibilidad?.ajuste_detalles?.map((d: any) => `${d.factor}: ${d.razon} (${d.pct}%)`).join(' | ') || 'Ajuste según score',
+            // [SNAPSHOT] Datos para evitar recalculación historial
+            health_score: elegibilidad?.healthScore || elegibilidad?.score || 0,
+            reputation_score: elegibilidad?.reputationScore || 0,
+            detalles_score: elegibilidad?.loanScoreData || elegibilidad?.score_detalle || {},
+            reputation_data: elegibilidad?.reputationScoreData || {}
         }
 
         try {
@@ -326,9 +340,40 @@ export function SolicitudRenovacionModal({
                     <DialogTitle className="text-xl">
                         {isAdminDirectRefinance ? 'Refinanciación Directa (Mora Crítica)' : 'Solicitar Renovación'}
                     </DialogTitle>
-                    <DialogDescription className="text-slate-400">
-                        Cliente: <span className="text-white font-medium">{clienteNombre}</span>
-                    </DialogDescription>
+                    <div className="flex items-center gap-4 mt-2">
+                        <div className="h-12 w-12 shrink-0 rounded-full bg-slate-800 flex items-center justify-center shadow-lg border border-white/10 overflow-hidden relative group">
+                            {clienteFotoPerfil ? (
+                                <ImageLightbox
+                                    src={clienteFotoPerfil}
+                                    alt={clienteNombre}
+                                    className="w-full h-full"
+                                    thumbnail={
+                                        <img
+                                            src={clienteFotoPerfil}
+                                            alt={clienteNombre}
+                                            className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                                        />
+                                    }
+                                />
+                            ) : (
+                                <div className="w-full h-full bg-gradient-to-tr from-blue-400 to-purple-500 flex items-center justify-center">
+                                    <User className="w-6 h-6 text-white" />
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                            <DialogDescription className="text-slate-400 flex items-center gap-1.5">
+                                Cliente
+                            </DialogDescription>
+                            <Link 
+                                href={`/dashboard/clientes/${clienteId}`}
+                                className="text-white font-bold hover:text-blue-400 transition-colors flex items-center gap-1.5 group"
+                            >
+                                <span className="truncate">{clienteNombre}</span>
+                                <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </Link>
+                        </div>
+                    </div>
                 </DialogHeader>
 
                 {(!canRequestDueToTime && userRole !== 'admin') ? (

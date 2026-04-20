@@ -48,7 +48,13 @@ export async function POST(request: Request) {
             modalidad, 
             fecha_inicio_propuesta,
             score_al_solicitar,
+            monto_minimo_permitido,
+            monto_maximo_permitido,
+            razon_limite,
+            health_score,
+            reputation_score,
             detalles_score,
+            reputation_data,
             cuenta_id
         } = body
 
@@ -114,8 +120,17 @@ export async function POST(request: Request) {
             estado_solicitud: 'pre_aprobado',
             requiere_excepcion: true,
             tipo_excepcion: 'mora_critica_admin',
-            score_al_solicitar,
-            resumen_comportamiento: detalles_score
+            score_al_solicitar: health_score || score_al_solicitar,
+            reputation_score_al_solicitar: reputation_score || 0,
+            monto_minimo_permitido: monto_minimo_permitido || 0,
+            monto_maximo_permitido: monto_maximo_permitido || 0,
+            razon_limite: razon_limite || 'Ajuste directo admin',
+            resumen_comportamiento: {
+                health_evaluation: detalles_score || {},
+                reputation_evaluation: reputation_data || {},
+                health_score: health_score || score_al_solicitar,
+                reputation_score: reputation_score || 0
+            }
         }
 
         const { data: solicitud, error: createError } = await supabaseAdmin

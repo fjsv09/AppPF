@@ -207,7 +207,8 @@ export async function GET(
             ...responseElegibilidad,
             healthScore: atomicHealthScore.score,
             reputationScore: evaluation.reputationScore,
-            loanScoreData: atomicHealthScore, // Usamos la data atómica para el desglose
+            loanScoreData: atomicHealthScore, 
+            reputationScoreData: evaluation, // Snapshot completo de reputación
             // Ajustar Limites según la nueva lógica
             monto_maximo: adjustment.montoSugerido,
             monto_minimo: Math.max(responseElegibilidad.monto_minimo || 0, responseElegibilidad.saldo_pendiente || 0, (loanFull.monto * 0.5)),

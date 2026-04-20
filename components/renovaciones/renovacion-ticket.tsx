@@ -26,13 +26,20 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
         const ticketEl = ticketRef.current
         if (!ticketEl) return
 
-        const printWindow = window.open('', '', 'width=400,height=600')
-        if (!printWindow) {
-            toast.error('No se pudo abrir ventana de impresión')
-            return
-        }
+        // Crear un iframe oculto para la impresión para evitar problemas en PWA iOS
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        document.body.appendChild(iframe);
 
-        printWindow.document.write(`
+        const printDoc = iframe.contentWindow?.document;
+        if (!printDoc) return;
+
+        printDoc.write(`
             <html>
                 <head>
                     <title>Comprobante-${nuevoPrestamoId.split('-')[0]}</title>
@@ -109,14 +116,20 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
                 </body>
             </html>
         `)
-        printWindow.document.close()
-        printWindow.focus()
-        
+        printDoc.close()
+
+        // Esperar a que el contenido se cargue y disparar impresión
         setTimeout(() => {
-            printWindow.print()
+            iframe.contentWindow?.focus()
+            iframe.contentWindow?.print()
+            
+            // Limpieza: remover el iframe después de un momento
+            setTimeout(() => {
+                document.body.removeChild(iframe)
+            }, 1000)
+            
+            toast.success('Listo para imprimir/guardar')
         }, 300)
-        
-        toast.success('Listo para imprimir/guardar')
     }
 
     const handleShare = async () => {

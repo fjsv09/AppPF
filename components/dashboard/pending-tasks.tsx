@@ -38,9 +38,10 @@ interface Tarea {
 interface PendingTasksProps {
     variant?: 'full' | 'compact'
     asesorId?: string | null
+    userRole?: string
 }
 
-export function PendingTasks({ variant = 'full', asesorId }: PendingTasksProps) {
+export function PendingTasks({ variant = 'full', asesorId, userRole }: PendingTasksProps) {
     const [tareas, setTareas] = useState<Tarea[]>([])
     const [loading, setLoading] = useState(true)
     const [selectedTarea, setSelectedTarea] = useState<Tarea | null>(null)
@@ -130,6 +131,7 @@ export function PendingTasks({ variant = 'full', asesorId }: PendingTasksProps) 
                         tarea={tarea}
                         variant="compact"
                         userId={userId}
+                        userRole={userRole}
                         onSelect={setSelectedTarea}
                         onAction={(path) => router.push(path)}
                     />
@@ -155,6 +157,7 @@ export function PendingTasks({ variant = 'full', asesorId }: PendingTasksProps) 
                         tarea={tarea}
                         variant="full"
                         userId={userId}
+                        userRole={userRole}
                         onSelect={setSelectedTarea}
                         onAction={(path) => router.push(path)}
                     />

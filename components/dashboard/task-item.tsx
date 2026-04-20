@@ -10,12 +10,14 @@ interface TaskItemProps {
     tarea: any
     variant: 'full' | 'compact'
     userId: string | null
+    userRole?: string
     onSelect: (tarea: any) => void
     onAction: (path: string) => void
 }
 
-export function TaskItem({ tarea, variant, userId, onSelect, onAction }: TaskItemProps) {
+export function TaskItem({ tarea, variant, userId, userRole, onSelect, onAction }: TaskItemProps) {
     const isOwner = userId === tarea.asesor_id
+    const hasPermission = isOwner || ['admin', 'supervisor'].includes(userRole || '')
     const isEvidenceTask = ['nuevo_prestamo', 'renovacion', 'refinanciacion'].includes(tarea.tipo)
 
     const typeMap: Record<string, { short: string; full: string; color: string }> = {
@@ -27,7 +29,17 @@ export function TaskItem({ tarea, variant, userId, onSelect, onAction }: TaskIte
         visita_asignada: { short: 'VIS', full: 'Visita', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' }
     }
 
-    const typeLabel = typeMap[tarea.tipo] || { short: 'GES', full: 'Gestión', color: 'bg-slate-800 text-slate-400 border-slate-700' }
+    const typeLabel = typeMap[tarea.tipo] || { short: 'GES', full: 'Gestion', color: 'bg-slate-800 text-slate-400 border-slate-700' }
+
+    const getRedirectionPath = () => {
+        if (isEvidenceTask) {
+            return `/dashboard/tareas?tab=evidencia`
+        }
+        if (tarea.tipo === 'auditoria_dirigida') {
+            return `/dashboard/tareas?tab=auditoria`
+        }
+        return `/dashboard/tareas?tab=gestiones`
+    }
 
     const responsable = tarea.asesor?.nombre_completo || 'Sistema'
     const subtext = tarea.prestamo?.solicitud?.motivo_prestamo || 
@@ -44,15 +56,11 @@ export function TaskItem({ tarea, variant, userId, onSelect, onAction }: TaskIte
             <div 
                 className={cn(
                     "px-4 py-2 hover:bg-white/5 transition-colors group flex items-center gap-3",
-                    isOwner && "cursor-pointer"
+                    hasPermission && "cursor-pointer"
                 )}
                 onClick={() => {
-                    if (!isOwner) return
-                    if (isEvidenceTask) {
-                        onSelect(tarea)
-                    } else {
-                        onAction(`/dashboard/tareas?tab=${tarea.tipo === 'auditoria_dirigida' ? 'auditoria' : 'gestiones'}`)
-                    }
+                    if (!hasPermission) return
+                    onAction(getRedirectionPath())
                 }}
             >
                 <Badge className={cn("h-4 px-1 py-0 text-[7px] uppercase shrink-0 font-black tracking-widest", typeLabel.color)}>
@@ -69,8 +77,8 @@ export function TaskItem({ tarea, variant, userId, onSelect, onAction }: TaskIte
                 </div>
 
                 <div className="shrink-0">
-                    {isOwner ? (
-                        isEvidenceTask ? (
+                    {hasPermission ? (
+                        (isEvidenceTask && isOwner) ? (
                             <Button 
                                 size="sm"
                                 onClick={(e) => {
@@ -86,7 +94,7 @@ export function TaskItem({ tarea, variant, userId, onSelect, onAction }: TaskIte
                                 size="sm"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    onAction(`/dashboard/tareas?tab=${tarea.tipo === 'auditoria_dirigida' ? 'auditoria' : 'gestiones'}`);
+                                    onAction(getRedirectionPath());
                                 }}
                                 className="h-7 px-2 text-[9px] bg-emerald-600/10 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/20 font-black uppercase rounded-lg transition-all flex items-center gap-1.5"
                             >
@@ -124,22 +132,31 @@ export function TaskItem({ tarea, variant, userId, onSelect, onAction }: TaskIte
                 </CardDescription>
             </CardHeader>
             <CardContent className="p-4 pt-2">
-                {isOwner ? (
-                    isEvidenceTask ? (
-                        <Button 
-                            onClick={() => onSelect(tarea)}
-                            className="w-full h-9 text-[10px] font-black uppercase bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg shadow-blue-500/10 transition-all flex items-center justify-center gap-2"
-                        >
-                            <Camera className="w-4 h-4" />
-                            Subir Evidencia
-                        </Button>
+                {hasPermission ? (
+                    (isEvidenceTask && isOwner) ? (
+                        <div className="grid grid-cols-2 gap-2">
+                             <Button 
+                                onClick={() => onAction(getRedirectionPath())}
+                                variant="outline"
+                                className="h-9 text-[10px] font-black uppercase border-slate-700 text-slate-400 hover:text-white rounded-xl transition-all"
+                            >
+                                Detalle
+                            </Button>
+                            <Button 
+                                onClick={() => onSelect(tarea)}
+                                className="h-9 text-[10px] font-black uppercase bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg shadow-blue-500/10 transition-all flex items-center justify-center gap-2"
+                            >
+                                <Camera className="w-4 h-4" />
+                                Evidencia
+                            </Button>
+                        </div>
                     ) : (
                         <Button 
-                            onClick={() => onAction(`/dashboard/tareas?tab=${tarea.tipo === 'auditoria_dirigida' ? 'auditoria' : 'gestiones'}`)}
+                            onClick={() => onAction(getRedirectionPath())}
                             className="w-full h-9 text-[10px] font-black uppercase bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-500/10 transition-all flex items-center justify-center gap-2"
                         >
                             <ClipboardList className="w-4 h-4" />
-                            Ver {tarea.tipo === 'auditoria_dirigida' ? 'Auditoría' : 'Gestión'}
+                            Ver Historial / Tarea
                         </Button>
                     )
                 ) : (

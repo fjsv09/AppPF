@@ -21,6 +21,7 @@ import {
 import { useSidebar } from './providers/sidebar-provider'
 import { SimuladorPrestamoModal } from './prestamos/simulador-prestamo-modal'
 import { Calculator } from 'lucide-react'
+import { version } from '../package.json'
 
 type Role = 'admin' | 'supervisor' | 'asesor'
 
@@ -331,6 +332,17 @@ export function DashboardNav({
                         )} />
                         {!isCollapsed && <span>Cerrar Sesión</span>}
                     </Button>
+
+                    {!isCollapsed && (
+                        <div className="mt-4 px-4 flex items-center justify-between">
+                            <span className="text-[10px] text-slate-600 font-medium tracking-tight">v{version}</span>
+                            <div className="flex gap-1">
+                                <div className="w-1 h-1 rounded-full bg-blue-500/30"></div>
+                                <div className="w-1 h-1 rounded-full bg-blue-500/30"></div>
+                                <div className="w-1 h-1 rounded-full bg-emerald-500/50"></div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </nav>
 

@@ -51,7 +51,7 @@ export function QuickActions({ rol }: QuickActionsProps) {
                         </span>
                     </div>
                     <div className="max-h-[220px] overflow-y-auto custom-scrollbar">
-                        <PendingTasks variant="compact" />
+                        <PendingTasks variant="compact" userRole={rol} />
                     </div>
                 </div>
 

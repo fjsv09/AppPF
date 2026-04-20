@@ -64,6 +64,8 @@ export function QuickPayModal({
     const [historyPayments, setHistoryPayments] = useState<any[]>([])
 
     const [location, setLocation] = useState<{lat: number, lng: number} | null>(null)
+    const [gpsError, setGpsError] = useState<string | null>(null)
+    const [isGpsLoading, setIsGpsLoading] = useState(false)
 
     const supabase = useMemo(() => createClient(), [])
 
@@ -136,20 +138,39 @@ export function QuickPayModal({
     }, [open, prestamoId, initialPrestamo?.id, result])
 
     useEffect(() => {
+        let watchId: number | null = null;
+
         if (open && !result) {
+            setIsGpsLoading(true)
+            
             // Sincronizar ubicación sin disparar recarga de datos
             if (userLoc) {
                 setLocation({ lat: userLoc[0], lng: userLoc[1] })
-            } else if (navigator.geolocation && !location) {
-                // Solo capturar si no tenemos ubicación aún (fallback)
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                    (err) => console.warn("GPS access denied or error:", err),
-                    { enableHighAccuracy: true, timeout: 5000 }
+                setIsGpsLoading(false)
+            } else if (navigator.geolocation) {
+                watchId = navigator.geolocation.watchPosition(
+                    (pos) => {
+                        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+                        setGpsError(null)
+                        setIsGpsLoading(false)
+                    },
+                    (err) => {
+                        console.warn("GPS watch error:", err)
+                        setLocation(null)
+                        setGpsError(err.code === 1 ? "Permiso denegado" : "Señal perdida o GPS apagado")
+                        setIsGpsLoading(false)
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                 )
             }
         }
-    }, [open, result, userLoc])
+
+        return () => {
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId)
+            }
+        }
+    }, [open, result, exigirGps, userLoc])
 
     useEffect(() => {
         if (!open) {
@@ -286,9 +307,33 @@ export function QuickPayModal({
             toast.error('Selecciona un método de pago')
             return
         }
-        if (exigirGps && !location) {
-            toast.error('Ubicación requerida para procesar el cobro')
-            return
+        if (exigirGps) {
+            if (!location) {
+                toast.error('Ubicación requerida. Por favor activa el GPS.')
+                return
+            }
+            
+            // Re-validación final antes de enviar
+            setLoading(true)
+            try {
+                await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                            setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+                            resolve(true)
+                        },
+                        (err) => {
+                            reject(new Error("Se perdió la señal GPS. Verifica tu ubicación."))
+                        },
+                        { enableHighAccuracy: true, timeout: 3000 }
+                    )
+                })
+            } catch (err: any) {
+                setLoading(false)
+                setLocation(null)
+                toast.error(err.message)
+                return
+            }
         }
         setLoading(true)
         try {
@@ -388,6 +433,25 @@ export function QuickPayModal({
                                             </span>
                                         </DialogDescription>
                                     </DialogHeader>
+
+                                    {/* Indicador de Señal GPS */}
+                                    {exigirGps && (
+                                        <div className={cn(
+                                            "mb-4 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase flex items-center justify-between transition-all",
+                                            location 
+                                                ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-500" 
+                                                : "bg-rose-500/5 border-rose-500/20 text-rose-500 animate-pulse"
+                                        )}>
+                                            <div className="flex items-center gap-2">
+                                                <div className={cn(
+                                                    "w-2 h-2 rounded-full",
+                                                    location ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"
+                                                )} />
+                                                SEÑAL GPS: {isGpsLoading ? 'Sincronizando...' : (location ? 'CONECTADO (MÁXIMA PRECISIÓN)' : (gpsError || 'SIN SEÑAL'))}
+                                            </div>
+                                            {location && <span className="font-mono opacity-60">{location.lat.toFixed(4)}, {location.lng.toFixed(4)}</span>}
+                                        </div>
+                                    )}
 
                                     {/* Banner advertencia GPS */}
                                     {exigirGps && !location && (

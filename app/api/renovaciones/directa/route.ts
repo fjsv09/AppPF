@@ -274,8 +274,8 @@ export async function POST(request: Request) {
 
             if (asesorResponsable) {
                 await createFullNotification(asesorResponsable, {
-                    titulo: 'Reestructuración: Subir Evidencia',
-                    mensaje: `Administración ha refinanciado a un cliente de tu cartera ($${monto_solicitado}).`,
+                    titulo: '📷 Evidencia Requerida',
+                    mensaje: `Se requiere foto de evidencia para el refinanciamiento de ${nombreC}.`,
                     link: '/dashboard/tareas?tab=evidencia',
                     tipo: 'warning'
                 }).catch(() => {});

@@ -20,7 +20,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const { data: config } = await supabase
     .from('configuracion_sistema')
     .select('clave, valor')
-    .in('clave', ['nombre_sistema', 'logo_sistema_url']);
+    .in('clave', ['nombre_sistema']);
 
   const configMap = config?.reduce((acc: any, item) => {
     acc[item.clave] = item.valor;
@@ -28,17 +28,13 @@ export async function generateMetadata(): Promise<Metadata> {
   }, {});
 
   const systemName = configMap?.nombre_sistema || "ProFinanzas";
-  const systemLogo = configMap?.logo_sistema_url;
-
-  const logoUrl = systemLogo || '/favicon.ico';
-
   return {
     title: {
       default: systemName,
       template: `%s | ${systemName}`,
     },
     description: "Gestión eficiente de préstamos y clientes",
-    manifest: '/manifest.json',
+    manifest: '/manifest.webmanifest',
     themeColor: '#0f172a',
     appleWebApp: {
       capable: true,
@@ -47,11 +43,11 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     icons: {
       icon: [
-        { url: logoUrl, rel: 'icon' },
-        { url: logoUrl, rel: 'shortcut icon' },
+        { url: '/api/pwa-icon?size=32', sizes: '32x32', type: 'image/png' },
+        { url: '/api/pwa-icon?size=192', sizes: '192x192', type: 'image/png' },
       ],
       apple: [
-        { url: logoUrl, rel: 'apple-touch-icon' },
+        { url: '/api/pwa-icon?size=180', sizes: '180x180', type: 'image/png' },
       ],
     }
   };

@@ -14,8 +14,6 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
   }, {})
 
   const systemName = configMap?.nombre_sistema || 'ProFinanzas'
-  const systemLogo = configMap?.logo_sistema_url || '/favicon.ico'
-
   return {
     name: `App ${systemName}`,
     short_name: systemName,
@@ -26,12 +24,17 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     theme_color: '#3b82f6',
     icons: [
       {
-        src: systemLogo,
-        sizes: 'any',
+        src: '/api/pwa-icon?size=192',
+        sizes: '192x192',
         type: 'image/png',
       },
       {
-        src: systemLogo,
+        src: '/api/pwa-icon?size=512',
+        sizes: '512x512',
+        type: 'image/png',
+      },
+      {
+        src: '/api/pwa-icon?size=512',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',

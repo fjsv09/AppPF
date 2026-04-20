@@ -73,10 +73,20 @@ export function BoletaPDF({ nomina, trabajador, open, onOpenChange }: BoletaPDFP
         const content = contentRef.current
         if (!content) return
 
-        const printWindow = window.open('', '', 'width=800,height=600')
-        if (!printWindow) return
+        // Crear un iframe oculto para la impresión para evitar problemas en PWA iOS
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        document.body.appendChild(iframe);
 
-        printWindow.document.write(`
+        const printDoc = iframe.contentWindow?.document;
+        if (!printDoc) return;
+
+        printDoc.write(`
             <html>
                 <head>
                     <title>Boleta-${trabajador.nombre_completo}-${mesAnio}</title>
@@ -89,9 +99,15 @@ export function BoletaPDF({ nomina, trabajador, open, onOpenChange }: BoletaPDFP
                 <body>${content.innerHTML}</body>
             </html>
         `)
-        printWindow.document.close()
-        printWindow.focus()
-        setTimeout(() => { printWindow.print(); printWindow.close() }, 500)
+        printDoc.close()
+        
+        setTimeout(() => {
+            iframe.contentWindow?.focus()
+            iframe.contentWindow?.print()
+            setTimeout(() => {
+                document.body.removeChild(iframe)
+            }, 1000)
+        }, 500)
     }
 
     const handleShare = async () => {

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { addDays, addWeeks, addMonths } from 'date-fns'
 import { checkSystemAccess } from '@/utils/systemRestrictions'
+import { createFullNotification } from '@/services/notification-service'
 
 export const dynamic = 'force-dynamic'
 
@@ -225,7 +226,6 @@ export async function POST(request: Request) {
 
     // 11. Notificar al asesor responsable (DB + PUSH)
     if (targetAsesorId) {
-        const { createFullNotification } = await import('@/services/notification-service')
         await createFullNotification(targetAsesorId, {
             titulo: '📷 Evidencia Requerida',
             mensaje: `Se requiere foto de evidencia para el nuevo préstamo de ${cliente?.nombres || 'Cliente'}.`,
@@ -250,4 +250,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message || 'Error interno del servidor' }, { status: 500 })
   }
 }
-

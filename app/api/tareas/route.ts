@@ -39,7 +39,7 @@ export async function GET(request: Request) {
                     id, 
                     monto, 
                     cliente:cliente_id(nombres, foto_perfil),
-                    solicitud:solicitud_id(motivo_prestamo)
+                    solicitud:solicitud_id(id, motivo_prestamo)
                 )
             `)
             .eq('estado', 'pendiente')

@@ -88,19 +88,19 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
                         <title>Renovación #${ticketId} | ProFinanzas</title>
                         <style>
                             @page {
-                                size: 58mm auto;
-                                margin: 0;
+                                margin: 2mm;
                             }
                             * { margin: 0; padding: 0; box-sizing: border-box; }
                             body {
-                                width: 58mm;
                                 margin: 0 auto;
                                 background: white;
+                                text-align: center;
                             }
                             img {
-                                width: 100%;
+                                max-width: 100%;
                                 height: auto;
                                 display: block;
+                                margin: 0 auto;
                             }
                             @media print {
                                 body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }

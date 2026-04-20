@@ -1,164 +1,200 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { Download, Share2, Receipt, Printer } from 'lucide-react'
+import { Share2, Receipt, Printer } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { toast } from 'sonner'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
+import { toPng } from 'html-to-image'
 
 interface RenovacionTicketProps {
     solicitud: any
     saldoAnterior: number
     nuevoPrestamoId: string
     clienteNombre: string
+    logoUrl?: string
 }
 
 import { formatMoney } from '@/utils/format'
 
-export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, clienteNombre }: RenovacionTicketProps) {
+/**
+ * Captura el ticket como imagen PNG usando html-to-image.
+ * Retorna un data URL string.
+ */
+async function captureTicketAsImage(element: HTMLElement): Promise<string> {
+    // Capturar múltiples veces para asegurar que los estilos estén renderizados (fix conocido de html-to-image)
+    await toPng(element, { backgroundColor: '#ffffff', pixelRatio: 3 })
+    const dataUrl = await toPng(element, { backgroundColor: '#ffffff', pixelRatio: 3 })
+    return dataUrl
+}
+
+/**
+ * Convierte una data URL a un Blob binario.
+ */
+function dataUrlToBlob(dataUrl: string): Blob {
+    const arr = dataUrl.split(',')
+    const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png'
+    const bstr = atob(arr[1])
+    let n = bstr.length
+    const u8arr = new Uint8Array(n)
+    while (n--) {
+        u8arr[n] = bstr.charCodeAt(n)
+    }
+    return new Blob([u8arr], { type: mime })
+}
+
+export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, clienteNombre, logoUrl }: RenovacionTicketProps) {
     const ticketRef = useRef<HTMLDivElement>(null)
+    const [isPrinting, setIsPrinting] = useState(false)
+    const [isSharing, setIsSharing] = useState(false)
     const montoNuevo = solicitud.monto_solicitado
     const efectivoEntregar = montoNuevo - saldoAnterior
     const fecha = new Date(solicitud.fecha_aprobacion || new Date())
+    const ticketId = nuevoPrestamoId.split('-')[0].toUpperCase()
 
-    const handlePrint = () => {
+    const handlePrint = async () => {
         const ticketEl = ticketRef.current
-        if (!ticketEl) return
+        if (!ticketEl || isPrinting) return
 
-        // Crear un iframe oculto para la impresión para evitar problemas en PWA iOS
-        const iframe = document.createElement('iframe');
-        iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = '0';
-        document.body.appendChild(iframe);
+        setIsPrinting(true)
+        toast.loading('Preparando impresión...', { id: 'print-ticket' })
 
-        const printDoc = iframe.contentWindow?.document;
-        if (!printDoc) return;
+        try {
+            // Capturar el ticket como imagen para garantizar que se imprima correctamente
+            const dataUrl = await captureTicketAsImage(ticketEl)
 
-        printDoc.write(`
-            <html>
-                <head>
-                    <title>Comprobante-${nuevoPrestamoId.split('-')[0]}</title>
-                    <style>
-                        body { 
-                            font-family: system-ui, -apple-system, sans-serif; 
-                            margin: 0; 
-                            padding: 20px;
-                            background: white;
-                        }
-                        .ticket {
-                            max-width: 350px;
-                            margin: 0 auto;
-                            padding: 20px;
-                            border: 1px solid #e2e8f0;
-                            border-radius: 16px;
-                        }
-                        .header { text-align: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 15px; }
-                        .icon { width: 40px; height: 40px; background: #0f172a; border-radius: 8px; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; }
-                        .title { font-size: 18px; font-weight: bold; margin: 0; }
-                        .meta { font-size: 11px; color: #94a3b8; font-family: monospace; margin-top: 5px; }
-                        .client-box { background: #f8fafc; padding: 10px; border-radius: 8px; margin-bottom: 15px; }
-                        .client-label { font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase; }
-                        .client-name { font-weight: 600; font-size: 14px; }
-                        .row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 14px; }
-                        .label { color: #64748b; }
-                        .value { font-weight: bold; }
-                        .negative { color: #ef4444; }
-                        .divider { border-top: 1px dashed #e2e8f0; margin: 10px 0; }
-                        .total-row { font-size: 16px; }
-                        .total-value { color: #10b981; font-weight: bold; }
-                        .details { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 15px; }
-                        .detail-box { background: #f8fafc; padding: 8px; border-radius: 6px; text-align: center; }
-                        .detail-label { font-size: 11px; color: #94a3b8; }
-                        .detail-value { font-weight: bold; font-size: 14px; }
-                        @media print { body { padding: 0; } }
-                    </style>
-                </head>
-                <body>
-                    <div class="ticket">
-                        <div class="header">
-                            <div class="icon">📄</div>
-                            <h1 class="title">Comprobante de Renovación</h1>
-                            <p class="meta">#${nuevoPrestamoId.split('-')[0].toUpperCase()} • ${format(fecha, "d MMM, yyyy", { locale: es })}</p>
-                        </div>
-                        <div class="client-box">
-                            <div class="client-label">Cliente</div>
-                            <div class="client-name">${clienteNombre}</div>
-                        </div>
-                        <div class="row">
-                            <span class="label">Nuevo Préstamo</span>
-                            <span class="value">$${formatMoney(montoNuevo)}</span>
-                        </div>
-                        <div class="row">
-                            <span class="label">Saldo Anterior</span>
-                            <span class="value negative">-$${formatMoney(saldoAnterior)}</span>
-                        </div>
-                        <div class="divider"></div>
-                        <div class="row total-row">
-                            <span class="label"><strong>Efectivo a Entregar</strong></span>
-                            <span class="total-value">$${formatMoney(efectivoEntregar)}</span>
-                        </div>
-                        <div class="details">
-                            <div class="detail-box">
-                                <div class="detail-label">Cuotas</div>
-                                <div class="detail-value">${solicitud.cuotas}</div>
-                            </div>
-                            <div class="detail-box">
-                                <div class="detail-label">Interés</div>
-                                <div class="detail-value">${solicitud.interes}%</div>
-                            </div>
-                        </div>
-                    </div>
-                </body>
-            </html>
-        `)
-        printDoc.close()
+            // Crear iframe oculto con la imagen optimizada para 58mm térmico
+            const iframe = document.createElement('iframe')
+            iframe.style.position = 'fixed'
+            iframe.style.right = '0'
+            iframe.style.bottom = '0'
+            iframe.style.width = '0'
+            iframe.style.height = '0'
+            iframe.style.border = '0'
+            iframe.style.opacity = '0'
+            document.body.appendChild(iframe)
 
-        // Esperar a que el contenido se cargue y disparar impresión
-        setTimeout(() => {
-            iframe.contentWindow?.focus()
-            iframe.contentWindow?.print()
-            
-            // Limpieza: remover el iframe después de un momento
+            const printDoc = iframe.contentWindow?.document
+            if (!printDoc) {
+                toast.error('Error al preparar impresión', { id: 'print-ticket' })
+                setIsPrinting(false)
+                return
+            }
+
+            printDoc.write(`
+                <html>
+                    <head>
+                        <title>Renovación #${ticketId} | ProFinanzas</title>
+                        <style>
+                            @page {
+                                size: 58mm auto;
+                                margin: 0;
+                            }
+                            * { margin: 0; padding: 0; box-sizing: border-box; }
+                            body {
+                                width: 58mm;
+                                margin: 0 auto;
+                                background: white;
+                            }
+                            img {
+                                width: 100%;
+                                height: auto;
+                                display: block;
+                            }
+                            @media print {
+                                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <img src="${dataUrl}" />
+                    </body>
+                </html>
+            `)
+            printDoc.close()
+
+            // Esperar a que la imagen cargue en el iframe antes de imprimir
+            const imgElement = printDoc.querySelector('img')
+            if (imgElement) {
+                await new Promise<void>((resolve) => {
+                    imgElement.onload = () => resolve()
+                    // Si la imagen ya se cargó (cache)
+                    if (imgElement.complete) resolve()
+                })
+            }
+
             setTimeout(() => {
-                document.body.removeChild(iframe)
-            }, 1000)
-            
-            toast.success('Listo para imprimir/guardar')
-        }, 300)
+                iframe.contentWindow?.focus()
+                iframe.contentWindow?.print()
+
+                setTimeout(() => {
+                    try { document.body.removeChild(iframe) } catch {}
+                }, 2000)
+
+                toast.success('Listo para imprimir', { id: 'print-ticket' })
+                setIsPrinting(false)
+            }, 400)
+        } catch (err) {
+            console.error('Print error:', err)
+            toast.error('Error al generar impresión', { id: 'print-ticket' })
+            setIsPrinting(false)
+        }
     }
 
     const handleShare = async () => {
-        // Crear texto para compartir
-        const text = `📄 *Comprobante de Renovación*
-#${nuevoPrestamoId.split('-')[0].toUpperCase()}
+        const ticketEl = ticketRef.current
+        if (!ticketEl || isSharing) return
 
-👤 Cliente: ${clienteNombre}
-💰 Nuevo Préstamo: $${formatMoney(montoNuevo)}
-📉 Saldo Anterior: -$${formatMoney(saldoAnterior)}
-✅ *Efectivo a Entregar: $${formatMoney(efectivoEntregar)}*
-
-📊 ${solicitud.cuotas} cuotas | ${solicitud.interes}% interés
-📅 ${format(fecha, "d MMM, yyyy", { locale: es })}`
+        setIsSharing(true)
+        toast.loading('Generando imagen...', { id: 'share-ticket' })
 
         try {
-            if (navigator.share) {
+            // Capturar el ticket como imagen PNG de alta calidad
+            const dataUrl = await captureTicketAsImage(ticketEl)
+            const blob = dataUrlToBlob(dataUrl)
+            const fileName = `Renovacion_${ticketId}_${clienteNombre.replace(/\s+/g, '_')}.png`
+            const file = new File([blob], fileName, { type: 'image/png' })
+
+            // Intentar compartir como archivo de imagen
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                 await navigator.share({
-                    title: 'Comprobante de Renovación',
-                    text: text
+                    title: `Comprobante de Renovación #${ticketId}`,
+                    files: [file]
                 })
-                toast.success('Compartido')
+                toast.success('Compartido', { id: 'share-ticket' })
+            } else if (navigator.share) {
+                // Fallback: algunos dispositivos soportan share pero no archivos
+                // Descargar imagen y compartir texto
+                const link = document.createElement('a')
+                link.href = dataUrl
+                link.download = fileName
+                link.click()
+                toast.success('Imagen descargada', { id: 'share-ticket' })
             } else {
-                await navigator.clipboard.writeText(text)
-                toast.success('Copiado al portapapeles')
+                // Desktop: descargar directamente
+                const link = document.createElement('a')
+                link.href = dataUrl
+                link.download = fileName
+                link.click()
+                toast.success('Imagen descargada', { id: 'share-ticket' })
             }
-        } catch {
-            await navigator.clipboard.writeText(text)
-            toast.success('Copiado al portapapeles')
+        } catch (err) {
+            if ((err as Error).name !== 'AbortError') {
+                console.error('Share error:', err)
+                // Último fallback: copiar texto al portapapeles
+                const text = `📄 Comprobante de Renovación #${ticketId}\n👤 ${clienteNombre}\n💰 Nuevo: $${formatMoney(montoNuevo)}\n📉 Saldo: -$${formatMoney(saldoAnterior)}\n✅ Efectivo: $${formatMoney(efectivoEntregar)}`
+                try {
+                    await navigator.clipboard.writeText(text)
+                    toast.success('Texto copiado al portapapeles', { id: 'share-ticket' })
+                } catch {
+                    toast.error('Error al compartir', { id: 'share-ticket' })
+                }
+            } else {
+                toast.dismiss('share-ticket')
+            }
+        } finally {
+            setIsSharing(false)
         }
     }
 
@@ -172,9 +208,16 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
                 {/* Header */}
                 <div className="relative text-center border-b border-slate-100 pb-4 mb-4">
                     <div className="flex justify-center mb-2">
-                        <div className="h-12 w-12 bg-slate-900 rounded-xl flex items-center justify-center text-white">
-                            <Receipt className="h-6 w-6" />
-                        </div>
+                        {logoUrl ? (
+                            <div className="h-14 w-14 rounded-xl overflow-hidden shadow-lg bg-slate-900 p-1.5">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={logoUrl} alt="ProFinanzas" className="w-full h-full object-contain" />
+                            </div>
+                        ) : (
+                            <div className="h-12 w-12 bg-slate-900 rounded-xl flex items-center justify-center text-white">
+                                <Receipt className="h-6 w-6" />
+                            </div>
+                        )}
                     </div>
                     <h3 className="font-bold text-xl tracking-tight">Comprobante de Renovación</h3>
                     <p className="text-xs text-slate-400 font-mono mt-1">
@@ -231,17 +274,18 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
                     variant="outline" 
                     className="flex-1 bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800"
                     onClick={handlePrint}
+                    disabled={isPrinting}
                 >
-                    <Printer className="mr-2 h-4 w-4" /> Imprimir
+                    <Printer className="mr-2 h-4 w-4" /> {isPrinting ? 'Preparando...' : 'Imprimir'}
                 </Button>
                 <Button 
                     className="flex-1 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white shadow-lg"
                     onClick={handleShare}
+                    disabled={isSharing}
                 >
-                    <Share2 className="mr-2 h-4 w-4" /> Compartir
+                    <Share2 className="mr-2 h-4 w-4" /> {isSharing ? 'Generando...' : 'Compartir'}
                 </Button>
             </div>
         </div>
     )
 }
-

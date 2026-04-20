@@ -33,11 +33,12 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     const { data: { user } } = await supabase.auth.getUser()
     const { data: perfil } = await supabaseAdmin
         .from('perfiles')
-        .select('rol')
+        .select('rol, exigir_gps_cobranza')
         .eq('id', user?.id)
         .single()
 
     const userRole = perfil?.rol || 'asesor'
+    const exigirGpsCobranza = !!perfil?.exigir_gps_cobranza
 
     // RESTRICCIÓN POR URL: Solo admin puede ver historial (se mantiene)
     const restrictedTabs = ['finalizados', 'renovados', 'refinanciados', 'anulados', 'pendientes', 'todos'];
@@ -763,6 +764,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                         blockReasonCierre={blockReasonCierre}
                         systemAccess={systemAccess}
                         cuentas={cuentasAdmin || []}
+                        exigirGpsCobranza={exigirGpsCobranza}
                     />
                 </Suspense>
             </div>

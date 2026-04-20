@@ -81,6 +81,7 @@ interface PrestamosTableProps {
     blockReasonCierre?: string
     systemAccess?: any
     cuentas?: any[]
+    exigirGpsCobranza?: boolean
 }
 
 type FilterTab = 'ruta_hoy' | 'cobranza' | 'morosos' | 'notificar' | 'semana' | 'en_curso' | 'renovaciones' | 'finalizados' | 'todos' | 'supervisor_alertas' | 'supervisor_mora' | 'renovados' | 'refinanciados' | 'anulados' | 'pendientes' | 'visitas_control' | 'activos'
@@ -146,7 +147,8 @@ export function PrestamosTable({
     isBlockedByCuadre,
     blockReasonCierre,
     systemAccess,
-    cuentas = []
+    cuentas = [],
+    exigirGpsCobranza = false
 }: PrestamosTableProps) {
 
     // Lógica de Bloqueo Sensible al Tipo de Acción (Centralizada en la Tabla)
@@ -236,12 +238,8 @@ export function PrestamosTable({
         return false
     }
  
-    // Obtener configuración de GPS obligatorio
-    const exigirGps = useMemo(() => {
-        if (userRol !== 'asesor') return false
-        const perfil = perfiles.find(p => p.id === userId)
-        return !!perfil?.exigir_gps_cobranza
-    }, [perfiles, userId, userRol])
+    // GPS obligatorio - viene directo del perfil del usuario actual (server-side)
+    const exigirGps = exigirGpsCobranza && userRol === 'asesor'
  
     // --- URL PARAMETERS & DERIVED STATE ---
     const activeFilter = (searchParams.get('tab') as FilterTab) || 'ruta_hoy'

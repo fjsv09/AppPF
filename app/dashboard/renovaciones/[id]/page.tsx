@@ -153,6 +153,14 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
         cuentasAdmin = cuentas || []
     }
 
+    // Obtener logo del sistema para el ticket
+    const { data: logoConfig } = await supabaseAdmin
+        .from('configuracion_sistema')
+        .select('valor')
+        .eq('clave', 'logo_sistema_url')
+        .maybeSingle()
+    const logoUrl = logoConfig?.valor || ''
+
     return (
         <div className="page-container max-w-4xl mx-auto">
                 {/* Header */}
@@ -491,6 +499,7 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                             saldoAnterior={datosRenovacion?.saldo_pendiente_original || 0}
                             nuevoPrestamoId={solicitud.prestamo_nuevo_id}
                             clienteNombre={solicitud.cliente?.nombres}
+                            logoUrl={logoUrl}
                         />
                     </div>
                 )}

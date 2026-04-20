@@ -157,13 +157,16 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
             const file = new File([blob], fileName, { type: 'image/png' })
 
             // Intentar compartir como archivo de imagen
-            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            const canShare = typeof navigator !== 'undefined' && 'share' in navigator
+            const canShareFiles = canShare && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })
+
+            if (canShareFiles) {
                 await navigator.share({
                     title: `Comprobante de Renovación #${ticketId}`,
                     files: [file]
                 })
                 toast.success('Compartido', { id: 'share-ticket' })
-            } else if (navigator.share) {
+            } else if (canShare) {
                 // Fallback: algunos dispositivos soportan share pero no archivos
                 // Descargar imagen y compartir texto
                 const link = document.createElement('a')

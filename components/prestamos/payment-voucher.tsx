@@ -5,7 +5,6 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Share2, Loader2, Printer, Download } from 'lucide-react'
 import { toBlob, toPng } from 'html-to-image'
-import html2canvas from 'html2canvas'
 import { toast } from 'sonner'
 import { api } from '@/services/api'
 import { VoucherContent } from '@/components/comunes/voucher-content'
@@ -163,50 +162,44 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
         const toastId = toast.loading('Preparando imagen para iOS...')
         
         try {
-            // Safari/iOS workaround
-            const originalStyle = iOSPrintContainerRef.current?.style.cssText || ''
-            if (iOSPrintContainerRef.current) {
-                iOSPrintContainerRef.current.style.position = 'fixed'
-                iOSPrintContainerRef.current.style.left = '0'
-                iOSPrintContainerRef.current.style.top = '0'
-                iOSPrintContainerRef.current.style.zIndex = '-1' // Detrás pero visible temporalmente
-            }
-
-            const canvas = await html2canvas(printRef.current, { 
+            // Usar exactamente el mismo renderizado comprobado que usa 'Imprimir'
+            const dataUrl = await toPng(printRef.current, { 
                 backgroundColor: '#ffffff',
-                scale: 2, // Reducir a 2 para prevenir el límite de Taint y tamaño máximo de Canvas de iOS Safari
-                useCORS: true,
-                allowTaint: false, // NUNCA usar true si llamaremos a toBlob() (Arroja SecurityError)
-                logging: false,
-                windowWidth: 380 
+                pixelRatio: 3, 
+                skipFonts: false,
+                cacheBust: true
             })
             
-            if (iOSPrintContainerRef.current) {
-                iOSPrintContainerRef.current.style.cssText = originalStyle
+            // Convertir Base64 Data URL a Blob de manera segura
+            const arr = dataUrl.split(',')
+            const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png'
+            const bstr = atob(arr[1])
+            let n = bstr.length
+            const u8arr = new Uint8Array(n)
+            while (n--) {
+                u8arr[n] = bstr.charCodeAt(n)
             }
+            const blob = new Blob([u8arr], { type: mime })
             
-            canvas.toBlob(async (blob) => {
-                if (!blob) throw new Error('Blob is null')
-                const fileName = `recibo-ios-${payment?.id?.toString()?.split?.('-')?.[0] || 'pago'}.png`
-                const file = new File([blob], fileName, { type: 'image/png' })
-                
-                if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
-                    await navigator.share({
-                        files: [file]
-                    })
-                    toast.success('Compartido con éxito en iOS', { id: toastId })
-                } else {
-                    const link = document.createElement('a')
-                    link.download = fileName
-                    link.href = URL.createObjectURL(blob)
-                    link.click()
-                    toast.success('Imagen descargada', { id: toastId })
-                }
-                if (payment?.id && userRole === 'asesor') {
-                    api.pagos.compartirVoucher(payment.id).catch(() => {})
-                }
-            }, 'image/png', 1.0)
+            const fileName = `recibo-ios-${payment?.id?.toString()?.split?.('-')?.[0] || 'pago'}.png`
+            const file = new File([blob], fileName, { type: 'image/png' })
             
+            if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    title: 'Ticket de Caja',
+                    files: [file]
+                })
+                toast.success('Compartido con éxito en iOS', { id: toastId })
+            } else {
+                const link = document.createElement('a')
+                link.download = fileName
+                link.href = URL.createObjectURL(blob)
+                link.click()
+                toast.success('Imagen descargada', { id: toastId })
+            }
+            if (payment?.id && userRole === 'asesor') {
+                api.pagos.compartirVoucher(payment.id).catch(() => {})
+            }
         } catch (e) {
             console.error('Error sharing iOS:', e)
             toast.error('No se pudo generar la imagen', { id: toastId })

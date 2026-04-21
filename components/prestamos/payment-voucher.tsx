@@ -48,6 +48,11 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
         setPrinting(true)
         const toastId = toast.loading('Preparando ticket...')
         
+        // Limpieza previa (por si hubo cancelaciones anteriores)
+        document.body.classList.remove('is-printing-ticket')
+        document.getElementById('print-style-native')?.remove()
+        document.getElementById('print-container-native')?.remove()
+
         try {
             // Generar imagen de alta calidad con fondo blanco para la impresora térmica
             const dataUrl = await toPng(printRef.current, { 
@@ -59,7 +64,7 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
             
             const printContainer = document.createElement('div')
             printContainer.id = 'print-container-native'
-            printContainer.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 99999; display: flex; justify-content: center; align-items: start; padding-top: 5mm;'
+            printContainer.style.display = 'none'
             printContainer.innerHTML = `<img src="${dataUrl}" style="width: 58mm; height: auto;" />`
             
             const style = document.createElement('style')
@@ -75,18 +80,19 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
             document.body.appendChild(printContainer)
 
             document.body.classList.add('is-printing-ticket')
+            
             // Dar un poco de tiempo para que la imagen se cargue en el DOM
             setTimeout(() => {
                 window.print()
+                setPrinting(false)
+                toast.success('Abriendo vista de impresión...', { id: toastId })
                 
-                // Limpieza después de un tiempo prudencial
+                // Limpieza postergada para Android
                 setTimeout(() => {
                     document.body.classList.remove('is-printing-ticket')
-                    if (document.getElementById('print-style-native')) document.head.removeChild(style)
-                    if (document.getElementById('print-container-native')) document.body.removeChild(printContainer)
-                    setPrinting(false)
-                    toast.success('Impresión enviada', { id: toastId })
-                }, 1000)
+                    document.getElementById('print-style-native')?.remove()
+                    document.getElementById('print-container-native')?.remove()
+                }, 30000)
             }, 500)
         } catch (e) {
             console.error('Error printing:', e)

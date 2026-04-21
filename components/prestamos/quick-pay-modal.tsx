@@ -298,6 +298,12 @@ export function QuickPayModal({
         if (!printRef.current || printing) return
         setPrinting(true)
         const toastId = toast.loading('Preparando ticket...')
+        
+        // Limpieza previa (por si hubo cancelaciones anteriores)
+        document.body.classList.remove('is-printing-ticket')
+        document.getElementById('print-style-native')?.remove()
+        document.getElementById('print-container-native')?.remove()
+
         try {
             const dataUrl = await toPng(printRef.current, { 
                 backgroundColor: '#ffffff',
@@ -308,7 +314,8 @@ export function QuickPayModal({
             
             const printContainer = document.createElement('div')
             printContainer.id = 'print-container-native'
-            printContainer.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 99999; display: flex; justify-content: center; align-items: start; padding-top: 5mm;'
+            // Oculto en pantalla normal
+            printContainer.style.display = 'none' 
             printContainer.innerHTML = `<img src="${dataUrl}" style="width: 58mm; height: auto;" />`
             
             const style = document.createElement('style')
@@ -317,22 +324,31 @@ export function QuickPayModal({
                 @media print {
                     @page { margin: 0; size: 58mm auto; }
                     body > *:not(#print-container-native) { display: none !important; }
-                    #print-container-native { display: block !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 58mm !important; }
+                    #print-container-native { 
+                        display: block !important; 
+                        position: absolute !important; 
+                        left: 0 !important; 
+                        top: 0 !important; 
+                        width: 58mm !important; 
+                    }
                 }
             `
             document.head.appendChild(style)
             document.body.appendChild(printContainer)
 
             document.body.classList.add('is-printing-ticket')
+            
             setTimeout(() => {
                 window.print()
+                setPrinting(false)
+                toast.success('Abriendo vista de impresión...', { id: toastId })
+
+                // Limpieza postergada para Android (que renderiza en 2do plano)
                 setTimeout(() => {
                     document.body.classList.remove('is-printing-ticket')
-                    if (document.getElementById('print-style-native')) document.head.removeChild(style)
-                    if (document.getElementById('print-container-native')) document.body.removeChild(printContainer)
-                    setPrinting(false)
-                    toast.success('Impresión enviada', { id: toastId })
-                }, 1000)
+                    document.getElementById('print-style-native')?.remove()
+                    document.getElementById('print-container-native')?.remove()
+                }, 30000) 
             }, 500)
         } catch (e) {
             console.error('Error printing:', e)

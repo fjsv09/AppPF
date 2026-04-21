@@ -107,8 +107,10 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
             document.body.classList.add('is-printing-ticket')
             setTimeout(() => {
                 window.print()
+                setIsPrinting(false)
+                toast.success('Abriendo vista de impresión...', { id: 'print-ticket' })
                 
-                // 4. Limpieza
+                // 4. Limpieza postergada para Android (que renderiza en 2do plano)
                 setTimeout(() => {
                     document.body.classList.remove('is-printing-ticket')
                     try {
@@ -120,9 +122,7 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
                     } catch (e) {
                         console.error('Print cleanup error:', e)
                     }
-                    setIsPrinting(false)
-                    toast.success('Listo para imprimir', { id: 'print-ticket' })
-                }, 1000)
+                }, 30000)
             }, 500)
 
         } catch (err) {

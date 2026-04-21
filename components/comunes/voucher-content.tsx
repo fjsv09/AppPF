@@ -122,16 +122,16 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                 )}>
                     {logoUrl ? (
                         <div className={cn(
-                            "flex items-center justify-center transition-all",
-                            isPrinting ? "w-20 h-20" : "w-14 h-14"
+                            "flex items-center justify-center relative z-10",
+                            isPrinting ? "w-24 h-16" : "w-14 h-14"
                         )}>
                             <img 
                                 src={logoUrl} 
-                                alt="Logo" 
+                                alt="ProFinanzas" 
                                 crossOrigin="anonymous"
                                 className={cn(
-                                    "w-full h-full object-contain block mx-auto",
-                                    isPrinting ? "brightness-0" : "brightness-0 invert"
+                                    "max-w-full max-h-full object-contain",
+                                    !isPrinting && "brightness-0 invert"
                                 )} 
                             />
                         </div>

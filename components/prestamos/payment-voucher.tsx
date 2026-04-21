@@ -163,20 +163,22 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
         const toastId = toast.loading('Preparando imagen para iOS...')
         
         try {
-            // Safari/iOS workaround for html2canvas to capture hidden elements more reliably
+            // Safari/iOS workaround
             const originalStyle = iOSPrintContainerRef.current?.style.cssText || ''
             if (iOSPrintContainerRef.current) {
+                iOSPrintContainerRef.current.style.position = 'fixed'
                 iOSPrintContainerRef.current.style.left = '0'
-                iOSPrintContainerRef.current.style.zIndex = '-9999'
+                iOSPrintContainerRef.current.style.top = '0'
+                iOSPrintContainerRef.current.style.zIndex = '-1' // Detrás pero visible temporalmente
             }
 
             const canvas = await html2canvas(printRef.current, { 
                 backgroundColor: '#ffffff',
-                scale: 3,
+                scale: 2, // Reducir a 2 para prevenir el límite de Taint y tamaño máximo de Canvas de iOS Safari
                 useCORS: true,
+                allowTaint: false, // NUNCA usar true si llamaremos a toBlob() (Arroja SecurityError)
                 logging: false,
-                allowTaint: true,
-                windowWidth: 300 // Forzar un ancho para la captura
+                windowWidth: 380 
             })
             
             if (iOSPrintContainerRef.current) {

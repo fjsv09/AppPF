@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useTransition } from 'react'
+import { useState, useMemo, useEffect, useTransition, Fragment } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import dynamic from 'next/dynamic'
@@ -683,8 +683,8 @@ export function PrestamosTable({
 
             case 'visitas_control':
                 // Control Ruta: Solo los de "Ruta Hoy" (quienes deben ser visitados hoy - Auditoría)
-                // Usamos cuota_dia_programada para que no desaparezcan al pagar
-                filtered = filtered.filter(p => p.cuota_dia_programada > 0.01 && p.estado === 'activo')
+                // O los que pagaron hoy aunque no les tocara (Pago Extra)
+                filtered = filtered.filter(p => (p.cuota_dia_programada > 0.01 || p.cobrado_hoy > 0.01) && p.estado === 'activo')
                 break
 
             case 'todos':
@@ -696,8 +696,14 @@ export function PrestamosTable({
         const frequencyWeight: Record<string, number> = { 'Diario': 1, 'Semanal': 2, 'Quincenal': 3, 'Mensual': 4 }
         
         filtered.sort((a, b) => {
-            // Prioridad para Control Ruta: Pendientes arriba, Pagados abajo
+            // Prioridad para Control Ruta: Programados arriba, Pagos Extra abajo
             if (activeFilter === 'visitas_control') {
+                const isProgramadoA = (a.cuota_dia_programada > 0.01) ? 0 : 1
+                const isProgramadoB = (b.cuota_dia_programada > 0.01) ? 0 : 1
+                
+                if (isProgramadoA !== isProgramadoB) return isProgramadoA - isProgramadoB
+                
+                // Dentro del mismo grupo (especialmente programados), pendientes arriba, pagados abajo
                 const isPaidA = a.cuota_dia_hoy <= 0.01 ? 1 : 0
                 const isPaidB = b.cuota_dia_hoy <= 0.01 ? 1 : 0
                 if (isPaidA !== isPaidB) return isPaidA - isPaidB
@@ -1070,7 +1076,28 @@ export function PrestamosTable({
                  "space-y-2",
                  viewType === 'cards' ? "md:hidden" : "hidden"
              )}>
-                {paginatedPrestamos.map((prestamo) => {
+                {paginatedPrestamos.map((prestamo, index) => {
+                    const isProgramado = (prestamo.cuota_dia_programada > 0.01)
+                    const prevIsProgramado = index > 0 ? (paginatedPrestamos[index - 1].cuota_dia_programada > 0.01) : null
+                    
+                    const renderHeader = () => {
+                        if (activeFilter !== 'visitas_control') return null
+                        if (index === 0 && isProgramado) return (
+                            <div className="flex items-center gap-2 py-3 px-2 mb-1 border-b border-emerald-500/10">
+                                <CalendarDays className="w-4 h-4 text-emerald-500" />
+                                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em]">Ruta Programada Hoy</span>
+                            </div>
+                        )
+                        if ((index === 0 && !isProgramado) || (index > 0 && !isProgramado && prevIsProgramado)) return (
+                            <div className="flex items-center gap-2 py-3 px-2 mb-1 mt-4 border-b border-amber-500/10">
+                                <DollarSign className="w-4 h-4 text-amber-500" />
+                                <span className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em]">Pagos Adicionales / Otras Fechas</span>
+                            </div>
+                        )
+                        return null
+                    }
+                    
+                    const header = renderHeader()
                     const datePeru = propSelectedDate || today
                     const cuotaDia = prestamo.cronograma_cuotas?.find((c: any) => c.fecha_vencimiento === datePeru)
                     const cobradoDia = cuotaDia?.pagos?.reduce((sum: number, p: any) => sum + parseFloat(p.monto_pagado || 0), 0) || 0
@@ -1088,7 +1115,9 @@ export function PrestamosTable({
 
                     if (activeFilter === 'visitas_control') {
                         return (
-                            <div
+                            <Fragment key={prestamo.id}>
+                                {header}
+                                <div
                                 key={prestamo.id}
                                 onClick={() => router.push(`/dashboard/prestamos/${prestamo.id}`)}
                                 className={cn(

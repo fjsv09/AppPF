@@ -57,14 +57,22 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                         const ctx = canvas.getContext('2d')
                         if (!ctx) return
                         
+                        // 1. Generar Base64 del logo original para evitar errores de CORS en html-to-image (Safari/Mobile)
                         ctx.drawImage(img, 0, 0)
+                        setLogoUrl(canvas.toDataURL('image/png'))
+
+                        // 2. Generar versión negra para la vista de impresión térmica
                         ctx.globalCompositeOperation = 'source-in'
                         ctx.fillStyle = '#000000'
                         ctx.fillRect(0, 0, canvas.width, canvas.height)
                         
                         setLogoDarkUrl(canvas.toDataURL('image/png'))
                     }
-                    img.src = data.valor
+                    img.onerror = (e) => {
+                        console.error('Error cargando imagen para Base64', e)
+                    }
+                    // Cache buster vital para Safari iOS que a menudo cachea la imagen sin CORS
+                    img.src = data.valor + (data.valor.includes('?') ? '&' : '?') + 'cb=' + new Date().getTime()
                 } catch (e) {
                     console.error('No se pudo generar logo oscuro', e)
                 }

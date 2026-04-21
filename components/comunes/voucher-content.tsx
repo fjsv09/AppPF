@@ -117,24 +117,27 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                 <div className={cn(
                     "flex items-center justify-center mx-auto relative z-10 transition-all duration-700",
                     isPrinting 
-                        ? "mb-2" 
+                        ? "mb-4" 
                         : "w-20 h-20 bg-white/20 ring-4 ring-white/10 shadow-[0_0_30px_rgba(255,255,255,0.2)] rounded-full backdrop-blur-md hover:scale-110 mb-4 overflow-hidden"
                 )}>
                     {logoUrl ? (
                         <div className={cn(
-                            "rounded-xl overflow-hidden flex items-center justify-center transition-all",
-                            isPrinting ? "h-14 w-14 shadow-lg bg-slate-900 p-1.5" : "w-14 h-14"
+                            "flex items-center justify-center transition-all",
+                            isPrinting ? "w-20 h-20" : "w-14 h-14"
                         )}>
                             <img 
                                 src={logoUrl} 
                                 alt="Logo" 
                                 crossOrigin="anonymous"
-                                className="w-full h-full object-contain" 
+                                className={cn(
+                                    "w-full h-full object-contain block mx-auto",
+                                    !isPrinting && "brightness-0 invert"
+                                )} 
                             />
                         </div>
                     ) : (
                         <CheckCircle className={cn(
-                            isPrinting ? "w-10 h-10 text-black" : "w-12 h-12 text-white"
+                            isPrinting ? "w-16 h-16 text-black" : "w-12 h-12 text-white"
                         )} />
                     )}
                 </div>

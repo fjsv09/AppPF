@@ -152,6 +152,7 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
 
             if (canShareFiles) {
                 await navigator.share({
+                    title: `Comprobante de Renovación #${ticketId}`,
                     files: [file]
                 })
                 toast.success('Compartido', { id: 'share-ticket' })

@@ -118,7 +118,9 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
 
             if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
                 await navigator.share({
-                    files: [file]
+                    files: [file],
+                    title: 'Recibo de Pago',
+                    text: `Pago registrado de ${client?.nombres || 'Cliente'}`
                 })
                 toast.success('Compartido con éxito')
             } else {

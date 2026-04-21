@@ -3,12 +3,14 @@
 import { useRef, useState, useEffect } from 'react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Share2, Loader2, Printer } from 'lucide-react'
+import { Share2, Loader2, Printer, Download } from 'lucide-react'
 import { toBlob, toPng } from 'html-to-image'
+import html2canvas from 'html2canvas'
 import { toast } from 'sonner'
 import { api } from '@/services/api'
 import { VoucherContent } from '@/components/comunes/voucher-content'
 import { createClient } from '@/utils/supabase/client'
+import { cn } from '@/lib/utils'
 
 interface PaymentVoucherProps {
     open: boolean
@@ -24,8 +26,10 @@ interface PaymentVoucherProps {
 export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cronograma, allPayments, userRole = 'asesor' }: PaymentVoucherProps) {
     const receiptRef = useRef<HTMLDivElement>(null)
     const printRef = useRef<HTMLDivElement>(null) // Hidden ref for thermal printing
+    const iOSPrintContainerRef = useRef<HTMLDivElement>(null) // Parent ref
     const [sharing, setSharing] = useState(false)
     const [printing, setPrinting] = useState(false)
+    const [isIOS, setIsIOS] = useState(false)
     const [logoUrl, setLogoUrl] = useState<string>('')
     const supabase = createClient()
 
@@ -39,6 +43,11 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
             if (data?.valor) setLogoUrl(data.valor)
         }
         if (open) fetchLogo()
+        // Detección de iOS
+        if (typeof window !== 'undefined') {
+            const checkIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && "ontouchend" in document)
+            setIsIOS(checkIOS)
+        }
     }, [open, supabase])
 
     if (!payment) return null
@@ -141,6 +150,62 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
         }
     }
 
+    const handleIOSShare = async () => {
+        if (!printRef.current || sharing) return
+        setSharing(true)
+        const toastId = toast.loading('Preparando imagen para iOS...')
+        
+        try {
+            // Safari/iOS workaround for html2canvas to capture hidden elements more reliably
+            const originalStyle = iOSPrintContainerRef.current?.style.cssText || ''
+            if (iOSPrintContainerRef.current) {
+                iOSPrintContainerRef.current.style.left = '0'
+                iOSPrintContainerRef.current.style.zIndex = '-9999'
+            }
+
+            const canvas = await html2canvas(printRef.current, { 
+                backgroundColor: '#ffffff',
+                scale: 3,
+                useCORS: true,
+                logging: false,
+                allowTaint: true,
+                windowWidth: 300 // Forzar un ancho para la captura
+            })
+            
+            if (iOSPrintContainerRef.current) {
+                iOSPrintContainerRef.current.style.cssText = originalStyle
+            }
+            
+            canvas.toBlob(async (blob) => {
+                if (!blob) throw new Error('Blob is null')
+                const fileName = `recibo-ios-${payment?.id?.toString()?.split?.('-')?.[0] || 'pago'}.png`
+                const file = new File([blob], fileName, { type: 'image/png' })
+                
+                if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file]
+                    })
+                    toast.success('Compartido con éxito en iOS', { id: toastId })
+                } else {
+                    const link = document.createElement('a')
+                    link.download = fileName
+                    link.href = URL.createObjectURL(blob)
+                    link.click()
+                    toast.success('Imagen descargada', { id: toastId })
+                }
+                if (payment?.id && userRole === 'asesor') {
+                    api.pagos.compartirVoucher(payment.id).catch(() => {})
+                }
+            }, 'image/png', 1.0)
+            
+        } catch (e) {
+            console.error('Error sharing iOS:', e)
+            toast.error('No se pudo generar la imagen', { id: toastId })
+        } finally {
+            setSharing(false)
+        }
+    }
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-sm overflow-hidden p-0 gap-0">
@@ -160,7 +225,7 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                 </div>
 
                 {/* Print View (Hidden High Contrast for Thermal) */}
-                <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+                <div ref={iOSPrintContainerRef} style={{ position: 'absolute', left: '-9999px', top: 0 }}>
                     <div ref={printRef}>
                         <VoucherContent 
                             payment={payment}
@@ -180,18 +245,28 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                         onClick={handlePrint} 
                         disabled={printing || sharing} 
                         variant="outline"
-                        className="flex-1 border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 rounded-xl h-11 text-xs font-bold"
+                        className={cn("border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 rounded-xl h-11 text-xs font-bold", isIOS ? "flex-1" : "flex-1")}
                     >
                         {printing ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Printer className="w-4 h-4 mr-2" />}
                         Imprimir
                     </Button>
+                    {isIOS && (
+                        <Button 
+                            onClick={handleIOSShare} 
+                            disabled={sharing || printing} 
+                            className="flex-[1.5] bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg shadow-blue-900/20 h-11 text-xs font-bold"
+                        >
+                            {sharing ? <Loader2 className="animate-spin w-4 h-4 mr-1" /> : <Download className="w-4 h-4 mr-1" />}
+                            Imprimir iOS
+                        </Button>
+                    )}
                     <Button 
                         onClick={handleShare} 
                         disabled={sharing || printing} 
-                        className="flex-[1.5] bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-900/20 h-11 text-xs font-bold"
+                        className={cn("bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-900/20 h-11 text-xs font-bold", isIOS ? "flex-1" : "flex-[1.5]")}
                     >
-                        {sharing ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Share2 className="w-4 h-4 mr-2" />}
-                        Compartir
+                        {sharing ? <Loader2 className="animate-spin w-4 h-4 mr-1" /> : <Share2 className="w-4 h-4 mr-1" />}
+                        {isIOS ? 'Normal' : 'Compartir'}
                     </Button>
                 </div>
             </DialogContent>

@@ -92,21 +92,21 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
     const theme = {
         bg: isPrinting ? 'bg-white' : 'bg-slate-900',
         textMain: isPrinting ? 'text-black' : 'text-white',
-        textMuted: isPrinting ? 'text-gray-600' : 'text-slate-500',
-        textAccent: isPrinting ? 'text-black' : 'text-emerald-400',
-        card: isPrinting ? 'bg-gray-50 border-gray-200' : 'bg-slate-800/40 border-white/5',
-        border: isPrinting ? 'border-gray-200' : 'border-white/5',
-        headerBg: isPrinting ? 'bg-white border-b-2 border-black' : 'bg-emerald-600',
+        textMuted: isPrinting ? 'text-black font-bold' : 'text-slate-500',
+        textAccent: isPrinting ? 'text-black font-bold' : 'text-emerald-400',
+        card: isPrinting ? 'bg-white border-black border-2 rounded-none shadow-none' : 'bg-slate-800/40 border-white/5 shadow-inner',
+        border: isPrinting ? 'border-black' : 'border-white/5',
+        headerBg: isPrinting ? 'bg-white border-b-2 border-black border-dashed' : 'bg-emerald-600',
         headerText: isPrinting ? 'text-black' : 'text-white'
     }
 
     return (
-        <div className={`${theme.bg} overflow-hidden ${isPrinting ? 'w-[58mm] mx-auto text-black' : ''}`}>
+        <div className={`${theme.bg} overflow-hidden ${isPrinting ? 'w-[58mm] mx-auto text-black border-2 border-black p-1 print-clear' : ''}`}>
             {/* Removing top logo as it's now in the header */}
 
 
             {/* Header */}
-            <div className={cn("text-center relative overflow-hidden", isPrinting ? "bg-white border-b-2 border-black pt-4 pb-2 px-2" : "bg-emerald-600 p-7")}>
+            <div className={cn("text-center relative overflow-hidden", isPrinting ? "bg-white border-b-2 border-black border-dashed pt-4 pb-2 px-2" : "bg-emerald-600 p-7")}>
                 {!isPrinting && (
                     <>
                         <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/30 pointer-events-none" />
@@ -136,10 +136,10 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                         )} />
                     )}
                 </div>
-                <h2 className={cn("font-black relative z-10 tracking-tight drop-shadow-lg", isPrinting ? "text-xl text-black" : "text-3xl text-white")}>
+                <h2 className={cn("font-black relative z-10 tracking-tight", isPrinting ? "text-xl text-black" : "text-3xl text-white drop-shadow-lg")}>
                     ¡Pago Exitoso!
                 </h2>
-                <p className={cn("uppercase font-bold tracking-[0.3em] relative z-10", isPrinting ? "text-gray-600 text-[9px] m-0 leading-tight" : "text-emerald-50/70 text-[10px] mt-1")}>
+                <p className={cn("uppercase font-bold tracking-[0.3em] relative z-10", isPrinting ? "text-black text-[9px] m-0 leading-tight" : "text-emerald-50/70 text-[10px] mt-1")}>
                     Transacción Procesada
                 </p>
             </div>
@@ -158,15 +158,15 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                 </div>
                 
                 {/* Estado Actual Card */}
-                <div className={cn(`${theme.card} rounded-xl border shadow-inner`, isPrinting ? "p-3" : "p-4")}>
+                <div className={cn(`${theme.card}`, isPrinting ? "p-2 mt-2" : "p-4 rounded-xl border")}>
                     <div className={cn(isPrinting ? "space-y-1.5" : "space-y-2.5")}>
                         <div className="flex justify-between text-xs items-center">
                             <span className={theme.textMuted}>Progreso del Crédito</span>
                             <span className={`${theme.textAccent} font-black`}>{pagadas} de {totalCuotas} cuotas</span>
                         </div>
-                        <div className={`h-1.5 w-full ${isPrinting ? 'bg-gray-200' : 'bg-slate-700/50'} rounded-full overflow-hidden`}>
+                        <div className={`h-1.5 w-full ${isPrinting ? 'bg-white border border-black rounded-none h-2' : 'bg-slate-700/50 rounded-full'} overflow-hidden`}>
                            <div 
-                                className={`h-full ${isPrinting ? 'bg-black' : 'bg-emerald-500'} rounded-full transition-all duration-500`} 
+                                className={`h-full ${isPrinting ? 'bg-black rounded-none' : 'bg-emerald-500 rounded-full'} transition-all duration-500`} 
                                 style={{ width: `${progressPct}%` }} 
                             />
                         </div>
@@ -187,10 +187,10 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                 </div>
 
                 {/* Info List */}
-                <div className={cn("pt-1", isPrinting ? "space-y-1" : "space-y-3")}>
+                <div className={cn("pt-1", isPrinting ? "space-y-1 mt-2 border-t border-black border-dashed pt-2" : "space-y-3")}>
                     <div className="flex justify-between text-[11px] items-center">
                         <span className={`${theme.textMuted} font-bold uppercase tracking-tighter`}>ID Operación</span>
-                        <span className={`font-mono ${isPrinting ? 'text-black' : 'text-slate-400'} text-[10px] px-1.5 py-0.5 ${isPrinting ? 'bg-gray-100' : 'bg-white/5'} rounded`}>{(payment.id || '').toString().slice(-10).toUpperCase()}</span>
+                        <span className={`font-mono ${isPrinting ? 'text-black bg-white font-bold' : 'text-slate-400 bg-white/5'} text-[10px] px-1.5 py-0.5 rounded`}>{(payment.id || '').toString().slice(-10).toUpperCase()}</span>
                     </div>
                     <div className="flex justify-between text-[11px] items-center">
                         <span className={`${theme.textMuted} font-bold uppercase tracking-tighter`}>DNI</span>

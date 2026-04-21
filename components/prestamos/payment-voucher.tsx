@@ -33,13 +33,29 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
     const supabase = createClient()
 
     useEffect(() => {
+        let isMounted = true
         const fetchLogo = async () => {
             const { data } = await supabase
                 .from('configuracion_sistema')
                 .select('valor')
                 .eq('clave', 'logo_sistema_url')
                 .maybeSingle()
-            if (data?.valor) setLogoUrl(data.valor)
+            
+            if (data?.valor && isMounted) {
+                try {
+                    // Pre-convert a Base64 para asegurar compatibilidad estricta con DOM a Canvas
+                    const response = await fetch(data.valor)
+                    const blob = await response.blob()
+                    const reader = new FileReader()
+                    reader.onloadend = () => {
+                        if (isMounted) setLogoUrl(reader.result as string)
+                    }
+                    reader.readAsDataURL(blob)
+                } catch (e) {
+                    // Fallback
+                    if (isMounted) setLogoUrl(data.valor)
+                }
+            }
         }
         if (open) fetchLogo()
         // Detección robusta de iOS
@@ -54,6 +70,8 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                 
             setIsIOS(Boolean(esIOS))
         }
+        
+        return () => { isMounted = false }
     }, [open, supabase])
 
     if (!payment) return null
@@ -186,7 +204,6 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
             
             if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
                 await navigator.share({
-                    title: 'Ticket de Caja',
                     files: [file]
                 })
                 toast.success('Compartido con éxito en iOS', { id: toastId })

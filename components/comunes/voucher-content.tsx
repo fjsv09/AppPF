@@ -117,7 +117,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                 <div className={cn(
                     "flex items-center justify-center mx-auto relative z-10 transition-all duration-700",
                     isPrinting 
-                        ? "w-auto h-auto mb-1" 
+                        ? "mb-2" // remover constraints dinámicos 
                         : "w-20 h-20 bg-white/20 ring-4 ring-white/10 shadow-[0_0_30px_rgba(255,255,255,0.2)] rounded-full backdrop-blur-md hover:scale-110 mb-4 overflow-hidden"
                 )}>
                     {logoUrl ? (
@@ -126,8 +126,8 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                             alt="Logo" 
                             crossOrigin="anonymous"
                             className={cn(
-                                "object-contain",
-                                isPrinting ? "w-16 h-auto grayscale brightness-0" : "w-14 h-14 brightness-0 invert"
+                                "object-contain block mx-auto",
+                                isPrinting ? "w-24 h-12 grayscale brightness-0" : "w-14 h-14 brightness-0 invert"
                             )} 
                         />
                     ) : (

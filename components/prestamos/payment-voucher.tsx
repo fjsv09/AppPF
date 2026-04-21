@@ -40,22 +40,7 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                 .select('valor')
                 .eq('clave', 'logo_sistema_url')
                 .maybeSingle()
-            
-            if (data?.valor && isMounted) {
-                try {
-                    // Pre-convert a Base64 para asegurar compatibilidad estricta con DOM a Canvas
-                    const response = await fetch(data.valor)
-                    const blob = await response.blob()
-                    const reader = new FileReader()
-                    reader.onloadend = () => {
-                        if (isMounted) setLogoUrl(reader.result as string)
-                    }
-                    reader.readAsDataURL(blob)
-                } catch (e) {
-                    // Fallback
-                    if (isMounted) setLogoUrl(data.valor)
-                }
-            }
+            if (data?.valor && isMounted) setLogoUrl(data.valor)
         }
         if (open) fetchLogo()
         // Detección robusta de iOS

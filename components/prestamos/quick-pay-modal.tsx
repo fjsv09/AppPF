@@ -59,6 +59,7 @@ export function QuickPayModal({
 
     // Sharing State
     const receiptRef = useRef<HTMLDivElement>(null)
+    const printRef = useRef<HTMLDivElement>(null)
     const [sharing, setSharing] = useState(false)
     const [printing, setPrinting] = useState(false)
     const [logoUrl, setLogoUrl] = useState<string>('')
@@ -127,8 +128,10 @@ export function QuickPayModal({
                 .maybeSingle()
             if (data?.valor) setLogoUrl(data.valor)
         }
-        if (open) {
+        
+        if (open && !result) {
             fetchLogo()
+            setLastPayment(null)
             const currentId = prestamoId || initialPrestamo?.id;
             if (currentId) {
                 const cleanId = currentId.split('-')?.length > 5 
@@ -143,10 +146,9 @@ export function QuickPayModal({
                     fetchPrestamoData(cleanId)
                 }
             }
-            setLastPayment(null)
         }
-        // Dependemos de IDs estables para evitar recargas si el objeto cambia de referencia
-    }, [open, prestamoId, initialPrestamo?.id, result, supabase])
+        // Solo re-inicializamos si abre el modal o cambia el préstamo
+    }, [open, prestamoId, initialPrestamo?.id, supabase])
 
     useEffect(() => {
         let watchId: number | null = null;
@@ -159,20 +161,32 @@ export function QuickPayModal({
                 setLocation({ lat: userLoc[0], lng: userLoc[1] })
                 setIsGpsLoading(false)
             } else if (navigator.geolocation) {
-                watchId = navigator.geolocation.watchPosition(
-                    (pos) => {
-                        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-                        setGpsError(null)
-                        setIsGpsLoading(false)
-                    },
-                    (err) => {
-                        console.warn("GPS watch error:", err)
-                        setLocation(null)
-                        setGpsError(err.code === 1 ? "Permiso denegado" : "Señal perdida o GPS apagado")
-                        setIsGpsLoading(false)
-                    },
-                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-                )
+                const getPosition = (highAccuracy: boolean) => {
+                    watchId = navigator.geolocation.watchPosition(
+                        (pos) => {
+                            setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+                            setGpsError(null)
+                            setIsGpsLoading(false)
+                        },
+                        (err) => {
+                            console.warn(`GPS watch error (highAccuracy=${highAccuracy}):`, err)
+                            
+                            // Si falla con alta precisión y nunca hemos tenido posición, intentamos con baja precisión
+                            if (highAccuracy && err.code !== 1) { // 1 es Permission Denied, no reintentamos
+                                navigator.geolocation.clearWatch(watchId!)
+                                getPosition(false)
+                                return
+                            }
+
+                            setLocation(null)
+                            setGpsError(err.code === 1 ? "Permiso denegado" : "Señal débil o GPS apagado")
+                            setIsGpsLoading(false)
+                        },
+                        { enableHighAccuracy: highAccuracy, timeout: highAccuracy ? 8000 : 15000, maximumAge: 0 }
+                    )
+                }
+
+                getPosition(true)
             }
         }
 
@@ -281,33 +295,30 @@ export function QuickPayModal({
     }
 
     const handlePrint = async () => {
-        if (!receiptRef.current || printing) return
+        if (!printRef.current || printing) return
         setPrinting(true)
-        const toastId = toast.loading('Preparando impresión...')
+        const toastId = toast.loading('Preparando ticket...')
         try {
-            const dataUrl = await toPng(receiptRef.current, { 
-                backgroundColor: '#0f172a',
-                pixelRatio: 2
+            const dataUrl = await toPng(printRef.current, { 
+                backgroundColor: '#ffffff',
+                pixelRatio: 3,
+                skipFonts: false,
+                cacheBust: true
             })
             
             const printContainer = document.createElement('div')
             printContainer.id = 'print-container-native'
-            printContainer.style.display = 'none'
-            printContainer.innerHTML = `<img src="${dataUrl}" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />`
+            printContainer.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 99999; display: flex; justify-content: center; align-items: start; padding-top: 5mm;'
+            printContainer.innerHTML = `<img src="${dataUrl}" style="width: 58mm; height: auto;" />`
             
             const style = document.createElement('style')
             style.id = 'print-style-native'
             style.innerHTML = `
                 @media print {
-                    body > *:not(#print-container-native) { display: none !important; }
-                    #print-container-native { 
-                        display: block !important; 
-                        position: absolute !important; 
-                        top: 0 !important; 
-                        left: 0 !important; 
-                        width: 100% !important;
-                    }
-                    @page { margin: 2mm; }
+                    @page { margin: 0; size: 58mm auto; }
+                    body * { visibility: hidden !important; }
+                    #print-container-native, #print-container-native * { visibility: visible !important; }
+                    #print-container-native { position: absolute !important; left: 0 !important; top: 0 !important; width: 58mm !important; }
                 }
             `
             document.head.appendChild(style)
@@ -316,15 +327,15 @@ export function QuickPayModal({
             setTimeout(() => {
                 window.print()
                 setTimeout(() => {
-                    document.head.removeChild(style)
-                    document.body.removeChild(printContainer)
+                    if (document.getElementById('print-style-native')) document.head.removeChild(style)
+                    if (document.getElementById('print-container-native')) document.body.removeChild(printContainer)
                     setPrinting(false)
                     toast.success('Impresión enviada', { id: toastId })
-                }, 500)
+                }, 1000)
             }, 500)
         } catch (e) {
-            console.error(e)
-            toast.error('Error al generar impresión', { id: toastId })
+            console.error('Error printing:', e)
+            toast.error('Error al generar ticket', { id: toastId })
             setPrinting(false)
         }
     }
@@ -333,7 +344,12 @@ export function QuickPayModal({
         if (!receiptRef.current || sharing) return
         setSharing(true)
         try {
-            const canvas = await toBlob(receiptRef.current, { cacheBust: true, pixelRatio: 2, backgroundColor: '#0f172a' })
+            const canvas = await toBlob(receiptRef.current, { 
+                cacheBust: true, 
+                pixelRatio: 2, 
+                backgroundColor: '#0f172a',
+                skipFonts: false
+            })
             if (!canvas) throw new Error('Error al generar imagen')
 
             const file = new File([canvas], `recibo-${lastPayment?.id?.slice?.(-10) || 'pago'}.png`, { type: 'image/png' })
@@ -373,26 +389,36 @@ export function QuickPayModal({
                 return
             }
             
-            // Re-validación final antes de enviar
+            // Re-validación final antes de enviar con reintento de precisión
             setLoading(true)
             try {
-                await new Promise((resolve, reject) => {
+                const getPos = (high: boolean) => new Promise((resolve, reject) => {
                     navigator.geolocation.getCurrentPosition(
                         (pos) => {
                             setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-                            resolve(true)
+                            resolve(pos)
                         },
-                        (err) => {
-                            reject(new Error("Se perdió la señal GPS. Verifica tu ubicación."))
-                        },
-                        { enableHighAccuracy: true, timeout: 3000 }
+                        (err) => reject(err),
+                        { enableHighAccuracy: high, timeout: high ? 4000 : 8000 }
                     )
                 })
+
+                try {
+                    await getPos(true)
+                } catch (e) {
+                    console.warn("Re-intento GPS con baja precisión...")
+                    await getPos(false)
+                }
             } catch (err: any) {
                 setLoading(false)
-                setLocation(null)
-                toast.error(err.message)
-                return
+                // Si es admin o supervisor, permitimos error de GPS para que no se bloqueen
+                if (userRol === 'admin' || userRol === 'supervisor') {
+                    console.warn("GPS falló pero se permite a Admin/Supervisor continuar")
+                } else {
+                    setLocation(null)
+                    toast.error("Se perdió la señal GPS. Verifica tu ubicación.")
+                    return
+                }
             }
         }
         setLoading(true)
@@ -525,6 +551,21 @@ export function QuickPayModal({
                                                 <p className="text-slate-200 leading-tight">
                                                     Tu cuenta requiere <span className="font-bold underline">GPS ACTIVO</span> para registrar cobranzas. Por favor, habilita la ubicación en tu dispositivo.
                                                 </p>
+                                                {(userRol === 'admin' || userRol === 'supervisor') && (
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        className="mt-2 h-7 text-[10px] bg-rose-500/10 border-rose-500/40 text-rose-200 hover:bg-rose-500/20"
+                                                        onClick={() => {
+                                                            // Mock location for testing on PC
+                                                            setLocation({ lat: -12.0464, lng: -77.0428 }) 
+                                                            setGpsError(null)
+                                                            toast.info("Ubicación simulada (Lima Central)")
+                                                        }}
+                                                    >
+                                                        Simular Ubicación (Modo PC)
+                                                    </Button>
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -668,32 +709,54 @@ export function QuickPayModal({
                         )}
                     </div>
                 ) : (
-                    <div className="bg-slate-900 border-slate-800 text-white w-full overflow-hidden p-0">
-                        <div className="max-h-[75vh] overflow-y-auto custom-scrollbar">
-                            <div ref={receiptRef}>
-                                <VoucherContent 
-                                    payment={lastPayment}
-                                    loan={prestamo}
-                                    client={prestamo?.clientes}
-                                    cronograma={fullCronograma}
-                                    allPayments={historyPayments}
-                                    logoUrl={logoUrl}
-                                />
-                            </div>
+                    <div className="bg-slate-950 text-white w-full flex flex-col min-h-[450px]">
+                        {/* Main View (Dark Mode) */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#0f172a] p-4">
+                            {!lastPayment ? (
+                                <div className="flex flex-col items-center justify-center py-24 gap-4">
+                                    <div className="relative">
+                                        <div className="absolute inset-0 bg-emerald-500/20 blur-xl rounded-full animate-pulse" />
+                                        <Loader2 className="w-10 h-10 text-emerald-500 animate-spin relative" />
+                                    </div>
+                                    <p className="text-slate-400 text-sm font-bold tracking-tight">Generando comprobante...</p>
+                                </div>
+                            ) : (
+                                <div ref={receiptRef} className="rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/5 bg-slate-900">
+                                    <VoucherContent 
+                                        payment={lastPayment}
+                                        loan={prestamo}
+                                        client={prestamo?.clientes}
+                                        cronograma={fullCronograma}
+                                        allPayments={historyPayments}
+                                        logoUrl={logoUrl}
+                                        isPrinting={false}
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Hidden Print View (High Contrast) */}
+                        <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+                            {lastPayment && (
+                                <div ref={printRef}>
+                                    <VoucherContent 
+                                        payment={lastPayment}
+                                        loan={prestamo}
+                                        client={prestamo?.clientes}
+                                        cronograma={fullCronograma}
+                                        allPayments={historyPayments}
+                                        logoUrl={logoUrl}
+                                        isPrinting={true}
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         {/* Footer Buttons - Fixed at bottom */}
                         <div className="p-3 bg-slate-950 flex gap-2 border-t border-slate-800 shadow-2xl">
                             <Button 
-                                onClick={handleClose} 
-                                variant="ghost" 
-                                className="flex-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl h-11 text-xs font-bold"
-                            >
-                                Cerrar
-                            </Button>
-                            <Button 
                                 onClick={handlePrint} 
-                                disabled={printing || sharing} 
+                                disabled={printing || sharing || !lastPayment} 
                                 variant="outline"
                                 className="flex-1 border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 rounded-xl h-11 text-xs font-bold"
                             >
@@ -702,8 +765,8 @@ export function QuickPayModal({
                             </Button>
                             <Button 
                                 onClick={handleShare} 
-                                disabled={sharing || printing} 
-                                className="flex-[1.5] bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-900/20 h-11 text-xs font-bold"
+                                disabled={sharing || printing || !lastPayment} 
+                                className="flex-[1.5] bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-900/20 h-11 text-sm font-bold"
                             >
                                 {sharing ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Share2 className="w-4 h-4 mr-2" />}
                                 Compartir

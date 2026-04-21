@@ -239,7 +239,9 @@ export function PrestamosTable({
     }
 
     // GPS obligatorio - viene directo del perfil del usuario actual (server-side)
-    const exigirGps = !!exigirGpsCobranza
+    // Solo se exige GPS si el perfil tiene la marca Y el usuario es Asesor.
+    // Admins y Supervisores pueden operar en PC sin GPS.
+    const exigirGps = !!exigirGpsCobranza && userRol === 'asesor'
 
 
     // --- URL PARAMETERS & DERIVED STATE ---

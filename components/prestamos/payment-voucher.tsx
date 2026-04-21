@@ -23,6 +23,7 @@ interface PaymentVoucherProps {
 
 export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cronograma, allPayments, userRole = 'asesor' }: PaymentVoucherProps) {
     const receiptRef = useRef<HTMLDivElement>(null)
+    const printRef = useRef<HTMLDivElement>(null) // Hidden ref for thermal printing
     const [sharing, setSharing] = useState(false)
     const [printing, setPrinting] = useState(false)
     const [logoUrl, setLogoUrl] = useState<string>('')
@@ -43,51 +44,52 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
     if (!payment) return null
 
     const handlePrint = async () => {
-        if (!receiptRef.current || printing) return
+        if (!printRef.current || printing) return
         setPrinting(true)
-        const toastId = toast.loading('Preparando impresión...')
+        const toastId = toast.loading('Preparando ticket...')
+        
         try {
-            // Captura de alta calidad para impresión
-            const dataUrl = await toPng(receiptRef.current, { 
-                backgroundColor: '#0f172a',
-                pixelRatio: 2
+            // Generar imagen de alta calidad con fondo blanco para la impresora térmica
+            const dataUrl = await toPng(printRef.current, { 
+                backgroundColor: '#ffffff',
+                pixelRatio: 3, // Más alto para térmicas
+                skipFonts: false,
+                cacheBust: true
             })
             
             const printContainer = document.createElement('div')
             printContainer.id = 'print-container-native'
-            printContainer.style.display = 'none'
-            printContainer.innerHTML = `<img src="${dataUrl}" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />`
+            printContainer.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 99999; display: flex; justify-content: center; align-items: start; padding-top: 5mm;'
+            printContainer.innerHTML = `<img src="${dataUrl}" style="width: 58mm; height: auto;" />`
             
             const style = document.createElement('style')
             style.id = 'print-style-native'
             style.innerHTML = `
                 @media print {
-                    body > *:not(#print-container-native) { display: none !important; }
-                    #print-container-native { 
-                        display: block !important; 
-                        position: absolute !important; 
-                        top: 0 !important; 
-                        left: 0 !important; 
-                        width: 100% !important;
-                    }
-                    @page { margin: 2mm; }
+                    @page { margin: 0; size: 58mm auto; }
+                    body * { visibility: hidden !important; }
+                    #print-container-native, #print-container-native * { visibility: visible !important; }
+                    #print-container-native { position: absolute !important; left: 0 !important; top: 0 !important; width: 58mm !important; }
                 }
             `
             document.head.appendChild(style)
             document.body.appendChild(printContainer)
 
+            // Dar un poco de tiempo para que la imagen se cargue en el DOM
             setTimeout(() => {
                 window.print()
+                
+                // Limpieza después de un tiempo prudencial
                 setTimeout(() => {
-                    document.head.removeChild(style)
-                    document.body.removeChild(printContainer)
+                    if (document.getElementById('print-style-native')) document.head.removeChild(style)
+                    if (document.getElementById('print-container-native')) document.body.removeChild(printContainer)
                     setPrinting(false)
                     toast.success('Impresión enviada', { id: toastId })
-                }, 500)
+                }, 1000)
             }, 500)
         } catch (e) {
-            console.error(e)
-            toast.error('Error al generar impresión', { id: toastId })
+            console.error('Error printing:', e)
+            toast.error('Error al generar ticket', { id: toastId })
             setPrinting(false)
         }
     }
@@ -96,10 +98,15 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
         if (!receiptRef.current || sharing) return
         setSharing(true)
         try {
-            const blob = await toBlob(receiptRef.current, { cacheBust: true, backgroundColor: '#0f172a', pixelRatio: 2 })
+            const blob = await toBlob(receiptRef.current, { 
+                cacheBust: true, 
+                backgroundColor: '#0f172a', 
+                pixelRatio: 2,
+                skipFonts: false
+            })
             if (!blob) throw new Error('Error al generar imagen')
 
-            const fileName = `recibo-${payment.id.split('-')[0]}.png`
+            const fileName = `recibo-${payment?.id?.toString()?.split?.('-')?.[0] || 'pago'}.png`
             const file = new File([blob], fileName, { type: 'image/png' })
 
             if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
@@ -108,6 +115,7 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                     title: 'Recibo de Pago',
                     text: `Pago registrado de ${client?.nombres || 'Cliente'}`
                 })
+                toast.success('Compartido con éxito')
             } else {
                 const link = document.createElement('a')
                 link.download = fileName
@@ -119,7 +127,7 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                 api.pagos.compartirVoucher(payment.id).catch(() => {})
             }
         } catch (e) {
-            console.error(e)
+            console.error('Error sharing:', e)
             toast.error('No se pudo compartir la imagen')
         } finally {
             setSharing(false)
@@ -129,6 +137,7 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-sm overflow-hidden p-0 gap-0">
+                {/* Main View (Dark Mode for App) */}
                 <div className="max-h-[80vh] overflow-y-auto custom-scrollbar">
                     <div ref={receiptRef}>
                         <VoucherContent 
@@ -138,19 +147,28 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                             cronograma={cronograma}
                             allPayments={allPayments}
                             logoUrl={logoUrl}
+                            isPrinting={false}
+                        />
+                    </div>
+                </div>
+
+                {/* Print View (Hidden High Contrast for Thermal) */}
+                <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+                    <div ref={printRef}>
+                        <VoucherContent 
+                            payment={payment}
+                            loan={loan}
+                            client={client}
+                            cronograma={cronograma}
+                            allPayments={allPayments}
+                            logoUrl={logoUrl}
+                            isPrinting={true}
                         />
                     </div>
                 </div>
 
                 {/* Footer Buttons - Fixed at bottom */}
                 <div className="p-3 bg-slate-950 flex gap-2 border-t border-slate-800 shadow-2xl">
-                    <Button 
-                        onClick={() => onOpenChange(false)} 
-                        variant="ghost" 
-                        className="flex-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl h-11 text-xs font-bold"
-                    >
-                        Cerrar
-                    </Button>
                     <Button 
                         onClick={handlePrint} 
                         disabled={printing || sharing} 
@@ -173,4 +191,5 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
         </Dialog>
     )
 }
+
 

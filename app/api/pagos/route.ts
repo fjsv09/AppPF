@@ -65,8 +65,12 @@ export async function POST(request: Request) {
         }
 
         // --- VERIFICACIÓN DE GPS OBLIGATORIO ---
-        if (!!perfil.exigir_gps_cobranza && (latitud === undefined || latitud === null || longitud === undefined || longitud === null)) {
-            console.warn(`[GPS RECHAZADO] Intento de pago sin coordenadas para usuario: ${user.id}`);
+        // Se permite el bypass para roles administrativos (admin/supervisor) para facilitar operación desde PC
+        const isStrictRole = perfil.rol === 'asesor';
+        const missingGps = latitud === undefined || latitud === null || longitud === undefined || longitud === null;
+        
+        if (!!perfil.exigir_gps_cobranza && isStrictRole && missingGps) {
+            console.warn(`[GPS RECHAZADO] Intento de pago sin coordenadas para asesor: ${user.id}`);
             return NextResponse.json({ 
                 error: 'Restricción de Seguridad: Se requiere ubicación GPS activa para procesar cobranzas.' 
             }, { status: 403 })

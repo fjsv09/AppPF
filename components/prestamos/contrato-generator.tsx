@@ -134,7 +134,9 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                 // Capture Page as Image (Better fidelity than direct HTML printing sometimes)
                 const dataUrl = await toPng(page, {
                     backgroundColor: '#fff',
-                    pixelRatio: 2
+                    pixelRatio: 2,
+                    cacheBust: true,
+                    skipFonts: false
                 })
 
                 if (i > 0) pdf.addPage()

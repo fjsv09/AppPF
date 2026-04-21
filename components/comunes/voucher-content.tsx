@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { CheckCircle, ArrowRight } from 'lucide-react'
-import { formatDatePeru } from '@/lib/utils'
+import { formatDatePeru, cn } from '@/lib/utils'
 
 interface VoucherContentProps {
     payment: any
@@ -11,16 +11,17 @@ interface VoucherContentProps {
     cronograma?: any[]
     allPayments?: any[]
     logoUrl?: string
+    isPrinting?: boolean
 }
 
-export function VoucherContent({ payment, loan, client, cronograma, allPayments, logoUrl }: VoucherContentProps) {
+export function VoucherContent({ payment, loan, client, cronograma, allPayments, logoUrl, isPrinting = false }: VoucherContentProps) {
     if (!payment) return null
 
     // Asegurar compatibilidad de nombres de campos entre RPC y Componente
-    const monto = payment.monto_pagado || payment.pago_monto || 0;
+    const monto = Number(payment.monto_pagado || payment.pago_monto || 0);
 
     // Lógica de cálculo de progreso (Idem PaymentVoucher original)
-    const totalCuotas = cronograma?.length || loan?.cuotas || 0
+    const totalCuotas = Number(cronograma?.length || loan?.cuotas || 0)
     let pagadas = 0
     let cuotasAtrasadas = 0
     let saldoPendiente = 0
@@ -86,52 +87,94 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
         }).length
     }
 
-    return (
-        <div className="bg-slate-900 overflow-hidden">
-            {/* Logo Section - Compact */}
-            {logoUrl && (
-                <div className="bg-slate-900 pt-4 pb-2 flex justify-center border-b border-white/5">
-                    <img src={logoUrl} alt="ProFinanzas" className="h-10 w-auto object-contain brightness-0 invert opacity-40" />
-                </div>
-            )}
+    const progressPct = totalCuotas > 0 ? (pagadas / totalCuotas) * 100 : 0;
 
-            {/* Header - More Compact */}
-            <div className="bg-emerald-600 p-5 sm:p-6 text-center relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
-                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-2 backdrop-blur-sm shadow-lg relative z-10">
-                    <CheckCircle className="w-8 h-8 text-white" />
+    const theme = {
+        bg: isPrinting ? 'bg-white' : 'bg-slate-900',
+        textMain: isPrinting ? 'text-black' : 'text-white',
+        textMuted: isPrinting ? 'text-gray-600' : 'text-slate-500',
+        textAccent: isPrinting ? 'text-black' : 'text-emerald-400',
+        card: isPrinting ? 'bg-gray-50 border-gray-200' : 'bg-slate-800/40 border-white/5',
+        border: isPrinting ? 'border-gray-200' : 'border-white/5',
+        headerBg: isPrinting ? 'bg-white border-b-2 border-black' : 'bg-emerald-600',
+        headerText: isPrinting ? 'text-black' : 'text-white'
+    }
+
+    return (
+        <div className={`${theme.bg} overflow-hidden ${isPrinting ? 'w-[58mm] mx-auto text-black' : ''}`}>
+            {/* Removing top logo as it's now in the header */}
+
+
+            {/* Header */}
+            <div className={`${theme.headerBg} p-7 text-center relative overflow-hidden`}>
+                {!isPrinting && (
+                    <>
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/30 pointer-events-none" />
+                        <div className="absolute -top-24 -right-24 w-48 h-48 bg-white/10 rounded-full blur-3xl animate-pulse" />
+                        <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-black/10 rounded-full blur-2xl" />
+                    </>
+                )}
+                <div className={cn(
+                    "flex items-center justify-center mx-auto relative z-10 transition-all duration-700",
+                    isPrinting 
+                        ? "w-auto h-auto mb-4" 
+                        : "w-20 h-20 bg-white/20 ring-4 ring-white/10 shadow-[0_0_30px_rgba(255,255,255,0.2)] rounded-full backdrop-blur-md hover:scale-110 mb-4 overflow-hidden"
+                )}>
+                    {logoUrl ? (
+                         <img 
+                            src={logoUrl} 
+                            alt="Logo" 
+                            crossOrigin="anonymous"
+                            className={cn(
+                                "object-contain",
+                                isPrinting ? "w-24 h-auto grayscale brightness-0" : "w-14 h-14 brightness-0 invert"
+                            )} 
+                        />
+                    ) : (
+                        <CheckCircle className={cn(
+                            isPrinting ? "w-12 h-12 text-black" : "w-12 h-12 text-white"
+                        )} />
+                    )}
                 </div>
-                <h2 className="text-2xl font-black text-white relative z-10 tracking-tight">¡Pago Exitoso!</h2>
-                <p className="text-emerald-100 text-[10px] uppercase font-bold opacity-80 relative z-10 tracking-[0.2em]">Transacción Procesada</p>
+                <h2 className={`text-3xl font-black ${theme.headerText} relative z-10 tracking-tight drop-shadow-lg`}>¡Pago Exitoso!</h2>
+                <p className={`${isPrinting ? 'text-gray-600' : 'text-emerald-50/70'} text-[10px] uppercase font-bold tracking-[0.3em] relative z-10 mt-1`}>Transacción Procesada</p>
             </div>
             
-            {/* Body - Denser layout */}
-            <div className="p-5 sm:p-6 space-y-5">
-                {/* Amount Section - Bigger value, less padding */}
-                <div className="flex justify-between items-baseline border-b border-white/5 pb-4">
-                    <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Monto Pagado</span>
-                    <span className="text-3xl font-black text-white tracking-tighter">S/ {Number(monto).toFixed(2)}</span>
+            {/* Body */}
+            <div className="p-5 space-y-5">
+                {/* Amount Section */}
+                <div className={`text-center py-2 border-b border-dashed ${theme.border}`}>
+                    <span className={`${theme.textMuted} text-[9px] font-black uppercase tracking-[0.3em] block mb-1 opacity-70`}>Monto de la Operación</span>
+                    <div className="flex items-center justify-center gap-1">
+                        <span className={`${theme.textMuted} text-lg font-bold mt-1`}>S/</span>
+                        <span className={`text-5xl font-black ${theme.textMain} tracking-tighter tabular-nums drop-shadow-sm`}>
+                            {Number(monto).toFixed(2)}
+                        </span>
+                    </div>
                 </div>
                 
-                {/* Estado Actual Card - Tighter spacing */}
-                <div className="bg-slate-800/40 rounded-xl p-4 border border-white/5 shadow-inner">
+                {/* Estado Actual Card */}
+                <div className={`${theme.card} rounded-xl p-4 border shadow-inner`}>
                     <div className="space-y-2.5">
                         <div className="flex justify-between text-xs items-center">
-                            <span className="text-slate-400 font-medium">Progreso del Crédito</span>
-                            <span className="text-emerald-400 font-black">{pagadas} de {totalCuotas} cuotas</span>
+                            <span className={theme.textMuted}>Progreso del Crédito</span>
+                            <span className={`${theme.textAccent} font-black`}>{pagadas} de {totalCuotas} cuotas</span>
                         </div>
-                        <div className="h-1 w-full bg-slate-700/50 rounded-full overflow-hidden">
-                           <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${(pagadas/totalCuotas)*100}%` }} />
+                        <div className={`h-1.5 w-full ${isPrinting ? 'bg-gray-200' : 'bg-slate-700/50'} rounded-full overflow-hidden`}>
+                           <div 
+                                className={`h-full ${isPrinting ? 'bg-black' : 'bg-emerald-500'} rounded-full transition-all duration-500`} 
+                                style={{ width: `${progressPct}%` }} 
+                            />
                         </div>
-                        <div className="flex justify-between text-[11px] items-start pt-1">
-                            <span className="text-slate-400 font-medium">Deuda Restante</span>
-                            <div className="text-right">
+                        <div className="flex justify-between text-[11px] items-center pt-1">
+                            <span className={theme.textMuted}>Deuda Restante</span>
+                            <div className="flex flex-col items-end">
                                 {cuotasAtrasadas > 0 && (
-                                     <span className="block text-[9px] text-rose-500 font-black mb-0.5">
-                                        {cuotasAtrasadas} Cuotas Atrasadas
+                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-500/10 text-[8px] text-rose-500 font-black mb-1 animate-bounce">
+                                        {cuotasAtrasadas} CUOTAS ATRASADAS
                                      </span>
                                 )}
-                                <span className="block text-white font-black text-sm">
+                                <span className={`${theme.textMain} font-black text-sm tabular-nums`}>
                                     S/ {saldoPendiente.toFixed(2)}
                                 </span>
                             </div>
@@ -139,30 +182,37 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                     </div>
                 </div>
 
-                {/* Info List - Tighter spacing */}
+                {/* Info List */}
                 <div className="space-y-3 pt-1">
                     <div className="flex justify-between text-[11px] items-center">
-                        <span className="text-slate-500 font-bold uppercase tracking-tighter">ID Operación</span>
-                        <span className="font-mono text-slate-400 text-[10px] px-1.5 py-0.5 bg-white/5 rounded">{(payment.id || '').toString().slice(-10).toUpperCase()}</span>
+                        <span className={`${theme.textMuted} font-bold uppercase tracking-tighter`}>ID Operación</span>
+                        <span className={`font-mono ${isPrinting ? 'text-black' : 'text-slate-400'} text-[10px] px-1.5 py-0.5 ${isPrinting ? 'bg-gray-100' : 'bg-white/5'} rounded`}>{(payment.id || '').toString().slice(-10).toUpperCase()}</span>
                     </div>
                     <div className="flex justify-between text-[11px] items-center">
-                        <span className="text-slate-500 font-bold uppercase tracking-tighter">Cliente</span>
-                        <span className="text-slate-300 font-black text-right max-w-[65%] truncate italic">{client?.nombres || 'Cliente'}</span>
+                        <span className={`${theme.textMuted} font-bold uppercase tracking-tighter`}>DNI</span>
+                        <span className={`${theme.textMain} font-mono text-[10px]`}>{client?.dni || '---'}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px] items-start pt-1">
+                        <span className={`${theme.textMuted} font-bold uppercase tracking-tighter mt-1`}>Cliente</span>
+                        <span className={`${theme.textMain} font-black text-right max-w-[75%] leading-tight text-base italic uppercase tracking-tight`}>
+                            {client?.nombres || 'Cliente'}
+                        </span>
                     </div>
                     <div className="flex justify-between text-[11px] items-center">
-                        <span className="text-slate-500 font-bold uppercase tracking-tighter">Fecha y Hora</span>
-                        <span className="text-slate-400 font-medium font-mono text-[10px]">
+                        <span className={`${theme.textMuted} font-bold uppercase tracking-tighter`}>Fecha y Hora</span>
+                        <span className={`${theme.textMuted} font-medium font-mono text-[10px]`}>
                             {formatDatePeru(payment.created_at || new Date().toISOString())}
                         </span>
                     </div>
                 </div>
             </div>
             
-            {/* Watermark - Smaller */}
-            <div className="pb-4 text-center opacity-10 pointer-events-none">
-                <span className="text-[8px] font-black uppercase tracking-[0.4em] text-white">Sistema Financiero ProFinanzas</span>
+            {/* Watermark */}
+            <div className="pb-4 text-center opacity-30 pointer-events-none">
+                <span className="text-[8px] font-black uppercase tracking-[0.4em]">Sistema Financiero ProFinanzas</span>
             </div>
         </div>
     )
 }
+
 

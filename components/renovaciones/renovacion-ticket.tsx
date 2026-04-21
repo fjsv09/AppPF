@@ -23,10 +23,13 @@ import { formatMoney } from '@/utils/format'
  * Retorna un data URL string.
  */
 async function captureTicketAsImage(element: HTMLElement): Promise<string> {
-    // Capturar múltiples veces para asegurar que los estilos estén renderizados (fix conocido de html-to-image)
-    await toPng(element, { backgroundColor: '#ffffff', pixelRatio: 3 })
-    const dataUrl = await toPng(element, { backgroundColor: '#ffffff', pixelRatio: 3 })
-    return dataUrl
+    // Capturar con cacheBust para asegurar frescura de estilos e imágenes
+    return await toPng(element, { 
+        backgroundColor: '#ffffff', 
+        pixelRatio: 3,
+        cacheBust: true,
+        skipFonts: false
+    })
 }
 
 /**
@@ -61,9 +64,13 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
         toast.loading('Preparando impresión...', { id: 'print-ticket' })
 
         try {
-            // Capturar el ticket como imagen (pixelRatio 2 es más que suficiente para térmica y más compatible)
-            await toPng(ticketEl, { backgroundColor: '#ffffff', pixelRatio: 2 })
-            const dataUrl = await toPng(ticketEl, { backgroundColor: '#ffffff', pixelRatio: 2 })
+            // Capturar el ticket como imagen
+            const dataUrl = await toPng(ticketEl, { 
+                backgroundColor: '#ffffff', 
+                pixelRatio: 2.5,
+                cacheBust: true,
+                skipFonts: false
+            })
             
             // Convertir Base64 a Blob para usar una Blob URL (más seguro y eficiente para el spooler de Android)
             const blob = dataUrlToBlob(dataUrl)
@@ -195,7 +202,12 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
                         {logoUrl ? (
                             <div className="h-14 w-14 rounded-xl overflow-hidden shadow-lg bg-slate-900 p-1.5">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={logoUrl} alt="ProFinanzas" className="w-full h-full object-contain" />
+                                <img 
+                                    src={logoUrl} 
+                                    alt="ProFinanzas" 
+                                    crossOrigin="anonymous"
+                                    className="w-full h-full object-contain" 
+                                />
                             </div>
                         ) : (
                             <div className="h-12 w-12 bg-slate-900 rounded-xl flex items-center justify-center text-white">

@@ -30,6 +30,7 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
     const [printing, setPrinting] = useState(false)
     const [isIOS, setIsIOS] = useState(false)
     const [logoUrl, setLogoUrl] = useState<string>('')
+    const [logoDarkUrl, setLogoDarkUrl] = useState<string>('')
     const supabase = createClient()
 
     useEffect(() => {
@@ -40,7 +41,34 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                 .select('valor')
                 .eq('clave', 'logo_sistema_url')
                 .maybeSingle()
-            if (data?.valor && isMounted) setLogoUrl(data.valor)
+            
+            if (data?.valor && isMounted) {
+                setLogoUrl(data.valor)
+                
+                // Generar dinámicamente versión negra para impresión (evita el bug de filtros CSS en Safari)
+                try {
+                    const img = new Image()
+                    img.crossOrigin = 'anonymous'
+                    img.onload = () => {
+                        if (!isMounted) return
+                        const canvas = document.createElement('canvas')
+                        canvas.width = img.width
+                        canvas.height = img.height
+                        const ctx = canvas.getContext('2d')
+                        if (!ctx) return
+                        
+                        ctx.drawImage(img, 0, 0)
+                        ctx.globalCompositeOperation = 'source-in'
+                        ctx.fillStyle = '#000000'
+                        ctx.fillRect(0, 0, canvas.width, canvas.height)
+                        
+                        setLogoDarkUrl(canvas.toDataURL('image/png'))
+                    }
+                    img.src = data.valor
+                } catch (e) {
+                    console.error('No se pudo generar logo oscuro', e)
+                }
+            }
         }
         if (open) fetchLogo()
         // Detección robusta de iOS

@@ -43,10 +43,17 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
             if (data?.valor) setLogoUrl(data.valor)
         }
         if (open) fetchLogo()
-        // Detección de iOS
-        if (typeof window !== 'undefined') {
-            const checkIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && "ontouchend" in document)
-            setIsIOS(checkIOS)
+        // Detección robusta de iOS
+        if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+            const ua = navigator.userAgent.toLowerCase();
+            const esIOS = 
+                /iphone|ipad|ipod/.test(ua) || 
+                /crios|fxios/.test(ua) || 
+                (navigator.platform && /iphone|ipad|ipod/.test(navigator.platform.toLowerCase())) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+                ((window.navigator as any).standalone === true);
+                
+            setIsIOS(Boolean(esIOS))
         }
     }, [open, supabase])
 

@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { DollarSign, AlertCircle, Share2, Loader2, CheckCircle, Lock, CreditCard, Shield } from 'lucide-react'
+import { DollarSign, AlertCircle, Share2, Loader2, CheckCircle, Lock, CreditCard, Shield, Printer } from 'lucide-react'
 import { api } from '@/services/api'
-import { toBlob } from 'html-to-image'
+import { toBlob, toPng } from 'html-to-image'
 import { cn } from '@/lib/utils'
 import { VoucherContent } from '@/components/comunes/voucher-content'
 
@@ -60,6 +60,8 @@ export function QuickPayModal({
     // Sharing State
     const receiptRef = useRef<HTMLDivElement>(null)
     const [sharing, setSharing] = useState(false)
+    const [printing, setPrinting] = useState(false)
+    const [logoUrl, setLogoUrl] = useState<string>('')
     const [lastPayment, setLastPayment] = useState<any>(null)
     const [historyPayments, setHistoryPayments] = useState<any[]>([])
 
@@ -115,9 +117,18 @@ export function QuickPayModal({
     const apertura = systemSchedule?.horario_apertura || '10:00'
     const cierre = systemSchedule?.horario_cierre || '19:00'
 
-    // --- LOGICA DE INICIALIZACION Y GPS ---
+    // --- LOGICA DE INICIALIZACION Y LOGOS ---
     useEffect(() => {
-        if (open && !result) {
+        const fetchLogo = async () => {
+            const { data } = await supabase
+                .from('configuracion_sistema')
+                .select('valor')
+                .eq('clave', 'logo_sistema_url')
+                .maybeSingle()
+            if (data?.valor) setLogoUrl(data.valor)
+        }
+        if (open) {
+            fetchLogo()
             const currentId = prestamoId || initialPrestamo?.id;
             if (currentId) {
                 const cleanId = currentId.split('-')?.length > 5 
@@ -135,7 +146,7 @@ export function QuickPayModal({
             setLastPayment(null)
         }
         // Dependemos de IDs estables para evitar recargas si el objeto cambia de referencia
-    }, [open, prestamoId, initialPrestamo?.id, result])
+    }, [open, prestamoId, initialPrestamo?.id, result, supabase])
 
     useEffect(() => {
         let watchId: number | null = null;
@@ -269,27 +280,76 @@ export function QuickPayModal({
         }
     }
 
+    const handlePrint = async () => {
+        if (!receiptRef.current || printing) return
+        setPrinting(true)
+        const toastId = toast.loading('Preparando impresión...')
+        try {
+            const dataUrl = await toPng(receiptRef.current, { 
+                backgroundColor: '#0f172a',
+                pixelRatio: 2
+            })
+            
+            const printContainer = document.createElement('div')
+            printContainer.id = 'print-container-native'
+            printContainer.style.display = 'none'
+            printContainer.innerHTML = `<img src="${dataUrl}" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />`
+            
+            const style = document.createElement('style')
+            style.id = 'print-style-native'
+            style.innerHTML = `
+                @media print {
+                    body > *:not(#print-container-native) { display: none !important; }
+                    #print-container-native { 
+                        display: block !important; 
+                        position: absolute !important; 
+                        top: 0 !important; 
+                        left: 0 !important; 
+                        width: 100% !important;
+                    }
+                    @page { margin: 2mm; }
+                }
+            `
+            document.head.appendChild(style)
+            document.body.appendChild(printContainer)
+
+            setTimeout(() => {
+                window.print()
+                setTimeout(() => {
+                    document.head.removeChild(style)
+                    document.body.removeChild(printContainer)
+                    setPrinting(false)
+                    toast.success('Impresión enviada', { id: toastId })
+                }, 500)
+            }, 500)
+        } catch (e) {
+            console.error(e)
+            toast.error('Error al generar impresión', { id: toastId })
+            setPrinting(false)
+        }
+    }
+
     const handleShare = async () => {
-        if (!receiptRef.current) return
+        if (!receiptRef.current || sharing) return
         setSharing(true)
         try {
-            const canvas = await toBlob(receiptRef.current, { cacheBust: true, pixelRatio: 2 })
+            const canvas = await toBlob(receiptRef.current, { cacheBust: true, pixelRatio: 2, backgroundColor: '#0f172a' })
             if (!canvas) throw new Error('Error al generar imagen')
 
-            const file = new File([canvas], `comprobante-${lastPayment?.id?.slice?.(-10) || 'pago'}.png`, { type: 'image/png' })
+            const file = new File([canvas], `recibo-${lastPayment?.id?.slice?.(-10) || 'pago'}.png`, { type: 'image/png' })
 
             if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
                 await navigator.share({
                     files: [file],
-                    title: 'Comprobante de Pago',
+                    title: 'Recibo de Pago',
                     text: `Pago registrado de ${prestamo?.clientes?.nombres}`
                 })
             } else {
                 const link = document.createElement('a')
-                link.download = `comprobante-${lastPayment?.id?.slice?.(-10) || 'pago'}.png`
+                link.download = `recibo-${lastPayment?.id?.slice?.(-10) || 'pago'}.png`
                 link.href = URL.createObjectURL(canvas)
                 link.click()
-                toast.success('Comprobante descargado')
+                toast.success('Imagen descargada')
             }
             if (lastPayment?.id && userRol === 'asesor') {
                 api.pagos.compartirVoucher(lastPayment.id).catch(() => {})
@@ -384,9 +444,9 @@ export function QuickPayModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md bg-slate-900 border-slate-800 text-slate-100 p-0 overflow-hidden">
+            <DialogContent className="sm:max-w-md bg-slate-900 border-slate-800 text-slate-100 p-0">
                 {!result ? (
-                    <div className="bg-slate-900 border-slate-800 text-white w-full overflow-hidden">
+                    <div className="bg-slate-900 border-slate-800 text-white w-full">
                         {(!canPayDueToTime && userRol !== 'admin') ? (
                             <div className="flex flex-col items-center justify-center py-12 px-6 gap-6 text-center">
                                 <div className="w-16 h-16 bg-rose-500/10 rounded-full flex items-center justify-center">
@@ -419,8 +479,8 @@ export function QuickPayModal({
                             </div>
                         ) : (
                             <>
-                                <div className="p-6">
-                                    <DialogHeader className="mb-4">
+                                <div className="p-4 md:p-6">
+                                    <DialogHeader className="mb-2">
                                         <DialogTitle className="flex items-center gap-2 text-xl font-bold">
                                             <CreditCard className="w-5 h-5 text-emerald-500" />
                                             Registrar Cobro
@@ -436,8 +496,8 @@ export function QuickPayModal({
 
                                     {/* Indicador de Señal GPS */}
                                     {exigirGps && (
-                                        <div className={cn(
-                                            "mb-4 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase flex items-center justify-between transition-all",
+                                    <div className={cn(
+                                        "mb-2 px-3 py-1 rounded-lg border text-[10px] font-black uppercase flex items-center justify-between transition-all",
                                             location 
                                                 ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-500" 
                                                 : "bg-rose-500/5 border-rose-500/20 text-rose-500 animate-pulse"
@@ -491,8 +551,8 @@ export function QuickPayModal({
                                             <p className="text-slate-500 text-sm">Cargando datos de cuota...</p>
                                         </div>
                                     ) : (
-                                        <div className="grid gap-6 py-4">
-                                            <div className="grid grid-cols-2 gap-4 p-4 bg-slate-950 rounded-xl border border-slate-800">
+                                        <div className="grid gap-4 md:gap-6 py-1">
+                                            <div className="grid grid-cols-2 gap-4 p-3 bg-slate-950 rounded-xl border border-slate-800">
                                                 <div>
                                                     <p className="text-[10px] text-slate-500 mb-1 font-bold uppercase tracking-wider">Total Cuota</p>
                                                     <p className="text-lg font-semibold text-slate-300">S/ {quota?.monto_cuota?.toFixed(2)}</p>
@@ -505,7 +565,7 @@ export function QuickPayModal({
                                                 </div>
                                             </div>
 
-                                            <div className="space-y-3 mt-2">
+                                            <div className="space-y-2 mt-1">
                                                 <Label htmlFor="amount" className="text-sm font-medium text-slate-300">Monto del cobro</Label>
                                                 <div className="relative">
                                                     <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
@@ -524,40 +584,40 @@ export function QuickPayModal({
                                                                 toast.warning(`Máximo: S/ ${maxAmount.toFixed(2)}`)
                                                             }
                                                         }}
-                                                        className="pl-10 h-12 text-xl font-bold bg-slate-950 border-slate-700 text-white rounded-xl"
+                                                        className="pl-10 h-10 text-lg font-bold bg-slate-950 border-slate-700 text-white rounded-xl"
                                                         placeholder="0.00"
                                                     />
                                                 </div>
                                             </div>
                                             
-                                            <div className="space-y-3 mt-2">
+                                            <div className="space-y-2 mt-1">
                                                 <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider">Método de Pago</Label>
                                                 <div className="grid grid-cols-2 gap-3">
                                                     <button
                                                         type="button"
                                                         onClick={() => setMetodoPago('Efectivo')}
                                                         className={cn(
-                                                            "flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 transition-all duration-200",
+                                                            "flex flex-col items-center justify-center gap-1 p-2 rounded-xl border-2 transition-all duration-200",
                                                             metodoPago === 'Efectivo' 
                                                             ? "border-emerald-500 bg-emerald-500/10 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
                                                             : "border-slate-800 bg-slate-950/50 text-slate-500 hover:border-slate-700 hover:text-slate-400"
                                                         )}
                                                     >
-                                                        <span className="text-2xl">💵</span>
-                                                        <span className="font-bold text-xs">Efectivo</span>
+                                                        <span className="text-xl">💵</span>
+                                                        <span className="font-bold text-[10px]">Efectivo</span>
                                                     </button>
                                                     <button
                                                         type="button"
                                                         onClick={() => setMetodoPago('Yape')}
                                                         className={cn(
-                                                            "flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 transition-all duration-200",
+                                                            "flex flex-col items-center justify-center gap-1 p-2 rounded-xl border-2 transition-all duration-200",
                                                             metodoPago === 'Yape' 
                                                             ? "border-indigo-500 bg-indigo-500/10 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]" 
                                                             : "border-slate-800 bg-slate-950/50 text-slate-500 hover:border-slate-700 hover:text-slate-400"
                                                         )}
                                                     >
-                                                        <span className="text-2xl">📱</span>
-                                                        <span className="font-bold text-xs">Yape</span>
+                                                        <span className="text-xl">📱</span>
+                                                        <span className="font-bold text-[10px]">Yape</span>
                                                     </button>
                                                 </div>
                                             </div>
@@ -574,7 +634,7 @@ export function QuickPayModal({
                                     )}
                                 </div>
 
-                                <DialogFooter className="p-6 pt-2 flex gap-3">
+                                <DialogFooter className="p-4 md:p-6 pt-1 flex gap-3">
                                     <Button 
                                         variant="ghost" 
                                         onClick={handleClose} 
@@ -587,7 +647,7 @@ export function QuickPayModal({
                                         onClick={handlePayment} 
                                         disabled={loading || !amount || parseFloat(amount) <= 0 || !metodoPago || (exigirGps && !location)}
                                         className={cn(
-                                            "flex-1 h-14 text-lg font-bold shadow-xl transition-all duration-300",
+                                            "flex-1 h-12 text-lg font-bold shadow-xl transition-all duration-300",
                                             !metodoPago
                                             ? "bg-slate-800 text-slate-500 cursor-not-allowed opacity-50"
                                             : metodoPago === 'Efectivo' 
@@ -609,21 +669,42 @@ export function QuickPayModal({
                     </div>
                 ) : (
                     <div className="bg-slate-900 border-slate-800 text-white w-full overflow-hidden p-0">
-                        <div ref={receiptRef}>
-                            <VoucherContent 
-                                payment={lastPayment}
-                                loan={prestamo}
-                                client={prestamo?.clientes}
-                                cronograma={fullCronograma}
-                                allPayments={historyPayments}
-                            />
+                        <div className="max-h-[75vh] overflow-y-auto custom-scrollbar">
+                            <div ref={receiptRef}>
+                                <VoucherContent 
+                                    payment={lastPayment}
+                                    loan={prestamo}
+                                    client={prestamo?.clientes}
+                                    cronograma={fullCronograma}
+                                    allPayments={historyPayments}
+                                    logoUrl={logoUrl}
+                                />
+                            </div>
                         </div>
 
-                        <div className="p-4 bg-slate-950 flex gap-3">
-                            <Button onClick={handleClose} variant="ghost" className="flex-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl">
+                        {/* Footer Buttons - Fixed at bottom */}
+                        <div className="p-3 bg-slate-950 flex gap-2 border-t border-slate-800 shadow-2xl">
+                            <Button 
+                                onClick={handleClose} 
+                                variant="ghost" 
+                                className="flex-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl h-11 text-xs font-bold"
+                            >
                                 Cerrar
                             </Button>
-                            <Button onClick={handleShare} disabled={sharing} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-900/20">
+                            <Button 
+                                onClick={handlePrint} 
+                                disabled={printing || sharing} 
+                                variant="outline"
+                                className="flex-1 border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 rounded-xl h-11 text-xs font-bold"
+                            >
+                                {printing ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Printer className="w-4 h-4 mr-2" />}
+                                Imprimir
+                            </Button>
+                            <Button 
+                                onClick={handleShare} 
+                                disabled={sharing || printing} 
+                                className="flex-[1.5] bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-900/20 h-11 text-xs font-bold"
+                            >
                                 {sharing ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Share2 className="w-4 h-4 mr-2" />}
                                 Compartir
                             </Button>

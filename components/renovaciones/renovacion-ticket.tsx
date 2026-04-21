@@ -61,16 +61,21 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
         toast.loading('Preparando impresión...', { id: 'print-ticket' })
 
         try {
-            // Capturar el ticket como imagen para garantizar que se imprima correctamente
-            const dataUrl = await captureTicketAsImage(ticketEl)
+            // Capturar el ticket como imagen (pixelRatio 2 es más que suficiente para térmica y más compatible)
+            await toPng(ticketEl, { backgroundColor: '#ffffff', pixelRatio: 2 })
+            const dataUrl = await toPng(ticketEl, { backgroundColor: '#ffffff', pixelRatio: 2 })
+            
+            // Convertir Base64 a Blob para usar una Blob URL (más seguro y eficiente para el spooler de Android)
+            const blob = dataUrlToBlob(dataUrl)
+            const blobUrl = URL.createObjectURL(blob)
 
             // 1. Crear contenedor temporal para la imagen de impresión
             const printContainer = document.createElement('div')
             printContainer.id = 'print-container-native'
-            printContainer.style.display = 'none' // Solo visible en @media print
-            printContainer.innerHTML = `<img src="${dataUrl}" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />`
+            printContainer.style.display = 'none'
+            printContainer.innerHTML = `<img src="${blobUrl}" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />`
             
-            // 2. Inyectar estilos para ocultar todo lo demás durante la impresión
+            // 2. Inyectar estilos
             const style = document.createElement('style')
             style.id = 'print-style-native'
             style.innerHTML = `
@@ -82,6 +87,7 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
                         top: 0 !important; 
                         left: 0 !important; 
                         width: 100% !important;
+                        background: white !important;
                     }
                     @page { margin: 2mm; }
                 }
@@ -90,17 +96,18 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
             document.head.appendChild(style)
             document.body.appendChild(printContainer)
 
-            // 3. Disparar impresión nativa del sistema
+            // 3. Disparar impresión nativa
             setTimeout(() => {
                 window.print()
                 
-                // 4. Limpieza (Remover elementos temporales)
+                // 4. Limpieza
                 setTimeout(() => {
                     try {
                         const s = document.getElementById('print-style-native')
                         const c = document.getElementById('print-container-native')
                         if (s) document.head.removeChild(s)
                         if (c) document.body.removeChild(c)
+                        URL.revokeObjectURL(blobUrl) // Liberar memoria
                     } catch (e) {
                         console.error('Print cleanup error:', e)
                     }

@@ -316,25 +316,25 @@ export async function POST(request: Request) {
             const { data, error } = await supabaseAdmin
                 .from('asistencia_personal')
                 .update({
-                    // Solo registrar hora inmediata si NO es entrada (la entrada espera 15 min)
-                    ...(eventTarget !== 'entrada' ? { [updateField]: horaActual } : {}),
+                    // Registrar hora inmediata (ahora siempre, para evitar restricción NOT NULL en entrada)
                     [latField]: lat,
                     [lonField]: lon,
                     lat, 
                     lon, 
                     distancia_oficina: Math.round(distancia),
-                    // No acumular tardanza en entrada todavía, se hará al cumplir la permanencia
-                    ...(eventTarget !== 'entrada' ? {
+                    // Si es entrada, iniciamos permanencia y ponemos hora básica (para satisfacer NOT NULL)
+                    // Si NO es entrada (turno tarde o cierre), registramos hora y tardanza inmediatamente
+                    ...(eventTarget === 'entrada' ? {
+                        hora_entrada: horaActual,
+                        permanencia_entrada_inicio: new Date().toISOString(),
+                        permanencia_entrada_estado: 'pendiente'
+                    } : {
+                        [updateField]: horaActual,
                         minutos_tardanza: totalMinutosTardanza,
                         descuento_tardanza: totalDescuentoTardanza,
                         estado: estadoFinal,
                         [tardanzaField]: minutosTardanzaActual,
-                    } : {}),
-                    // Inicializar permanencia si es entrada
-                    ...(eventTarget === 'entrada' ? {
-                        permanencia_entrada_inicio: new Date().toISOString(),
-                        permanencia_entrada_estado: 'pendiente'
-                    } : {})
+                    })
                 })
                 .eq('id', existingRecord.id)
                 .select()
@@ -347,25 +347,25 @@ export async function POST(request: Request) {
             const insertData: any = {
                 usuario_id: user.id,
                 fecha: todayStr,
-                // Solo registrar hora inmediata si NO es entrada
-                ...(eventTarget !== 'entrada' ? { [updateField]: horaActual } : {}),
+                // Registrar hora inmediata
                 [latField]: lat,
                 [lonField]: lon,
                 lat,
                 lon,
                 distancia_oficina: Math.round(distancia),
-                // No registrar tardanza en entrada todavía
-                ...(eventTarget !== 'entrada' ? {
+                // Si es entrada, iniciamos permanencia y ponemos hora básica
+                // Si NO es entrada, registramos hora y tardanza inmediatamente
+                ...(eventTarget === 'entrada' ? {
+                    hora_entrada: horaActual,
+                    permanencia_entrada_inicio: new Date().toISOString(),
+                    permanencia_entrada_estado: 'pendiente'
+                } : {
+                    [updateField]: horaActual,
                     minutos_tardanza: totalMinutosTardanza,
                     descuento_tardanza: totalDescuentoTardanza,
                     estado: estadoFinal,
                     [tardanzaField]: minutosTardanzaActual,
-                } : {}),
-                // Inicializar permanencia si es entrada
-                ...(eventTarget === 'entrada' ? {
-                    permanencia_entrada_inicio: new Date().toISOString(),
-                    permanencia_entrada_estado: 'pendiente'
-                } : {})
+                })
             }
 
             const { data, error } = await supabaseAdmin

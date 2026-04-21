@@ -65,11 +65,13 @@ export async function POST(request: Request) {
         }
 
         // --- VERIFICACIÓN DE GPS OBLIGATORIO ---
-        if (perfil.exigir_gps_cobranza && (!latitud || !longitud)) {
+        if (!!perfil.exigir_gps_cobranza && (latitud === undefined || latitud === null || longitud === undefined || longitud === null)) {
+            console.warn(`[GPS RECHAZADO] Intento de pago sin coordenadas para usuario: ${user.id}`);
             return NextResponse.json({ 
                 error: 'Restricción de Seguridad: Se requiere ubicación GPS activa para procesar cobranzas.' 
             }, { status: 403 })
         }
+
 
         // --- VERIFICACIÓN DE SCOPE (Supervisor solo puede pagar préstamos de sus asesores) ---
         if (perfil.rol === 'supervisor') {

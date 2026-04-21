@@ -105,7 +105,7 @@ export function RenovarModal({ prestamoId, clienteNombre, currentMonto }: Renova
                             required 
                         />
                     </div>
-                    <DialogFooter>
+                    <DialogFooter className="pb-16 md:pb-6">
                         <Button type="submit" disabled={loading} className="bg-amber-600 hover:bg-amber-500 text-white w-full">
                             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Confirmar Renovación'}
                         </Button>

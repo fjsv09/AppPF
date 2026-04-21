@@ -67,7 +67,7 @@ export function CuadreModal({ userId, isDebtBlocked, isMorningBlocked, isNightBl
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className="w-[95vw] sm:max-w-3xl bg-slate-950 border-slate-800 p-0 overflow-hidden rounded-2xl md:rounded-3xl">
+            <DialogContent className="sm:max-w-3xl bg-slate-950 border-slate-800 p-0 overflow-hidden">
                 <div className="p-4 md:p-8 max-h-[90dvh] overflow-y-auto custom-scrollbar">
                     <DialogHeader className="mb-4 md:mb-6">
                         <DialogTitle className="text-xl md:text-2xl font-bold text-white">Solicitud de Cuadre</DialogTitle>

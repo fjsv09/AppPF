@@ -31,6 +31,8 @@ interface LoanScore {
   increases: number;
   penalties: number;
   details: { label: string; value: number; type: 'increase' | 'penalty' }[];
+  pagos_puntuales?: number; // Propiedad opcional para paridad con BehaviorSummary
+  pagos_tardios?: number;
 }
 
 interface LoanMetrics {
@@ -301,6 +303,8 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
   let score = 100;
   let increases = 0;
   let penalties = 0;
+  let pagos_puntuales = 0;
+  let pagos_tardios = 0;
   const details: { label: string; value: number; type: 'increase' | 'penalty' }[] = [];
 
   // Pesos dinamicos base desde config (con fallbacks legacy)
@@ -327,7 +331,7 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
   const wTarde = baseTarde * multiplier;
 
   const cronograma = loan.cronograma_cuotas || [];
-  if (cronograma.length === 0) return { score: 100, increases: 0, penalties: 0, details: [] };
+  if (cronograma.length === 0) return { score: 100, increases: 0, penalties: 0, details: [], pagos_puntuales: 0, pagos_tardios: 0 };
 
   let maxHistoricalDelay = 0;
 
@@ -419,9 +423,11 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
 
           if (fechaPagoStr <= vDate) {
             increases += wPuntual;
+            pagos_puntuales++;
           } else {
             // Pago tarde
             penalties += wTarde;
+            pagos_tardios++;
 
             // Calcular cuántos días de atraso tuvo al ser pagada para el histórico
             const fechaPagoObj = new Date(focusPayment.created_at || focusPayment.fecha_pago);
@@ -484,7 +490,7 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
 
   score = Math.max(0, Math.min(100, score + increases - penalties));
 
-  return { score, increases, penalties, details };
+  return { score, increases, penalties, details, pagos_puntuales, pagos_tardios };
 }
 
 export function calculateClientReputation(client: any, allLoans: any[], config: any = {}) {
@@ -1166,12 +1172,21 @@ export async function getLoanHealthScoreAction(supabase: any, loanId: string, to
   const config = await getFinancialConfig(supabase);
 
   // 4. Ejecutar formula centralizada con pesos dinamicos
-  return calculateLoanScore(
+  const metrics = calculateLoanMetrics(
     { ...prestamo, cronograma_cuotas: cronograma || [] },
-    pagos,
     today,
-    config
+    config,
+    pagos
   );
+
+  // Mantener compatibilidad con código existente que espera score y details en el primer nivel
+  return {
+    ...metrics,
+    score: metrics.loanScore?.score ?? 100,
+    details: metrics.loanScore?.details ?? [],
+    pagos_puntuales: metrics.loanScore?.pagos_puntuales ?? 0,
+    pagos_tardios: metrics.loanScore?.pagos_tardios ?? 0,
+  };
 }
 
 /**

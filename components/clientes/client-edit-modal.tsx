@@ -164,8 +164,8 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-950 border-slate-800 text-slate-100 p-0 overflow-hidden flex flex-col">
-        <DialogHeader className="p-6 border-b border-white/5 bg-slate-900/50">
+      <DialogContent className="sm:max-w-2xl bg-slate-950 border-slate-800 text-slate-100 p-0 overflow-hidden flex flex-col">
+        <DialogHeader className="p-4 md:p-6 border-b border-white/5 bg-slate-900/50">
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <User className="w-5 h-5 text-blue-400" />
             Editar Perfil del Cliente
@@ -173,7 +173,7 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-y-auto">
-          <div className="p-6 space-y-8 pb-32">
+          <div className="p-4 md:p-6 space-y-4 md:space-y-6 pb-24">
              {error && (
                 <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
                     <AlertCircle className="w-4 h-4" />
@@ -182,7 +182,7 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
              )}
 
              {/* Sección 1: Foto y Básico */}
-             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
                 <div className="md:col-span-1 space-y-2">
                     <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Foto de Perfil</label>
                     <div className="flex flex-col items-center gap-3">
@@ -426,7 +426,7 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
              </div>
           </div>
 
-          <DialogFooter className="sticky bottom-0 left-0 right-0 p-6 bg-slate-900 border-t border-white/5 gap-3 flex flex-row justify-end">
+          <DialogFooter className="sticky bottom-0 left-0 right-0 p-4 md:p-6 bg-slate-900 border-t border-white/5 gap-3 flex flex-row justify-end">
             <Button 
                 type="button" 
                 variant="ghost" 

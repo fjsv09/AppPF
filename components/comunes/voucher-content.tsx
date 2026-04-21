@@ -10,9 +10,10 @@ interface VoucherContentProps {
     client: any
     cronograma?: any[]
     allPayments?: any[]
+    logoUrl?: string
 }
 
-export function VoucherContent({ payment, loan, client, cronograma, allPayments }: VoucherContentProps) {
+export function VoucherContent({ payment, loan, client, cronograma, allPayments, logoUrl }: VoucherContentProps) {
     if (!payment) return null
 
     // Asegurar compatibilidad de nombres de campos entre RPC y Componente
@@ -87,70 +88,81 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments 
 
     return (
         <div className="bg-slate-900 overflow-hidden">
-            {/* Header - Fixed to match Screenshot 1 */}
-            <div className="bg-emerald-600 p-8 text-center">
-                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm shadow-xl">
-                    <CheckCircle className="w-10 h-10 text-white" />
+            {/* Logo Section - Compact */}
+            {logoUrl && (
+                <div className="bg-slate-900 pt-4 pb-2 flex justify-center border-b border-white/5">
+                    <img src={logoUrl} alt="ProFinanzas" className="h-10 w-auto object-contain brightness-0 invert opacity-40" />
                 </div>
-                <h2 className="text-3xl font-extrabold text-white">¡Pago Exitoso!</h2>
-                <p className="text-emerald-100 text-sm mt-1">La transacción se procesó correctamente.</p>
+            )}
+
+            {/* Header - More Compact */}
+            <div className="bg-emerald-600 p-5 sm:p-6 text-center relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
+                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-2 backdrop-blur-sm shadow-lg relative z-10">
+                    <CheckCircle className="w-8 h-8 text-white" />
+                </div>
+                <h2 className="text-2xl font-black text-white relative z-10 tracking-tight">¡Pago Exitoso!</h2>
+                <p className="text-emerald-100 text-[10px] uppercase font-bold opacity-80 relative z-10 tracking-[0.2em]">Transacción Procesada</p>
             </div>
             
-            {/* Body */}
-            <div className="p-8 space-y-8">
-                {/* Amount Section */}
-                <div className="flex justify-between items-center border-b border-white/5 pb-6">
-                    <span className="text-slate-400 text-sm md:text-base font-medium">Monto Pagado</span>
-                    <span className="text-3xl font-black text-white">S/ {Number(monto).toFixed(2)}</span>
+            {/* Body - Denser layout */}
+            <div className="p-5 sm:p-6 space-y-5">
+                {/* Amount Section - Bigger value, less padding */}
+                <div className="flex justify-between items-baseline border-b border-white/5 pb-4">
+                    <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Monto Pagado</span>
+                    <span className="text-3xl font-black text-white tracking-tighter">S/ {Number(monto).toFixed(2)}</span>
                 </div>
                 
-                {/* Estado Actual Card */}
-                <div className="bg-slate-800/40 rounded-2xl p-5 border border-white/5 shadow-inner">
-                    <p className="text-[10px] uppercase tracking-widest font-black text-slate-500 mb-4">Estado Actual</p>
-                    <div className="space-y-3">
-                        <div className="flex justify-between text-sm items-center">
-                            <span className="text-slate-300">Progreso</span>
-                            <span className="text-emerald-400 font-bold">{pagadas} de {totalCuotas} cuotas</span>
+                {/* Estado Actual Card - Tighter spacing */}
+                <div className="bg-slate-800/40 rounded-xl p-4 border border-white/5 shadow-inner">
+                    <div className="space-y-2.5">
+                        <div className="flex justify-between text-xs items-center">
+                            <span className="text-slate-400 font-medium">Progreso del Crédito</span>
+                            <span className="text-emerald-400 font-black">{pagadas} de {totalCuotas} cuotas</span>
                         </div>
-                        <div className="flex justify-between text-sm items-start">
-                            <span className="text-slate-300">Atrasadas</span>
+                        <div className="h-1 w-full bg-slate-700/50 rounded-full overflow-hidden">
+                           <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${(pagadas/totalCuotas)*100}%` }} />
+                        </div>
+                        <div className="flex justify-between text-[11px] items-start pt-1">
+                            <span className="text-slate-400 font-medium">Deuda Restante</span>
                             <div className="text-right">
                                 {cuotasAtrasadas > 0 && (
-                                     <span className="block text-xs text-rose-400 font-black mb-1">
+                                     <span className="block text-[9px] text-rose-500 font-black mb-0.5">
                                         {cuotasAtrasadas} Cuotas Atrasadas
                                      </span>
                                 )}
-                                <span className="block text-white font-black text-base">
-                                    Deuda Restante: S/ {saldoPendiente.toFixed(2)}
+                                <span className="block text-white font-black text-sm">
+                                    S/ {saldoPendiente.toFixed(2)}
                                 </span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Info List */}
-                <div className="space-y-4 pt-2">
-                    <div className="flex justify-between text-sm items-center">
-                        <span className="text-slate-500 font-medium font-outfit uppercase tracking-tighter">Operación</span>
-                        <span className="font-mono text-slate-300 text-xs px-2 py-0.5 bg-white/5 rounded">{(payment.id || '').toString().slice(-10).toUpperCase()}</span>
+                {/* Info List - Tighter spacing */}
+                <div className="space-y-3 pt-1">
+                    <div className="flex justify-between text-[11px] items-center">
+                        <span className="text-slate-500 font-bold uppercase tracking-tighter">ID Operación</span>
+                        <span className="font-mono text-slate-400 text-[10px] px-1.5 py-0.5 bg-white/5 rounded">{(payment.id || '').toString().slice(-10).toUpperCase()}</span>
                     </div>
-                    <div className="flex justify-between text-sm items-center">
-                        <span className="text-slate-500 font-medium font-outfit uppercase tracking-tighter">Cliente</span>
-                        <span className="text-slate-200 font-bold text-right max-w-[60%] truncate">{client?.nombres || 'Cliente'}</span>
+                    <div className="flex justify-between text-[11px] items-center">
+                        <span className="text-slate-500 font-bold uppercase tracking-tighter">Cliente</span>
+                        <span className="text-slate-300 font-black text-right max-w-[65%] truncate italic">{client?.nombres || 'Cliente'}</span>
                     </div>
-                    <div className="flex justify-between text-sm items-center">
-                        <span className="text-slate-500 font-medium font-outfit uppercase tracking-tighter">Fecha</span>
-                        <span className="text-slate-300 font-medium">
+                    <div className="flex justify-between text-[11px] items-center">
+                        <span className="text-slate-500 font-bold uppercase tracking-tighter">Fecha y Hora</span>
+                        <span className="text-slate-400 font-medium font-mono text-[10px]">
                             {formatDatePeru(payment.created_at || new Date().toISOString())}
                         </span>
                     </div>
                 </div>
             </div>
             
-            {/* Watermark */}
-            <div className="pb-6 text-center opacity-10 pointer-events-none">
-                <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-white">Sistema Financiero</span>
+            {/* Watermark - Smaller */}
+            <div className="pb-4 text-center opacity-10 pointer-events-none">
+                <span className="text-[8px] font-black uppercase tracking-[0.4em] text-white">Sistema Financiero ProFinanzas</span>
             </div>
         </div>
     )
 }
+

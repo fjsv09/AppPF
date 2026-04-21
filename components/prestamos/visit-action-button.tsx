@@ -398,7 +398,7 @@ export function VisitActionButton({
                         )}
                     </div>
 
-                    <DialogFooter className="gap-2 sm:gap-0">
+                    <DialogFooter className="gap-2 sm:gap-0 pb-16 md:pb-6">
                         <Button variant="outline" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(false); }} className="bg-slate-900 border-slate-800 text-slate-400">
                             Minimizar
                         </Button>

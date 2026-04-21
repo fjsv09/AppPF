@@ -1,11 +1,10 @@
 "use client"
 
 import { useState, useTransition, useEffect, useMemo } from "react"
-import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { 
-    Phone, MessageSquare, MapPin, Navigation, Navigation2, 
-    Loader2, AlertTriangle, X, Send, ClipboardList 
+import {
+    Phone, MessageSquare, MapPin, Navigation, Navigation2,
+    Loader2, AlertTriangle, X, Send, ClipboardList
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -46,13 +45,13 @@ export function RegistrarGestionModal({
     onSuccess
 }: RegistrarGestionModalProps) {
     const [isPending, startTransition] = useTransition()
-    
+
     // Form state
     const [selectedPrestamoId, setSelectedPrestamoId] = useState(defaultPrestamoId)
     const [tipoGestion, setTipoGestion] = useState<TipoGestion>('Llamada')
     const [resultado, setResultado] = useState(RESULTADO_OPCIONES['Llamada'][0])
     const [notas, setNotas] = useState('')
-    
+
     // GPS state
     const [coordenadas, setCoordenadas] = useState<string | null>(null)
     const [gpsLoading, setGpsLoading] = useState(false)
@@ -62,17 +61,17 @@ export function RegistrarGestionModal({
     const relevantLoans = useMemo(() => {
         return (prestamos || []).filter((l: any) => {
             // Un préstamo es relevante si está activo O tiene deuda pendiente real
-            const pendingBalance = l.cronograma_cuotas?.reduce((acc: number, c: any) => 
+            const pendingBalance = l.cronograma_cuotas?.reduce((acc: number, c: any) =>
                 acc + (c.monto_cuota - (c.monto_pagado || 0)), 0) || 0
-            
+
             const isActive = l.estado === 'activo'
             const hasDebt = pendingBalance > 0.01
 
             // Excluir específicamente los que ya están anulados o rechazados
             const isInvalid = ['anulado', 'rechazado'].includes(l.estado?.toLowerCase())
-            
+
             if (isInvalid) return false
-            
+
             // Si es 'renovado', solo dejarlo si excepcionalmente tuviera saldo pendiente (0.01+)
             return isActive || hasDebt
         })
@@ -122,10 +121,10 @@ export function RegistrarGestionModal({
                 setGpsError('No se pudo obtener la ubicación. Verifica los permisos.')
                 setGpsLoading(false)
             },
-            { 
-                enableHighAccuracy: true, 
+            {
+                enableHighAccuracy: true,
                 timeout: 15000,
-                maximumAge: 0 
+                maximumAge: 0
             }
         )
     }
@@ -164,63 +163,63 @@ export function RegistrarGestionModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="bg-slate-950 border border-slate-800 text-white max-w-md p-0 gap-0 overflow-hidden">
-                <DialogHeader className="px-6 py-5 border-b border-slate-800 bg-slate-900/50">
+            <DialogContent className="bg-slate-950 border border-slate-800 text-white max-w-md p-0 gap-0">
+                <DialogHeader className="px-4 py-2.5 border-b border-slate-800 bg-slate-900/50">
                     <DialogTitle className="flex items-center gap-2 text-white">
                         <div className="w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center">
                             <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
                         </div>
                         Registrar Gestión
                     </DialogTitle>
-                    <p className="text-xs text-slate-500 mt-1 pl-9 truncate">
+                    <p className="text-[10px] text-slate-500 mt-0.5 pl-9 truncate">
                         Cliente: <span className="text-slate-300">{clienteNombre}</span>
                     </p>
                 </DialogHeader>
 
-                <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+                <div className="p-4 space-y-3">
                     {/* Loan Selector (if multiple relevant) */}
                     {(() => {
                         if (relevantLoans.length <= 1) return null
 
                         return (
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
                                     <span>Asociar a Préstamo</span>
                                     {!selectedPrestamoId && <span className="text-[10px] text-amber-500 font-black animate-pulse">SELECCIONE UNO</span>}
                                 </label>
-                                <div className="grid grid-cols-1 gap-1.5">
+                                <div className="grid grid-cols-1 gap-1">
                                     {relevantLoans.map((loan: any) => (
-                                    <button
-                                        key={loan.id}
-                                        type="button"
-                                        onClick={() => setSelectedPrestamoId(loan.id)}
-                                        className={cn(
-                                            "w-full text-left px-3 py-2 rounded-lg border text-[11px] transition-all flex items-center justify-between group",
-                                            selectedPrestamoId === loan.id
-                                                ? "bg-blue-600/20 border-blue-500/40 text-blue-200 font-medium"
-                                                : "bg-slate-900/40 border-slate-800 text-slate-500 hover:border-slate-700 hover:text-slate-300"
-                                        )}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <span className={cn(
-                                                "w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0",
-                                                selectedPrestamoId === loan.id ? "border-blue-500 bg-blue-500" : "border-slate-800 bg-transparent group-hover:border-slate-700"
-                                            )}>
-                                                {selectedPrestamoId === loan.id && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                                            </span>
-                                            <span>${loan.monto} ({loan.estado})</span>
-                                        </div>
-                                        {loan.estado_mora && <span className="uppercase text-[9px] px-1.5 rounded bg-slate-800 font-bold">{loan.estado_mora}</span>}
-                                    </button>
-                                ))}
+                                        <button
+                                            key={loan.id}
+                                            type="button"
+                                            onClick={() => setSelectedPrestamoId(loan.id)}
+                                            className={cn(
+                                                "w-full text-left px-3 py-1.5 rounded-lg border text-[11px] transition-all flex items-center justify-between group",
+                                                selectedPrestamoId === loan.id
+                                                    ? "bg-blue-600/20 border-blue-500/40 text-blue-200 font-medium"
+                                                    : "bg-slate-900/40 border-slate-800 text-slate-500 hover:border-slate-700 hover:text-slate-300"
+                                            )}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <span className={cn(
+                                                    "w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0",
+                                                    selectedPrestamoId === loan.id ? "border-blue-500 bg-blue-500" : "border-slate-800 bg-transparent group-hover:border-slate-700"
+                                                )}>
+                                                    {selectedPrestamoId === loan.id && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                                </span>
+                                                <span>${loan.monto} ({loan.estado})</span>
+                                            </div>
+                                            {loan.estado_mora && <span className="uppercase text-[8px] px-1 rounded bg-slate-800 font-bold">{loan.estado_mora}</span>}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
                         )
                     })()}
 
                     {/* Tipo / Vía */}
                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Vía de Contacto</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vía de Contacto</label>
                         <div className="grid grid-cols-3 gap-2">
                             {TIPO_GESTION_OPCIONES.map((tipo) => {
                                 const TIcon = TIPO_ICON[tipo]
@@ -231,14 +230,14 @@ export function RegistrarGestionModal({
                                         type="button"
                                         onClick={() => handleChangeTipo(tipo)}
                                         className={cn(
-                                            "flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border transition-all",
+                                            "flex flex-col items-center gap-0.5 py-1.5 px-0.5 rounded-xl border transition-all",
                                             isActive
                                                 ? "bg-blue-600/20 border-blue-500/50 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.1)]"
                                                 : "bg-slate-900/60 border-slate-800 text-slate-500 hover:border-slate-600 hover:text-slate-400"
                                         )}
                                     >
-                                        <TIcon className="w-4 h-4" />
-                                        <span className="text-[11px] font-bold uppercase tracking-tight">{tipo}</span>
+                                        <TIcon className="w-3.5 h-3.5" />
+                                        <span className="text-[10px] font-bold uppercase tracking-tight">{tipo}</span>
                                     </button>
                                 )
                             })}
@@ -248,38 +247,27 @@ export function RegistrarGestionModal({
                     {/* Acciones Directas */}
                     {(tipoGestion === 'Llamada' || tipoGestion === 'WhatsApp') && clienteTelefono && (
                         <div className="space-y-2 animate-in slide-in-from-top duration-300">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                                {tipoGestion === 'Llamada' ? <Phone className="w-3 h-3 text-blue-400" /> : <MessageSquare className="w-3 h-3 text-emerald-400" />}
-                                Acción Directa
-                            </label>
-                            
-                            {tipoGestion === 'Llamada' ? (
-                                <UIButton
-                                    asChild
-                                    className="w-full bg-blue-600 hover:bg-blue-500 text-white h-11 gap-2 text-sm font-semibold shadow-lg shadow-blue-900/40"
+                            <UIButton
+                                asChild
+                                className={cn(
+                                    "w-full text-white h-10 gap-2 text-xs font-semibold shadow-lg",
+                                    tipoGestion === 'Llamada' ? "bg-blue-600 hover:bg-blue-500 shadow-blue-900/40" : "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/40"
+                                )}
+                            >
+                                <a
+                                    href={tipoGestion === 'Llamada' ? `tel:${clienteTelefono}` : `https://wa.me/${clienteTelefono.replace(/\D/g, '') || ''}`}
+                                    target={tipoGestion === 'WhatsApp' ? "_blank" : undefined}
+                                    rel={tipoGestion === 'WhatsApp' ? "noopener noreferrer" : undefined}
                                 >
-                                    <a href={`tel:${clienteTelefono}`}>
-                                        <Phone className="w-4 h-4" />
-                                        Llamar al Cliente
-                                    </a>
-                                </UIButton>
-                            ) : (
-                                <UIButton
-                                    asChild
-                                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white h-11 gap-2 text-sm font-semibold shadow-lg shadow-emerald-900/40"
-                                >
-                                    <a 
-                                        href={`https://wa.me/${clienteTelefono.replace(/\D/g, '') || ''}`} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                    >
-                                        <MessageSquare className="w-4 h-4" />
-                                        Enviar WhatsApp
-                                    </a>
-                                </UIButton>
-                            )}
-                            <p className="text-[10px] text-slate-600 text-center">
-                                {tipoGestion === 'Llamada' ? 'Al terminar la llamada, registra el resultado abajo' : 'Al enviar el mensaje, registra el resultado abajo'}
+                                    {(() => {
+                                        const DynamicIcon = TIPO_ICON[tipoGestion]
+                                        return <DynamicIcon className="w-3.5 h-3.5" />
+                                    })()}
+                                    {tipoGestion === 'Llamada' ? 'Llamar al Cliente' : 'Enviar WhatsApp'}
+                                </a>
+                            </UIButton>
+                            <p className="text-[9px] text-slate-600 text-center">
+                                Al terminar, registra el resultado abajo
                             </p>
                         </div>
                     )}
@@ -287,20 +275,19 @@ export function RegistrarGestionModal({
                     {/* GPS Verification for Visits */}
                     {tipoGestion === 'Visita' && (
                         <div className="space-y-2 animate-in slide-in-from-top duration-300">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                                 <Navigation className="w-3 h-3 text-blue-400" />
-                                Verificación GPS
-                                <span className="text-red-400 text-xs">* Obligatorio</span>
+                                Verificación GPS *
                             </label>
                             {coordenadas ? (
-                                <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-950/30 border border-emerald-700/40">
-                                    <Navigation2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                                    <div className="flex-1">
-                                        <p className="text-xs font-semibold text-emerald-400">Ubicación capturada ✓</p>
-                                        <p className="text-[10px] font-mono text-emerald-600 mt-0.5">{coordenadas}</p>
+                                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-950/30 border border-emerald-700/40">
+                                    <Navigation2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[10px] font-semibold text-emerald-400">Capturada ✓</p>
+                                        <p className="text-[9px] font-mono text-emerald-600 truncate">{coordenadas}</p>
                                     </div>
                                     <button type="button" onClick={() => setCoordenadas(null)} className="text-slate-500 hover:text-slate-300">
-                                        <X className="w-4 h-4" />
+                                        <X className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
                             ) : (
@@ -309,18 +296,14 @@ export function RegistrarGestionModal({
                                         type="button"
                                         onClick={captureGPS}
                                         disabled={gpsLoading}
-                                        className="w-full bg-blue-600 hover:bg-blue-500 text-white h-11 gap-2 text-sm font-semibold"
+                                        className="w-full bg-blue-600 hover:bg-blue-500 text-white h-10 gap-2 text-xs font-semibold"
                                     >
-                                        {gpsLoading ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                            <Navigation className="w-4 h-4" />
-                                        )}
-                                        {gpsLoading ? 'Obteniendo ubicación...' : '📍 Capturar mi Ubicación GPS'}
+                                        {gpsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Navigation className="w-3.5 h-3.5" />}
+                                        {gpsLoading ? 'Obteniendo...' : '📍 Capturar GPS'}
                                     </UIButton>
                                     {gpsError && (
-                                        <p className="text-xs text-red-400 flex items-start gap-1.5 p-2 bg-red-950/20 rounded-lg border border-red-900/30">
-                                            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                                        <p className="text-[10px] text-red-400 flex items-start gap-1 p-1.5 bg-red-950/20 rounded-lg border border-red-900/30">
+                                            <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
                                             {gpsError}
                                         </p>
                                     )}
@@ -331,15 +314,15 @@ export function RegistrarGestionModal({
 
                     {/* Resultado Filter */}
                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Resultado de la Gestión</label>
-                        <div className="grid grid-cols-1 gap-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Resultado</label>
+                        <div className="grid grid-cols-2 gap-1">
                             {RESULTADO_OPCIONES[tipoGestion].map((res) => (
                                 <button
                                     key={res}
                                     type="button"
                                     onClick={() => setResultado(res)}
                                     className={cn(
-                                        "w-full text-left px-3 py-2.5 rounded-lg border text-sm transition-all",
+                                        "w-full text-left px-2.5 py-2 rounded-lg border text-[11px] transition-all",
                                         resultado === res
                                             ? "bg-blue-600/20 border-blue-500/40 text-blue-200 font-medium"
                                             : "bg-slate-900/40 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300"
@@ -352,40 +335,40 @@ export function RegistrarGestionModal({
                     </div>
 
                     {/* Notas */}
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Notas <span className="text-slate-600 normal-case font-normal">(opcional)</span></label>
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Notas <span className="text-slate-600 normal-case font-normal">(opcional)</span></label>
                         <textarea
                             value={notas}
                             onChange={e => setNotas(e.target.value)}
-                            rows={3}
-                            className="w-full bg-slate-900 border border-slate-800 text-slate-300 text-sm rounded-xl p-3 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                            rows={2}
+                            className="w-full bg-slate-900 border border-slate-800 text-slate-300 text-[11px] rounded-lg p-2 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                             placeholder="Ej: Hablé con el titular..."
                         />
                     </div>
                 </div>
 
-                <div className="px-6 pb-6 pt-2 flex gap-3 border-t border-slate-900">
+                <div className="px-4 pb-24 md:pb-6 pt-2 flex gap-3">
                     <UIButton
                         variant="outline"
                         type="button"
                         onClick={() => onOpenChange(false)}
-                        className="flex-1 bg-transparent border-slate-700 text-slate-400"
+                        className="flex-1 bg-transparent border-slate-700 text-slate-400 h-9 text-xs"
                     >
-                        <X className="w-3.5 h-3.5 mr-2" />
+                        <X className="w-3 h-3 mr-1.5" />
                         Cancelar
                     </UIButton>
                     <UIButton
                         type="button"
                         onClick={handleGuardar}
                         disabled={isPending || !resultado || (tipoGestion === 'Visita' && !coordenadas) || (relevantLoans.length > 0 && !selectedPrestamoId)}
-                        className="flex-1 bg-blue-600 hover:bg-blue-500 text-white"
+                        className="flex-1 bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-bold"
                     >
                         {isPending ? (
-                            <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                            <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
                         ) : (
-                            <Send className="w-3.5 h-3.5 mr-2" />
+                            <Send className="w-3 h-3 mr-1.5" />
                         )}
-                        Guardar Gestión
+                        Guardar
                     </UIButton>
                 </div>
             </DialogContent>

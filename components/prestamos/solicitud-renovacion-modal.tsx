@@ -333,7 +333,7 @@ export function SolicitudRenovacionModal({
                 )}
             </DialogTrigger>
             <DialogContent 
-                className="bg-slate-900 border-slate-800 text-white sm:max-w-[600px] max-h-[95vh] overflow-y-auto"
+                className="bg-slate-900 border-slate-800 text-white sm:max-w-[600px]"
                 onClick={(e) => e.stopPropagation()}
             >
                 <DialogHeader>
@@ -761,7 +761,7 @@ export function SolicitudRenovacionModal({
                             )}
 
                             {userRole !== 'supervisor' && (
-                                <DialogFooter>
+                                <DialogFooter className="pb-16 md:pb-6">
                                     <Button 
                                         type="submit" 
                                         disabled={loading || !canRequestDueToTime || isBlockedByCuadre}

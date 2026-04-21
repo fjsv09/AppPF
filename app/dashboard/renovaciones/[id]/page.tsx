@@ -113,9 +113,14 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
             ...resumenData.reputation_evaluation,
             reputationScore: solicitud.reputation_score_al_solicitar ?? resumenData.reputation_score ?? resumenData.reputation_evaluation?.score ?? 0
         }
-        atomicHealth = {
-            ...resumenData.health_evaluation,
-            score: solicitud.score_al_solicitar ?? resumenData.health_score ?? resumenData.health_evaluation?.score ?? 0
+        
+        // Normalizar health data si viene de snapshot antiguo (LoanScore) vs nuevo (LoanMetrics)
+        const rawHealth = resumenData.health_evaluation || {}
+        atomicHealth = rawHealth.loanScore ? rawHealth : { loanScore: rawHealth }
+        
+        // Forzar score capturado si existe
+        if (solicitud.score_al_solicitar) {
+            atomicHealth.loanScore.score = Number(solicitud.score_al_solicitar)
         }
     } else {
         // Fallback para registros antiguos: calculamos en tiempo real
@@ -127,7 +132,7 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
 
         // Aún así respetamos el score de salud capturado si existe
         if (solicitud.score_al_solicitar) {
-            atomicHealth.score = Number(solicitud.score_al_solicitar)
+            atomicHealth.loanScore.score = Number(solicitud.score_al_solicitar)
         }
     }
 
@@ -212,7 +217,7 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                                 {/* Salud del Préstamo */}
                                 <div className="bg-white/[0.03] rounded-3xl p-6 border border-white/5 flex flex-col items-center gap-4 relative">
                                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Salud Préstamo</span>
-                                    <ScoreIndicator score={atomicHealth.score} size="lg" />
+                                    <ScoreIndicator score={atomicHealth.loanScore.score} size="lg" />
                                     <div className="mt-2 w-full">
                                         <Accordion type="single" collapsible>
                                             <AccordionItem value="health" className="border-none">
@@ -220,7 +225,7 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                                                     Ver Auditoría
                                                 </AccordionTrigger>
                                                 <AccordionContent className="pt-4">
-                                                    <ScoreBreakdown loanScore={atomicHealth} />
+                                                    <ScoreBreakdown loanScore={atomicHealth.loanScore} />
                                                 </AccordionContent>
                                             </AccordionItem>
                                         </Accordion>
@@ -251,21 +256,23 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                     <div className="space-y-4">
                         <Card className="bg-slate-900/50 border-slate-800 h-full">
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-xs font-black text-slate-400 uppercase tracking-widest">Desempeño Historico</CardTitle>
+                                <CardTitle className="text-xs font-black text-slate-400 uppercase tracking-widest">Resumen del Préstamo</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <BehaviorSummary data={{
-                                    // Sincronizar metrics reales con BehaviorSummary
-                                    pagos_puntuales: evaluation.reputationData?.metrics?.pagosPuntuales || (resumenData as any).pagos_puntuales,
-                                    pagos_tardios: evaluation.reputationData?.metrics?.pagosTardios || (resumenData as any).pagos_tardios,
-                                    prestamos_finalizados: evaluation.reputationData?.metrics?.totalFinished || (resumenData as any).prestamos_finalizados,
-                                    prestamos_renovados: evaluation.reputationData?.metrics?.totalRenovated || (resumenData as any).prestamos_renovados,
-                                    meses_cliente: evaluation.reputationData?.metrics?.months || (resumenData as any).meses_cliente,
-                                    refinanciamientos: evaluation.reputationData?.metrics?.totalRefinanced || 0,
-                                    historial_mora: evaluation.reputationData?.metrics?.totalVencido || 0,
-                                    historial_cpp: 0,
-                                    cuotas_vencidas_actual: atomicHealth?.penalties > 0 ? 1 : 0 // Para alertar mora activa
-                                } as any} />
+                                <BehaviorSummary 
+                                    loanView
+                                    data={{
+                                        pagos_puntuales: atomicHealth.loanScore?.pagos_puntuales || 0,
+                                        pagos_tardios: atomicHealth.loanScore?.pagos_tardios || 0,
+                                        cuotas_vencidas_actual: atomicHealth.cuotasAtrasadas || 0,
+                                        prestamos_finalizados: 0,
+                                        prestamos_renovados: 0,
+                                        meses_cliente: 0,
+                                        historial_mora: 0,
+                                        historial_cpp: 0,
+                                        refinanciamientos: 0
+                                    } as any} 
+                                />
                             </CardContent>
                         </Card>
                     </div>
@@ -273,7 +280,7 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
 
                 <div className="mt-6 mb-8">
                     <ScoreLimitRules 
-                        healthScore={atomicHealth.score} 
+                        healthScore={atomicHealth.loanScore.score} 
                         reputationScore={evaluation.reputationScore} 
                     />
                 </div>
@@ -386,7 +393,7 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                 {(() => {
                     const { calculateRenovationAdjustment } = require('@/lib/financial-logic');
                     const adj = calculateRenovationAdjustment(
-                        atomicHealth.score,
+                        atomicHealth.loanScore.score,
                         evaluation.reputationScore,
                         Number(solicitud.prestamo?.monto || 0),
                         Number(solicitud.monto_cuota_pendiente || 0) // Para asegurar el piso de deuda

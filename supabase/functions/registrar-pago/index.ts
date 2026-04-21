@@ -30,27 +30,35 @@ Deno.serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
-        // Check Role
+        // Check Role & GPS Requirement
         const { data: perfil } = await supabaseAdmin
             .from('perfiles')
-            .select('rol')
+            .select('rol, exigir_gps_cobranza')
             .eq('id', user.id)
             .single()
 
         if (!perfil) throw new Error('Profile not found')
 
-        const { cuota_id, monto } = await req.json()
+        const { cuota_id, monto, latitud, longitud } = await req.json()
 
         if (!cuota_id || !monto) {
             throw new Error('Missing required fields')
+        }
+
+        // GPS Enforcement
+        if (!!perfil.exigir_gps_cobranza && (latitud === undefined || latitud === null || longitud === undefined || longitud === null)) {
+            throw new Error('Restricción de Seguridad: Se requiere ubicación GPS activa.')
         }
 
         // Call RPC
         const { data, error } = await supabaseAdmin.rpc('registrar_pago_db', {
             p_cuota_id: cuota_id,
             p_monto: monto,
-            p_usuario_id: user.id
+            p_usuario_id: user.id,
+            p_latitud: latitud,
+            p_longitud: longitud
         })
+
 
         if (error) throw error
 

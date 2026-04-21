@@ -106,7 +106,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
 
 
             {/* Header */}
-            <div className={`${theme.headerBg} p-7 text-center relative overflow-hidden`}>
+            <div className={cn("text-center relative overflow-hidden", isPrinting ? "bg-white border-b-2 border-black pt-4 pb-2 px-2" : "bg-emerald-600 p-7")}>
                 {!isPrinting && (
                     <>
                         <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/30 pointer-events-none" />
@@ -117,7 +117,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                 <div className={cn(
                     "flex items-center justify-center mx-auto relative z-10 transition-all duration-700",
                     isPrinting 
-                        ? "w-auto h-auto mb-4" 
+                        ? "w-auto h-auto mb-1" 
                         : "w-20 h-20 bg-white/20 ring-4 ring-white/10 shadow-[0_0_30px_rgba(255,255,255,0.2)] rounded-full backdrop-blur-md hover:scale-110 mb-4 overflow-hidden"
                 )}>
                     {logoUrl ? (
@@ -127,35 +127,39 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                             crossOrigin="anonymous"
                             className={cn(
                                 "object-contain",
-                                isPrinting ? "w-24 h-auto grayscale brightness-0" : "w-14 h-14 brightness-0 invert"
+                                isPrinting ? "w-16 h-auto grayscale brightness-0" : "w-14 h-14 brightness-0 invert"
                             )} 
                         />
                     ) : (
                         <CheckCircle className={cn(
-                            isPrinting ? "w-12 h-12 text-black" : "w-12 h-12 text-white"
+                            isPrinting ? "w-10 h-10 text-black" : "w-12 h-12 text-white"
                         )} />
                     )}
                 </div>
-                <h2 className={`text-3xl font-black ${theme.headerText} relative z-10 tracking-tight drop-shadow-lg`}>¡Pago Exitoso!</h2>
-                <p className={`${isPrinting ? 'text-gray-600' : 'text-emerald-50/70'} text-[10px] uppercase font-bold tracking-[0.3em] relative z-10 mt-1`}>Transacción Procesada</p>
+                <h2 className={cn("font-black relative z-10 tracking-tight drop-shadow-lg", isPrinting ? "text-xl text-black" : "text-3xl text-white")}>
+                    ¡Pago Exitoso!
+                </h2>
+                <p className={cn("uppercase font-bold tracking-[0.3em] relative z-10", isPrinting ? "text-gray-600 text-[9px] m-0 leading-tight" : "text-emerald-50/70 text-[10px] mt-1")}>
+                    Transacción Procesada
+                </p>
             </div>
             
             {/* Body */}
-            <div className="p-5 space-y-5">
+            <div className={cn("p-5 space-y-5", isPrinting && "p-3 space-y-2.5")}>
                 {/* Amount Section */}
-                <div className={`text-center py-2 border-b border-dashed ${theme.border}`}>
+                <div className={cn(`text-center border-b border-dashed ${theme.border}`, isPrinting ? "py-1" : "py-2")}>
                     <span className={`${theme.textMuted} text-[9px] font-black uppercase tracking-[0.3em] block mb-1 opacity-70`}>Monto de la Operación</span>
                     <div className="flex items-center justify-center gap-1">
-                        <span className={`${theme.textMuted} text-lg font-bold mt-1`}>S/</span>
-                        <span className={`text-5xl font-black ${theme.textMain} tracking-tighter tabular-nums drop-shadow-sm`}>
+                        <span className={`${theme.textMuted} font-bold mt-1 ${isPrinting ? 'text-sm' : 'text-lg'}`}>S/</span>
+                        <span className={cn(`font-black ${theme.textMain} tracking-tighter tabular-nums drop-shadow-sm`, isPrinting ? "text-3xl" : "text-5xl")}>
                             {Number(monto).toFixed(2)}
                         </span>
                     </div>
                 </div>
                 
                 {/* Estado Actual Card */}
-                <div className={`${theme.card} rounded-xl p-4 border shadow-inner`}>
-                    <div className="space-y-2.5">
+                <div className={cn(`${theme.card} rounded-xl border shadow-inner`, isPrinting ? "p-3" : "p-4")}>
+                    <div className={cn(isPrinting ? "space-y-1.5" : "space-y-2.5")}>
                         <div className="flex justify-between text-xs items-center">
                             <span className={theme.textMuted}>Progreso del Crédito</span>
                             <span className={`${theme.textAccent} font-black`}>{pagadas} de {totalCuotas} cuotas</span>
@@ -183,7 +187,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                 </div>
 
                 {/* Info List */}
-                <div className="space-y-3 pt-1">
+                <div className={cn("pt-1", isPrinting ? "space-y-1" : "space-y-3")}>
                     <div className="flex justify-between text-[11px] items-center">
                         <span className={`${theme.textMuted} font-bold uppercase tracking-tighter`}>ID Operación</span>
                         <span className={`font-mono ${isPrinting ? 'text-black' : 'text-slate-400'} text-[10px] px-1.5 py-0.5 ${isPrinting ? 'bg-gray-100' : 'bg-white/5'} rounded`}>{(payment.id || '').toString().slice(-10).toUpperCase()}</span>
@@ -208,7 +212,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
             </div>
             
             {/* Watermark */}
-            <div className="pb-4 text-center opacity-30 pointer-events-none">
+            <div className={cn("text-center opacity-30 pointer-events-none", isPrinting ? "pb-2" : "pb-4")}>
                 <span className="text-[8px] font-black uppercase tracking-[0.4em]">Sistema Financiero ProFinanzas</span>
             </div>
         </div>

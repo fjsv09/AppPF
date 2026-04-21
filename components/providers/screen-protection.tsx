@@ -85,13 +85,13 @@ export function ScreenProtection({ children, userName }: { children: React.React
         styleEl.id = 'screen-protection-styles'
         styleEl.textContent = `
             @media print {
-                /* Ocultar todo por defecto para proteger el sistema */
-                body > *:not(#print-container-native) {
+                /* Ocultar todo por defecto para proteger el sistema, a menos que tenga la clase de impresión legítima */
+                body:not(.is-printing-ticket) * {
                     display: none !important;
                 }
                 
-                /* Si no existe el contenedor de impresión legítimo, mostrar mensaje de error */
-                body:not(:has(#print-container-native))::after {
+                /* Si no tiene la clase, mostrar mensaje de error */
+                body:not(.is-printing-ticket)::after {
                     content: 'Impresión no permitida — Sistema Protegido';
                     display: block;
                     font-size: 24px;
@@ -104,12 +104,7 @@ export function ScreenProtection({ children, userName }: { children: React.React
                     width: 100%;
                     height: 100%;
                     background: white;
-                }
-
-                /* Asegurar que el contenedor de impresión sea visible si existe */
-                #print-container-native, #print-container-native * {
-                    display: block !important;
-                    visibility: visible !important;
+                    z-index: 99999;
                 }
             }
         `

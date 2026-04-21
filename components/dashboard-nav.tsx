@@ -347,7 +347,7 @@ export function DashboardNav({
             </nav>
 
             {/* Mobile Bottom Nav */}
-            <nav className="mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 border-t border-white/10 bg-slate-950/95 backdrop-blur-xl p-2 px-4 flex justify-around items-center z-[9999] shadow-[0_-5px_20px_rgba(0,0,0,0.5)]" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>
+            <nav className="mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 border-t border-white/10 bg-slate-950/95 backdrop-blur-xl p-2 px-4 flex justify-around items-center z-40 shadow-[0_-5px_20px_rgba(0,0,0,0.5)]" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>
                 {filteredLinks.slice(0, 4).map((link) => {
                     const Icon = link.icon
                     const isActive = pathname === link.href

@@ -67,20 +67,21 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
             style.innerHTML = `
                 @media print {
                     @page { margin: 0; size: 58mm auto; }
-                    body * { visibility: hidden !important; }
-                    #print-container-native, #print-container-native * { visibility: visible !important; }
-                    #print-container-native { position: absolute !important; left: 0 !important; top: 0 !important; width: 58mm !important; }
+                    body > *:not(#print-container-native) { display: none !important; }
+                    #print-container-native { display: block !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 58mm !important; }
                 }
             `
             document.head.appendChild(style)
             document.body.appendChild(printContainer)
 
+            document.body.classList.add('is-printing-ticket')
             // Dar un poco de tiempo para que la imagen se cargue en el DOM
             setTimeout(() => {
                 window.print()
                 
                 // Limpieza después de un tiempo prudencial
                 setTimeout(() => {
+                    document.body.classList.remove('is-printing-ticket')
                     if (document.getElementById('print-style-native')) document.head.removeChild(style)
                     if (document.getElementById('print-container-native')) document.body.removeChild(printContainer)
                     setPrinting(false)

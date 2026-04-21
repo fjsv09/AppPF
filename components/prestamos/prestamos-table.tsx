@@ -1087,7 +1087,7 @@ export function PrestamosTable({
 
                             {/* -------------------- MOBILE CARDS VIEW -------------------- */}
                             <div className={cn(
-                                "space-y-2",
+                                "space-y-2 pb-32",
                                 viewType === 'cards' ? "md:hidden" : "hidden"
                             )}>
                                 {paginatedPrestamos.map((prestamo, index) => {

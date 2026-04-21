@@ -104,11 +104,13 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
             document.body.appendChild(printContainer)
 
             // 3. Disparar impresión nativa
+            document.body.classList.add('is-printing-ticket')
             setTimeout(() => {
                 window.print()
                 
                 // 4. Limpieza
                 setTimeout(() => {
+                    document.body.classList.remove('is-printing-ticket')
                     try {
                         const s = document.getElementById('print-style-native')
                         const c = document.getElementById('print-container-native')

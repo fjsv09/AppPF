@@ -448,7 +448,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     }
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 pb-32">
              {/* Header Actions (Export CSV, Bulk Reassign) - Only Admin */}
              {userRol === 'admin' && (
                 <div className="flex justify-end gap-2 mb-2">

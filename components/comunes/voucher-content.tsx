@@ -131,7 +131,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                                 crossOrigin="anonymous"
                                 className={cn(
                                     "w-full h-full object-contain block mx-auto",
-                                    !isPrinting && "brightness-0 invert"
+                                    isPrinting ? "brightness-0" : "brightness-0 invert"
                                 )} 
                             />
                         </div>

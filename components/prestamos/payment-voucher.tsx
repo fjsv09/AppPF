@@ -280,7 +280,7 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                             client={client}
                             cronograma={cronograma}
                             allPayments={allPayments}
-                            logoUrl={logoUrl}
+                            logoUrl={logoDarkUrl || logoUrl}
                             isPrinting={true}
                         />
                     </div>

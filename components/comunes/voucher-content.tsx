@@ -130,8 +130,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                                 alt="ProFinanzas" 
                                 crossOrigin="anonymous"
                                 className={cn(
-                                    "max-w-full max-h-full object-contain",
-                                    !isPrinting && "brightness-0 invert"
+                                    "max-w-full max-h-full object-contain"
                                 )} 
                             />
                         </div>

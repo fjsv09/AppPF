@@ -153,9 +153,7 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
             // Share using Web Share API (PDF Support is high on mobile)
             if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                 await navigator.share({
-                    files: [file],
-                    title,
-                    text: `Hola ${prestamo.clientes?.nombres}, aquí tienes tu ${docTitle.toLowerCase()} oficial de ProFinanzas en PDF.`
+                    files: [file]
                 })
                 toast.success("PDF Enviado", { id: "share-pdf" })
                 return

@@ -165,12 +165,18 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
         const toastId = toast.loading('Preparando imagen para iOS...')
         
         try {
-            // Usar exactamente el mismo renderizado comprobado que usa 'Imprimir'
+            // Pequeña espera para asegurar que los estilos estén aplicados y recursos cargados
+            await new Promise(resolve => setTimeout(resolve, 300))
+
             const dataUrl = await toPng(printRef.current, { 
                 backgroundColor: '#ffffff',
-                pixelRatio: 3, 
+                pixelRatio: 2, // Reducir un poco para evitar límites de canvas en iOS
                 skipFonts: false,
-                cacheBust: true
+                cacheBust: true,
+                style: {
+                    transform: 'scale(1)',
+                    transformOrigin: 'top left'
+                }
             })
             
             // Convertir Base64 Data URL a Blob de manera segura
@@ -229,7 +235,16 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                 </div>
 
                 {/* Print View (Hidden High Contrast for Thermal) */}
-                <div ref={iOSPrintContainerRef} style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+                <div ref={iOSPrintContainerRef} style={{ 
+                    position: 'fixed', 
+                    left: 0, 
+                    top: 0, 
+                    width: '58mm', 
+                    zIndex: -1, 
+                    opacity: 0, 
+                    pointerEvents: 'none',
+                    backgroundColor: 'white'
+                }}>
                     <div ref={printRef}>
                         <VoucherContent 
                             payment={payment}

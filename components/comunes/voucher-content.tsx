@@ -106,7 +106,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
 
 
             {/* Header */}
-            <div className={cn("text-center relative overflow-hidden", isPrinting ? "bg-white border-b-2 border-black border-dashed pt-4 pb-2 px-2" : "bg-emerald-600 p-7")}>
+            <div className={cn("text-center relative overflow-hidden", isPrinting ? "bg-white border-b-2 border-black border-dashed pt-2 pb-1 px-1" : "bg-emerald-600 p-7")}>
                 {!isPrinting && (
                     <>
                         <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/30 pointer-events-none" />
@@ -117,18 +117,18 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                 <div className={cn(
                     "flex items-center justify-center mx-auto relative z-10 transition-all duration-700",
                     isPrinting 
-                        ? "mb-4" 
+                        ? "mb-1" 
                         : "w-20 h-20 bg-white/20 ring-4 ring-white/10 shadow-[0_0_30px_rgba(255,255,255,0.2)] rounded-full backdrop-blur-md hover:scale-110 mb-4 overflow-hidden"
                 )}>
                     {logoUrl ? (
                         <div className={cn(
                             "flex items-center justify-center relative z-10",
-                            isPrinting ? "w-24 h-16" : "w-14 h-14"
+                            isPrinting ? "w-20 h-12" : "w-14 h-14"
                         )}>
                             <img 
                                 src={logoUrl} 
                                 alt="ProFinanzas" 
-                                crossOrigin={logoUrl?.startsWith('data:') ? undefined : "anonymous"}
+                                crossOrigin="anonymous"
                                 className={cn(
                                     "max-w-full max-h-full object-contain"
                                 )} 
@@ -140,7 +140,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                         )} />
                     )}
                 </div>
-                <h2 className={cn("font-black relative z-10 tracking-tight", isPrinting ? "text-xl text-black" : "text-3xl text-white drop-shadow-lg")}>
+                <h2 className={cn("font-black relative z-10 tracking-tight", isPrinting ? "text-lg text-black" : "text-3xl text-white drop-shadow-lg")}>
                     ¡Pago Exitoso!
                 </h2>
                 <p className={cn("uppercase font-bold tracking-[0.3em] relative z-10", isPrinting ? "text-black text-[9px] m-0 leading-tight" : "text-emerald-50/70 text-[10px] mt-1")}>
@@ -149,21 +149,21 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
             </div>
             
             {/* Body */}
-            <div className={cn("p-5 space-y-5", isPrinting && "p-3 space-y-2.5")}>
+            <div className={cn("p-5 space-y-5", isPrinting && "p-2 space-y-1.5")}>
                 {/* Amount Section */}
-                <div className={cn(`text-center border-b border-dashed ${theme.border}`, isPrinting ? "py-1" : "py-2")}>
-                    <span className={`${theme.textMuted} text-[9px] font-black uppercase tracking-[0.3em] block mb-1 opacity-70`}>Monto de la Operación</span>
+                <div className={cn(`text-center border-b border-dashed ${theme.border}`, isPrinting ? "py-0.5" : "py-2")}>
+                    <span className={`${theme.textMuted} ${isPrinting ? 'text-[8px] mb-0' : 'text-[9px] mb-1'} font-black uppercase tracking-[0.3em] block opacity-70`}>Monto de la Operación</span>
                     <div className="flex items-center justify-center gap-1">
-                        <span className={`${theme.textMuted} font-bold mt-1 ${isPrinting ? 'text-sm' : 'text-lg'}`}>S/</span>
-                        <span className={cn(`font-black ${theme.textMain} tracking-tighter tabular-nums drop-shadow-sm`, isPrinting ? "text-3xl" : "text-5xl")}>
+                        <span className={`${theme.textMuted} font-bold mt-1 ${isPrinting ? 'text-xs' : 'text-lg'}`}>S/</span>
+                        <span className={cn(`font-black ${theme.textMain} tracking-tighter tabular-nums drop-shadow-sm`, isPrinting ? "text-2xl" : "text-5xl")}>
                             {Number(monto).toFixed(2)}
                         </span>
                     </div>
                 </div>
                 
                 {/* Estado Actual Card */}
-                <div className={cn(`${theme.card}`, isPrinting ? "p-2 mt-2" : "p-4 rounded-xl border")}>
-                    <div className={cn(isPrinting ? "space-y-1.5" : "space-y-2.5")}>
+                <div className={cn(`${theme.card}`, isPrinting ? "p-1.5 mt-1" : "p-4 rounded-xl border")}>
+                    <div className={cn(isPrinting ? "space-y-1" : "space-y-2.5")}>
                         <div className="flex justify-between text-xs items-center">
                             <span className={theme.textMuted}>Progreso del Crédito</span>
                             <span className={`${theme.textAccent} font-black`}>{pagadas} de {totalCuotas} cuotas</span>
@@ -191,7 +191,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                 </div>
 
                 {/* Info List */}
-                <div className={cn("pt-1", isPrinting ? "space-y-1 mt-2 border-t border-black border-dashed pt-2" : "space-y-3")}>
+                <div className={cn("pt-1", isPrinting ? "space-y-0.5 mt-1 border-t border-black border-dashed pt-1" : "space-y-3")}>
                     <div className="flex justify-between text-[11px] items-center">
                         <span className={`${theme.textMuted} font-bold uppercase tracking-tighter`}>ID Operación</span>
                         <span className={`font-mono ${isPrinting ? 'text-black bg-white font-bold' : 'text-slate-400 bg-white/5'} text-[10px] px-1.5 py-0.5 rounded`}>{(payment.id || '').toString().slice(-10).toUpperCase()}</span>
@@ -216,7 +216,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
             </div>
             
             {/* Watermark */}
-            <div className={cn("text-center opacity-30 pointer-events-none", isPrinting ? "pb-2" : "pb-4")}>
+            <div className={cn("text-center opacity-30 pointer-events-none mt-1", isPrinting ? "pb-0.5" : "pb-4")}>
                 <span className="text-[8px] font-black uppercase tracking-[0.4em]">Sistema Financiero ProFinanzas</span>
             </div>
         </div>

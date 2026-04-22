@@ -194,9 +194,13 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
             if (payment?.id && userRole === 'asesor') {
                 api.pagos.compartirVoucher(payment.id).catch(() => {})
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error('Error sharing:', e)
-            toast.error('No se pudo compartir la imagen')
+            if (e.name === 'AbortError' || e.message?.includes('AbortError') || e.message?.includes('share canceled')) {
+                // El usuario canceló la acción de compartir
+            } else {
+                toast.error('No se pudo compartir la imagen')
+            }
         } finally {
             setSharing(false)
         }
@@ -251,9 +255,13 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
             if (payment?.id && userRole === 'asesor') {
                 api.pagos.compartirVoucher(payment.id).catch(() => {})
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error('Error sharing iOS:', e)
-            toast.error('No se pudo generar la imagen', { id: toastId })
+            if (e.name === 'AbortError' || e.message?.includes('AbortError') || e.message?.includes('share canceled')) {
+                toast.dismiss(toastId)
+            } else {
+                toast.error('No se pudo generar la imagen', { id: toastId })
+            }
         } finally {
             setSharing(false)
         }

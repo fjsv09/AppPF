@@ -143,28 +143,28 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                 <h2 className={cn("font-black relative z-10 tracking-tight", isPrinting ? "text-lg text-black" : "text-3xl text-white drop-shadow-lg")}>
                     ¡Pago Exitoso!
                 </h2>
-                <p className={cn("uppercase font-bold tracking-[0.3em] relative z-10", isPrinting ? "text-black text-[9px] m-0 leading-tight" : "text-emerald-50/70 text-[10px] mt-1")}>
+                <p className={cn("uppercase font-bold tracking-[0.3em] relative z-10", isPrinting ? "text-black text-[7px] m-0 leading-none mt-0.5" : "text-emerald-50/70 text-[10px] mt-1")}>
                     Transacción Procesada
                 </p>
             </div>
             
             {/* Body */}
-            <div className={cn("p-5 space-y-5", isPrinting && "p-2 space-y-1.5")}>
+            <div className={cn("p-5 space-y-5", isPrinting && "p-1.5 space-y-1")}>
                 {/* Amount Section */}
                 <div className={cn(`text-center border-b border-dashed ${theme.border}`, isPrinting ? "py-0.5" : "py-2")}>
-                    <span className={`${theme.textMuted} ${isPrinting ? 'text-[8px] mb-0' : 'text-[9px] mb-1'} font-black uppercase tracking-[0.3em] block opacity-70`}>Monto de la Operación</span>
-                    <div className="flex items-center justify-center gap-1">
-                        <span className={`${theme.textMuted} font-bold mt-1 ${isPrinting ? 'text-xs' : 'text-lg'}`}>S/</span>
-                        <span className={cn(`font-black ${theme.textMain} tracking-tighter tabular-nums drop-shadow-sm`, isPrinting ? "text-2xl" : "text-5xl")}>
+                    <span className={`${theme.textMuted} ${isPrinting ? 'text-[7px] mb-0 leading-none' : 'text-[9px] mb-1'} font-black uppercase tracking-[0.3em] block opacity-70`}>Monto de la Operación</span>
+                    <div className="flex items-center justify-center gap-0.5">
+                        <span className={`${theme.textMuted} font-bold mt-1 ${isPrinting ? 'text-[10px]' : 'text-lg'}`}>S/</span>
+                        <span className={cn(`font-black ${theme.textMain} tracking-tighter tabular-nums drop-shadow-sm leading-none`, isPrinting ? "text-xl" : "text-5xl")}>
                             {Number(monto).toFixed(2)}
                         </span>
                     </div>
                 </div>
                 
                 {/* Estado Actual Card */}
-                <div className={cn(`${theme.card}`, isPrinting ? "p-1.5 mt-1" : "p-4 rounded-xl border")}>
-                    <div className={cn(isPrinting ? "space-y-1" : "space-y-2.5")}>
-                        <div className="flex justify-between text-xs items-center">
+                <div className={cn(`${theme.card}`, isPrinting ? "p-1 mt-0.5" : "p-4 rounded-xl border")}>
+                    <div className={cn(isPrinting ? "space-y-0.5" : "space-y-2.5")}>
+                        <div className={cn("flex justify-between items-center", isPrinting ? "text-[9px] leading-none" : "text-xs")}>
                             <span className={theme.textMuted}>Progreso del Crédito</span>
                             <span className={`${theme.textAccent} font-black`}>{pagadas} de {totalCuotas} cuotas</span>
                         </div>
@@ -174,15 +174,16 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                                 style={{ width: `${progressPct}%` }} 
                             />
                         </div>
-                        <div className="flex justify-between text-[11px] items-center pt-1">
-                            <span className={theme.textMuted}>Deuda Restante</span>
-                            <div className="flex flex-col items-end">
-                                {cuotasAtrasadas > 0 && (
-                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-500/10 text-[8px] text-rose-500 font-black mb-1 animate-bounce">
-                                        {cuotasAtrasadas} CUOTAS ATRASADAS
-                                     </span>
-                                )}
-                                <span className={`${theme.textMain} font-black text-sm tabular-nums`}>
+                        <div className="flex flex-col pt-0.5">
+                            {cuotasAtrasadas > 0 && (
+                                 <div className="flex items-center justify-center gap-1.5 text-rose-600 font-black animate-bounce bg-rose-500/5 py-0.5 rounded-sm mb-0.5 border border-rose-500/20 border-dashed">
+                                    <span className={cn(isPrinting ? "text-base" : "text-lg")}>{cuotasAtrasadas}</span>
+                                    <span className={cn(isPrinting ? "text-[9px]" : "text-[10px]", "uppercase tracking-tighter")}>Cuotas Atrasadas</span>
+                                 </div>
+                            )}
+                            <div className="flex justify-between items-center text-[11px]">
+                                <span className={cn(theme.textMuted, isPrinting && "text-[9px]")}>Deuda Restante</span>
+                                <span className={cn(`${theme.textMain} font-black tabular-nums`, isPrinting ? "text-[12px]" : "text-sm")}>
                                     S/ {saldoPendiente.toFixed(2)}
                                 </span>
                             </div>
@@ -191,24 +192,24 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                 </div>
 
                 {/* Info List */}
-                <div className={cn("pt-1", isPrinting ? "space-y-0.5 mt-1 border-t border-black border-dashed pt-1" : "space-y-3")}>
-                    <div className="flex justify-between text-[11px] items-center">
+                <div className={cn(isPrinting ? "pt-0.5 space-y-0 mt-0.5 border-t border-black border-dashed" : "pt-1 space-y-3")}>
+                    <div className={cn("flex justify-between items-center", isPrinting ? "text-[8px] leading-tight" : "text-[11px]")}>
                         <span className={`${theme.textMuted} font-bold uppercase tracking-tighter`}>ID Operación</span>
-                        <span className={`font-mono ${isPrinting ? 'text-black bg-white font-bold' : 'text-slate-400 bg-white/5'} text-[10px] px-1.5 py-0.5 rounded`}>{(payment.id || '').toString().slice(-10).toUpperCase()}</span>
+                        <span className={`font-mono ${isPrinting ? 'text-black bg-white font-bold' : 'text-slate-400 bg-white/5'} ${isPrinting ? 'text-[7px]' : 'text-[10px]'} px-1 rounded`}>{(payment.id || '').toString().slice(-10).toUpperCase()}</span>
                     </div>
-                    <div className="flex justify-between text-[11px] items-center">
+                    <div className={cn("flex justify-between items-center", isPrinting ? "text-[8px] leading-tight" : "text-[11px]")}>
                         <span className={`${theme.textMuted} font-bold uppercase tracking-tighter`}>DNI</span>
-                        <span className={`${theme.textMain} font-mono text-[10px]`}>{client?.dni || '---'}</span>
+                        <span className={`${theme.textMain} font-mono ${isPrinting ? 'text-[8px]' : 'text-[10px]'}`}>{client?.dni || '---'}</span>
                     </div>
-                    <div className="flex justify-between text-[11px] items-start pt-1">
-                        <span className={`${theme.textMuted} font-bold uppercase tracking-tighter mt-1`}>Cliente</span>
-                        <span className={`${theme.textMain} font-black text-right max-w-[75%] leading-tight text-base italic uppercase tracking-tight`}>
+                    <div className={cn("flex justify-between items-start pt-0.5", isPrinting ? "text-[8px] leading-tight" : "text-[11px]")}>
+                        <span className={`${theme.textMuted} font-bold uppercase tracking-tighter mt-0.5`}>Cliente</span>
+                        <span className={`${theme.textMain} font-black text-right max-w-[75%] leading-tight ${isPrinting ? 'text-[9px]' : 'text-base'} italic uppercase tracking-tight`}>
                             {client?.nombres || 'Cliente'}
                         </span>
                     </div>
-                    <div className="flex justify-between text-[11px] items-center">
+                    <div className={cn("flex justify-between items-center", isPrinting ? "text-[8px] leading-tight" : "text-[11px]")}>
                         <span className={`${theme.textMuted} font-bold uppercase tracking-tighter`}>Fecha y Hora</span>
-                        <span className={`${theme.textMuted} font-medium font-mono text-[10px]`}>
+                        <span className={`${theme.textMuted} font-medium font-mono ${isPrinting ? 'text-[7px]' : 'text-[10px]'}`}>
                             {formatDatePeru(payment.created_at || new Date().toISOString())}
                         </span>
                     </div>
@@ -216,8 +217,8 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
             </div>
             
             {/* Watermark */}
-            <div className={cn("text-center opacity-30 pointer-events-none mt-1", isPrinting ? "pb-0.5" : "pb-4")}>
-                <span className="text-[8px] font-black uppercase tracking-[0.4em]">Sistema Financiero ProFinanzas</span>
+            <div className={cn("text-center pointer-events-none", isPrinting ? "mt-0.5 pb-0.5 opacity-100 text-black" : "opacity-30 pb-4 mt-1")}>
+                <span className="text-[7px] font-black uppercase tracking-[0.4em]">Sistema Financiero ProFinanzas</span>
             </div>
         </div>
     )

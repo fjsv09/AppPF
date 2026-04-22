@@ -31,6 +31,7 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
     const [isIOS, setIsIOS] = useState(false)
     const [logoUrl, setLogoUrl] = useState<string>('')
     const [logoDarkUrl, setLogoDarkUrl] = useState<string>('')
+    const [logoReady, setLogoReady] = useState(false)
     const supabase = createClient()
 
     useEffect(() => {
@@ -67,15 +68,20 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                         ctx.fillRect(0, 0, canvas.width, canvas.height)
                         
                         setLogoDarkUrl(canvas.toDataURL('image/png'))
+                        setLogoReady(true)
                     }
                     img.onerror = (e) => {
                         console.error('Error cargando imagen para Base64', e)
+                        setLogoReady(true)
                     }
                     // Cache buster vital para Safari iOS que a menudo cachea la imagen sin CORS
                     img.src = data.valor + (data.valor.includes('?') ? '&' : '?') + 'cb=' + new Date().getTime()
                 } catch (e) {
                     console.error('No se pudo generar logo oscuro', e)
+                    setLogoReady(true)
                 }
+            } else {
+                setLogoReady(true)
             }
         }
         if (open) fetchLogo()
@@ -313,7 +319,7 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                 <div className="p-3 bg-slate-950 flex gap-2 border-t border-slate-800 shadow-2xl">
                     <Button 
                         onClick={handlePrint} 
-                        disabled={printing || sharing} 
+                        disabled={printing || sharing || !logoReady} 
                         variant="outline"
                         className={cn("border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 rounded-xl h-11 text-xs font-bold", isIOS ? "flex-1" : "flex-1")}
                     >
@@ -323,7 +329,7 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                     {isIOS && (
                         <Button 
                             onClick={handleIOSShare} 
-                            disabled={sharing || printing} 
+                            disabled={sharing || printing || !logoReady} 
                             className="flex-[1.5] bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg shadow-blue-900/20 h-11 text-xs font-bold"
                         >
                             {sharing ? <Loader2 className="animate-spin w-4 h-4 mr-1" /> : <Download className="w-4 h-4 mr-1" />}
@@ -332,7 +338,7 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
                     )}
                     <Button 
                         onClick={handleShare} 
-                        disabled={sharing || printing} 
+                        disabled={sharing || printing || !logoReady} 
                         className={cn("bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-900/20 h-11 text-xs font-bold", isIOS ? "flex-1" : "flex-[1.5]")}
                     >
                         {sharing ? <Loader2 className="animate-spin w-4 h-4 mr-1" /> : <Share2 className="w-4 h-4 mr-1" />}

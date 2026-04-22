@@ -108,12 +108,19 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
         document.getElementById('print-container-native')?.remove()
 
         try {
+            // Pequeña espera para asegurar que los estilos estén aplicados y la imagen cargada
+            await new Promise(resolve => setTimeout(resolve, 300))
+
             // Generar imagen de alta calidad con fondo blanco para la impresora térmica
             const dataUrl = await toPng(printRef.current, { 
                 backgroundColor: '#ffffff',
-                pixelRatio: 3, // Más alto para térmicas
+                pixelRatio: 2, // Reducido a 2 para evitar límites de memoria en canvas de Android
                 skipFonts: false,
-                cacheBust: true
+                cacheBust: true,
+                style: {
+                    transform: 'scale(1)',
+                    transformOrigin: 'top left'
+                }
             })
             
             const printContainer = document.createElement('div')

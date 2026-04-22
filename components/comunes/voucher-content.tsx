@@ -128,7 +128,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                             <img 
                                 src={logoUrl} 
                                 alt="ProFinanzas" 
-                                crossOrigin="anonymous"
+                                crossOrigin={logoUrl?.startsWith('data:') ? undefined : "anonymous"}
                                 className={cn(
                                     "max-w-full max-h-full object-contain"
                                 )} 

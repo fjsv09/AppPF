@@ -25,6 +25,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 import { MovementsFilterBar } from '@/components/admin/movements-filter-bar'
+import { SyncAccountBalance } from '@/components/admin/sync-account-balance'
 
 export const dynamic = 'force-dynamic'
 
@@ -105,7 +106,7 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
     <div className="page-container pb-20">
       {/* HEADER SECTION */}
       <div className="page-header">
-        <div>
+        <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-3">
             <BackButton />
             <div>
@@ -115,6 +116,13 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
               </p>
             </div>
           </div>
+          
+          {cuentaFilter && (
+            <SyncAccountBalance 
+              cuentaId={cuentaFilter} 
+              nombreCuenta={accounts.find(a => a.id === cuentaFilter)?.nombre || 'Cuenta'} 
+            />
+          )}
         </div>
       </div>
 

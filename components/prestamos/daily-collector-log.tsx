@@ -95,9 +95,11 @@ export function DailyCollectorLog({
         
         // [SINCRONIZACIÓN] Para préstamos migrados, es posible que no existan registros en 'pagos'
         // pero sí montos pagados en 'cronograma_cuotas'. Usamos el máximo para ser resilientes.
-        const totalPagadoEnPagos = (pagos || []).reduce((acc: number, p: any) => acc + (parseFloat(p.monto_pagado) || 0), 0);
+        const validPagos = (pagos || []).filter((p: any) => p.estado_verificacion !== 'rechazado');
+        const totalPagadoEnPagos = validPagos.reduce((acc: number, p: any) => acc + (parseFloat(p.monto_pagado) || 0), 0);
         const totalPagadoEnCronograma = (cronograma || []).reduce((acc: number, c: any) => acc + (parseFloat(c.monto_pagado) || 0), 0);
-        const totalPagadoHistorico = Math.max(totalPagadoEnPagos, totalPagadoEnCronograma);
+        const hasPhysicalPagos = (pagos || []).length > 0;
+        const totalPagadoHistorico = hasPhysicalPagos ? totalPagadoEnPagos : totalPagadoEnCronograma;
         
         let remaining = totalPagadoHistorico;
         
@@ -138,13 +140,15 @@ export function DailyCollectorLog({
         if (!cronograma) return { assignments: [], quotaSources: {}, paymentDestinations: {} };
         
         const sortedQuotas = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota);
-        const rawPagos = (pagos || []);
+        const rawPagos = (pagos || []).filter((p: any) => p.estado_verificacion !== 'rechazado');
         
         // 1. Calcular Saldo de Sistema (Diferencia acumulada)
         const totalPagadoEnPagos = rawPagos.reduce((s: number, p: any) => s + (parseFloat(p.monto_pagado) || 0), 0);
         const totalPagadoEnCronograma = cronograma.reduce((s: number, c: any) => s + (parseFloat(c.monto_pagado) || 0), 0);
 
-        let systemMoney = Math.max(0, totalPagadoEnCronograma - totalPagadoEnPagos);
+        // [SINCRONIZACIÓN] Trust transactions over cronograma sum
+        const hasPhysicalPagos = (pagos || []).length > 0;
+        let systemMoney = hasPhysicalPagos ? 0 : Math.max(0, totalPagadoEnCronograma - totalPagadoEnPagos);
 
         const sortedPagos = [...rawPagos].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         
@@ -220,16 +224,16 @@ export function DailyCollectorLog({
         return { assignments, quotaSources: qSources, paymentDestinations: pDests };
     }, [cronograma, pagos]);
     // --- FIN WATERFALL ---
-
     const allRows = useMemo(() => {
         if (virtualCronograma.length === 0) return []
+        const validPagos = (pagos || []).filter((p: any) => p.estado_verificacion !== 'rechazado');
         const qDates = virtualCronograma.map((c: any) => c.fecha_vencimiento)
-        const pDates = (pagos || []).map((p: any) => formatDatePeru(p.created_at, 'isoDate'))
+        const pDates = validPagos.map((p: any) => formatDatePeru(p.created_at, 'isoDate'))
         const dates = Array.from(new Set([...qDates, ...pDates])).sort()
         return dates.map(d => ({
             date: d,
             cuota: virtualCronograma.find((c: any) => c.fecha_vencimiento === d),
-            physical: (pagos || []).filter((p: any) => formatDatePeru(p.created_at, 'isoDate') === d)
+            physical: validPagos.filter((p: any) => formatDatePeru(p.created_at, 'isoDate') === d)
         }))
     }, [virtualCronograma, pagos])
 

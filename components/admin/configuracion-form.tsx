@@ -330,6 +330,45 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
     const [editingKey, setEditingKey] = useState<string | null>(null)
     const [uploadingLogo, setUploadingLogo] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const [gettingLocation, setGettingLocation] = useState(false)
+
+    const handleGetLocation = () => {
+        if (!navigator.geolocation) {
+            toast.error("Tu navegador no soporta geolocalización")
+            return
+        }
+
+        setGettingLocation(true)
+        toast.info("Obteniendo ubicación...", {
+            description: "Por favor, permite el acceso si se te solicita."
+        })
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords
+                setConfig(prev => ({
+                    ...prev,
+                    oficina_lat: latitude.toString(),
+                    oficina_lon: longitude.toString()
+                }))
+                toast.success("Ubicación obtenida", {
+                    description: `Lat: ${latitude.toFixed(6)}, Lon: ${longitude.toFixed(6)}`
+                })
+                setGettingLocation(false)
+            },
+            (error) => {
+                let msg = "Error desconocido"
+                switch(error.code) {
+                    case error.PERMISSION_DENIED: msg = "Permiso denegado"; break;
+                    case error.POSITION_UNAVAILABLE: msg = "Ubicación no disponible"; break;
+                    case error.TIMEOUT: msg = "Tiempo de espera agotado"; break;
+                }
+                toast.error("Error de GPS", { description: msg })
+                setGettingLocation(false)
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        )
+    }
 
     const handleUnlock = async () => {
         setUnlocking(true)
@@ -557,33 +596,46 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
                                                                 </span>
                                                             )}
                                                         </div>
-                                                        <Input
-                                                            id={item.clave}
-                                                            type={
-                                                                (item.clave.includes('horario') || item.clave.includes('cuadre') || item.clave.includes('nombre') || item.clave.includes('logo')) 
-                                                                    ? 'text' 
-                                                                    : 'number'
-                                                            }
-                                                            placeholder={
-                                                                item.clave.includes('horario') ? 'HH:MM' : 
-                                                                item.clave.includes('nombre') ? 'Ej: Sistema PF' : 
-                                                                item.clave.includes('desbloqueo') ? 'Ej: 15' : ''
-                                                            }
-                                                            value={
-                                                                (isEditing) 
-                                                                    ? currentValue 
-                                                                    : ((item.clave.includes('horario') || item.clave.includes('cuadre')) && currentValue && !currentValue.includes(':') && !isNaN(Number(currentValue))) 
-                                                                        ? `${currentValue.padStart(2, '0')}:00` 
-                                                                        : currentValue
-                                                            }
-                                                            onChange={(e) => setConfig({ ...config, [item.clave]: e.target.value })}
-                                                            disabled={!isEditing}
-                                                            className={cn(
-                                                                "h-9 bg-slate-950/40 border-slate-800 text-white text-sm font-mono transition-all",
-                                                                isEditing ? "border-blue-500/40 bg-slate-950" : "opacity-60 cursor-default",
-                                                                item.clave === 'logo_sistema_url' && "pr-10"
+                                                        <div className="relative">
+                                                            <Input
+                                                                id={item.clave}
+                                                                type={
+                                                                    (item.clave.includes('horario') || item.clave.includes('cuadre') || item.clave.includes('nombre') || item.clave.includes('logo')) 
+                                                                        ? 'text' 
+                                                                        : 'number'
+                                                                }
+                                                                placeholder={
+                                                                    item.clave.includes('horario') ? 'HH:MM' : 
+                                                                    item.clave.includes('nombre') ? 'Ej: Sistema PF' : 
+                                                                    item.clave.includes('desbloqueo') ? 'Ej: 15' : ''
+                                                                }
+                                                                value={
+                                                                    (isEditing) 
+                                                                        ? currentValue 
+                                                                        : ((item.clave.includes('horario') || item.clave.includes('cuadre')) && currentValue && !currentValue.includes(':') && !isNaN(Number(currentValue))) 
+                                                                            ? `${currentValue.padStart(2, '0')}:00` 
+                                                                            : currentValue
+                                                                }
+                                                                onChange={(e) => setConfig({ ...config, [item.clave]: e.target.value })}
+                                                                disabled={!isEditing}
+                                                                className={cn(
+                                                                    "h-9 bg-slate-950/40 border-slate-800 text-white text-sm font-mono transition-all",
+                                                                    isEditing ? "border-blue-500/40 bg-slate-950" : "opacity-60 cursor-default",
+                                                                    (item.clave === 'logo_sistema_url' || item.clave === 'oficina_lat' || item.clave === 'oficina_lon') && "pr-10"
+                                                                )}
+                                                            />
+                                                            {isEditing && (item.clave === 'oficina_lat' || item.clave === 'oficina_lon') && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    onClick={handleGetLocation}
+                                                                    disabled={gettingLocation}
+                                                                    className="absolute right-0 top-0 h-9 w-9 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-lg"
+                                                                >
+                                                                    {gettingLocation ? <Loader2 className="h-4 w-4 animate-spin text-slate-500" /> : <MapPin className="h-4 w-4" />}
+                                                                </Button>
                                                             )}
-                                                        />
+                                                        </div>
                                                         {item.clave === 'logo_sistema_url' && isEditing && (
                                                             <div className="mt-2 flex items-center gap-2">
                                                                 <input

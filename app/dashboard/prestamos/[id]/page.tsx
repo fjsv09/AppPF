@@ -188,6 +188,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                 pagos_distribucion(*)
             `)
             .in('cuota_id', idsCuotas)
+            .neq('estado_verificacion', 'rechazado')
             .order('created_at', { ascending: false });
         pagos = fullData || [];
     }

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createFullNotification } from '@/services/notification-service'
 
 /**
  * Notifica al cliente por WhatsApp sobre un pago realizado.
@@ -118,5 +119,51 @@ Hola *${clienteNom}*, hemos registrado tu pago correctamente.
     } catch (e: any) {
         console.error('[NOTIFICACION] Error:', e)
         return { success: false, error: e.message }
+    }
+}
+
+/**
+ * Notifica a un grupo de usuarios basado en su rol.
+ * Stub para integrar con Push Notifications (OneSignal, Firebase, etc.) o websockets.
+ */
+export async function notificarATodos(roles: string[], titulo: string, mensaje: string, tipo: string = 'info') {
+    const supabaseAdmin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
+    try {
+        console.log(`[PUSH NOTIFICATION] Enviando a roles [${roles.join(', ')}]: ${titulo} - ${mensaje}`)
+        
+        // Obtener todos los usuarios con los roles especificados
+        const { data: usuarios } = await supabaseAdmin
+            .from('perfiles')
+            .select('id')
+            .in('rol', roles)
+
+        if (usuarios && usuarios.length > 0) {
+            // Enviar notificaciones de sistema y push a cada uno usando el servicio oficial
+            for (const usuario of usuarios) {
+                await createFullNotification(usuario.id, {
+                    titulo,
+                    mensaje,
+                    tipo,
+                    link: '/dashboard/validacion-pagos' // Link opcional para ir directo a validar
+                })
+            }
+        }
+
+        // Registrarlo en auditoría
+        await supabaseAdmin.from('auditoria').insert({
+            usuario_id: '00000000-0000-0000-0000-000000000000', // Sistema
+            accion: 'notificacion_multicast_enviada',
+            tabla_afectada: 'perfiles',
+            detalle: { roles, titulo, mensaje, tipo, usuarios_afectados: usuarios?.length || 0 }
+        })
+
+        return { success: true }
+    } catch (error) {
+        console.error('[PUSH NOTIFICATION ERROR]:', error)
+        return { success: false, error }
     }
 }

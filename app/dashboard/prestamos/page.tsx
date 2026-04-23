@@ -83,7 +83,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             ),
             cronograma_cuotas (
                 *,
-                pagos (id, created_at, monto_pagado, metodo_pago, voucher_compartido, latitud, longitud, registrado_por)
+                pagos (id, created_at, monto_pagado, metodo_pago, voucher_compartido, latitud, longitud, registrado_por, estado_verificacion)
             ),
             gestiones (
                 id,

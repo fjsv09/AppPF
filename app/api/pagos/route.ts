@@ -58,7 +58,7 @@ export async function POST(request: Request) {
         // --- FIN VERIFICACIÓN DE ACCESO ---
 
         const body = await request.json()
-        const { cuota_id, monto, metodo_pago = 'Efectivo', latitud, longitud } = body
+        const { cuota_id, monto, metodo_pago = 'Efectivo', latitud, longitud, voucher_url } = body
 
         if (!cuota_id || !monto) {
             return NextResponse.json({ error: 'Faltan campos requeridos (cuota_id, monto)' }, { status: 400 })
@@ -136,46 +136,122 @@ export async function POST(request: Request) {
         }
         // --- FIN VERIFICACIÓN DE BLOQUEO ---
 
-        // Call RPC using Admin Client
-        const { data, error } = await supabaseAdmin.rpc('registrar_pago_db', {
-            p_cuota_id: cuota_id,
-            p_monto: monto,
-            p_usuario_id: user.id,
-            p_metodo_pago: metodo_pago,
-            p_latitud: latitud,
-            p_longitud: longitud
-        })
+        const isDigital = ['Yape', 'Plin', 'Transferencia'].includes(metodo_pago)
+        let result: any = null
 
-        if (error) {
-            console.error('RPC Error:', error)
-            return NextResponse.json({ error: error.message }, { status: 400 })
-        }
+        if (isDigital) {
+            // --- NUEVO FLUJO SILENCIOSO PARA PAGOS DIGITALES ---
+            // 1. Obtener datos de la cuota
+            const { data: cuota, error: cErr } = await supabaseAdmin
+                .from('cronograma_cuotas')
+                .select('monto_cuota, monto_pagado')
+                .eq('id', cuota_id)
+                .single()
+            
+            if (cErr) return NextResponse.json({ error: 'Cuota no encontrada' }, { status: 404 })
 
-        // Log para depuración
-        console.log('RPC Response:', JSON.stringify(data, null, 2))
+            const nuevoMontoPagado = (parseFloat(cuota.monto_pagado) || 0) + parseFloat(monto)
+            const nuevoEstado = nuevoMontoPagado >= parseFloat(cuota.monto_cuota) ? 'pagado' : 'pendiente'
 
-        // Parse result - RPC puede devolver string o objeto
-        let result = data
-        if (typeof data === 'string') {
-            try {
-                result = JSON.parse(data)
-            } catch (e) {
-                console.error('Error parsing RPC response:', e)
+            // 2. Actualizar Cuota
+            await supabaseAdmin
+                .from('cronograma_cuotas')
+                .update({ 
+                    monto_pagado: nuevoMontoPagado, 
+                    estado: nuevoEstado,
+                    fecha_pago: new Date().toISOString()
+                })
+                .eq('id', cuota_id)
+
+            // 3. Crear Registro de Pago (estado pendiente)
+            const { data: newPago, error: pErr } = await supabaseAdmin
+                .from('pagos')
+                .insert({
+                    cuota_id,
+                    monto_pagado: monto,
+                    registrado_por: user.id,
+                    metodo_pago,
+                    latitud,
+                    longitud,
+                    voucher_url,
+                    estado_verificacion: 'pendiente'
+                })
+                .select('id')
+                .single()
+
+            if (pErr) return NextResponse.json({ error: 'Error al registrar pago: ' + pErr.message }, { status: 500 })
+
+            result = { 
+                success: true, 
+                message: 'Pago digital registrado. Pendiente de validación por administración.',
+                pago_id: newPago.id 
             }
+        } else {
+            // --- FLUJO TRADICIONAL PARA EFECTIVO ---
+            
+            // [NUEVO] Si quien registra es un Supervisor, el dinero (Efectivo) debe atribuirse al Asesor del préstamo
+            let targetUserId = user.id
+            if (perfil?.rol === 'supervisor') {
+                const { data: qData } = await supabaseAdmin
+                    .from('cronograma_cuotas')
+                    .select('prestamos(clientes(asesor_id))')
+                    .eq('id', cuota_id)
+                    .single()
+                
+                const loanAdvisorId = (qData?.prestamos as any)?.clientes?.asesor_id
+                if (loanAdvisorId) {
+                    targetUserId = loanAdvisorId
+                    console.log(`Supervisor ${user.id} registrando cobro para Asesor ${targetUserId}`)
+                }
+            }
+
+            const { data, error } = await supabaseAdmin.rpc('registrar_pago_db', {
+                p_cuota_id: cuota_id,
+                p_monto: monto,
+                p_usuario_id: targetUserId, // Atribuimos el dinero al Asesor si es supervisor
+                p_metodo_pago: metodo_pago,
+                p_latitud: latitud,
+                p_longitud: longitud,
+                p_voucher_url: voucher_url
+            })
+
+            if (error) {
+                console.error('RPC Error:', error)
+                return NextResponse.json({ error: error.message }, { status: 400 })
+            }
+
+            result = typeof data === 'string' ? JSON.parse(data) : data
         }
 
-        // Audit Log (using Admin) - Incluye el rol del usuario que hizo el pago
+        // Audit Log (using Admin) - Incluye el ID real de quien hizo el pago para auditoría
         await supabaseAdmin.from('auditoria').insert({
-            usuario_id: user.id,
-            accion: 'registrar_pago',
-            tabla_afectada: 'pagos',
-            detalle: { cuota_id, monto, result, rol_cobrador: perfil.rol, latitud, longitud }
+            usuario_id: user.id, // Auditamos al usuario REAL (Supervisor o Asesor)
+            accion: 'registro_pago',
+            tabla: 'pagos',
+            registro_id: result.pago_id || null,
+            detalles: { 
+                metodo_pago, 
+                monto, 
+                cuota_id, 
+                rol_ejecutor: perfil?.rol,
+                atribuido_a: result.pago_id ? undefined : (perfil?.rol === 'supervisor' ? 'asesor_prestamo' : 'mismo_usuario')
+            }
         })
 
         // Iniciar notificación asíncrona (no bloquea la respuesta del pago)
         if (result.pago_id) {
             import('@/utils/notifications').then(mod => {
                 mod.notificarPagoCliente(result.pago_id)
+                
+                // Si es un pago digital, notificar a los admins para que validen
+                if (['Yape', 'Plin', 'Transferencia'].includes(metodo_pago)) {
+                    mod.notificarATodos(
+                        ['admin', 'secretaria'],
+                        'Nuevo Pago Digital por Validar',
+                        `Un asesor acaba de registrar S/ ${monto} vía ${metodo_pago}. Requiere validación.`,
+                        'alerta'
+                    )
+                }
             }).catch(err => {
                 console.error('Error al iniciar notificación:', err)
             })

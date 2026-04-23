@@ -23,6 +23,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { CarteraAdvisorAssign } from '@/components/admin/cartera-advisor-assign'
 import { CarteraNavButtons } from '@/components/admin/cartera-nav-buttons'
+import { CarteraAccountsManageModal } from '@/components/admin/cartera-accounts-manage-modal'
 
 export const dynamic = 'force-dynamic'
 
@@ -292,10 +293,13 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
 
       {/* ACCOUNTS AREA */}
       <div className="space-y-3 pt-2">
-        <div className="flex items-end justify-between px-1">
-            <div className="flex items-center gap-2">
-               <PiggyBank className="w-4 h-4 text-blue-400" />
-               <h2 className="text-sm font-black text-white tracking-tight leading-none uppercase">Cuentas</h2>
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between px-1 gap-3">
+            <div className="flex items-center gap-3">
+               <div className="flex items-center gap-2">
+                  <PiggyBank className="w-4 h-4 text-blue-400" />
+                  <h2 className="text-sm font-black text-white tracking-tight leading-none uppercase">Cuentas</h2>
+               </div>
+               <CarteraAccountsManageModal carteraId={id} accounts={accounts} />
             </div>
             <div className="flex items-center gap-3 text-[9px] font-bold text-slate-600">
                <span className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" /> BANCO</span>
@@ -311,7 +315,7 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
                             <div className="flex items-center justify-between mb-2 md:mb-3">
                                 <Badge className={cn(
                                     "px-1.5 py-0 border-none font-black text-[6px] md:text-[6.5px] tracking-wider uppercase",
-                                    acc.tipo.toLowerCase() === 'banco' ? "bg-blue-500/10 text-blue-400" : "bg-emerald-500/10 text-emerald-400"
+                                    (acc.tipo === 'digital' || acc.tipo === 'cobranzas' || acc.tipo.toLowerCase() === 'banco') ? "bg-blue-500/10 text-blue-400" : "bg-emerald-500/10 text-emerald-400"
                                 )}>
                                     {acc.tipo}
                                 </Badge>

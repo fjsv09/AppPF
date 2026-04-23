@@ -96,7 +96,9 @@ export function calculateLoanMetrics(
   const cronograma = loan.cronograma_cuotas || [];
 
   // Fuente de verdad para pagos: standalonePagos > loan.pagos > flatMap(cronograma.pagos)
-  const pagos = standalonePagos || loan.pagos || cronograma.flatMap((c: any) => c.pagos || []);
+  // [FILTRO SEGURIDAD] Excluir pagos rechazados explícitamente
+  const pagosRaw = standalonePagos || loan.pagos || cronograma.flatMap((c: any) => c.pagos || []);
+  const pagos = pagosRaw.filter((p: any) => p.estado_verificacion !== 'rechazado');
 
   const totalPagar = Number(loan.monto) * (1 + (Number(loan.interes) / 100));
 
@@ -106,8 +108,10 @@ export function calculateLoanMetrics(
     ? pagos.reduce((sum: number, p: any) => sum + (Number(p.monto_pagado) || 0), 0)
     : cronograma.reduce((sum: number, c: any) => sum + (Number(c.monto_pagado) || 0), 0);
 
-  // Usamos el mayor para ser resilientes a desincronizaciones puntuales en BD
-  const totalPagadoAcumulado = Math.max(totalPagadoAcumuladoReal, cronograma.reduce((sum: number, c: any) => sum + (Number(c.monto_pagado) || 0), 0));
+  // [SINCRONIZACIÓN] Priorizamos la suma de transacciones reales (pagos) si existen.
+  // Solo usamos la suma del cronograma como fallback para préstamos migrados sin registros de pagos.
+  const sumCronograma = cronograma.reduce((sum: number, c: any) => sum + (Number(c.monto_pagado) || 0), 0);
+  const totalPagadoAcumulado = (pagosRaw.length > 0) ? totalPagadoAcumuladoReal : sumCronograma;
 
   if (loan.estado !== 'activo') {
     return {
@@ -336,7 +340,8 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
   let maxHistoricalDelay = 0;
 
   // 1. Preparar Pool de Trazabilidad (Alineado con DailyCollectorLog.tsx)
-  const rawPagos = (pagos || []);
+  // [FILTRO SEGURIDAD] Excluir pagos rechazados explícitamente
+  const rawPagos = (pagos || []).filter((p: any) => p.estado_verificacion !== 'rechazado');
 
   // Calcular Saldo de Sistema (Diferencia acumulada para resiliencia en migraciones)
   const totalPagadoEnPagos = rawPagos.reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
@@ -545,10 +550,11 @@ export function calculateClientReputation(client: any, allLoans: any[], config: 
 
   sortedLoans.forEach(l => {
     // Calcular salud individual para el promedio histórico
-    let flatPagos = l.pagos || [];
-    if (flatPagos.length === 0 && l.cronograma_cuotas) {
-      flatPagos = l.cronograma_cuotas.flatMap((c: any) => c.pagos || []);
+    let flatPagosRaw = l.pagos || [];
+    if (flatPagosRaw.length === 0 && l.cronograma_cuotas) {
+      flatPagosRaw = l.cronograma_cuotas.flatMap((c: any) => c.pagos || []);
     }
+    const flatPagos = flatPagosRaw.filter((p: any) => p.estado_verificacion !== 'rechazado');
     const loanScore = calculateLoanScore(l, flatPagos, getTodayPeru(), config);
     totalHistoricalHealth += loanScore.score;
 
@@ -954,7 +960,8 @@ export function getComprehensiveEvaluation(client: any, loans: any[], allPayment
 
     const isMigrado = (l.observacion_supervisor || '').includes('Préstamo migrado del sistema anterior');
     const isEffectivelyFinalized = isMigrado && (l.saldo_pendiente || 0) <= 0.01;
-    return l.estado === 'activo' && !isEffectivelyFinalized;
+    const isRejected = l.estado_verificacion === 'rechazado';
+    return l.estado === 'activo' && !isEffectivelyFinalized && !isRejected;
   });
 
   // Inyectar pagos si se proveen de forma externa (optimización para APIs)
@@ -1004,7 +1011,7 @@ export function getComprehensiveEvaluation(client: any, loans: any[], allPayment
   let totalPaymentsCount = 0;
 
   if (allPayments && allPayments.length > 0) {
-    allPayments.forEach(p => {
+    allPayments.filter((p: any) => p.estado_verificacion !== 'rechazado').forEach(p => {
       totalPaymentsCount++;
       if ((p.metodo_pago || 'Efectivo') === 'Efectivo') countEfectivo++;
       else countDigital++;
@@ -1013,7 +1020,7 @@ export function getComprehensiveEvaluation(client: any, loans: any[], allPayment
     enrichedLoans.forEach(l => {
       const cronograma = l.cronograma_cuotas || [];
       cronograma.forEach((c: any) => {
-        const cuotaPagos = c.pagos || [];
+        const cuotaPagos = (c.pagos || []).filter((p: any) => p.estado_verificacion !== 'rechazado');
         cuotaPagos.forEach((p: any) => {
           totalPaymentsCount++;
           const method = p.metodo_pago || 'Efectivo';

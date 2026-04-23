@@ -57,7 +57,7 @@ export async function PUT(
         }
 
         const nuevoMonto = parseFloat(monto)
-        const diffMonto = nuevoMonto - parseFloat(pagoActual.monto)
+        const diffMonto = nuevoMonto - parseFloat(pagoActual.monto_pagado)
 
         // 3.5 VALIDACIÓN DE CUADRE (Restricción Temporal Precisa)
         // Buscar TODOS los cuadres del asesor en esta fecha, sin filtrar por tipo
@@ -154,7 +154,7 @@ export async function PUT(
         await supabaseAdmin
             .from('pagos')
             .update({ 
-                monto: nuevoMonto,
+                monto_pagado: nuevoMonto,
                 metodo_pago: metodo_pago || pagoActual.metodo_pago
             })
             .eq('id', id)

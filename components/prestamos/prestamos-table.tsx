@@ -496,7 +496,7 @@ export function PrestamosTable({
 
             // Consolidar pagos de hoy (para auditoría) - Resiliencia ante diferentes estructuras de datos
             const allPagosRaw = [...(p.pagos || []), ...cronograma.flatMap((c: any) => c.pagos || [])]
-            const allPagos = Array.from(new Map(allPagosRaw.filter(p => p?.id).map(pay => [pay.id, pay])).values())
+            const allPagos = Array.from(new Map(allPagosRaw.filter(p => p?.id && p.estado_verificacion !== 'rechazado').map(pay => [pay.id, pay])).values())
 
             const pagosHoy = allPagos.filter((pag: any) => {
                 const f = pag.created_at || pag.fecha_pago

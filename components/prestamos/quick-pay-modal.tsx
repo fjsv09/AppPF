@@ -12,6 +12,7 @@ import { api } from '@/services/api'
 import { toBlob, toPng } from 'html-to-image'
 import { cn } from '@/lib/utils'
 import { VoucherContent } from '@/components/comunes/voucher-content'
+import { Camera, Image as ImageIcon } from 'lucide-react'
 
 interface QuickPayModalProps {
     open: boolean
@@ -65,6 +66,11 @@ export function QuickPayModal({
     const [logoUrl, setLogoUrl] = useState<string>('')
     const [lastPayment, setLastPayment] = useState<any>(null)
     const [historyPayments, setHistoryPayments] = useState<any[]>([])
+
+    // Voucher Upload State
+    const [voucherFile, setVoucherFile] = useState<File | null>(null)
+    const [voucherPreview, setVoucherPreview] = useState<string | null>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     const [location, setLocation] = useState<{lat: number, lng: number} | null>(null)
     const [gpsError, setGpsError] = useState<string | null>(null)
@@ -203,6 +209,8 @@ export function QuickPayModal({
             setLastPayment(null)
             setMetodoPago('')
             setLocation(null)
+            setVoucherFile(null)
+            setVoucherPreview(null)
         }
     }, [open])
 
@@ -246,13 +254,18 @@ export function QuickPayModal({
 
             const idsCuotas = cronograma.map((c: any) => c.id);
             const { data: pagosData } = idsCuotas.length > 0 
-                ? await supabase.from('pagos').select('*').in('cuota_id', idsCuotas).order('created_at', { ascending: true })
+                ? await supabase
+                    .from('pagos')
+                    .select('*')
+                    .in('cuota_id', idsCuotas)
+                    .neq('estado_verificacion', 'rechazado') // NO CONTAR PAGOS RECHAZADOS
+                    .order('created_at', { ascending: true })
                 : { data: null };
 
             const hData = pagosData || [];
 
-            // Virtual Distribution Logic
-            const totalPagadoHistorico = hData.reduce((acc, p) => acc + (parseFloat(p.monto_pagado) || 0), 0)
+            // Virtual Distribution Logic - Solo cuenta lo aprobado o pendiente (no rechazado)
+            const totalPagadoHistorico = hData.reduce((acc, p) => acc + (parseFloat(p.monto_pagado?.toString() || '0')), 0)
             let remainingToDistribute = totalPagadoHistorico
             
             const virtualCronograma = cronograma.map(c => {
@@ -438,15 +451,51 @@ export function QuickPayModal({
                 }
             }
         }
+        
+        if (metodoPago !== 'Efectivo' && !voucherFile) {
+            toast.error('Por favor sube o toma una foto del voucher')
+            return
+        }
+        
         setLoading(true)
+        let uploadedFileName = null
         try {
+            let finalVoucherUrl = undefined
+            
+            // Subir voucher a Supabase Storage si existe
+            if (voucherFile && metodoPago !== 'Efectivo') {
+                const toastId = toast.loading('Subiendo voucher...')
+                const fileExt = voucherFile.name.split('.').pop()
+                uploadedFileName = `voucher-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
+                
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('vouchers_pagos')
+                    .upload(uploadedFileName, voucherFile, {
+                        cacheControl: '3600',
+                        upsert: false
+                    })
+                    
+                if (uploadError) {
+                    toast.dismiss(toastId)
+                    throw new Error('Error al subir la imagen del voucher')
+                }
+                
+                const { data: { publicUrl } } = supabase.storage
+                    .from('vouchers_pagos')
+                    .getPublicUrl(uploadedFileName)
+                    
+                finalVoucherUrl = publicUrl
+                toast.success('Voucher subido', { id: toastId })
+            }
+
             const payAmount = parseFloat(amount)
             const res = await api.pagos.registrar({ 
                 cuota_id: quota.id, 
                 monto: payAmount,
                 metodo_pago: metodoPago,
                 latitud: location?.lat,
-                longitud: location?.lng
+                longitud: location?.lng,
+                voucher_url: finalVoucherUrl
             })
 
             const qRes = await supabase.from('cronograma_cuotas').select('*').eq('prestamo_id', prestamo.id).order('fecha_vencimiento', { ascending: true })
@@ -472,7 +521,14 @@ export function QuickPayModal({
             toast.success('Pago registrado correctamente')
             if (onSuccess) onSuccess(res)
         } catch (error: any) {
+            console.error(error)
             toast.error('Error al registrar pago', { description: error.message })
+            
+            // LIMPIEZA: Si la subida de imagen funcionó pero el registro en DB falló, borramos la imagen
+            if (uploadedFileName) {
+                console.log('Anulando subida de imagen por fallo en registro...')
+                supabase.storage.from('vouchers_pagos').remove([uploadedFileName])
+            }
         } finally {
             setLoading(false)
         }
@@ -610,43 +666,53 @@ export function QuickPayModal({
                                         </div>
                                     ) : (
                                         <div className="grid gap-4 md:gap-6 py-1">
-                                            <div className="grid grid-cols-2 gap-4 p-3 bg-slate-950 rounded-xl border border-slate-800">
-                                                <div>
-                                                    <p className="text-[10px] text-slate-500 mb-1 font-bold uppercase tracking-wider">Total Cuota</p>
-                                                    <p className="text-lg font-semibold text-slate-300">S/ {quota?.monto_cuota?.toFixed(2)}</p>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="text-[10px] text-slate-500 mb-1 font-bold uppercase tracking-wider">Pendiente</p>
-                                                    <p className="text-lg font-bold text-rose-400">
-                                                        S/ {(quota?.monto_cuota - (quota?.monto_pagado||0)).toFixed(2)}
-                                                    </p>
-                                                </div>
+                                        {!quota ? (
+                                            <div className="py-8 text-center bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+                                                <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-2" />
+                                                <p className="text-sm font-bold text-emerald-400 uppercase tracking-widest">Préstamo Liquidado</p>
+                                                <p className="text-[10px] text-slate-400 mt-1">Todas las cuotas han sido pagadas.</p>
                                             </div>
+                                        ) : (
+                                            <>
+                                                <div className="grid grid-cols-2 gap-4 p-3 bg-slate-950 rounded-xl border border-slate-800">
+                                                    <div>
+                                                        <p className="text-[10px] text-slate-500 mb-1 font-bold uppercase tracking-wider">Total Cuota</p>
+                                                        <p className="text-lg font-semibold text-slate-300">S/ {parseFloat(quota?.monto_cuota || 0).toFixed(2)}</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-[10px] text-slate-500 mb-1 font-bold uppercase tracking-wider">Pendiente</p>
+                                                        <p className="text-lg font-bold text-rose-400">
+                                                            S/ {(parseFloat(quota?.monto_cuota || 0) - (parseFloat(quota?.monto_pagado || 0))).toFixed(2)}
+                                                        </p>
+                                                    </div>
+                                                </div>
 
-                                            <div className="space-y-2 mt-1">
-                                                <Label htmlFor="amount" className="text-sm font-medium text-slate-300">Monto del cobro</Label>
-                                                <div className="relative">
-                                                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                                                    <Input
-                                                        id="amount"
-                                                        type="number"
-                                                        value={amount}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value
-                                                            const numericVal = parseFloat(val)
-                                                            const maxAmount = fullCronograma.reduce((acc, c) => acc + (parseFloat(c.monto_cuota) - parseFloat(c.monto_pagado || 0)), 0)
-                                                            if (val === '' || (numericVal >= 0 && numericVal <= maxAmount + 0.01)) {
-                                                                setAmount(val)
-                                                            } else if (numericVal > maxAmount) {
-                                                                setAmount(maxAmount.toFixed(2))
-                                                                toast.warning(`Máximo: S/ ${maxAmount.toFixed(2)}`)
-                                                            }
-                                                        }}
-                                                        className="pl-10 h-10 text-lg font-bold bg-slate-950 border-slate-700 text-white rounded-xl"
-                                                        placeholder="0.00"
-                                                    />
+                                                <div className="space-y-2 mt-1">
+                                                    <Label htmlFor="amount" className="text-sm font-medium text-slate-300">Monto del cobro</Label>
+                                                    <div className="relative">
+                                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center text-slate-400 font-bold text-sm">S/</div>
+                                                        <Input
+                                                            id="amount"
+                                                            type="number"
+                                                            value={amount}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value
+                                                                const numericVal = parseFloat(val)
+                                                                const maxAmount = fullCronograma.reduce((acc, c) => acc + (parseFloat(c.monto_cuota) - parseFloat(c.monto_pagado || 0)), 0)
+                                                                if (val === '' || (numericVal >= 0 && numericVal <= maxAmount + 0.01)) {
+                                                                    setAmount(val)
+                                                                } else if (numericVal > maxAmount) {
+                                                                    setAmount(maxAmount.toFixed(2))
+                                                                    toast.warning(`Máximo: S/ ${maxAmount.toFixed(2)}`)
+                                                                }
+                                                            }}
+                                                            className="pl-10 h-10 text-lg font-bold bg-slate-950 border-slate-700 text-white rounded-xl"
+                                                            placeholder="0.00"
+                                                        />
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            </>
+                                        )}
                                             
                                             <div className="space-y-2 mt-1">
                                                 <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider">Método de Pago</Label>
@@ -680,6 +746,91 @@ export function QuickPayModal({
                                                 </div>
                                             </div>
 
+                                            {/* Subida de Voucher */}
+                                            {metodoPago === 'Yape' && (
+                                                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mt-2 animate-in fade-in slide-in-from-top-2">
+                                                    <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider block mb-3">Evidencia de Pago</Label>
+                                                    
+                                                    <div className="flex flex-col items-center gap-3">
+                                                        {voucherPreview ? (
+                                                            <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-slate-700 bg-black flex items-center justify-center">
+                                                                <img src={voucherPreview} alt="Voucher Preview" className="max-h-full max-w-full object-contain" />
+                                                                <Button 
+                                                                    type="button"
+                                                                    variant="destructive" 
+                                                                    size="sm"
+                                                                    className="absolute top-2 right-2 h-7 rounded-md"
+                                                                    onClick={() => {
+                                                                        setVoucherFile(null)
+                                                                        setVoucherPreview(null)
+                                                                        if (fileInputRef.current) fileInputRef.current.value = ''
+                                                                    }}
+                                                                >
+                                                                    Cambiar Foto
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="grid grid-cols-2 gap-3 w-full">
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="outline"
+                                                                    className="h-20 border-slate-700 hover:border-indigo-500 hover:bg-indigo-500/10 flex flex-col gap-2 rounded-xl"
+                                                                    onClick={() => fileInputRef.current?.click()}
+                                                                >
+                                                                    <ImageIcon className="h-6 w-6 text-slate-400" />
+                                                                    <span className="text-xs text-slate-400">Subir de Galería</span>
+                                                                </Button>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="outline"
+                                                                    className="h-20 border-slate-700 hover:border-indigo-500 hover:bg-indigo-500/10 flex flex-col gap-2 rounded-xl"
+                                                                    onClick={() => {
+                                                                        // Pequeño hack para forzar la cámara en móviles
+                                                                        if (fileInputRef.current) {
+                                                                            fileInputRef.current.setAttribute('capture', 'environment')
+                                                                            fileInputRef.current.click()
+                                                                            setTimeout(() => {
+                                                                                fileInputRef.current?.removeAttribute('capture')
+                                                                            }, 1000)
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <Camera className="h-6 w-6 text-slate-400" />
+                                                                    <span className="text-xs text-slate-400">Tomar Foto</span>
+                                                                </Button>
+                                                            </div>
+                                                        )}
+                                                        <input 
+                                                            type="file" 
+                                                            ref={fileInputRef}
+                                                            className="hidden" 
+                                                            accept="image/*"
+                                                            onChange={(e) => {
+                                                                const file = e.target.files?.[0]
+                                                                if (file) {
+                                                                    // Validar tamaño (< 5MB)
+                                                                    if (file.size > 5 * 1024 * 1024) {
+                                                                        toast.error('La imagen es muy grande. Máximo 5MB.')
+                                                                        return
+                                                                    }
+                                                                    setVoucherFile(file)
+                                                                    const reader = new FileReader()
+                                                                    reader.onloadend = () => setVoucherPreview(reader.result as string)
+                                                                    reader.readAsDataURL(file)
+                                                                }
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="bg-amber-950/30 border border-amber-900/50 rounded-lg p-3 flex gap-3 mt-2">
+                                                <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+                                                <div className="text-xs text-amber-200/80">
+                                                    <span className="font-bold text-amber-400">¿Pago Mixto?</span> Si el cliente paga una parte en efectivo y otra digital, registra cada monto por <span className="font-bold underline text-amber-300">separado</span> (primero uno y luego el otro).
+                                                </div>
+                                            </div>
+
                                             {fullCronograma.filter(c => c.fecha_vencimiento < today && c.estado !== 'pagado').length > 0 && quota?.fecha_vencimiento === today && (
                                                 <div className="bg-blue-950/30 border border-blue-900/50 rounded-lg p-3 flex gap-3">
                                                     <AlertCircle className="w-5 h-5 text-blue-500 shrink-0" />
@@ -703,14 +854,14 @@ export function QuickPayModal({
                                     </Button>
                                     <Button 
                                         onClick={handlePayment} 
-                                        disabled={loading || !amount || parseFloat(amount) <= 0 || !metodoPago || (exigirGps && !location)}
+                                        disabled={loading || !amount || parseFloat(amount) <= 0 || !metodoPago || (exigirGps && !location) || (metodoPago !== 'Efectivo' && !voucherFile)}
                                         className={cn(
                                             "flex-1 h-12 text-lg font-bold shadow-xl transition-all duration-300",
                                             !metodoPago
                                             ? "bg-slate-800 text-slate-500 cursor-not-allowed opacity-50"
                                             : metodoPago === 'Efectivo' 
                                                 ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20 text-white" 
-                                                : "bg-indigo-600 hover:bg-indigo-500 shadow-indigo-900/20 text-white"
+                                                : (!voucherFile ? "bg-slate-700 text-slate-400" : "bg-indigo-600 hover:bg-indigo-500 shadow-indigo-900/20 text-white")
                                         )}
                                     >
                                         {loading ? (

@@ -20,8 +20,13 @@ export async function POST(request: NextRequest) {
         }
 
         const updates: any = {}
-        if (email) updates.email = email
-        if (password) updates.password = password
+        if (email) {
+            updates.email = email
+            updates.email_confirm = true
+        }
+        if (password) {
+            updates.password = password
+        }
         
         // Update user_metadata if role or name changed
         const metadata: any = {}

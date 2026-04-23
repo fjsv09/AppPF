@@ -80,6 +80,7 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
             perfiles!registrado_por ( nombre_completo )
         `, { count: 'exact' })
         .not('registrado_por', 'is', null)
+        .neq('estado_verificacion', 'rechazado')
 
     if (userRol === 'asesor') {
         // Asesor: Ve todos los pagos de préstamos de sus clientes (incluyendo los hechos por admin/supervisor)
@@ -180,8 +181,9 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
     // We run a separate query for totals to respect filters but ignore pagination
     let statsQuery = supabaseAdmin
         .from('pagos')
-        .select('monto_pagado, fecha_pago, registrado_por, cronograma_cuotas!inner(prestamos!inner(clientes!inner(nombres)))')
+        .select('monto_pagado, fecha_pago, registrado_por, cronograma_cuotas!inner(prestamos!inner(clientes!inner(nombres, asesor_id)))')
         .not('registrado_por', 'is', null)
+        .neq('estado_verificacion', 'rechazado')
 
     // Apply the same filters as the main list
     if (userRol !== 'admin') {

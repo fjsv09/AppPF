@@ -68,7 +68,7 @@ export async function PUT(
                 // para mantener el estado "pagado" (si así estaba).
                 if (diffMonto !== 0) {
                     const nuevoMontoPagadoCuota = parseFloat(cuotaActual.monto_pagado) + diffMonto
-                    const nuevoMontoPagoGlobal = parseFloat(pago.monto) + diffMonto
+                    const nuevoMontoPagoGlobal = parseFloat(pago.monto_pagado) + diffMonto
 
                     // Actualizar Pago y Distribución
                     await supabaseAdmin
@@ -78,14 +78,14 @@ export async function PUT(
                     
                     await supabaseAdmin
                         .from('pagos')
-                        .update({ monto: nuevoMontoPagoGlobal })
+                        .update({ monto_pagado: nuevoMontoPagoGlobal })
                         .eq('id', pago.id)
 
                     // Ajustar Cuenta de Cobranza del Asesor
                     const { data: carteras } = await supabaseAdmin
                         .from('carteras')
                         .select('id')
-                        .eq('asesor_id', pago.asesor_id)
+                        .eq('asesor_id', pago.registrado_por)
                     
                     const carterIds = carteras?.map(c => c.id) || []
                     const { data: cuentaCobranza } = await supabaseAdmin

@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { CheckCircle, ArrowRight } from 'lucide-react'
+import { CheckCircle, ArrowRight, Clock } from 'lucide-react'
 import { formatDatePeru, cn } from '@/lib/utils'
 
 interface VoucherContentProps {
@@ -38,7 +38,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
         // 1. Obtener todos los pagos realizados hasta este momento (inclusive)
         // Si no tenemos allPayments, usamos solo el pago actual como fallback
         const currentId = payment.id || 'current';
-        const sortedPayments = [...(allPayments || [])];
+        const sortedPayments = (allPayments || []).filter(p => p.estado_verificacion !== 'rechazado');
         
         // Si el pago actual no está en la lista (pasa en registros nuevos), lo añadimos para el cálculo
         if (!sortedPayments.find(p => p.id === currentId)) {
@@ -141,11 +141,17 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                     )}
                 </div>
                 <h2 className={cn("font-black relative z-10 tracking-tight", isPrinting ? "text-lg text-black" : "text-3xl text-white drop-shadow-lg")}>
-                    ¡Pago Exitoso!
+                    {payment.estado_verificacion === 'pendiente' ? '¡Pago Registrado!' : '¡Pago Exitoso!'}
                 </h2>
                 <p className={cn("uppercase font-bold tracking-[0.3em] relative z-10", isPrinting ? "text-black text-[7px] m-0 leading-none mt-0.5" : "text-emerald-50/70 text-[10px] mt-1")}>
-                    Transacción Procesada
+                    {payment.estado_verificacion === 'pendiente' ? 'Operación pendiente de validación' : 'Transacción Procesada'}
                 </p>
+                {payment.estado_verificacion === 'pendiente' && !isPrinting && (
+                    <div className="mt-3 relative z-10 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-200 text-[10px] font-bold uppercase tracking-wider animate-pulse">
+                        <Clock className="w-3 h-3" />
+                        Esperando verificación de oficina
+                    </div>
+                )}
             </div>
             
             {/* Body */}
@@ -178,7 +184,9 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                             {cuotasAtrasadas > 0 && (
                                  <div className="flex items-center justify-center gap-1.5 text-rose-600 font-black animate-bounce bg-rose-500/5 py-0.5 rounded-sm mb-0.5 border border-rose-500/20 border-dashed">
                                     <span className={cn(isPrinting ? "text-base" : "text-lg")}>{cuotasAtrasadas}</span>
-                                    <span className={cn(isPrinting ? "text-[9px]" : "text-[10px]", "uppercase tracking-tighter")}>Cuotas Atrasadas</span>
+                                    <span className={cn(isPrinting ? "text-[9px]" : "text-[10px]", "uppercase tracking-tighter")}>
+                                        {cuotasAtrasadas === 1 ? 'Cuota Atrasada' : 'Cuotas Atrasadas'}
+                                    </span>
                                  </div>
                             )}
                             <div className="flex justify-between items-center text-[11px]">
@@ -205,6 +213,12 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                         <span className={`${theme.textMuted} font-bold uppercase tracking-tighter mt-0.5`}>Cliente</span>
                         <span className={`${theme.textMain} font-black text-right max-w-[75%] leading-tight ${isPrinting ? 'text-[9px]' : 'text-base'} italic uppercase tracking-tight`}>
                             {client?.nombres || 'Cliente'}
+                        </span>
+                    </div>
+                    <div className={cn("flex justify-between items-center", isPrinting ? "text-[8px] leading-tight" : "text-[11px]")}>
+                        <span className={`${theme.textMuted} font-bold uppercase tracking-tighter`}>Método de Pago</span>
+                        <span className={`${theme.textMain} font-bold uppercase ${isPrinting ? 'text-[8px]' : 'text-[11px]'}`}>
+                            {payment.metodo_pago === 'Efectivo' ? 'EFECTIVO' : 'DIGITAL'}
                         </span>
                     </div>
                     <div className={cn("flex justify-between items-center", isPrinting ? "text-[8px] leading-tight" : "text-[11px]")}>

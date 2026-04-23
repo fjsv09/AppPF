@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { Home, Users, Banknote, Calendar, ShieldAlert, History, LogOut, Settings, ChartBar, FileText, Menu, RefreshCw, Cog, Briefcase, Camera, Bell, Landmark, Wallet, UserCog, Receipt, CreditCard, Target, Award, Contact, ChevronLeft, ChevronRight, Clock, Loader2, TrendingUp } from 'lucide-react'
+import { Home, Users, Banknote, Calendar, ShieldAlert, History, LogOut, Settings, ChartBar, FileText, Menu, RefreshCw, Cog, Briefcase, Camera, Bell, Landmark, Wallet, UserCog, Receipt, CreditCard, Target, Award, Contact, ChevronLeft, ChevronRight, Clock, Loader2, TrendingUp, CheckCircle } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Button } from './ui/button'
@@ -116,6 +116,7 @@ export function DashboardNav({
         { href: '/dashboard/renovaciones', label: 'Renovaciones', icon: RefreshCw, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
         { href: '/dashboard/tareas', label: 'Tareas', icon: Camera, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
         { href: '/dashboard/pagos', label: 'Pagos', icon: Calendar, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
+        { href: '/dashboard/validacion-pagos', label: 'Validar Pagos', icon: CheckCircle, roles: ['admin'], category: 'Operaciones' },
         
         // --- Gestión y Supervisión ---
         { href: '/dashboard/usuarios', label: 'Gestión de Equipo', icon: UserCog, roles: ['admin'], category: 'Gestión' },

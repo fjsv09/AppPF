@@ -35,6 +35,7 @@ import {
 import { formatDate } from '@/utils/format'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { createClient } from '@/utils/supabase/client'
+import { cn } from '@/lib/utils'
 
 interface Cliente {
     id: string

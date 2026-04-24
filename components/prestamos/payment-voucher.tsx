@@ -114,13 +114,33 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
         document.getElementById('print-container-native')?.remove()
 
         try {
-            // Pequeña espera para asegurar que los estilos estén aplicados y la imagen cargada
-            await new Promise(resolve => setTimeout(resolve, 300))
+            // Esperar a que TODAS las imágenes del contenedor de impresión estén cargadas
+            const images = printRef.current.querySelectorAll('img')
+            if (images.length > 0) {
+                await Promise.all(Array.from(images).map(img => {
+                    if (img.complete && img.naturalWidth > 0) return Promise.resolve()
+                    return new Promise<void>((resolve) => {
+                        img.onload = () => resolve()
+                        img.onerror = () => resolve()
+                        // Forzar recarga si la imagen no ha empezado a cargar
+                        if (!img.complete && img.src) {
+                            const currentSrc = img.src
+                            img.src = ''
+                            img.src = currentSrc
+                        }
+                        // Timeout de seguridad
+                        setTimeout(resolve, 2000)
+                    })
+                }))
+            }
+            
+            // Pequeña espera adicional para renderizado del DOM
+            await new Promise(resolve => setTimeout(resolve, 200))
 
             // Generar imagen de alta calidad con fondo blanco para la impresora térmica
             const dataUrl = await toPng(printRef.current, { 
                 backgroundColor: '#ffffff',
-                pixelRatio: 2, // Reducido a 2 para evitar límites de memoria en canvas de Android
+                pixelRatio: 2,
                 skipFonts: false,
                 cacheBust: true,
                 style: {
@@ -218,8 +238,24 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
         const toastId = toast.loading('Preparando imagen para iOS...')
         
         try {
-            // Pequeña espera para asegurar que los estilos estén aplicados y recursos cargados
-            await new Promise(resolve => setTimeout(resolve, 300))
+            // Esperar a que TODAS las imágenes estén cargadas antes de captura
+            const images = printRef.current.querySelectorAll('img')
+            if (images.length > 0) {
+                await Promise.all(Array.from(images).map(img => {
+                    if (img.complete && img.naturalWidth > 0) return Promise.resolve()
+                    return new Promise<void>((resolve) => {
+                        img.onload = () => resolve()
+                        img.onerror = () => resolve()
+                        if (!img.complete && img.src) {
+                            const currentSrc = img.src
+                            img.src = ''
+                            img.src = currentSrc
+                        }
+                        setTimeout(resolve, 2000)
+                    })
+                }))
+            }
+            await new Promise(resolve => setTimeout(resolve, 200))
 
             const dataUrl = await toPng(printRef.current, { 
                 backgroundColor: '#ffffff',
@@ -293,12 +329,10 @@ export function PaymentVoucher({ open, onOpenChange, payment, loan, client, cron
 
                 {/* Print View (Hidden High Contrast for Thermal) */}
                 <div ref={iOSPrintContainerRef} style={{ 
-                    position: 'fixed', 
-                    left: 0, 
+                    position: 'absolute', 
+                    left: '-9999px', 
                     top: 0, 
                     width: '58mm', 
-                    zIndex: -1, 
-                    opacity: 0, 
                     pointerEvents: 'none',
                     backgroundColor: 'white'
                 }}>

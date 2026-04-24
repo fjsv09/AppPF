@@ -132,7 +132,26 @@ export function QuickPayModal({
                 .select('valor')
                 .eq('clave', 'logo_sistema_url')
                 .maybeSingle()
-            if (data?.valor) setLogoUrl(data.valor)
+            if (data?.valor) {
+                // Convertir a Base64 para evitar CORS en html-to-image
+                try {
+                    const img = new Image()
+                    img.crossOrigin = 'anonymous'
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas')
+                        canvas.width = img.width
+                        canvas.height = img.height
+                        const ctx = canvas.getContext('2d')
+                        if (!ctx) { setLogoUrl(data.valor); return }
+                        ctx.drawImage(img, 0, 0)
+                        setLogoUrl(canvas.toDataURL('image/png'))
+                    }
+                    img.onerror = () => setLogoUrl(data.valor)
+                    img.src = data.valor + (data.valor.includes('?') ? '&' : '?') + 'cb=' + Date.now()
+                } catch {
+                    setLogoUrl(data.valor)
+                }
+            }
         }
         
         if (open && !result) {
@@ -318,9 +337,29 @@ export function QuickPayModal({
         document.getElementById('print-container-native')?.remove()
 
         try {
+            // Esperar a que TODAS las imágenes del contenedor de impresión estén cargadas
+            const images = printRef.current.querySelectorAll('img')
+            if (images.length > 0) {
+                await Promise.all(Array.from(images).map(img => {
+                    if (img.complete && img.naturalWidth > 0) return Promise.resolve()
+                    return new Promise<void>((resolve) => {
+                        img.onload = () => resolve()
+                        img.onerror = () => resolve()
+                        if (!img.complete && img.src) {
+                            const currentSrc = img.src
+                            img.src = ''
+                            img.src = currentSrc
+                        }
+                        setTimeout(resolve, 2000)
+                    })
+                }))
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 200))
+
             const dataUrl = await toPng(printRef.current, { 
                 backgroundColor: '#ffffff',
-                pixelRatio: 3,
+                pixelRatio: 2,
                 skipFonts: false,
                 cacheBust: true
             })

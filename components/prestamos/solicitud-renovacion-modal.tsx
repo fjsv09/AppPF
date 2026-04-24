@@ -87,6 +87,7 @@ export function SolicitudRenovacionModal({
     clienteId,
     clienteNombre, 
     clienteFotoPerfil,
+    clienteTelefono,
     currentMonto,
     currentInteres,
     currentModalidad,

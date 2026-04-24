@@ -88,66 +88,18 @@ export function DailyCollectorLog({
     const canPayDueToTime = isWithinHours || isTemporaryUnlocked
     // --- FIN LOGICA DE ACCESO ---
 
-    // --- VIRTUAL DISTRIBUTION LOGIC ---
-    const virtualCronograma = useMemo(() => {
-        if (!cronograma) return [];
-        const sorted = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota);
-        
-        // [SINCRONIZACIÓN] Para préstamos migrados, es posible que no existan registros en 'pagos'
-        // pero sí montos pagados en 'cronograma_cuotas'. Usamos el máximo para ser resilientes.
-        const validPagos = (pagos || []).filter((p: any) => p.estado_verificacion !== 'rechazado');
-        const totalPagadoEnPagos = validPagos.reduce((acc: number, p: any) => acc + (parseFloat(p.monto_pagado) || 0), 0);
-        const totalPagadoEnCronograma = (cronograma || []).reduce((acc: number, c: any) => acc + (parseFloat(c.monto_pagado) || 0), 0);
-        const hasPhysicalPagos = (pagos || []).length > 0;
-        const totalPagadoHistorico = hasPhysicalPagos ? totalPagadoEnPagos : totalPagadoEnCronograma;
-        
-        let remaining = totalPagadoHistorico;
-        
-        return sorted.map(c => {
-            const montoCuota = parseFloat(c.monto_cuota || 0);
-            let pagadoEnEstaCuota = 0;
-            if (remaining >= montoCuota - 0.01) {
-                pagadoEnEstaCuota = montoCuota;
-                remaining -= montoCuota;
-            } else if (remaining > 0) {
-                pagadoEnEstaCuota = Math.round(remaining * 100) / 100;
-                remaining = 0;
-            }
-            return {
-                ...c,
-                monto_pagado_virtual: pagadoEnEstaCuota,
-                monto_pagado: pagadoEnEstaCuota // OVERRIDE PARA LA UI
-            };
-        });
-    }, [cronograma, pagos]);
-
-    // --- LOGICA DE CUOTA ACTIVA (Identificar cobro del día) ---
-    const activeQuota = useMemo(() => {
-        if (virtualCronograma.length === 0) return null;
-        const quotasWithStatus = virtualCronograma.map(c => {
-            const montoCuota = parseFloat(c.monto_cuota)
-            const montoPagado = parseFloat(c.monto_pagado)
-            return { ...c, isPaid: (montoCuota - montoPagado) <= 0.01 }
-        })
-        const firstUnpaid = quotasWithStatus.find(q => !q.isPaid)
-        const todayQuota = quotasWithStatus.find(q => !q.isPaid && q.fecha_vencimiento === todayStr)
-        return todayQuota || firstUnpaid
-    }, [virtualCronograma, todayStr])
-    // --- FIN LOGICA CUOTA ACTIVA ---
-
-    // --- WATERFALL DISTRIBUTION LOGIC (Trazabilidad Real) ---
-    const waterfallData = useMemo(() => {
-        if (!cronograma) return { assignments: [], quotaSources: {}, paymentDestinations: {} };
+    // --- NUEVA LÓGICA DE DISTRIBUCIÓN CONSISTENTE (WATERFALL) ---
+    const waterfallDistribution = useMemo(() => {
+        if (!cronograma) return { virtualCronograma: [], quotaSources: {}, paymentDestinations: {} };
         
         const sortedQuotas = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota);
         const rawPagos = (pagos || []).filter((p: any) => p.estado_verificacion !== 'rechazado');
         
-        // 1. Calcular Saldo de Sistema (Diferencia acumulada)
-        const totalPagadoEnPagos = rawPagos.reduce((s: number, p: any) => s + (parseFloat(p.monto_pagado) || 0), 0);
-        const totalPagadoEnCronograma = cronograma.reduce((s: number, c: any) => s + (parseFloat(c.monto_pagado) || 0), 0);
-
         // [SINCRONIZACIÓN] Trust transactions over cronograma sum
-        const hasPhysicalPagos = (pagos || []).length > 0;
+        const hasPhysicalPagos = rawPagos.length > 0;
+        const totalPagadoEnPagos = rawPagos.reduce((s: number, p: any) => s + (parseFloat(p.monto_pagado) || 0), 0);
+        const totalPagadoEnCronograma = (cronograma || []).reduce((s: number, c: any) => s + (parseFloat(c.monto_pagado) || 0), 0);
+
         let systemMoney = hasPhysicalPagos ? 0 : Math.max(0, totalPagadoEnCronograma - totalPagadoEnPagos);
 
         const sortedPagos = [...rawPagos].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -158,7 +110,6 @@ export function DailyCollectorLog({
             date: formatDatePeru(p.created_at, 'isoDate')
         }));
 
-        const assignments: any[] = [];
         const qSources: any = {};
         const pDests: any = {};
         const remainingNeeded = {} as any;
@@ -182,7 +133,6 @@ export function DailyCollectorLog({
                 paymentId: pay.id, paymentDate: pay.date,
                 amount: amt, type: finalType, isSystem: pay.isSystem
             };
-            assignments.push(a);
             qSources[quota.id].push(a);
             if (!pDests[pay.id]) pDests[pay.id] = [];
             pDests[pay.id].push(a);
@@ -201,7 +151,6 @@ export function DailyCollectorLog({
         }
 
         // FASE 2: Prioridad Día (Intent - Misma Fecha)
-        // Si hay un pago realizado el mismo día que una cuota, cubrir esa primero para asegurar status "CUMPLIÓ"
         pool.forEach(p => {
              const sameDayQuota = sortedQuotas.find(q => q.fecha_vencimiento === p.date);
              if (sameDayQuota && remainingNeeded[sameDayQuota.id] > 0.01) {
@@ -221,9 +170,36 @@ export function DailyCollectorLog({
             });
         });
 
-        return { assignments, quotaSources: qSources, paymentDestinations: pDests };
+        const virtualCronograma = sortedQuotas.map(q => {
+            const pagado = (parseFloat(q.monto_cuota) || 0) - remainingNeeded[q.id];
+            return {
+                ...q,
+                monto_pagado_virtual: pagado,
+                monto_pagado: pagado // OVERRIDE PARA LA UI
+            };
+        });
+
+        return { virtualCronograma, quotaSources: qSources, paymentDestinations: pDests };
     }, [cronograma, pagos]);
+
+    const virtualCronograma = waterfallDistribution.virtualCronograma;
+    const waterfallData = waterfallDistribution;
     // --- FIN WATERFALL ---
+
+    // --- LOGICA DE CUOTA ACTIVA (Identificar cobro del día) ---
+    const activeQuota = useMemo(() => {
+        if (virtualCronograma.length === 0) return null;
+        const quotasWithStatus = virtualCronograma.map(c => {
+            const montoCuota = parseFloat(c.monto_cuota)
+            const montoPagado = parseFloat(c.monto_pagado)
+            return { ...c, isPaid: (montoCuota - montoPagado) <= 0.01 }
+        })
+        const firstUnpaid = quotasWithStatus.find(q => !q.isPaid)
+        const todayQuota = quotasWithStatus.find(q => !q.isPaid && q.fecha_vencimiento === todayStr)
+        return todayQuota || firstUnpaid
+    }, [virtualCronograma, todayStr])
+    // --- FIN LOGICA CUOTA ACTIVA ---
+
     const allRows = useMemo(() => {
         if (virtualCronograma.length === 0) return []
         const validPagos = (pagos || []).filter((p: any) => p.estado_verificacion !== 'rechazado');

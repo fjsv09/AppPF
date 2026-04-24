@@ -57,23 +57,49 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
         const paymentsAtThatTime = paymentIndex >= 0 ? sortedPayments.slice(0, paymentIndex + 1) : [payment]
         const totalPaidAtThatTime = paymentsAtThatTime.reduce((acc, p) => acc + Number(p.monto_pagado || p.pago_monto || 0), 0)
         
-        let remainingToDistribute = totalPaidAtThatTime
         const cronogramaOrdenado = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota)
+        const remainingNeeded = {} as any
+        cronogramaOrdenado.forEach(q => { remainingNeeded[q.id] = Number(q.monto_cuota) })
+
+        const formatDateISO = (d: any) => {
+            try {
+                return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date(d))
+            } catch(e) { return '' }
+        }
+
+        const pool = paymentsAtThatTime.map(p => ({
+            ...p,
+            rem: Number(p.monto_pagado || p.pago_monto || 0),
+            date: formatDateISO(p.created_at)
+        }))
+
+        // FASE 2: Prioridad Día (Mismo día del pago cubre su cuota primero)
+        pool.forEach(p => {
+             const sameDayQuota = cronogramaOrdenado.find(q => q.fecha_vencimiento === p.date);
+             if (sameDayQuota && remainingNeeded[sameDayQuota.id] > 0.01) {
+                 const take = Math.min(p.rem, remainingNeeded[sameDayQuota.id]);
+                 remainingNeeded[sameDayQuota.id] -= take;
+                 p.rem -= take;
+             }
+        });
+
+        // FASE 3: Cascada FIFO Residual
+        cronogramaOrdenado.forEach(q => {
+            pool.forEach(p => {
+                if (remainingNeeded[q.id] <= 0.01 || p.rem <= 0.01) return;
+                const take = Math.min(p.rem, remainingNeeded[q.id]);
+                remainingNeeded[q.id] -= take;
+                p.rem -= take;
+            });
+        });
         
         const virtualCronograma = cronogramaOrdenado.map(c => {
             const montoCuota = Number(c.monto_cuota || 0)
-            let pagadoEnEstaCuota = 0
-            if (remainingToDistribute >= montoCuota - 0.01) {
-                pagadoEnEstaCuota = montoCuota
-                remainingToDistribute -= montoCuota
-            } else if (remainingToDistribute > 0) {
-                pagadoEnEstaCuota = Math.round(remainingToDistribute * 100) / 100
-                remainingToDistribute = 0
-            }
+            const pagadoVirtual = montoCuota - remainingNeeded[c.id]
             return {
                 ...c,
-                monto_pagado_virtual: pagadoEnEstaCuota,
-                isPagadaVirtual: pagadoEnEstaCuota >= (montoCuota - 0.01)
+                monto_pagado_virtual: pagadoVirtual,
+                isPagadaVirtual: pagadoVirtual >= (montoCuota - 0.01)
             }
         })
         

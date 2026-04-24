@@ -95,26 +95,95 @@ export function CronogramaClient({
     // Calculate Global State for Display
     const sorted = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota)
     
-    // Virtual Distribution Logic (Align with VoucherContent & Loanmetrics)
-    // Usamos todos los pagos históricos para calcular cómo se distribuyen lógicamente sobre las cuotas
-    const totalPagadoHistorico = pagos.reduce((acc, p) => acc + (parseFloat(p.monto_pagado) || 0), 0)
-    let remainingToDistribute = totalPagadoHistorico
-    
-    const virtualCronograma = sorted.map(c => {
-        const montoCuota = parseFloat(c.monto_cuota || 0)
-        let pagadoEnEstaCuota = 0
-        if (remainingToDistribute >= montoCuota - 0.01) {
-            pagadoEnEstaCuota = montoCuota
-            remainingToDistribute -= montoCuota
-        } else if (remainingToDistribute > 0) {
-            pagadoEnEstaCuota = Math.round(remainingToDistribute * 100) / 100
-            remainingToDistribute = 0
+    // --- NUEVA LÓGICA DE DISTRIBUCIÓN CONSISTENTE (WATERFALL) ---
+    // Importante: No usar lib/utils directamente para formateo de fechas si no está disponible,
+    // pero aquí lo usamos para consistencia con DailyCollectorLog.
+    const formatDatePeru = (date: string, formatType: 'isoDate' | 'time') => {
+        const d = new Date(date);
+        if (formatType === 'isoDate') {
+            return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(d);
         }
-        return {
-            ...c,
-            monto_pagado_virtual: pagadoEnEstaCuota
+        return new Intl.DateTimeFormat('es-PE', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+    };
+
+    const waterfallDistribution = (function() {
+        if (!cronograma) return { virtualCronograma: [], quotaSources: {}, paymentDestinations: {} };
+        
+        const sortedQuotas = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota);
+        const rawPagos = (pagos || []).filter((p: any) => p.estado_verificacion !== 'rechazado');
+        const hasPhysicalPagos = rawPagos.length > 0;
+        const totalPagadoEnPagos = rawPagos.reduce((s: number, p: any) => s + (parseFloat(p.monto_pagado) || 0), 0);
+        const totalPagadoEnCronograma = (cronograma || []).reduce((s: number, c: any) => s + (parseFloat(c.monto_pagado) || 0), 0);
+
+        let systemMoney = hasPhysicalPagos ? 0 : Math.max(0, totalPagadoEnCronograma - totalPagadoEnPagos);
+
+        const sortedPagos = [...rawPagos].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        
+        let pool = sortedPagos.map(p => ({ 
+            ...p, 
+            rem: parseFloat(p.monto_pagado) || 0,
+            date: formatDatePeru(p.created_at, 'isoDate')
+        }));
+
+        const qSources: any = {};
+        const remainingNeeded = {} as any;
+
+        sortedQuotas.forEach(q => {
+            remainingNeeded[q.id] = parseFloat(q.monto_cuota) || 0;
+            qSources[q.id] = [];
+        });
+
+        const assign = (pay: any, quota: any, amt: number) => {
+            if (amt <= 0.001) return;
+            remainingNeeded[quota.id] -= amt;
+            qSources[quota.id].push({ amount: amt, date: pay.date });
+        };
+
+        // FASE 1: Sistema
+        if (systemMoney > 0.01) {
+            const sysPay = { id: 'system-init', date: '0000-00-00', isSystem: true };
+            sortedQuotas.forEach(q => {
+                if (systemMoney <= 0.01 || remainingNeeded[q.id] <= 0.01) return;
+                const take = Math.min(systemMoney, remainingNeeded[q.id]);
+                assign(sysPay, q, take);
+                systemMoney -= take;
+            });
         }
-    })
+
+        // FASE 2: Prioridad Día
+        pool.forEach(p => {
+             const sameDayQuota = sortedQuotas.find(q => q.fecha_vencimiento === p.date);
+             if (sameDayQuota && remainingNeeded[sameDayQuota.id] > 0.01) {
+                 const take = Math.min(p.rem, remainingNeeded[sameDayQuota.id]);
+                 assign(p, sameDayQuota, take);
+                 p.rem -= take;
+             }
+        });
+
+        // FASE 3: Cascada FIFO
+        sortedQuotas.forEach(q => {
+            pool.forEach(p => {
+                if (remainingNeeded[q.id] <= 0.01 || p.rem <= 0.01) return;
+                const take = Math.min(p.rem, remainingNeeded[q.id]);
+                assign(p, q, take);
+                p.rem -= take;
+            });
+        });
+
+        const virtualCronograma = sortedQuotas.map(q => {
+            const pagado = (parseFloat(q.monto_cuota) || 0) - remainingNeeded[q.id];
+            return {
+                ...q,
+                monto_pagado_virtual: pagado,
+                monto_pagado: pagado
+            };
+        });
+
+        return { virtualCronograma };
+    })();
+
+    const virtualCronograma = waterfallDistribution.virtualCronograma;
+    // --- FIN WATERFALL ---
     
     // Today's date for comparison (start of day)
     const today = new Date()

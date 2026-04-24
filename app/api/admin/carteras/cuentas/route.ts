@@ -7,8 +7,16 @@ export async function POST(request: Request) {
         const { action, id, cartera_id, nombre, tipo, usuarios_autorizados } = body
         const supabaseAdmin = createAdminClient()
         // 1. Verificar Rol Admin antes de cualquier acción
-        const { data: { user } } = await supabaseAdmin.auth.getUser()
-        const { data: perfil } = await supabaseAdmin.from('perfiles').select('rol').eq('id', user?.id).single()
+        const { createClient: createServerClient } = await import('@/utils/supabase/server')
+        const supabase = await createServerClient()
+        
+        // 1. Verificar Rol Admin antes de cualquier acción
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+            return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+        }
+
+        const { data: perfil } = await supabaseAdmin.from('perfiles').select('rol').eq('id', user.id).single()
         
         if (perfil?.rol !== 'admin') {
             return NextResponse.json({ error: 'No tienes permisos para realizar esta acción.' }, { status: 403 })

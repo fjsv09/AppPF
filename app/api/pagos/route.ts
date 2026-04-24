@@ -238,27 +238,19 @@ export async function POST(request: Request) {
             }
         })
 
-        // Iniciar notificación asíncrona (no bloquea la respuesta del pago)
+        // Notificaciones y revalidación en segundo plano (sin bloquear respuesta)
         if (result.pago_id) {
             import('@/utils/notifications').then(mod => {
                 mod.notificarPagoCliente(result.pago_id)
-                
-                // Si es un pago digital, notificar a los admins para que validen
                 if (['Yape', 'Plin', 'Transferencia'].includes(metodo_pago)) {
-                    mod.notificarATodos(
-                        ['admin', 'secretaria'],
-                        'Nuevo Pago Digital por Validar',
-                        `Un asesor acaba de registrar S/ ${monto} vía ${metodo_pago}. Requiere validación.`,
-                        'alerta'
-                    )
+                    mod.notificarATodos(['admin', 'secretaria'], 'Nuevo Pago Digital', `S/ ${monto} por validar.`, 'alerta')
                 }
-            }).catch(err => {
-                console.error('Error al iniciar notificación:', err)
-            })
+            }).catch(e => console.error('Notify Error:', e))
         }
 
         revalidatePath('/dashboard/pagos')
-        revalidatePath('/dashboard/prestamos', 'layout')
+        revalidatePath('/dashboard/prestamos') // Eliminamos 'layout' para mayor rapidez
+        revalidatePath('/dashboard/clientes')
 
         return NextResponse.json(result)
 

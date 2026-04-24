@@ -286,7 +286,7 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
                             
                             <div className="text-right">
                                 <div className="text-base font-bold text-emerald-400 group-hover:text-emerald-300 transition-colors">
-                                    +${pago.monto_pagado}
+                                    +S/ {pago.monto_pagado}
                                 </div>
                             </div>
                         </div>

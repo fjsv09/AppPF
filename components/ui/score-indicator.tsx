@@ -346,18 +346,34 @@ export function ScoreBreakdown({ loanScore }: { loanScore: any }) {
 /**
  * Visualización de las escalas de ajuste (Tiers)
  */
-export function AdjustmentScales({ currentHealth, currentReputation }: { currentHealth: number, currentReputation: number }) {
+export function AdjustmentScales({ currentHealth, currentReputation, config = {} }: { currentHealth: number, currentReputation: number, config?: any }) {
+    const getConfigValue = (key: string, fallback: number) => {
+        const val = config[key];
+        if (val === undefined || val === null || val === '') return fallback;
+        const num = Number(val);
+        return isNaN(num) ? fallback : num;
+    };
+
+    const aExcelente = getConfigValue('renovacion_aumento_excelente', 20);
+    const aMuyBueno = getConfigValue('renovacion_aumento_muy_bueno', 15);
+    const aBueno = getConfigValue('renovacion_aumento_bueno', 10);
+    const aRegular = getConfigValue('renovacion_aumento_regular', 0);
+    const rRiesgo = getConfigValue('renovacion_reduccion_riesgo', -15);
+
+    const bRepExcelente = getConfigValue('renovacion_bono_reputacion_excelente', 10);
+    const bRepBueno = getConfigValue('renovacion_bono_reputacion_bueno', 5);
+
     const healthTiers = [
-        { min: 90, label: 'Excelente', pct: '+20%', color: 'from-emerald-600 to-emerald-400', threshold: '≥90 pts' },
-        { min: 75, label: 'Muy Bueno', pct: '+15%', color: 'from-blue-600 to-blue-400', threshold: '≥75 pts' },
-        { min: 60, label: 'Bueno', pct: '+10%', color: 'from-cyan-600 to-cyan-400', threshold: '≥60 pts' },
-        { min: 40, label: 'Regular', pct: '0%', color: 'from-slate-600 to-slate-400', threshold: '≥40 pts' },
-        { min: 0, label: 'Riesgo', pct: '-15%', color: 'from-rose-600 to-rose-400', threshold: '<40 pts' },
+        { min: 90, label: 'Excelente', pct: `${aExcelente > 0 ? '+' : ''}${aExcelente}%`, color: 'from-emerald-600 to-emerald-400', threshold: '≥90 pts' },
+        { min: 75, label: 'Muy Bueno', pct: `${aMuyBueno > 0 ? '+' : ''}${aMuyBueno}%`, color: 'from-blue-600 to-blue-400', threshold: '≥75 pts' },
+        { min: 60, label: 'Bueno', pct: `${aBueno > 0 ? '+' : ''}${aBueno}%`, color: 'from-cyan-600 to-cyan-400', threshold: '≥60 pts' },
+        { min: 40, label: 'Regular', pct: `${aRegular > 0 ? '+' : ''}${aRegular}%`, color: 'from-slate-600 to-slate-400', threshold: '≥40 pts' },
+        { min: 0, label: 'Riesgo', pct: `${rRiesgo}%`, color: 'from-rose-600 to-rose-400', threshold: '<40 pts' },
     ];
 
     const repBonuses = [
-        { min: 90, label: 'Excelente', pct: '+10%', color: 'text-emerald-400', threshold: '≥90 pts' },
-        { min: 75, label: 'Bueno', pct: '+5%', color: 'text-blue-400', threshold: '≥75 pts' },
+        { min: 90, label: 'Excelente', pct: `+${bRepExcelente}%`, color: 'text-emerald-400', threshold: '≥90 pts' },
+        { min: 75, label: 'Bueno', pct: `+${bRepBueno}%`, color: 'text-blue-400', threshold: '≥75 pts' },
     ];
 
     return (
@@ -439,9 +455,9 @@ export function AdjustmentScales({ currentHealth, currentReputation }: { current
 /**
  * Reglas de negocio para límites de monto según Score de Salud y Reputación
  */
-export function ScoreLimitRules({ healthScore, reputationScore }: { healthScore: number, reputationScore: number }) {
+export function ScoreLimitRules({ healthScore, reputationScore, config = {} }: { healthScore: number, reputationScore: number, config?: any }) {
     // Cálculo centralizado
-    const adjustment = calculateRenovationAdjustment(healthScore, reputationScore, 100); // Usamos 100 para obtener porcentajes base
+    const adjustment = calculateRenovationAdjustment(healthScore, reputationScore, 100, 0, config); // Usamos 100 para obtener porcentajes base
 
     const { totalPotentialPct, detalles } = adjustment;
 
@@ -515,7 +531,7 @@ export function ScoreLimitRules({ healthScore, reputationScore }: { healthScore:
                                 </div>
                             </AccordionTrigger>
                             <AccordionContent className="pt-2">
-                                <AdjustmentScales currentHealth={healthScore} currentReputation={reputationScore} />
+                                <AdjustmentScales currentHealth={healthScore} currentReputation={reputationScore} config={config} />
                             </AccordionContent>
                         </AccordionItem>
                     </Accordion>

@@ -1157,9 +1157,10 @@ export function PrestamosTable({
                                                                 </h3>
                                                             </div>
                                                                  <div className="text-right shrink-0">
-                                                                    <span className="text-sm font-black text-white bg-slate-800/50 px-2 py-0.5 rounded-lg border border-slate-700/30">
-                                                                        S/ {(parseFloat(cuotaDia?.monto_cuota || prestamo.cuota_dia_programada || 0) || prestamo.valorCuota || 0).toFixed(2)}
-                                                                    </span>
+                                                                    <div className="flex-1 bg-slate-900/40 p-2.5 rounded-xl border border-slate-700/30">
+                                        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Capital</p>
+                                        <p className="text-xs font-mono font-bold text-slate-200">S/ {prestamo.monto?.toLocaleString()}</p>
+                                    </div>
                                                                 </div>
                                                         </div>
 
@@ -1449,18 +1450,18 @@ export function PrestamosTable({
                                                         <div className="flex items-center gap-2">
                                                             <div className="flex flex-col">
                                                                 <span className="text-[7px] text-slate-500 uppercase font-black tracking-wider mb-0.5">Capital</span>
-                                                                <span className="font-mono text-slate-300 text-[12px]">${prestamo.monto?.toFixed(0)}</span>
+                                                                <span className="font-mono text-slate-300 text-[12px]">S/ {prestamo.monto?.toFixed(0)}</span>
                                                             </div>
                                                             <div className="flex flex-col">
                                                                 <span className="text-[7px] text-slate-500 uppercase font-black tracking-wider mb-0.5">Cuota</span>
-                                                                <span className="font-mono text-slate-300 text-[12px]">${prestamo.valorCuota?.toFixed(0)}</span>
+                                                                <span className="font-mono text-slate-300 text-[12px]">S/ {prestamo.valorCuota?.toFixed(0)}</span>
                                                             </div>
                                                             {/* New Saldo/Any Partial Section */}
                                                             {(prestamo.saldo_cuota_parcial > 0) && (
                                                                 <div className="flex flex-col">
                                                                     <span className="text-[8px] text-blue-400/70 uppercase font-bold tracking-wider mb-0.5">Saldo</span>
                                                                     <span className="font-mono text-blue-400 text-[11px] font-bold animate-pulse">
-                                                                        ${prestamo.saldo_cuota_parcial.toFixed(0)}
+                                                                        S/ {prestamo.saldo_cuota_parcial.toFixed(0)}
                                                                     </span>
                                                                 </div>
                                                             )}
@@ -1472,7 +1473,7 @@ export function PrestamosTable({
                                                                         "font-mono text-[11px]",
                                                                         ['vencido', 'moroso'].includes(prestamo.estado_mora) ? "text-red-500" : "text-amber-500"
                                                                     )}>
-                                                                        ${prestamo.deudaHoy.toFixed(0)}
+                                                                        S/ {prestamo.deudaHoy.toFixed(0)}
                                                                     </span>
                                                                 </div>
                                                             )}
@@ -2202,12 +2203,12 @@ export function PrestamosTable({
 
                                                         {/* Capital */}
                                                         <div suppressHydrationWarning className="col-span-1 text-right font-mono text-slate-300 text-sm">
-                                                            ${prestamo.monto?.toLocaleString()}
+                                                            S/ {prestamo.monto?.toLocaleString()}
                                                         </div>
 
                                                         {/* Cuota */}
                                                         <div className="col-span-1 text-right font-mono text-slate-300 text-sm">
-                                                            ${prestamo.valorCuota?.toFixed(2)}
+                                                            S/ {prestamo.valorCuota?.toFixed(2)}
                                                         </div>
 
                                                         {/* Mora */}
@@ -2220,7 +2221,7 @@ export function PrestamosTable({
                                                                             prestamo.deudaHoy > 0 ? "text-amber-400" :
                                                                                 "text-slate-500"
                                                             )}>
-                                                                ${prestamo.deudaHoy.toFixed(2)}
+                                                                S/ {prestamo.deudaHoy.toFixed(2)}
                                                             </span>
                                                         </div>
 
@@ -2230,7 +2231,7 @@ export function PrestamosTable({
                                                                 "font-bold font-mono tracking-tight text-sm",
                                                                 (prestamo.saldo_cuota_parcial > 0) ? "text-blue-400" : "text-slate-500"
                                                             )}>
-                                                                ${(prestamo.saldo_cuota_parcial || 0).toFixed(2)}
+                                                                S/ {(prestamo.saldo_cuota_parcial || 0).toFixed(2)}
                                                             </span>
                                                         </div>
 
@@ -2310,7 +2311,7 @@ export function PrestamosTable({
                                                                     if (prestamo.estado_mora === 'vencido') return 'Venció con deuda pendiente'
                                                                     if (prestamo.estado_mora === 'moroso') return isDiario ? `Status Moroso: ≥${umbralMoroso} cuotas atrasadas (Conf. Actual)` : `Status Moroso: ≥${umbralMorosoOtros} cuotas atrasadas (Conf. Actual)`
                                                                     if (prestamo.estado_mora === 'cpp') return isDiario ? `Status CPP: ≥${umbralCpp} cuotas atrasadas (Conf. Actual)` : `Status CPP: ≥${umbralCppOtros} cuotas atrasadas (Conf. Actual)`
-                                                                    if (prestamo.estado_mora === 'deuda') return `Pendiente de cobro hoy: $${metrics?.deudaExigibleHoy?.toFixed(2)}`
+                                                                    if (prestamo.estado_mora === 'deuda') return `Pendiente de cobro hoy: S/ ${metrics?.deudaExigibleHoy?.toFixed(2)}`
                                                                     return 'Al día (OK)'
                                                                 }
 

@@ -26,6 +26,7 @@ interface SolicitudRenovacionModalProps {
     clienteId: string
     clienteNombre: string
     clienteFotoPerfil?: string | null
+    clienteTelefono?: string | null
     currentMonto: number
     currentInteres: number
     currentModalidad: string
@@ -102,6 +103,8 @@ export function SolicitudRenovacionModal({
     cuentas = []
 }: SolicitudRenovacionModalProps) {
     const [open, setOpen] = useState(false)
+    const [showSuccess, setShowSuccess] = useState(false)
+    const [wasNotified, setWasNotified] = useState(false)
     const [loading, setLoading] = useState(false)
     const [fetching, setFetching] = useState(false)
     const supabase = useMemo(() => createClient(), [])
@@ -109,6 +112,7 @@ export function SolicitudRenovacionModal({
     const [elegibilidad, setElegibilidad] = useState<any>(null)
     const [error, setError] = useState<string | null>(null)
     const [selectedCuenta, setSelectedCuenta] = useState<string>('')
+    const [feriados, setFeriados] = useState<Set<string>>(new Set())
     const router = useRouter()
 
     // Lógica de Horario Síncrona para bloqueo preventivo inmediato
@@ -146,8 +150,18 @@ export function SolicitudRenovacionModal({
     useEffect(() => {
         if (open && canRequestDueToTime && !isBlockedByCuadre) {
             checkEligibility()
+            fetchFeriados()
         }
     }, [open, canRequestDueToTime, isBlockedByCuadre])
+
+    const fetchFeriados = async () => {
+        try {
+            const { data } = await supabase.from('feriados').select('fecha')
+            setFeriados(new Set(data?.map(f => f.fecha) || []))
+        } catch (e) {
+            console.error('Error fetching feriados:', e)
+        }
+    }
 
     const checkEligibility = async () => {
         setCheckingEligibility(true)
@@ -258,7 +272,12 @@ export function SolicitudRenovacionModal({
             toast.success(successTitle, {
                 description: successDesc
             })
-            setOpen(false)
+            
+            if (isAdminDirectRefinance) {
+                setShowSuccess(true)
+            } else {
+                setOpen(false)
+            }
             router.refresh()
         } catch (error: any) {
             toast.error(error.message || 'Error al procesar la operación')
@@ -289,7 +308,8 @@ export function SolicitudRenovacionModal({
         monto: currentMonto,
         interes: getBaseInterest(), 
         cuotas: currentCuotas,
-        modalidad: currentModalidad
+        modalidad: currentModalidad,
+        fecha_inicio: todayStr
     })
 
 
@@ -308,19 +328,41 @@ export function SolicitudRenovacionModal({
         const totalPagar = monto * (1 + interesFinal / 100)
         const valorCuota = cuotas > 0 ? totalPagar / cuotas : 0
 
-        return { interesFinal, totalPagar, valorCuota }
+        // [NUEVO] Calcular Fecha Fin
+        const { calcularFechasProyectadas } = require('@/lib/financial-logic')
+        const fechas = calcularFechasProyectadas(
+            simulacion.fecha_inicio,
+            cuotas,
+            simulacion.modalidad as any,
+            feriados
+        )
+
+        return { interesFinal, totalPagar, valorCuota, fechaFin: fechas.fechaFin }
     }
 
     const resultados = calcularSimulacion()
 
     const handleOpenChange = (isOpen: boolean) => {
+        if (!isOpen && showSuccess && !wasNotified) return
         setOpen(isOpen)
         if (!isOpen) {
             // Resetear estado al cerrar para que vuelva a verificar al abrir
             // Esto corrige el bug de que no se actualiza si el usuario paga una cuota y vuelve a intentar
             setElegibilidad(null)
             setError(null)
+            setShowSuccess(false)
+            setWasNotified(false)
         }
+    }
+
+    const handleSendWhatsApp = () => {
+        const phone = clienteTelefono?.replace(/\D/g, '') || ''
+        const monto = formatMoney(simulacion.monto)
+        const type = isAdminDirectRefinance ? 'refinanciación' : 'renovación'
+        const message = encodeURIComponent(`Hola ${clienteNombre}, le saludamos de ProFinanzas. Le informamos que su ${type} por un monto de S/ ${monto} ha sido APROBADA y el nuevo préstamo ya está activo. ¡Felicidades!`)
+        
+        window.open(`https://wa.me/51${phone}?text=${message}`, '_blank')
+        setWasNotified(true)
     }
 
     return (
@@ -405,6 +447,44 @@ export function SolicitudRenovacionModal({
                         </div>
                         <Button variant="outline" onClick={() => setOpen(false)} className="mt-4 border-slate-700 text-slate-300">
                             Entendido
+                        </Button>
+                    </div>
+                ) : showSuccess ? (
+                    <div className="text-center py-12 space-y-8 animate-in zoom-in-95 duration-500">
+                        <div className="space-y-3">
+                            <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-500/30 shadow-2xl shadow-emerald-500/20">
+                                <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+                            </div>
+                            <h3 className="text-3xl font-black text-white tracking-tighter uppercase">¡Operación Exitosa!</h3>
+                            <p className="text-slate-400 max-w-sm mx-auto text-sm font-medium">
+                                El proceso de {isAdminDirectRefinance ? 'refinanciación' : 'renovación'} ha concluido satisfactoriamente.
+                            </p>
+                        </div>
+
+                        <div className="bg-slate-950/50 border border-slate-800 rounded-3xl p-6 space-y-4 max-w-md mx-auto">
+                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Comunicación Directa</p>
+                            <Button 
+                                onClick={handleSendWhatsApp}
+                                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-14 rounded-2xl flex items-center justify-center gap-3 shadow-xl shadow-emerald-900/40 transition-all active:scale-[0.98] group"
+                            >
+                                <svg className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
+                                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.246 2.248 3.484 5.232 3.484 8.412-.003 6.557-5.338 11.892-11.893 11.892-1.997-.001-3.951-.5-5.688-1.448l-6.309 1.656zm6.29-4.143c1.565.928 3.178 1.416 4.856 1.417 5.341 0 9.69-4.348 9.693-9.691.002-2.59-1.01-5.025-2.847-6.865-1.838-1.837-4.271-2.847-6.863-2.848-5.341 0-9.69 4.349-9.692 9.691-.001 1.831.515 3.614 1.491 5.162l-.994 3.63 3.712-.974zm11.367-7.46c-.066-.11-.244-.176-.511-.309-.267-.133-1.583-.781-1.827-.87-.245-.089-.423-.133-.6.133-.177.266-.689.87-.845 1.047-.156.177-.311.199-.578.066-.267-.133-1.127-.416-2.146-1.326-.793-.707-1.329-1.58-1.485-1.847-.156-.266-.016-.411.117-.544.12-.119.267-.31.4-.466.133-.155.177-.266.267-.443.089-.178.044-.333-.022-.466-.067-.133-.6-1.446-.822-1.979-.217-.518-.434-.447-.6-.456-.153-.008-.328-.01-.502-.01-.174 0-.457.065-.696.327-.24.262-.915.894-.915 2.178 0 1.284.934 2.525 1.065 2.702.131.177 1.836 2.805 4.448 3.931.621.267 1.106.427 1.484.547.623.198 1.19.17 1.637.104.498-.074 1.583-.647 1.805-1.27.222-.623.222-1.157.156-1.27z" />
+                                </svg>
+                                Notificar por WhatsApp
+                            </Button>
+                        </div>
+
+                        <Button 
+                            onClick={() => setOpen(false)}
+                            disabled={!wasNotified}
+                            className={cn(
+                                "w-full max-w-xs font-black h-12 rounded-xl transition-all",
+                                wasNotified 
+                                    ? "bg-slate-800 hover:bg-slate-700 text-white" 
+                                    : "bg-slate-800/50 text-slate-500 cursor-not-allowed"
+                            )}
+                        >
+                            {wasNotified ? 'Finalizar y Continuar' : 'Debe notificar para finalizar'}
                         </Button>
                     </div>
                 ) : checkingEligibility ? (
@@ -494,6 +574,7 @@ export function SolicitudRenovacionModal({
                                                     <ScoreLimitRules 
                                                         healthScore={elegibilidad.healthScore || elegibilidad.score} 
                                                         reputationScore={elegibilidad.reputationScore || elegibilidad.score} 
+                                                        config={elegibilidad.config}
                                                     />
                                                 </TabsContent>
                                                 
@@ -567,7 +648,7 @@ export function SolicitudRenovacionModal({
                         <div className="grid grid-cols-3 gap-3 text-center">
                             <div className="bg-slate-800/50 rounded-lg p-3">
                                 <div className="text-slate-400 text-xs text-[10px] uppercase tracking-wider">Monto Original</div>
-                                <div className="text-slate-200 font-bold font-mono">${formatMoney(currentMonto)}</div>
+                                <div className="text-slate-200 font-bold font-mono">S/ {formatMoney(currentMonto)}</div>
                             </div>
                             <div className="bg-slate-800/50 rounded-lg p-3">
                                 <div className="text-slate-400 text-xs text-[10px] uppercase tracking-wider">Pagado</div>
@@ -575,7 +656,7 @@ export function SolicitudRenovacionModal({
                             </div>
                             <div className="bg-slate-800/50 rounded-lg p-3">
                                 <div className="text-slate-400 text-xs text-[10px] uppercase tracking-wider">Saldo Pendiente</div>
-                                <div className="text-amber-400 font-bold font-mono">${formatMoney(elegibilidad.saldo_pendiente)}</div>
+                                <div className="text-amber-400 font-bold font-mono">S/ {formatMoney(elegibilidad.saldo_pendiente)}</div>
                             </div>
                         </div>
 
@@ -583,8 +664,8 @@ export function SolicitudRenovacionModal({
                         <div className="bg-blue-950/30 border border-blue-500/20 rounded-lg p-3">
                             <p className="text-blue-400 text-xs font-medium mb-3">Límites de Monto según Score</p>
                             <div className="flex justify-between items-center text-sm">
-                                <span className="text-slate-400">Mínimo: <span className="text-white font-bold">${formatMoney(elegibilidad.monto_minimo)}</span></span>
-                                <span className="text-slate-400">Máximo: <span className="text-white font-bold">${formatMoney(elegibilidad.monto_maximo)}</span></span>
+                                <span className="text-slate-400">Mínimo: <span className="text-white font-bold">S/ {formatMoney(elegibilidad.monto_minimo)}</span></span>
+                                <span className="text-slate-400">Máximo: <span className="text-white font-bold">S/ {formatMoney(elegibilidad.monto_maximo)}</span></span>
                             </div>
                         </div>
 
@@ -691,19 +772,26 @@ export function SolicitudRenovacionModal({
                             </div>
 
                             {/* SIMULADOR / PREVIEW */}
-                            <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-500/20">
-                                <div className="grid grid-cols-3 gap-4 text-center">
-                                    <div>
+                            <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-500/20 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 blur-2xl pointer-events-none" />
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center relative z-10">
+                                    <div className="flex flex-col justify-center">
                                         <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Interés Final</p>
                                         <p className="text-emerald-400 font-bold text-lg">{resultados.interesFinal}%</p>
                                     </div>
-                                    <div>
+                                    <div className="flex flex-col justify-center">
                                         <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Total a Pagar</p>
-                                        <p className="text-white font-bold text-lg">${formatMoney(resultados.totalPagar)}</p>
+                                        <p className="text-white font-bold text-lg">S/ {formatMoney(resultados.totalPagar)}</p>
                                     </div>
-                                    <div>
+                                    <div className="flex flex-col justify-center">
                                         <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Valor Cuota</p>
-                                        <p className="text-white font-bold text-lg">${formatMoney(resultados.valorCuota)}</p>
+                                        <p className="text-white font-bold text-lg">S/ {formatMoney(resultados.valorCuota)}</p>
+                                    </div>
+                                    <div className="flex flex-col justify-center border-l border-white/5 pl-2">
+                                        <p className="text-[10px] text-blue-400 font-black uppercase tracking-wider mb-1">Fecha Fin</p>
+                                        <p className="text-blue-300 font-bold text-sm">
+                                            {resultados.fechaFin ? new Date(resultados.fechaFin).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' }) : '---'}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -726,7 +814,7 @@ export function SolicitudRenovacionModal({
                                                 <SelectItem key={cuenta.id} value={cuenta.id}>
                                                     <div className="flex justify-between items-center w-full min-w-[200px]">
                                                         <span>{cuenta.nombre}</span>
-                                                        <span className="text-emerald-400 font-mono ml-4">${formatMoney(cuenta.saldo)}</span>
+                                                        <span className="text-emerald-400 font-mono ml-4">S/ {formatMoney(cuenta.saldo)}</span>
                                                     </div>
                                                 </SelectItem>
                                             ))}
@@ -742,7 +830,8 @@ export function SolicitudRenovacionModal({
                                     name="fecha_inicio" 
                                     type="date" 
                                     min={todayStr}
-                                    defaultValue={todayStr}
+                                    value={simulacion.fecha_inicio}
+                                    onChange={(e) => setSimulacion({...simulacion, fecha_inicio: e.target.value})}
                                     className="bg-slate-950 border-slate-800"
                                     required 
                                 />

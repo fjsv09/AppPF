@@ -66,9 +66,13 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
     if (perfil?.rol === 'admin' && solicitud.estado_solicitud === 'pre_aprobado') {
         const { data: cuentas } = await supabaseAdmin
             .from('cuentas_financieras')
-            .select('id, nombre, saldo, tipo')
+            .select('id, nombre, saldo, tipo, cartera_id, usuarios_autorizados')
             .order('nombre')
-        cuentasAdmin = cuentas || []
+        
+        cuentasAdmin = (cuentas || []).filter((c: any) => 
+            c.cartera_id === '00000000-0000-0000-0000-000000000000' || 
+            (c.usuarios_autorizados && c.usuarios_autorizados.length > 0)
+        )
     }
 
     // Calcular total estimado

@@ -172,8 +172,15 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
         }
     }
     
-    const { data: qCuentas } = await supabaseAdmin.from('cuentas_financieras').select('id, nombre, saldo').order('nombre')
-    const cuentas = qCuentas || []
+    const { data: qCuentas } = await supabaseAdmin
+        .from('cuentas_financieras')
+        .select('id, nombre, saldo, cartera_id, usuarios_autorizados')
+        .order('nombre')
+    
+    const cuentas = (qCuentas || []).filter((c: any) => 
+        c.cartera_id === '00000000-0000-0000-0000-000000000000' || 
+        (c.usuarios_autorizados && c.usuarios_autorizados.length > 0)
+    )
 
     const { data: cuotasIds } = await supabaseAdmin.from('cronograma_cuotas').select('id').eq('prestamo_id', params.id);
     const idsCuotas = cuotasIds?.map(c => c.id) || [];
@@ -361,6 +368,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                                                     clienteId: prestamo.cliente_id || prestamo.clientes?.id || '',
                                                     clienteNombre: prestamo.clientes?.nombres || 'Cliente', 
                                                     clienteFotoPerfil: prestamo.clientes?.foto_perfil,
+                                                    clienteTelefono: prestamo.clientes?.telefono,
                                                     currentMonto: prestamo.monto,
                                                     currentInteres: prestamo.interes,
                                                     currentModalidad: prestamo.frecuencia?.toLowerCase() || 'diario',

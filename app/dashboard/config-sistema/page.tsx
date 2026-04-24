@@ -81,7 +81,14 @@ export default async function ConfiguracionPage() {
             'reputation_penalty_refinanciado',
             'reputation_penalty_vencido',
             'reputation_penalty_salud_pobre',
-            'reputation_bonus_antiguedad_mensual'
+            'reputation_bonus_antiguedad_mensual',
+            'renovacion_aumento_excelente',
+            'renovacion_aumento_muy_bueno',
+            'renovacion_aumento_bueno',
+            'renovacion_aumento_regular',
+            'renovacion_reduccion_riesgo',
+            'renovacion_bono_reputacion_excelente',
+            'renovacion_bono_reputacion_bueno'
         ])
         .order('clave')
     

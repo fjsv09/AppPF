@@ -147,14 +147,20 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         desbloqueo_hasta: configHorario?.find(c => c.clave === 'desbloqueo_hasta')?.valor || ''
     }
 
-    // --- DATA PARA CREACIÓN DIRECTA (Admin Only) ---
+    // --- DATA PARA DESEMBOLSO (Admin & Supervisor) ---
     let cuentasAdmin: any[] = []
-    if (userRole === 'admin') {
+    if (userRole === 'admin' || userRole === 'supervisor') {
         const { data: qAdmin } = await supabaseAdmin
             .from('cuentas_financieras')
-            .select('id, nombre, saldo')
+            .select('id, nombre, saldo, cartera_id, usuarios_autorizados')
             .order('nombre')
-        cuentasAdmin = qAdmin || []
+        
+        // Filtrar solo cuentas compartidas y de la cartera global
+        // La cartera global tiene el ID '00000000-0000-0000-0000-000000000000'
+        cuentasAdmin = (qAdmin || []).filter((c: any) => 
+            c.cartera_id === '00000000-0000-0000-0000-000000000000' || 
+            (c.usuarios_autorizados && c.usuarios_autorizados.length > 0)
+        )
     }
 
     // Fetch Feriados

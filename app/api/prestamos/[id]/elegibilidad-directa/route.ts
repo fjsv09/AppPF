@@ -102,25 +102,15 @@ export async function GET(
         const adjustment = calculateRenovationAdjustment(
             atomicHealthScore.score, 
             evaluation.reputationScore, 
-            prestamo.monto
+            prestamo.monto,
+            0,
+            systemConfig
         )
 
-        const montoOriginal = prestamo.monto;
-        let montoMaximo = adjustment.montoSugerido;
-        let montoMinimo = montoOriginal * 0.5;
-
-        if (saldoPendiente > 0) {
-            montoMinimo = Math.max(montoMinimo, saldoPendiente);
-        }
-
-        const clientLimit = parseFloat((prestamo.clientes as any)?.limite_prestamo || 0);
-        if (clientLimit > 0 && montoMaximo > clientLimit) {
-            montoMaximo = clientLimit;
-        }
-
-        if (montoMaximo < montoMinimo) {
-            montoMaximo = montoMinimo;
-        }
+        // Para refinanciación directa (Mora Crítica), el monto permitido debe ser estrictamente
+        // igual al saldo pendiente, no se permite dar más ni menos del monto que se debe.
+        let montoMinimo = saldoPendiente > 0 ? saldoPendiente : prestamo.monto;
+        let montoMaximo = montoMinimo;
 
         // Respuesta siempre elegible para el Admin
         const elegibilidadMock = {
@@ -142,7 +132,8 @@ export async function GET(
             estado_mora: prestamo.estado_mora,
             es_refinanciado: prestamo.estado === 'refinanciado',
             es_ultimo_prestamo: true,
-            requiere_admin_excepcion: true
+            requiere_admin_excepcion: true,
+            config: systemConfig
         }
 
         return NextResponse.json(elegibilidadMock)

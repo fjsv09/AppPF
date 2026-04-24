@@ -10,7 +10,12 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'ID de cuenta requerido.' }, { status: 400 })
         }
 
+        const { requireAdmin } = await import('@/utils/supabase/admin')
+        const authCheck = await requireAdmin()
+        if ('error' in authCheck) return authCheck.error
+
         const supabaseAdmin = createAdminClient()
+
         
         // 1. Obtener todos los movimientos asociados a esta cuenta
         const { data: movimientos, error: movError } = await supabaseAdmin

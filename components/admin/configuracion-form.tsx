@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { 
-    Settings, Save, AlertCircle, Loader2, Lock, Upload, X, 
+    TrendingUp, Settings, Save, AlertCircle, Loader2, Lock, Upload, X, 
     Clock, MapPin, Scale, Activity, Award, Layout, ChevronRight
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -247,6 +247,48 @@ const CONFIG_LABELS: Record<string, { nombre: string; descripcion: string; min?:
         descripcion: 'Puntos por cada mes de antigüedad.',
         min: 0,
         max: 10
+    },
+    'renovacion_aumento_excelente': {
+        nombre: 'Salud: Excelente (>=90)',
+        descripcion: 'Aumento porcentual para clientes con salud excelente.',
+        min: -100,
+        max: 100
+    },
+    'renovacion_aumento_muy_bueno': {
+        nombre: 'Salud: Muy Bueno (>=75)',
+        descripcion: 'Aumento porcentual para clientes con salud muy buena.',
+        min: -100,
+        max: 100
+    },
+    'renovacion_aumento_bueno': {
+        nombre: 'Salud: Bueno (>=60)',
+        descripcion: 'Aumento porcentual para clientes con salud buena.',
+        min: -100,
+        max: 100
+    },
+    'renovacion_aumento_regular': {
+        nombre: 'Salud: Regular (>=40)',
+        descripcion: 'Aumento porcentual para clientes con salud regular.',
+        min: -100,
+        max: 100
+    },
+    'renovacion_reduccion_riesgo': {
+        nombre: 'Salud: Riesgo (<40)',
+        descripcion: 'Reducción porcentual para clientes con salud crítica.',
+        min: -100,
+        max: 0
+    },
+    'renovacion_bono_reputacion_excelente': {
+        nombre: 'Bono Reputación: Excelente (>=90)',
+        descripcion: 'Bono adicional por reputación excelente.',
+        min: 0,
+        max: 100
+    },
+    'renovacion_bono_reputacion_bueno': {
+        nombre: 'Bono Reputación: Bueno (>=75)',
+        descripcion: 'Bono adicional por reputación buena.',
+        min: 0,
+        max: 100
     }
 }
 
@@ -295,6 +337,15 @@ const CATEGORIES = [
         iconColor: 'text-purple-400',
         bgColor: 'bg-purple-500/10',
         keys: ['reputation_bonus_finalizado', 'reputation_bonus_renovado', 'reputation_bonus_salud_excelente', 'reputation_penalty_refinanciado', 'reputation_penalty_vencido', 'reputation_penalty_salud_pobre', 'reputation_bonus_antiguedad_mensual']
+    },
+    {
+        id: 'renovaciones',
+        nombre: 'Parámetros de Renovación',
+        descripcion: 'Configuración de aumentos y bonos para renovaciones.',
+        icon: TrendingUp,
+        iconColor: 'text-cyan-400',
+        bgColor: 'bg-cyan-500/10',
+        keys: ['renovacion_aumento_excelente', 'renovacion_aumento_muy_bueno', 'renovacion_aumento_bueno', 'renovacion_aumento_regular', 'renovacion_reduccion_riesgo', 'renovacion_bono_reputacion_excelente', 'renovacion_bono_reputacion_bueno']
     },
     {
         id: 'sistema',

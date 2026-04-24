@@ -14,6 +14,7 @@ import {
     CheckCircle2, XCircle, Clock, MessageSquare,
     Activity
 } from 'lucide-react'
+import { calculateRenovationAdjustment } from '@/lib/financial-logic'
 import { BackButton } from '@/components/ui/back-button'
 import { RenovacionesActions } from '@/components/renovaciones/renovaciones-actions'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
@@ -97,7 +98,8 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
     // [NUEVO] OBTENER EVALUACIÓN INTEGRAL PARA EL PANEL DE REVISIÓN (Centralizado)
     const { 
         getClientReputationAction, 
-        getLoanHealthScoreAction
+        getLoanHealthScoreAction,
+        getFinancialConfig
     } = await import('@/lib/financial-logic')
 
     // [SNAPSHOT TOTAL] Priorizar datos inmutables guardados para evitar cálculos redundantes
@@ -124,8 +126,9 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
         }
     } else {
         // Fallback para registros antiguos: calculamos en tiempo real
-        const liveEvaluation = await getClientReputationAction(supabaseAdmin, solicitud.cliente_id)
-        const liveAtomicHealth = await getLoanHealthScoreAction(supabaseAdmin, solicitud.prestamo_id)
+        const evaluationDate = new Date(solicitud.created_at).toISOString().split('T')[0]
+        const liveEvaluation = await getClientReputationAction(supabaseAdmin, solicitud.cliente_id, evaluationDate)
+        const liveAtomicHealth = await getLoanHealthScoreAction(supabaseAdmin, solicitud.prestamo_id, evaluationDate)
 
         evaluation = liveEvaluation
         atomicHealth = liveAtomicHealth
@@ -135,6 +138,18 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
             atomicHealth.loanScore.score = Number(solicitud.score_al_solicitar)
         }
     }
+
+    // [NUEVO] Obtener configuración centralizada
+    const systemConfig = await getFinancialConfig(supabaseAdmin)
+
+    // [NUEVO] Pre-calcular ajustes para evitar require e IIFE en JSX
+    const limitsAdjustment = calculateRenovationAdjustment(
+        atomicHealth.loanScore.score,
+        evaluation.reputationScore,
+        Number(solicitud.prestamo?.monto || 0),
+        Number(solicitud.monto_cuota_pendiente || 0),
+        systemConfig
+    )
 
     // Datos adicionales si está aprobada
     let datosRenovacion = null
@@ -153,9 +168,13 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
     if (perfil?.rol === 'admin' && ['pre_aprobado', 'pendiente_supervision'].includes(solicitud.estado_solicitud)) {
         const { data: cuentas } = await supabaseAdmin
             .from('cuentas_financieras')
-            .select('id, nombre, saldo, tipo')
+            .select('id, nombre, saldo, tipo, cartera_id, usuarios_autorizados')
             .order('nombre')
-        cuentasAdmin = cuentas || []
+        
+        cuentasAdmin = (cuentas || []).filter((c: any) => 
+            c.cartera_id === '00000000-0000-0000-0000-000000000000' || 
+            (c.usuarios_autorizados && c.usuarios_autorizados.length > 0)
+        )
     }
 
     // Obtener logo del sistema para el ticket
@@ -165,6 +184,23 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
         .eq('clave', 'logo_sistema_url')
         .maybeSingle()
     const logoUrl = logoConfig?.valor || ''
+
+    // [NUEVO] Calcular Fechas Proyectadas
+    const { data: feriadosData } = await supabaseAdmin
+        .from('feriados')
+        .select('fecha')
+    const feriadosSet = new Set(feriadosData?.map(f => f.fecha) || [])
+
+    const { 
+        calcularFechasProyectadas,
+    } = await import('@/lib/financial-logic')
+
+    const fechasProyectadas = calcularFechasProyectadas(
+        solicitud.fecha_inicio_propuesta,
+        solicitud.cuotas,
+        solicitud.modalidad as any,
+        feriadosSet
+    )
 
     return (
         <div className="page-container max-w-4xl mx-auto">
@@ -282,6 +318,7 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                     <ScoreLimitRules 
                         healthScore={atomicHealth.loanScore.score} 
                         reputationScore={evaluation.reputationScore} 
+                        config={systemConfig}
                     />
                 </div>
 
@@ -336,17 +373,29 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                         <CardContent className="space-y-3">
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Monto</span>
-                                <span className="text-white font-bold">${formatMoney(solicitud.prestamo?.monto)}</span>
+                                <span className="text-white font-bold">S/ {formatMoney(solicitud.prestamo?.monto)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Interés</span>
                                 <span className="text-white">{solicitud.prestamo?.interes}%</span>
                             </div>
                             <div className="flex justify-between">
+                                <span className="text-slate-500">Cuotas</span>
+                                <span className="text-white">{solicitud.prestamo?.cuotas}</span>
+                            </div>
+                            <div className="flex justify-between">
                                 <span className="text-slate-500">Frecuencia</span>
                                 <span className="text-white capitalize">{solicitud.prestamo?.frecuencia}</span>
                             </div>
                             <div className="flex justify-between">
+                                <span className="text-slate-500">Fecha Inicio</span>
+                                <span className="text-white">{formatDate(solicitud.prestamo?.fecha_inicio)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-500">Fecha Fin</span>
+                                <span className="text-white">{formatDate(solicitud.prestamo?.fecha_fin)}</span>
+                            </div>
+                            <div className="flex justify-between pt-1">
                                 <span className="text-slate-500">Estado Mora</span>
                                 <Badge variant="outline" className={
                                     solicitud.prestamo?.estado_mora === 'normal' ? 'text-emerald-400 border-emerald-500/30' :
@@ -367,7 +416,7 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                         <CardContent className="space-y-3">
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Nuevo Monto</span>
-                                <span className="text-white font-bold">${formatMoney(solicitud.monto_solicitado)}</span>
+                                <span className="text-white font-bold">S/ {formatMoney(solicitud.monto_solicitado)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Interés</span>
@@ -383,58 +432,50 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Fecha Inicio</span>
-                                <span className="text-white">{formatDate(solicitud.fecha_inicio_propuesta)}</span>
+                                <span className="text-white font-medium">{formatDate(solicitud.fecha_inicio_propuesta)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-500">Fecha Fin (Proyectada)</span>
+                                <span className="text-blue-400 font-bold">{fechasProyectadas.fechaFin ? formatDate(fechasProyectadas.fechaFin.toISOString().split('T')[0]) : '---'}</span>
                             </div>
                         </CardContent>
                     </Card>
                 </div>
 
                 {/* Límites Dinámicos (Dual-Score Truth) */}
-                {(() => {
-                    const { calculateRenovationAdjustment } = require('@/lib/financial-logic');
-                    const adj = calculateRenovationAdjustment(
-                        atomicHealth.loanScore.score,
-                        evaluation.reputationScore,
-                        Number(solicitud.prestamo?.monto || 0),
-                        Number(solicitud.monto_cuota_pendiente || 0) // Para asegurar el piso de deuda
-                    );
-
-                    return (
-                        <Card className="bg-blue-900/20 border-blue-700/50 shadow-lg relative overflow-hidden group">
-                            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
-                            <CardContent className="py-5 relative z-10">
-                                <div className="flex flex-wrap justify-center gap-12 text-center">
-                                    <div className="flex flex-col items-center gap-1">
-                                        <p className="text-blue-400/60 text-[10px] font-black uppercase tracking-[0.2em]">Monto Mínimo</p>
-                                        <div className="flex items-baseline gap-1">
-                                            <span className="text-white text-2xl font-black font-mono tracking-tighter">${adj.montoMinimo}</span>
-                                            <span className="text-[10px] text-slate-500 font-bold uppercase">usd</span>
-                                        </div>
-                                        {adj.montoMinimo > Number(solicitud.prestamo?.monto || 0) * 0.5 && (
-                                            <span className="text-[9px] text-amber-500/60 italic font-medium">Cap: Saldo Pendiente</span>
-                                        )}
-                                    </div>
-
-                                    <div className="w-px h-10 bg-blue-500/10 self-center hidden sm:block" />
-
-                                    <div className="flex flex-col items-center gap-1">
-                                        <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em]">Monto Máximo</p>
-                                        <div className="flex items-baseline gap-1">
-                                            <span className="text-emerald-400 text-3xl font-black font-mono tracking-tighter shadow-emerald-500/10">${adj.montoMaximo}</span>
-                                            <span className="text-[10px] text-emerald-600 font-bold uppercase">usd</span>
-                                        </div>
-                                        <span className={cn(
-                                            "text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded",
-                                            adj.totalPotentialPct < 0 ? "bg-rose-500/10 text-rose-400" : "bg-emerald-500/10 text-emerald-400"
-                                        )}>
-                                            {adj.totalPotentialPct > 0 ? `+${adj.totalPotentialPct}%` : `${adj.totalPotentialPct}%`} (D-SCORE)
-                                        </span>
-                                    </div>
+                <Card className="bg-blue-900/20 border-blue-700/50 shadow-lg relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+                    <CardContent className="py-5 relative z-10">
+                        <div className="flex flex-wrap justify-center gap-12 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                                <p className="text-blue-400/60 text-[10px] font-black uppercase tracking-[0.2em]">Monto Mínimo</p>
+                                <div className="flex items-baseline gap-1">
+                                    <span className="text-white text-2xl font-black font-mono tracking-tighter">${limitsAdjustment.montoMinimo}</span>
+                                    <span className="text-[10px] text-slate-500 font-bold uppercase">usd</span>
                                 </div>
-                            </CardContent>
-                        </Card>
-                    );
-                })()}
+                                {limitsAdjustment.montoMinimo > Number(solicitud.prestamo?.monto || 0) * 0.5 && (
+                                    <span className="text-[9px] text-amber-500/60 italic font-medium">Cap: Saldo Pendiente</span>
+                                )}
+                            </div>
+
+                            <div className="w-px h-10 bg-blue-500/10 self-center hidden sm:block" />
+
+                            <div className="flex flex-col items-center gap-1">
+                                <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em]">Monto Máximo</p>
+                                <div className="flex items-baseline gap-1">
+                                    <span className="text-emerald-400 text-3xl font-black font-mono tracking-tighter shadow-emerald-500/10">${limitsAdjustment.montoMaximo}</span>
+                                    <span className="text-[10px] text-emerald-600 font-bold uppercase">usd</span>
+                                </div>
+                                <span className={cn(
+                                    "text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded",
+                                    limitsAdjustment.totalPotentialPct < 0 ? "bg-rose-500/10 text-rose-400" : "bg-emerald-500/10 text-emerald-400"
+                                )}>
+                                    {limitsAdjustment.totalPotentialPct > 0 ? `+${limitsAdjustment.totalPotentialPct}%` : `${limitsAdjustment.totalPotentialPct}%`} (D-SCORE)
+                                </span>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
 
                 {/* Información de Auditoría */}
                 <Card className="bg-slate-900/50 border-slate-800">

@@ -89,7 +89,8 @@ export function calculateLoanMetrics(
       valorCuotaPromedio: 0,
       saldoCuotaParcial: 0,
       totalCuotas: 0,
-      cuotasPagadas: 0
+      cuotasPagadas: 0,
+      loanScore: { score: 100, increases: 0, penalties: 0, details: [], pagos_puntuales: 0, pagos_tardios: 0 }
     };
   }
 
@@ -134,7 +135,8 @@ export function calculateLoanMetrics(
       valorCuotaPromedio: 0,
       saldoCuotaParcial: 0,
       totalCuotas: cronograma.length,
-      cuotasPagadas: cronograma.filter((c: any) => c.estado === 'pagado').length
+      cuotasPagadas: cronograma.filter((c: any) => c.estado === 'pagado').length,
+      loanScore: calculateLoanScore(loan, pagos, today, config)
     };
   }
 
@@ -295,7 +297,7 @@ export function calculateLoanMetrics(
     saldoCuotaParcial,
     totalCuotas: loan.numero_cuotas || loan.cuotas || (valorCuotaPromedio > 0 ? Math.round(totalPagar / valorCuotaPromedio) : 0) || cronograma.length,
     cuotasPagadas: valorCuotaPromedio > 0 ? Math.floor(totalPagadoAcumulado / valorCuotaPromedio) : 0,
-    loanScore: calculateLoanScore(loan, pagos, today) // Integración del nuevo score
+    loanScore: calculateLoanScore(loan, pagos, today, config) // Integración del nuevo score
   };
 }
 
@@ -311,17 +313,24 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
   let pagos_tardios = 0;
   const details: { label: string; value: number; type: 'increase' | 'penalty' }[] = [];
 
-  // Pesos dinamicos base desde config (con fallbacks legacy)
-  const basePuntual = Math.abs(Number(config.score_peso_puntual) ?? 1);
-  const baseTarde = Math.abs(Number(config.score_peso_tarde) ?? 5);
+  const getVal = (key: string, fallback: number) => {
+    const val = config[key];
+    if (val === undefined || val === null || val === '') return fallback;
+    const num = Number(val);
+    return isNaN(num) ? fallback : Math.abs(num);
+  };
 
-  const wCpp = Math.abs(Number(config.score_peso_cpp) ?? 10);
-  const wMoroso = Math.abs(Number(config.score_peso_moroso) ?? 20);
-  const wVencido = Math.abs(Number(config.score_peso_vencido) ?? 35);
+  // Pesos dinamicos base desde config (con fallbacks legacy)
+  const basePuntual = getVal('score_peso_puntual', 1);
+  const baseTarde = getVal('score_peso_tarde', 5);
+
+  const wCpp = getVal('score_peso_cpp', 10);
+  const wMoroso = getVal('score_peso_moroso', 20);
+  const wVencido = getVal('score_peso_vencido', 35);
 
   // Penalidades por dia de atraso y topes
-  const wDiarioAtraso = Math.abs(Number(config.score_peso_diario_atraso) ?? 2);
-  const wTopeAtrasoCuota = Math.abs(Number(config.score_tope_atraso_cuota) ?? 15);
+  const wDiarioAtraso = getVal('score_peso_diario_atraso', 2);
+  const wTopeAtrasoCuota = getVal('score_tope_atraso_cuota', 15);
 
   // Multiplicadores por frecuencia (Normalizacion)
   const freq = loan.frecuencia?.toLowerCase().trim() || 'diario';
@@ -420,6 +429,7 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
           // Si es sistema, se asume puntual para no penalizar inconsistencias legacy
           if (focusPayment.isSystem) {
             increases += wPuntual;
+            pagos_puntuales++; // [CORRECCIÓN] Incrementar contador para datos reales en UI
             return;
           }
 
@@ -430,27 +440,32 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
             increases += wPuntual;
             pagos_puntuales++;
           } else {
-            // Pago tarde
-            penalties += wTarde;
-            pagos_tardios++;
-
-            // Calcular cuántos días de atraso tuvo al ser pagada para el histórico
-            const fechaPagoObj = new Date(focusPayment.created_at || focusPayment.fecha_pago);
+            // Pago tarde: Calcular días de atraso al momento de pagar
+            const fechaPagoObj = new Date(finishLine.date + 'T12:00:00');
             const fechaVencObj = new Date(c.fecha_vencimiento + 'T12:00:00');
             const diffTime = fechaPagoObj.getTime() - fechaVencObj.getTime();
             const diffDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
             maxHistoricalDelay = Math.max(maxHistoricalDelay, diffDays);
 
-            const isSystem = !focusPayment.asesor_id ||
-              focusPayment.metodo_pago === 'Sistema' ||
+            const isSystem = focusPayment.metodo_pago === 'Sistema' ||
+              focusPayment.metodo_pago === 'Renovación' ||
               focusPayment.metodo_pago === 'Excedente' ||
-              focusPayment.es_autopago_renovacion;
+              focusPayment.es_autopago_renovacion === true;
+
+            // Penalidad:
+            // 1. Si es pago por Sistema (Renovación), penalizamos por días reales (más severo).
+            // 2. Si es pago por Cliente (aunque sea tarde), usamos la penalidad base fija (menos severo).
+            const dayPenalty = Math.min(wTopeAtrasoCuota, diffDays * wDiarioAtraso);
+            const finalPenalty = isSystem ? Math.max(wTarde, dayPenalty) : wTarde;
+            
+            penalties += finalPenalty;
+            pagos_tardios++;
 
             const label = isSystem
-              ? `Regularización Tardía (Mora) - Cuota ${c.numero_cuota}`
+              ? `Regularización Tardía (Mora) - Cuota ${c.numero_cuota} (${diffDays}d)`
               : `Pago Tarde Cuota ${c.numero_cuota}`;
 
-            details.push({ label, value: wTarde, type: 'penalty' });
+            details.push({ label, value: finalPenalty, type: 'penalty' });
           }
         } catch (e) {
           console.error('Error parsing payment date:', e);
@@ -477,11 +492,13 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
   // 2. Castigos por Riesgo Histórico Máximo (Fusión Opción B: Comportamiento + Estado de Negocio + Fecha)
   const isVencidoState = ['vencido', 'legal', 'castigado'].includes(loan.estado?.toLowerCase().trim() || '') ||
     ['vencido', 'legal', 'castigado'].includes(loan.estado_mora?.toLowerCase().trim() || '') ||
-    (loan.fecha_final && loan.fecha_final < today);
+    (loan.fecha_fin && loan.fecha_fin < today);
 
   const totalRemaining = Object.values(remainingNeeded).reduce((a, b) => a + b, 0);
+  const lastPaymentDateStr = pool.length > 0 ? pool[pool.length - 1].date : '';
+  const wasVencidoAtSettlement = (loan.fecha_fin && lastPaymentDateStr > loan.fecha_fin);
 
-  if (maxHistoricalDelay > 30 || (isVencidoState && totalRemaining > 0.01)) {
+  if (maxHistoricalDelay > 30 || (isVencidoState && totalRemaining > 0.01) || (wasVencidoAtSettlement && totalRemaining <= 0.01)) {
     penalties += wVencido;
     const label = (isVencidoState && totalRemaining > 0.01) ? 'Riesgo Crítico: PRÉSTAMO VENCIDO' : 'Riesgo Histórico: VENCIDO';
     details.push({ label, value: wVencido, type: 'penalty' });
@@ -519,8 +536,11 @@ export function calculateClientReputation(client: any, allLoans: any[], config: 
   const pVencido = getConfigValue('reputation_penalty_vencido', 40);
   const pSaludPobre = getConfigValue('reputation_penalty_salud_pobre', 25);
 
-  const finishedLoans = allLoans.filter(l => ['finalizado', 'liquidado', 'renovado', 'refinanciado'].includes(l.estado));
-  const totalProcessed = finishedLoans.length;
+  const relevantLoans = allLoans.filter(l => 
+    ['finalizado', 'liquidado', 'renovado', 'refinanciado', 'activo'].includes(l.estado) &&
+    l.estado_verificacion !== 'rechazado'
+  );
+  const totalProcessed = relevantLoans.length;
   const metrics: any = {
     totalFinished: 0,
     totalRenovated: 0,
@@ -544,7 +564,7 @@ export function calculateClientReputation(client: any, allLoans: any[], config: 
   let totalHistoricalHealth = 0;
 
   // 2. Evaluación de Historial de Préstamos (Orden cronológico por fecha de creación)
-  const sortedLoans = [...finishedLoans].sort((a, b) => 
+  const sortedLoans = [...relevantLoans].sort((a, b) => 
     new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   );
 
@@ -596,10 +616,17 @@ export function calculateClientReputation(client: any, allLoans: any[], config: 
       details.push({ label: `Refinanciación por Mora (P#${l.id.split('-')[0]})`, value: -pRefinanciado, effectivelyAdded: -pRefinanciado, type: 'penalty', date: l.created_at });
     }
 
-    if (l.estado_mora === 'vencido' || l.estado === 'vencido') {
+    const em = (l.estado_mora?.toLowerCase() || l.estado?.toLowerCase() || '');
+    if (em === 'vencido') {
       metrics.totalVencido++;
       currentScore = Math.max(0, currentScore - pVencido);
-      details.push({ label: `Riesgo: Préstamo Vencido (P#${l.id.split('-')[0]})`, value: -pVencido, effectivelyAdded: -pVencido, type: 'penalty', date: l.created_at });
+      details.push({ 
+        label: `Riesgo: Préstamo Vencido (P#${l.id.split('-')[0]})`, 
+        value: -pVencido, 
+        effectivelyAdded: -pVencido, 
+        type: 'penalty', 
+        date: l.created_at 
+      });
     }
   });
 
@@ -1059,22 +1086,39 @@ export function calculateRenovationAdjustment(
   healthScore: number, 
   reputationScore: number, 
   montoOriginal: number,
-  saldoPendiente: number = 0
+  saldoPendiente: number = 0,
+  config: any = {}
 ) {
+  const getConfigValue = (key: string, fallback: number) => {
+    const val = config[key];
+    if (val === undefined || val === null || val === '') return fallback;
+    const num = Number(val);
+    return isNaN(num) ? fallback : num;
+  };
+
+  const aExcelente = getConfigValue('renovacion_aumento_excelente', 20);
+  const aMuyBueno = getConfigValue('renovacion_aumento_muy_bueno', 15);
+  const aBueno = getConfigValue('renovacion_aumento_bueno', 10);
+  const aRegular = getConfigValue('renovacion_aumento_regular', 0);
+  const rRiesgo = getConfigValue('renovacion_reduccion_riesgo', -15);
+
+  const bRepExcelente = getConfigValue('renovacion_bono_reputacion_excelente', 10);
+  const bRepBueno = getConfigValue('renovacion_bono_reputacion_bueno', 5);
+
   // 1. Ajuste Base por Salud (Capacidad de pago demostrada hoy)
   let baseIncreasePct = 0;
-  if (healthScore >= 90) baseIncreasePct = 20;
-  else if (healthScore >= 75) baseIncreasePct = 15;
-  else if (healthScore >= 60) baseIncreasePct = 10;
-  else if (healthScore >= 40) baseIncreasePct = 0;
-  else baseIncreasePct = -15; // Reducción sugerida por riesgo (Estándar Dual-Score)
+  if (healthScore >= 90) baseIncreasePct = aExcelente;
+  else if (healthScore >= 75) baseIncreasePct = aMuyBueno;
+  else if (healthScore >= 60) baseIncreasePct = aBueno;
+  else if (healthScore >= 40) baseIncreasePct = aRegular;
+  else baseIncreasePct = rRiesgo; // Reducción sugerida por riesgo (Estándar Dual-Score)
 
   // 2. Plus por Reputación (Confianza histórica)
   // El bonus solo aplica si la salud actual no es crítica (>= 40)
   let reputationBonusPct = 0;
   if (healthScore >= 40) {
-    if (reputationScore >= 90) reputationBonusPct = 10;
-    else if (reputationScore >= 75) reputationBonusPct = 5;
+    if (reputationScore >= 90) reputationBonusPct = bRepExcelente;
+    else if (reputationScore >= 75) reputationBonusPct = bRepBueno;
   }
 
   const totalPotentialPct = baseIncreasePct + reputationBonusPct;
@@ -1137,7 +1181,14 @@ export async function getFinancialConfig(supabase: any) {
       'reputation_penalty_refinanciado',
       'reputation_penalty_vencido',
       'reputation_penalty_salud_pobre',
-      'reputation_bonus_antiguedad_mensual'
+      'reputation_bonus_antiguedad_mensual',
+      'renovacion_aumento_excelente',
+      'renovacion_aumento_muy_bueno',
+      'renovacion_aumento_bueno',
+      'renovacion_aumento_regular',
+      'renovacion_reduccion_riesgo',
+      'renovacion_bono_reputacion_excelente',
+      'renovacion_bono_reputacion_bueno'
     ]);
 
   return (configRows || []).reduce((acc: any, row: any) => ({ ...acc, [row.clave]: row.valor }), {});

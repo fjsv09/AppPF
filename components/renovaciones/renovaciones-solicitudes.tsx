@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,9 @@ import {
 import { toast } from 'sonner'
 import { cn, getFrequencyBadgeStyles } from '@/lib/utils'
 import { formatMoney } from '@/utils/format'
+import { PaginationControlled } from '@/components/ui/pagination-controlled'
+import { usePathname, useSearchParams } from 'next/navigation'
+import { useEffect, useTransition } from 'react'
 
 interface Solicitud {
     id: string
@@ -50,6 +53,9 @@ interface RenovacionesSolicitudesProps {
     solicitudes: Solicitud[]
     userRole: 'asesor' | 'supervisor' | 'admin'
     userId: string
+    totalRecords: number
+    currentPage: number
+    pageSize: number
 }
 
 const estadoConfig: Record<string, { label: string; icon: any; color: string; bg: string }> = {
@@ -85,8 +91,12 @@ const estadoConfig: Record<string, { label: string; icon: any; color: string; bg
     }
 }
 
-export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: RenovacionesSolicitudesProps) {
+export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRecords, currentPage, pageSize }: RenovacionesSolicitudesProps) {
     const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
+    const [isPending, startTransition] = useTransition()
+
     const [actionDialog, setActionDialog] = useState<{
         type: 'preprobar' | 'observar' | 'aprobar' | 'rechazar' | null
         solicitud: Solicitud | null
@@ -94,36 +104,54 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
     const [loading, setLoading] = useState(false)
     const [inputText, setInputText] = useState('')
 
-    const [searchTerm, setSearchTerm] = useState('')
-    const [statusFilter, setStatusFilter] = useState('todos')
-    const [sortField, setSortField] = useState<'created_at' | 'fecha_inicio' | 'fecha_aprobacion'>('created_at')
-    const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
+    const currentSearch = searchParams.get('q') || ''
+    const currentStatus = searchParams.get('estado') || 'todos'
+    const currentSort = searchParams.get('sort') || 'created_at'
+    const currentOrder = searchParams.get('order') || 'desc'
 
-    const filteredSolicitudes = useMemo(() => {
-        return solicitudes?.filter(sol => {
-            const searchLower = searchTerm.toLowerCase()
-            const matchesSearch = 
-                sol.cliente?.nombres?.toLowerCase().includes(searchLower) ||
-                sol.cliente?.dni?.includes(searchLower)
-            
-            const matchesStatus = statusFilter === 'todos' || sol.estado_solicitud === statusFilter
+    const [searchTerm, setSearchTerm] = useState(currentSearch)
 
-            return matchesSearch && matchesStatus
-        })?.sort((a, b) => {
-            let dateA = new Date(a.created_at).getTime()
-            let dateB = new Date(b.created_at).getTime()
+    useEffect(() => {
+        setSearchTerm(searchParams.get('q') || '')
+    }, [searchParams.get('q')])
 
-            if (sortField === 'fecha_aprobacion') {
-                dateA = 0 
-                dateB = 0 
-            } else if (sortField === 'fecha_inicio') {
-                dateA = a.fecha_inicio_propuesta ? new Date(a.fecha_inicio_propuesta).getTime() : 0
-                dateB = b.fecha_inicio_propuesta ? new Date(b.fecha_inicio_propuesta).getTime() : 0
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            if (searchTerm !== (searchParams.get('q') || '')) {
+                updateFilter('q', searchTerm)
             }
+        }, 500)
+        return () => clearTimeout(timeout)
+    }, [searchTerm])
 
-            return sortOrder === 'desc' ? dateB - dateA : dateA - dateB
-        }) || []
-    }, [solicitudes, searchTerm, statusFilter, sortField, sortOrder])
+    const updateFilter = (key: string, value: string) => {
+        startTransition(() => {
+            const params = new URLSearchParams(searchParams.toString())
+            params.set('page', '1') // Reset to page 1 on filter change
+            if (value && value !== 'todos' && value !== '') {
+                params.set(key, value)
+            } else {
+                params.delete(key)
+            }
+            router.push(`${pathname}?${params.toString()}`, { scroll: false })
+        })
+    }
+
+    const handlePageChange = (page: number) => {
+        startTransition(() => {
+            const params = new URLSearchParams(searchParams.toString())
+            params.set('page', String(page))
+            router.push(`${pathname}?${params.toString()}`, { scroll: false })
+        })
+    }
+
+    const handleSortChange = (field: string) => {
+        updateFilter('sort', field)
+    }
+
+    const handleOrderChange = (order: 'asc' | 'desc') => {
+        updateFilter('order', order)
+    }
 
     const handleAction = async () => {
         if (!actionDialog.type || !actionDialog.solicitud) return
@@ -183,7 +211,11 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
             {/* Filters */}
             <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-6 shadow-lg shadow-black/20 w-full">
                 <div className="relative w-full md:flex-1 md:max-w-none min-w-[180px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                    {isPending ? (
+                         <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500 animate-spin" />
+                    ) : (
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                    )}
                     <Input
                         placeholder="Buscar cliente, DNI..."
                         value={searchTerm}
@@ -204,7 +236,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <Select value={currentStatus} onValueChange={(val) => updateFilter('estado', val)}>
                         <SelectTrigger className="h-10 w-auto min-w-[140px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3">
                             <Activity className="w-3 h-3 mr-2 text-emerald-400 shrink-0" />
                             <SelectValue placeholder="Estado" />
@@ -220,7 +252,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                     </Select>
 
                     <div className="flex gap-1 shrink-0 bg-slate-950/30 p-1 rounded-lg border border-slate-800/50 w-auto">
-                        <Select value={sortField} onValueChange={(val) => setSortField(val as 'created_at' | 'fecha_aprobacion' | 'fecha_inicio')}>
+                        <Select value={currentSort} onValueChange={handleSortChange}>
                             <SelectTrigger className="h-10 w-auto min-w-[110px] bg-transparent border-0 text-slate-300 focus:ring-0 text-xs px-2 shrink-0">
                                 <span className="text-slate-500 mr-1 hidden sm:inline">Ordenar:</span>
                                 <SelectValue placeholder="Ordenar" />
@@ -238,8 +270,8 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setSortOrder('asc')}
-                                className={cn("h-8 w-8 rounded hover:bg-slate-800 shrink-0", sortOrder === 'asc' ? "text-blue-400 bg-blue-950/20" : "text-slate-500")}
+                                onClick={() => handleOrderChange('asc')}
+                                className={cn("h-8 w-8 rounded hover:bg-slate-800 shrink-0", currentOrder === 'asc' ? "text-blue-400 bg-blue-950/20" : "text-slate-500")}
                                 title="Ascendente (Más antiguos primero)"
                                 type="button"
                             >
@@ -248,8 +280,8 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setSortOrder('desc')}
-                                className={cn("h-8 w-8 rounded hover:bg-slate-800 shrink-0", sortOrder === 'desc' ? "text-blue-400 bg-blue-950/20" : "text-slate-500")}
+                                onClick={() => handleOrderChange('desc')}
+                                className={cn("h-8 w-8 rounded hover:bg-slate-800 shrink-0", currentOrder === 'desc' ? "text-blue-400 bg-blue-950/20" : "text-slate-500")}
                                 title="Descendente (Más recientes primero)"
                                 type="button"
                             >
@@ -260,7 +292,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                 </div>
             </div>
 
-            {filteredSolicitudes.length === 0 ? (
+            {solicitudes.length === 0 ? (
                 <div className="bg-slate-900/50 backdrop-blur-sm rounded-2xl border border-slate-800 p-12 text-center">
                     <RefreshCw className="h-16 w-16 text-slate-600 mx-auto mb-4" />
                     <h3 className="text-xl font-semibold text-slate-400 mb-2">
@@ -271,15 +303,15 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                             ? 'Las solicitudes que crees aparecerán aquí'
                             : 'Las solicitudes pendientes de revisión aparecerán aquí'}
                     </p>
-                    {(searchTerm !== '' || statusFilter !== 'todos') && (
+                    {(currentSearch !== '' || currentStatus !== 'todos') && (
                         <Button 
                             variant="outline" 
                             className="mt-4 text-slate-400 border-slate-700 hover:text-white"
                             onClick={() => {
                                 setSearchTerm('')
-                                setStatusFilter('todos')
-                                setSortField('created_at')
-                                setSortOrder('desc')
+                                startTransition(() => {
+                                    router.push(pathname)
+                                })
                             }}
                         >
                             Limpiar filtros
@@ -289,8 +321,13 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
             ) : (
                 <>
                     {/* -------------------- MOBILE VIEW (CARDS) -------------------- */}
-                    <div className="md:hidden space-y-4">
-                        {filteredSolicitudes.map((sol) => {
+                    <div className={cn("md:hidden space-y-4 relative", isPending && "opacity-50")}>
+                        {isPending && (
+                            <div className="absolute inset-0 z-10 flex items-center justify-center">
+                                <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                            </div>
+                        )}
+                        {solicitudes.map((sol) => {
                     const estado = estadoConfig[sol.estado_solicitud] || estadoConfig['pendiente_supervision']
                     
                     return (
@@ -350,7 +387,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                                     <div className="flex flex-col text-left">
                                         <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Monto</span>
                                         <span className="font-mono text-emerald-400 font-bold text-sm whitespace-nowrap">
-                                            <DollarSign className="inline w-3.5 h-3.5 text-emerald-500 mr-0.5 -mt-0.5" />
+                                            <span className="text-emerald-500 mr-0.5 -mt-0.5 font-bold">S/ </span>
                                             {sol.monto_solicitado.toLocaleString('en-US')}
                                         </span>
                                     </div>
@@ -394,6 +431,25 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                                     <Button size="sm" variant="outline" className="flex-1 bg-slate-900 border-slate-700 text-slate-300 h-8 text-[11px] hover:text-white" onClick={() => router.push(`/dashboard/renovaciones/${sol.id}`)}>
                                         <Eye className="w-3.5 h-3.5 mr-1" /> Ver Caso
                                     </Button>
+                                    {sol.estado_solicitud === 'aprobado' && (
+                                        <Button 
+                                            size="sm" 
+                                            variant="outline" 
+                                            className="flex-1 bg-emerald-900/20 border-emerald-500/30 text-emerald-400 h-8 text-[11px] hover:bg-emerald-500/20"
+                                            onClick={(e) => {
+                                                e.preventDefault()
+                                                const phone = (sol.cliente?.telefono)?.replace(/\D/g, '') || ''
+                                                const monto = sol.monto_solicitado.toLocaleString('en-US')
+                                                const message = encodeURIComponent(`Hola ${sol.cliente?.nombres}, le saludamos de ProFinanzas. Le informamos que su renovación por un monto de S/ ${monto} ha sido APROBADA. ¡Felicidades!`)
+                                                window.open(`https://wa.me/51${phone}?text=${message}`, '_blank')
+                                            }}
+                                        >
+                                            <svg className="w-3 h-3 mr-1 fill-current" viewBox="0 0 24 24">
+                                                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.246 2.248 3.484 5.232 3.484 8.412-.003 6.557-5.338 11.892-11.893 11.892-1.997-.001-3.951-.5-5.688-1.448l-6.309 1.656zm6.29-4.143c1.565.928 3.178 1.416 4.856 1.417 5.341 0 9.69-4.348 9.693-9.691.002-2.59-1.01-5.025-2.847-6.865-1.838-1.837-4.271-2.847-6.863-2.848-5.341 0-9.69 4.349-9.692 9.691-.001 1.831.515 3.614 1.491 5.162l-.994 3.63 3.712-.974zm11.367-7.46c-.066-.11-.244-.176-.511-.309-.267-.133-1.583-.781-1.827-.87-.245-.089-.423-.133-.6.133-.177.266-.689.87-.845 1.047-.156.177-.311.199-.578.066-.267-.133-1.127-.416-2.146-1.326-.793-.707-1.329-1.58-1.485-1.847-.156-.266-.016-.411.117-.544.12-.119.267-.31.4-.466.133-.155.177-.266.267-.443.089-.178.044-.333-.022-.466-.067-.133-.6-1.446-.822-1.979-.217-.518-.434-.447-.6-.456-.153-.008-.328-.01-.502-.01-.174 0-.457.065-.696.327-.24.262-.915.894-.915 2.178 0 1.284.934 2.525 1.065 2.702.131.177 1.836 2.805 4.448 3.931.621.267 1.106.427 1.484.547.623.198 1.19.17 1.637.104.498-.074 1.583-.647 1.805-1.27.222-.623.222-1.157.156-1.27z" />
+                                            </svg>
+                                            Notificar
+                                        </Button>
+                                    )}
                                     {userRole === 'supervisor' && sol.estado_solicitud === 'pendiente_supervision' && (
                                         <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-500 text-white h-8 text-[11px]" onClick={() => openAction('preprobar', sol)}>
                                             Pre-aprobar
@@ -407,7 +463,12 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
             </div>
 
             {/* -------------------- HIGHER RES TABLE VIEW -------------------- */}
-            <div className="hidden md:block bg-slate-950/40 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+            <div className={cn("hidden md:block bg-slate-950/40 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden relative", isPending && "opacity-50")}>
+                {isPending && (
+                    <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/5 backdrop-blur-[1px]">
+                         <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
+                    </div>
+                )}
                 <div className="overflow-x-auto custom-scrollbar pb-2">
                     <div className="min-w-[1200px]">
                         {/* Desktop Header */}
@@ -422,7 +483,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
 
                         {/* Content */}
                         <div className="divide-y divide-slate-800/50 text-sm">
-                            {filteredSolicitudes.map((sol) => {
+                            {solicitudes.map((sol) => {
                                 const estado = estadoConfig[sol.estado_solicitud] || estadoConfig['pendiente_supervision']
                                 const IconEstado = estado.icon
 
@@ -456,7 +517,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
 
                                         {/* Solicitado */}
                                         <div className="col-span-2 text-right flex flex-col items-end justify-center min-w-0">
-                                            <div className="text-sm font-mono font-bold text-slate-300">${sol.monto_solicitado.toLocaleString('en-US')}</div>
+                                            <div className="text-sm font-mono font-bold text-slate-300">S/ {sol.monto_solicitado.toLocaleString('en-US')}</div>
                                             <div className="text-[10px] text-slate-400 mt-0.5 flex items-center justify-end gap-1 leading-tight">
                                                 <span>{sol.cuotas}</span>
                                                 <Badge 
@@ -524,6 +585,24 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                                                     </Button>
                                                 </>
                                             )}
+                                            {sol.estado_solicitud === 'aprobado' && (
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="ghost" 
+                                                    className="h-8 w-8 p-0 rounded-lg text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 hover:text-emerald-300 transition-all"
+                                                    onClick={(e) => {
+                                                        e.preventDefault()
+                                                        const phone = (sol.cliente?.telefono)?.replace(/\D/g, '') || ''
+                                                        const monto = sol.monto_solicitado.toLocaleString('en-US')
+                                                        const message = encodeURIComponent(`Hola ${sol.cliente?.nombres}, le saludamos de ProFinanzas. Le informamos que su renovación por un monto de S/ ${monto} ha sido APROBADA. ¡Felicidades!`)
+                                                        window.open(`https://wa.me/51${phone}?text=${message}`, '_blank')
+                                                    }}
+                                                >
+                                                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                                                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.246 2.248 3.484 5.232 3.484 8.412-.003 6.557-5.338 11.892-11.893 11.892-1.997-.001-3.951-.5-5.688-1.448l-6.309 1.656zm6.29-4.143c1.565.928 3.178 1.416 4.856 1.417 5.341 0 9.69-4.348 9.693-9.691.002-2.59-1.01-5.025-2.847-6.865-1.838-1.837-4.271-2.847-6.863-2.848-5.341 0-9.69 4.349-9.692 9.691-.001 1.831.515 3.614 1.491 5.162l-.994 3.63 3.712-.974zm11.367-7.46c-.066-.11-.244-.176-.511-.309-.267-.133-1.583-.781-1.827-.87-.245-.089-.423-.133-.6.133-.177.266-.689.87-.845 1.047-.156.177-.311.199-.578.066-.267-.133-1.127-.416-2.146-1.326-.793-.707-1.329-1.58-1.485-1.847-.156-.266-.016-.411.117-.544.12-.119.267-.31.4-.466.133-.155.177-.266.267-.443.089-.178.044-.333-.022-.466-.067-.133-.6-1.446-.822-1.979-.217-.518-.434-.447-.6-.456-.153-.008-.328-.01-.502-.01-.174 0-.457.065-.696.327-.24.262-.915.894-.915 2.178 0 1.284.934 2.525 1.065 2.702.131.177 1.836 2.805 4.448 3.931.621.267 1.106.427 1.484.547.623.198 1.19.17 1.637.104.498-.074 1.583-.647 1.805-1.27.222-.623.222-1.157.156-1.27z" />
+                                                    </svg>
+                                                </Button>
+                                            )}
                                             <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all" onClick={() => router.push(`/dashboard/renovaciones/${sol.id}`)} title="Ver Detalle">
                                                 <Eye className="w-4 h-4" />
                                             </Button>
@@ -560,7 +639,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                             {actionDialog.type === 'rechazar' && 'Rechazar Solicitud'}
                         </DialogTitle>
                         <DialogDescription className="text-slate-400">
-                            {actionDialog.solicitud?.cliente?.nombres} - ${formatMoney(actionDialog.solicitud?.monto_solicitado)}
+                            {actionDialog.solicitud?.cliente?.nombres} - S/ {formatMoney(actionDialog.solicitud?.monto_solicitado)}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -649,6 +728,19 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId }: Renov
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Pagination Controls */}
+            {!loading && solicitudes.length > 0 && (
+                <div className="mt-6">
+                    <PaginationControlled 
+                        currentPage={currentPage}
+                        totalPages={Math.ceil(totalRecords / pageSize)}
+                        onPageChange={handlePageChange}
+                        totalRecords={totalRecords}
+                        pageSize={pageSize}
+                    />
+                </div>
+            )}
                 </>
             )}
         </div>

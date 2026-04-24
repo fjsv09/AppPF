@@ -199,7 +199,9 @@ export async function GET(
         const adjustment = calculateRenovationAdjustment(
             atomicHealthScore.score, 
             evaluation.reputationScore, 
-            responseElegibilidad.monto_original || loanFull.monto
+            responseElegibilidad.monto_original || loanFull.monto,
+            0,
+            systemConfig
         )
 
         // Actualizar respuesta con los nuevos scores y LÍMITES sincronizados
@@ -215,7 +217,8 @@ export async function GET(
             ajuste_recomendado_pct: adjustment.totalPotentialPct,
             ajuste_detalles: adjustment.detalles,
             // Sobrescribir el score legacy si existe
-            score: atomicHealthScore.score 
+            score: atomicHealthScore.score,
+            config: systemConfig
         }
 
         // Respetar Límite Global del Cliente (Techo máximo absoluto)

@@ -102,6 +102,19 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule, onClose }: P
     const selectClient = async (client: any) => {
         setSelectedClient(client)
         setStep(2)
+        
+        // Iniciar captura de ubicación lo antes posible (Paso 2)
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                (err) => {
+                    console.warn("Location warmup failed:", err);
+                    setLocationError(true);
+                },
+                { enableHighAccuracy: true, timeout: 8000 }
+            );
+        }
+
         // Fetch active loans
         const { data } = await supabase.from('prestamos').select('*').eq('cliente_id', client.id).eq('estado', 'activo')
         if (data) setLoans(data)
@@ -192,32 +205,46 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule, onClose }: P
         setLoading(true)
 
         try {
+            // [NUEVO] Intento de sincronización de último segundo si no hay ubicación
+            let finalLocation = location;
+            if (!finalLocation && navigator.geolocation) {
+                try {
+                    const pos = await new Promise<GeolocationPosition>((res, rej) => {
+                        navigator.geolocation.getCurrentPosition(res, rej, { 
+                            timeout: 3500, 
+                            enableHighAccuracy: true 
+                        });
+                    });
+                    finalLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    setLocation(finalLocation);
+                } catch (e) { 
+                    console.warn("Sync final GPS fallido o denegado"); 
+                }
+            }
+
             console.log('Confirmando Pago para Préstamo ID:', selectedLoan.id)
             
+            // 1. Registrar el pago en el servidor
             const apiResult = await api.pagos.registrar({ 
                 cuota_id: payingQuota.id, 
                 monto: parseFloat(amount), 
                 metodo_pago: metodoPago,
-                latitud: location?.lat,
-                longitud: location?.lng
+                latitud: finalLocation?.lat,
+                longitud: finalLocation?.lng
             })
             
-            // RE-FETCH DATA FROM DB WITH ABSOLUTE CERTAINTY
-            const { data: qData } = await supabase.from('cronograma_cuotas')
-                .select('*')
-                .eq('prestamo_id', selectedLoan.id)
-                .order('numero_cuota', { ascending: true });
-                
-            const idsCuotas = qData?.map((c: any) => c.id) || [];
-            const { data: hData } = idsCuotas.length > 0 
-                ? await supabase.from('pagos')
-                    .select('*, perfiles(nombre_completo)')
-                    .in('cuota_id', idsCuotas)
+            // 2. RE-FETCH DATA IN PARALLEL TO SAVE TIME
+            // Fetching both quotas and payments for the entire loan
+            const [qRes, hRes] = await Promise.all([
+                supabase.from('cronograma_cuotas')
+                    .select('*')
+                    .eq('prestamo_id', selectedLoan.id)
+                    .order('numero_cuota', { ascending: true }),
+                supabase.from('pagos')
+                    .select('*, perfiles(nombre_completo), cronograma_cuotas!inner(prestamo_id)')
+                    .eq('cronograma_cuotas.prestamo_id', selectedLoan.id)
                     .order('created_at', { ascending: true })
-                : { data: [] };
-
-            const qRes = { data: qData };
-            const hRes = { data: hData };
+            ])
 
             console.log('Wizard Refetch Results:', { 
                 quotasCount: qRes.data?.length, 
@@ -236,6 +263,7 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule, onClose }: P
                 setStep(4) 
                 toast.success('Pago Registrado Exitosamente')
             } else {
+                // Fallback si por alguna razón el fetch no trajo el nuevo ID inmediatamente
                 setPaymentResult({
                     id: apiResult.pago_id,
                     created_at: new Date().toISOString(),
@@ -398,7 +426,7 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule, onClose }: P
                                         <div>
                                             <div className="text-sm text-slate-500 font-medium mb-1">Monto Principal</div>
                                             <div className="text-3xl font-bold text-white tracking-tight group-hover:text-blue-400 transition-colors">
-                                                ${loan.monto}
+                                                S/ {loan.monto}
                                             </div>
                                             <div className="mt-2 text-xs text-slate-400 flex items-center gap-2">
                                                 <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">
@@ -425,7 +453,7 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule, onClose }: P
             {step === 3 && (
                 <div className="space-y-6">
                     <div className="flex items-center justify-between text-sm text-slate-400 bg-slate-900/50 p-3 rounded-lg border border-slate-800">
-                        <span>Préstamo de <b>${selectedLoan.monto}</b></span>
+                        <span>Préstamo de <b>S/ {selectedLoan.monto}</b></span>
                         <Button variant="ghost" size="sm" onClick={() => setStep(2)} className="h-auto py-1 px-2 hover:text-white">
                             Cambiar
                         </Button>
@@ -461,7 +489,7 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule, onClose }: P
                                         </div>
                                         
                                         <div className="text-right">
-                                            <div className="font-bold text-white text-lg">${pending.toFixed(2)}</div>
+                                            <div className="font-bold text-white text-lg">S/ {pending.toFixed(2)}</div>
                                             {isPaid ? (
                                                 <Button size="sm" variant="ghost" disabled className="text-emerald-500 font-bold bg-transparent">
                                                     Pagado
@@ -497,7 +525,7 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule, onClose }: P
 
                                 <div className="space-y-6 max-w-sm mx-auto">
                                     <div className="relative">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xl font-bold">$</span>
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xl font-bold">S/</span>
                                         <Input
                                             type="number"
                                             value={amount}
@@ -511,7 +539,7 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule, onClose }: P
                                                     setAmount(val)
                                                 } else if (numericVal > maxAmount) {
                                                     setAmount(maxAmount.toFixed(2))
-                                                    toast.warning(`El monto no puede exceder la deuda total ($${maxAmount.toFixed(2)})`)
+                                                    toast.warning(`El monto no puede exceder la deuda total (S/ ${maxAmount.toFixed(2)})`)
                                                 }
                                             }}
                                             min="0"

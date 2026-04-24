@@ -15,7 +15,15 @@ export const metadata: Metadata = {
     title: 'Solicitudes de Renovación'
 }
 
-export default async function RenovacionesPage() {
+export default async function RenovacionesPage(props: { searchParams: Promise<{ q?: string, estado?: string, sort?: string, order?: string, page?: string }> }) {
+    const searchParams = await props.searchParams;
+    const queryTerm = searchParams.q || ''
+    const statusFilter = searchParams.estado || 'todos'
+    const sortField = (searchParams.sort as 'created_at' | 'fecha_inicio' | 'fecha_aprobacion') || 'created_at'
+    const sortOrder = (searchParams.order as 'desc' | 'asc') || 'desc'
+    const currentPage = Number(searchParams.page) || 1
+    const ITEMS_PER_PAGE = 10
+
     const supabase = await createClient()
     const supabaseAdmin = createAdminClient()
 
@@ -31,34 +39,73 @@ export default async function RenovacionesPage() {
 
     if (!perfil) redirect('/login')
 
-    // Obtener solicitudes según rol
-    let query = supabaseAdmin
-        .from('solicitudes_renovacion')
-        .select(`
-            *,
-            cliente:cliente_id(id, nombres, dni),
-            prestamo:prestamo_id(id, monto, estado, estado_mora, frecuencia),
-            asesor:asesor_id(id, nombre_completo),
-            supervisor:supervisor_id(id, nombre_completo)
-        `)
-        .order('created_at', { ascending: false })
-
-    if (perfil.rol === 'asesor') {
-        query = query.eq('asesor_id', user.id)
-    } else if (perfil.rol === 'supervisor') {
+    // Preparar IDs para filtros de rol
+    let restrictedAsesorIds: string[] = []
+    if (perfil.rol === 'supervisor') {
         const { data: asesores } = await supabaseAdmin
             .from('perfiles')
             .select('id')
             .eq('supervisor_id', user.id)
-        
-        const asesorIds = asesores?.map(a => a.id) || []
-        asesorIds.push(user.id)
-        query = query.in('asesor_id', asesorIds)
+        restrictedAsesorIds = asesores?.map(a => a.id) || []
+        restrictedAsesorIds.push(user.id)
     }
 
-    const { data: solicitudes } = await query
+    // Helper para aplicar filtros de seguridad
+    const applySecurityFilters = (q: any) => {
+        if (perfil.rol === 'asesor') {
+            return q.eq('asesor_id', user.id)
+        } else if (perfil.rol === 'supervisor') {
+            return q.in('asesor_id', restrictedAsesorIds)
+        }
+        return q
+    }
 
-    // [NUEVO] Lógica de Acceso al Sistema
+    // Consulta principal
+    let mainQuery = supabaseAdmin
+        .from('solicitudes_renovacion')
+        .select(`
+            *,
+            cliente:cliente_id!inner(id, nombres, dni),
+            prestamo:prestamo_id(id, monto, estado, estado_mora, frecuencia),
+            asesor:asesor_id(id, nombre_completo),
+            supervisor:supervisor_id(id, nombre_completo)
+        `, { count: 'exact' })
+
+    mainQuery = applySecurityFilters(mainQuery)
+
+    if (queryTerm) {
+        mainQuery = mainQuery.or(`nombres.ilike.%${queryTerm}%,dni.ilike.%${queryTerm}%`, { foreignTable: 'cliente' })
+    }
+    
+    if (statusFilter !== 'todos') {
+        mainQuery = mainQuery.eq('estado_solicitud', statusFilter)
+    }
+
+    const { data: solicitudes, count: totalRecords } = await mainQuery
+        .order(sortField, { ascending: sortOrder === 'asc' })
+        .range((currentPage - 1) * ITEMS_PER_PAGE, (currentPage * ITEMS_PER_PAGE) - 1)
+
+    // Consultas para KPIs (independientes de la búsqueda)
+    const getKpiCount = async (estados: string | string[]) => {
+        let q = supabaseAdmin.from('solicitudes_renovacion').select('id', { count: 'exact', head: true })
+        q = applySecurityFilters(q)
+        if (Array.isArray(estados)) {
+            q = q.in('estado_solicitud', estados)
+        } else {
+            q = q.eq('estado_solicitud', estados)
+        }
+        const { count } = await q
+        return count || 0
+    }
+
+    const [pendientes, preAprobados, enCorreccion, finalizadas] = await Promise.all([
+        getKpiCount('pendiente_supervision'),
+        getKpiCount('pre_aprobado'),
+        getKpiCount('en_correccion'),
+        getKpiCount(['aprobado', 'rechazado'])
+    ])
+
+    // Lógica de Acceso y Bloqueos
     const { checkSystemAccess } = await import('@/utils/systemRestrictions')
     const access = await checkSystemAccess(supabaseAdmin, user.id, perfil.rol, 'renovacion')
     
@@ -94,49 +141,45 @@ export default async function RenovacionesPage() {
 
             {/* Hero Stats */}
             <div className="kpi-grid md:grid-cols-4">
-                {/* Card 1: Pendientes */}
                 <div className="kpi-card group hover:border-yellow-500/30">
                     <div className="kpi-card-icon">
                         <Clock className="w-16 h-16 text-yellow-500" />
                     </div>
                     <p className="kpi-label">Pendientes</p>
-                    <h2 className="kpi-value">{solicitudes?.filter(s => s.estado_solicitud === 'pendiente_supervision').length || 0}</h2>
+                    <h2 className="kpi-value">{pendientes}</h2>
                     <div className="mt-2 text-yellow-400 flex items-center gap-1">
                         <span className="kpi-badge bg-yellow-950/50 text-yellow-400 border border-yellow-900/50">REVISIÓN</span>
                     </div>
                 </div>
 
-                {/* Card 2: Pre-Aprobadas */}
                 <div className="kpi-card group hover:border-blue-500/30">
                     <div className="kpi-card-icon">
                         <Eye className="w-16 h-16 text-blue-500" />
                     </div>
                     <p className="kpi-label">Pre-Aprobadas</p>
-                    <h2 className="kpi-value">{solicitudes?.filter(s => s.estado_solicitud === 'pre_aprobado').length || 0}</h2>
+                    <h2 className="kpi-value">{preAprobados}</h2>
                     <div className="mt-2 text-blue-400 flex items-center gap-1">
                         <span className="kpi-badge bg-blue-950/50 text-blue-400 border border-blue-900/50">POR APROBAR</span>
                     </div>
                 </div>
 
-                {/* Card 3: En Corrección */}
                 <div className="kpi-card group hover:border-orange-500/30">
                     <div className="kpi-card-icon">
                         <AlertCircle className="w-16 h-16 text-orange-500" />
                     </div>
                     <p className="kpi-label">En Corrección</p>
-                    <h2 className="kpi-value">{solicitudes?.filter(s => s.estado_solicitud === 'en_correccion').length || 0}</h2>
+                    <h2 className="kpi-value">{enCorreccion}</h2>
                     <div className="mt-2 text-orange-400 flex items-center gap-1">
                         <span className="kpi-badge bg-orange-950/50 text-orange-400 border border-orange-900/50">ATENCIÓN</span>
                     </div>
                 </div>
 
-                {/* Card 4: Finalizadas */}
                 <div className="kpi-card group hover:border-slate-500/30">
                     <div className="kpi-card-icon">
                         <CheckCircle className="w-16 h-16 text-slate-500" />
                     </div>
                     <p className="kpi-label">Finalizadas</p>
-                    <h2 className="kpi-value">{solicitudes?.filter(s => s.estado_solicitud === 'aprobado' || s.estado_solicitud === 'rechazado').length || 0}</h2>
+                    <h2 className="kpi-value">{finalizadas}</h2>
                     <div className="mt-2 text-slate-400 flex items-center gap-1">
                         <span className="kpi-badge bg-slate-800 text-slate-400 border border-slate-700">COMPLETADO</span>
                     </div>
@@ -148,6 +191,9 @@ export default async function RenovacionesPage() {
                 solicitudes={solicitudes || []} 
                 userRole={perfil.rol}
                 userId={user.id}
+                totalRecords={totalRecords || 0}
+                currentPage={currentPage}
+                pageSize={ITEMS_PER_PAGE}
             />
         </div>
     )

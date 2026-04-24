@@ -62,6 +62,14 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
         }
 
+        if (monto_maximo_permitido && monto_solicitado > monto_maximo_permitido) {
+            return NextResponse.json({ error: `El monto solicitado excede el límite máximo permitido ($${monto_maximo_permitido})` }, { status: 400 })
+        }
+        
+        if (monto_minimo_permitido && monto_solicitado < monto_minimo_permitido) {
+            return NextResponse.json({ error: `El monto solicitado es menor al límite mínimo permitido ($${monto_minimo_permitido})` }, { status: 400 })
+        }
+
         const { data: prestamoInfo } = await supabaseAdmin
             .from('prestamos')
             .select(`
@@ -89,13 +97,16 @@ export async function POST(request: Request) {
         // Obtener cuotas pendientes para saber cuánto debemos retener
         const { data: cuotasPendientes } = await supabaseAdmin
             .from('cronograma_cuotas')
-            .select('id, monto_cuota')
+            .select('id, monto_cuota, monto_pagado')
             .eq('prestamo_id', prestamo_id)
             .neq('estado', 'pagado')
 
         let saldo_retenido = 0;
         if (cuotasPendientes && cuotasPendientes.length > 0) {
-            saldo_retenido = cuotasPendientes.reduce((acc: number, c: any) => acc + Number(c.monto_cuota), 0);
+            saldo_retenido = cuotasPendientes.reduce((acc: number, c: any) => {
+                const pagado = Number(c.monto_pagado || 0);
+                return acc + (Number(c.monto_cuota) - pagado);
+            }, 0);
         }
 
         const desembolso_neto = monto_solicitado - saldo_retenido;
@@ -216,7 +227,7 @@ export async function POST(request: Request) {
             // 5. Historial de Pagos - UN SOLO registro consolidado
             if (cuotasPendientes && cuotasPendientes.length > 0) {
                 const montoTotalLiquidado = cuotasPendientes.reduce((acc: number, c: any) => 
-                    acc + Number(c.monto_cuota), 0);
+                    acc + (Number(c.monto_cuota) - Number(c.monto_pagado || 0)), 0);
 
                 const { error: pagosError } = await supabaseAdmin.from('pagos').insert({
                     cuota_id: cuotasPendientes[0].id,

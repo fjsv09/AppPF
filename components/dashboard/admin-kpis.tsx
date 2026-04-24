@@ -281,7 +281,7 @@ export function AdminKPIs() {
                                             }
                                         </div>
                                         <div className="text-right font-black text-cyan-400 text-[11px] md:text-xs">
-                                            ${formatMoney(cliente.monto_ultimo_prestamo)}
+                                            S/ {formatMoney(cliente.monto_ultimo_prestamo)}
                                         </div>
                                     </div>
                                 ))}
@@ -330,7 +330,7 @@ export function AdminKPIs() {
                                         <div className="min-w-0 flex-1">
                                             <p className="text-[10px] md:text-[11px] font-bold text-white truncate uppercase">{sol.cliente.nombres}</p>
                                             <div className="flex items-center gap-2 mt-0.5">
-                                                <p className="text-[9px] text-slate-500 font-bold">${formatMoney(sol.monto_solicitado)}</p>
+                                                <p className="text-[9px] text-slate-500 font-bold">S/ {formatMoney(sol.monto_solicitado)}</p>
                                                 <span className="text-[7px] text-slate-600 font-black uppercase truncate">@ {sol.asesor.nombre_completo.split(' ')[0]}</span>
                                             </div>
                                         </div>

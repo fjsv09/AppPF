@@ -340,18 +340,23 @@ export function DailyCollectorLog({
                                 const isMigrado = prestamo.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
                                 const cVal = cuota ? Number(cuota.monto_cuota || 0) : 0, pVal = cuota ? Number(cuota.monto_pagado || 0) : 0
                                 const isFull = cuota ? (pVal >= (cVal - 0.01)) : false, isPart = cuota ? (pVal > 0 && !isFull) : false
+                                 
+                                 const sources = cuota ? (waterfallData.quotaSources[cuota.id] || []) : []
+                                 const isCoveredByAdvance = sources.some((s: any) => s.type === 'advance' && s.paymentDate !== date)
                                 
                                 let st = { l: "NO PAGÓ", c: "text-rose-500 bg-rose-500/10", bg: "bg-rose-500/5" }
                                 if (isVirtual) st = { l: "EXTRA", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
                                 else if (isFull) {
-                                  if (totalDay > 0) st = { l: "CUMPLIÓ", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
+                                  if (totalDay > 0) st = { l: "PAGO", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
+                                  else if (isCoveredByAdvance) st = { l: "SISTEMA", c: "text-blue-400 bg-blue-500/10", bg: "bg-blue-500/10" }
                                   else st = { l: "SISTEMA", c: isMigrado ? "text-sky-400 bg-sky-500/10" : "text-rose-500 bg-rose-500/10", bg: isMigrado ? "bg-sky-500/5" : "bg-rose-500/5" }
                                 } else if (isPart) {
                                   if (totalDay > 0) st = { l: "ABONÓ", c: "text-amber-400 bg-amber-500/10", bg: "bg-amber-500/5" }
+                                  else if (isCoveredByAdvance) st = { l: "SISTEMA", c: "text-blue-400 bg-blue-500/10", bg: "bg-blue-500/10" }
                                   else st = { l: "SISTEMA", c: isMigrado ? "text-sky-400 bg-sky-500/10" : "text-rose-500 bg-rose-500/10", bg: isMigrado ? "bg-sky-500/5" : "bg-rose-500/5" }
                                 } else if (totalDay > 0) {
                                   // Regla de Recaudación Física: Si se cobró dinero pero se aplicó a deudas anteriores
-                                  if (totalDay >= (cVal - 0.01)) st = { l: "CUMPLIÓ", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
+                                  if (totalDay >= (cVal - 0.01)) st = { l: "PAGO", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
                                   else st = { l: "ABONÓ", c: "text-amber-400 bg-amber-500/10", bg: "bg-amber-500/5" }
                                 } else if (isFuture) st = { l: "PENDIENTE", c: "text-slate-500 bg-slate-800/20", bg: "" }
 
@@ -411,7 +416,7 @@ export function DailyCollectorLog({
                                                             </div>
                                                             {dests.map((d: any, i: number) => (
                                                                 <p key={i} className="text-[9px] text-slate-300 font-bold leading-tight ml-4">
-                                                                    → S/ {Math.round(d.amount)} a {d.type === 'arrear' ? 'Atraso' : d.type === 'advance' ? 'Adelanto' : 'Cuota'} #{d.quotaNum}
+                                                                    → S/ {Math.round(d.amount)} a <span className={cn(d.type === 'advance' && "text-blue-400")}>{d.type === 'arrear' ? 'Atraso' : d.type === 'advance' ? 'Adelanto de Cuota' : 'Cuota'}</span> #{d.quotaNum}
                                                                 </p>
                                                             ))}
                                                             {dests.length === 0 && <p className="text-[9px] text-slate-500 ml-4">Dinero en bolsa (Excedente Final)</p>}
@@ -427,7 +432,9 @@ export function DailyCollectorLog({
                                                                 <ArrowRightCircle className="w-3 h-3" /> 
                                                                 {s.type === 'system' 
                                                                     ? 'Saldada con Excedente Anterior (Sistema)' 
-                                                                    : `Cubierta con ${s.type === 'advance' ? 'Adelanto' : 'Excedente'} del ${s.paymentDate.split('-').reverse().slice(0,2).join('/')}`
+                                                                    : <span className={cn(s.type === 'advance' ? 'text-blue-400' : 'text-sky-400')}>
+                                                                        Cubierta con {s.type === 'advance' ? 'Adelanto de Cuota' : 'Excedente'} del {s.paymentDate.split('-').reverse().slice(0,2).join('/')}
+                                                                      </span>
                                                                 }
                                                             </p>
                                                         ))}

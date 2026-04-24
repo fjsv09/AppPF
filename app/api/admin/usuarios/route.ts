@@ -5,10 +5,12 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
     try {
-        const supabase = await createAdminClient() // Usamos admin para leer perfiles
+        const { createClient: createServerClient } = await import('@/utils/supabase/server')
+        const serverClient = await createServerClient()
+        const { data: { user } } = await serverClient.auth.getUser()
         
-        // 1. Obtener el ID del usuario actual para excluirlo
-        const { data: { user } } = await supabase.auth.getUser()
+        const supabase = createAdminClient() 
+
         
         // 2. Obtener perfiles excluyendo al usuario actual
         let query = supabase

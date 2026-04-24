@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { useEffect, useState, useMemo } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, CircleMarker } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Wallet, MapPin, User, Lock, Phone, Navigation, AlertTriangle, CheckCircle, DollarSign } from 'lucide-react'
@@ -137,15 +137,13 @@ export default function RutaMapa({
         }
     }, [])
 
-    if (!isMounted) return <div className="h-[400px] w-full rounded-xl bg-slate-900 animate-pulse flex items-center justify-center text-slate-500">Cargando mapa...</div>
-
-    // Filter out loans without valid coordinates
-    const mapItems = (() => {
+    // 1. First, get all raw items from loans and payments
+    const rawItems = useMemo(() => {
         try {
             return prestamos.flatMap(p => {
                 const items = [];
                 
-                // 1. Client Official Location
+                // Client Official Location
                 const coordsStr = p.gps_coordenadas || p.clientes?.solicitudes?.[0]?.gps_coordenadas
                 if (coordsStr && typeof coordsStr === 'string') {
                     const [latStr, lngStr] = coordsStr.split(',')
@@ -170,12 +168,9 @@ export default function RutaMapa({
                     }
                 }
 
-                // 2. Real Payment Location (Today) - Filtered by role and ownership
+                // Real Payment Location (Today)
                 if (userRole === 'admin' || userRole === 'supervisor') {
                     const hoyPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
-                    
-                    // Si es supervisor, solo permitimos ver cobros hechos por su equipo
-                    // [PATCH]: Verificación de seguridad para perfiles
                     let myAdvisorIds: string[] = [];
                     if (userRole === 'supervisor' && currentUserId && Array.isArray(perfiles)) {
                         myAdvisorIds = perfiles
@@ -187,18 +182,12 @@ export default function RutaMapa({
                         .flatMap((c: any) => c.pagos || [])
                         .filter((pag: any) => {
                             if (!pag || !pag.created_at) return false;
-                            
                             const fechaPago = new Date(pag.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
                             const isCorrectDate = fechaPago === hoyPeru && pag.latitud && pag.longitud;
-                            
                             if (!isCorrectDate) return false;
-
-                            // Restricción para Supervisores: Solo ver sus propios cobros o los de sus asesores
                             if (userRole === 'supervisor' && currentUserId) {
-                                const isFromTeam = myAdvisorIds.includes(pag.registrado_por) || pag.registrado_por === currentUserId;
-                                return isFromTeam;
+                                return myAdvisorIds.includes(pag.registrado_por) || pag.registrado_por === currentUserId;
                             }
-
                             return true;
                         });
 
@@ -221,16 +210,69 @@ export default function RutaMapa({
                         });
                     });
                 }
-
                 return items;
             }).filter(Boolean) as any[];
         } catch (error) {
-            console.error("CRITICAL ERROR IN MAP RENDERING:", error);
+            console.error("CRITICAL ERROR IN MAP ITEMS COLLECTION:", error);
             return [];
         }
-    })();
+    }, [prestamos, userRole, currentUserId, perfiles]);
 
-    if (mapItems.length === 0) {
+    // 2. Spiderfy overlapping items (separate them with lines to original point)
+    const { spiderItems, connectorLines, anchorPoints } = useMemo(() => {
+        if (!rawItems.length) return { spiderItems: [], connectorLines: [], anchorPoints: [] };
+        
+        const groups: Record<string, any[]> = {};
+        rawItems.forEach(item => {
+            // Group by ~11m precision (4 decimal places) to catch close markers
+            const key = `${item.lat.toFixed(4)},${item.lng.toFixed(4)}`;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(item);
+        });
+
+        const sItems: any[] = [];
+        const lines: any[] = [];
+        const anchors: [number, number][] = [];
+
+        Object.values(groups).forEach(group => {
+            if (group.length === 1) {
+                sItems.push({ ...group[0], zIndexOffset: 0 });
+            } else {
+                const centerLat = group[0].lat;
+                const centerLng = group[0].lng;
+                anchors.push([centerLat, centerLng]);
+
+                group.forEach((item, idx) => {
+                    const angle = (idx / group.length) * 2 * Math.PI;
+                    // Adjusted radius for balanced separation (~35 meters)
+                    const radius = 0.00032; 
+                    const sLat = centerLat + Math.cos(angle) * radius;
+                    const sLng = centerLng + Math.sin(angle) * radius;
+
+                    sItems.push({
+                        ...item,
+                        lat: sLat,
+                        lng: sLng,
+                        zIndexOffset: 1000 + idx
+                    });
+
+                    lines.push({
+                        id: `${item.id}-line`,
+                        positions: [[centerLat, centerLng], [sLat, sLng]],
+                        color: item.isPayment ? '#10b981' : '#64748b'
+                    });
+                });
+            }
+        });
+
+        return { spiderItems: sItems, connectorLines: lines, anchorPoints: anchors };
+    }, [rawItems]);
+
+    const markersList = useMemo(() => rawItems.map(i => [i.lat, i.lng] as [number, number]), [rawItems]);
+
+    if (!isMounted) return <div className="h-[400px] w-full rounded-xl bg-slate-900 animate-pulse flex items-center justify-center text-slate-500">Cargando mapa...</div>
+
+    if (rawItems.length === 0) {
         return (
             <div className="h-[400px] w-full rounded-xl bg-slate-900 border border-slate-800 flex flex-col items-center justify-center text-slate-500 gap-4">
                 <MapPin className="w-12 h-12 opacity-20" />
@@ -239,7 +281,7 @@ export default function RutaMapa({
         )
     }
 
-    const markersList: [number, number][] = mapItems.map(i => [i.lat, i.lng])
+
 
     // Default center (Lima, if nothing else)
     const center: [number, number] = markersList.length > 0 ? markersList[0] : [-12.0464, -77.0428]
@@ -258,6 +300,31 @@ export default function RutaMapa({
                 />
                 
                 <BoundsAutoFitter markers={markersList} />
+
+                {/* Connector lines for spiderfied markers */}
+                {connectorLines.map((line: any) => (
+                    <Polyline 
+                        key={line.id} 
+                        positions={line.positions} 
+                        color={line.color} 
+                        weight={2} 
+                        dashArray="5, 10" 
+                        opacity={0.6} 
+                    />
+                ))}
+
+                {/* Anchor points for spiderfied groups */}
+                {anchorPoints.map((pos, idx) => (
+                    <CircleMarker 
+                        key={`anchor-${idx}`} 
+                        center={pos} 
+                        radius={4} 
+                        fillColor="#64748b" 
+                        color="white" 
+                        weight={2} 
+                        fillOpacity={1} 
+                    />
+                ))}
 
                 {/* Advisor Location Marker */}
                 {userLoc && (
@@ -286,7 +353,7 @@ export default function RutaMapa({
                     </Marker>
                 )}
 
-                {mapItems.map((item) => {
+                {spiderItems.map((item) => {
                     const distance = userLoc ? calculateDistance(userLoc[0], userLoc[1], item.lat, item.lng) : null;
                     const isFar = distance !== null && distance > radioMax;
 
@@ -295,6 +362,7 @@ export default function RutaMapa({
                             key={item.id} 
                             position={[item.lat, item.lng]}
                             icon={item.icon}
+                            zIndexOffset={item.zIndexOffset}
                         >
                             <Popup className="custom-popup">
                                 <div className="p-1 min-w-[220px]">

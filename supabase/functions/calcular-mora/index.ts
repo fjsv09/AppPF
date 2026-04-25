@@ -16,6 +16,7 @@ interface Prestamo {
     fecha_fin: string
     monto: number
     interes: number
+    frecuencia: string
 }
 
 interface Cuota {
@@ -69,11 +70,13 @@ Deno.serve(async (req) => {
 
             try {
                 // Obtener cuotas del préstamo
-                const { data: cuotas, error: cuotasError } = await supabaseAdmin
+                const { data, error: cuotasError } = await supabaseAdmin
                     .from('cronograma_cuotas')
                     .select('id, prestamo_id, fecha_vencimiento, monto_cuota, monto_pagado, estado')
                     .eq('prestamo_id', prestamo.id)
                     .order('fecha_vencimiento', { ascending: true })
+
+                const cuotas = (data as Cuota[]) || []
 
                 if (cuotasError) {
                     console.error(`[MORA JOB] Error cuotas prestamo ${prestamo.id}:`, cuotasError)
@@ -82,32 +85,34 @@ Deno.serve(async (req) => {
                 }
 
                 // Calcular cuotas debidas (no pagadas y fecha <= hoy)
-                const cuotasDebidasArr = (cuotas || []).filter(c => 
+                const cuotasDebidasArr = cuotas.filter((c: Cuota) => 
                     c.estado !== 'pagado' && 
                     c.monto_pagado < (c.monto_cuota - 0.5) &&
-                    new Date(c.fecha_vencimiento) <= hoy
+                    new Date(c.fecha_vencimiento).getTime() <= hoy.getTime()
                 )
 
                 const cuotasDebidas = cuotasDebidasArr.length
 
                 // Calcular saldo pendiente
-                const saldoPendiente = (cuotas || []).reduce((acc, c) => 
+                const saldoPendiente = cuotas.reduce((acc: number, c: Cuota) => 
                     acc + (c.monto_cuota - (c.monto_pagado || 0)), 0
                 )
 
                 // Obtener umbrales de configuración
-                const { data: configData } = await supabaseAdmin
+                const { data: rawConfig } = await supabaseAdmin
                     .from('configuracion_sistema')
                     .select('clave, valor')
                     .in('clave', ['umbral_cpp_cuotas', 'umbral_moroso_cuotas', 'umbral_cpp_otros', 'umbral_moroso_otros'])
 
-                const cfgCpp = parseInt(configData?.find(c => c.clave === 'umbral_cpp_cuotas')?.valor || '4')
-                const cfgMoroso = parseInt(configData?.find(c => c.clave === 'umbral_moroso_cuotas')?.valor || '7')
-                const cfgCppOtros = parseInt(configData?.find(c => c.clave === 'umbral_cpp_otros')?.valor || '1')
-                const cfgMorosoOtros = parseInt(configData?.find(c => c.clave === 'umbral_moroso_otros')?.valor || '2')
+                const configData = (rawConfig as {clave: string, valor: string}[]) || []
+
+                const cfgCpp = parseInt(configData.find((c: any) => c.clave === 'umbral_cpp_cuotas')?.valor || '4')
+                const cfgMoroso = parseInt(configData.find((c: any) => c.clave === 'umbral_moroso_cuotas')?.valor || '7')
+                const cfgCppOtros = parseInt(configData.find((c: any) => c.clave === 'umbral_cpp_otros')?.valor || '1')
+                const cfgMorosoOtros = parseInt(configData.find((c: any) => c.clave === 'umbral_moroso_otros')?.valor || '2')
 
                 // Frecuencia del préstamo
-                const frecuencia = (prestamo as any).frecuencia?.toLowerCase() || 'diario'
+                const frecuencia = prestamo.frecuencia?.toLowerCase() || 'diario'
                 
                 // Determinar umbrales específicos por frecuencia
                 let minCpp = cfgCpp
@@ -119,54 +124,62 @@ Deno.serve(async (req) => {
                 }
 
                 // Determinar nuevo estado
-                let nuevoEstadoMora = 'ok'
+                let nuevoEstadoMora = prestamo.estado_mora // Por defecto mantenemos el actual
                 let motivo = ''
 
-                // Regla 1: Si saldo == 0, préstamo finalizado
-                if (saldoPendiente <= 0) {
-                    nuevoEstadoMora = 'finalizado'
-                    motivo = 'Préstamo pagado completamente'
-                    
-                    // Actualizar estado del préstamo a finalizado
-                    await supabaseAdmin
-                        .from('prestamos')
-                        .update({ estado: 'finalizado', estado_mora: 'ok' })
-                        .eq('id', prestamo.id)
+                // Regla 1: Si saldo == 0, préstamo finalizado (USAMOS UMBRAL 0.5 PARA REDONDEO)
+                if (saldoPendiente <= 0.5) {
+                    // Si el préstamo está activo, lo pasamos a finalizado
+                    if (prestamo.estado === 'activo') {
+                        motivo = 'Préstamo pagado completamente'
+                        
+                        // Actualizar estado del préstamo a finalizado 
+                        // IMPORTANTE: NO tocamos 'estado_mora' aquí para preservar el historial (Req. Conv 633ef206)
+                        await supabaseAdmin
+                            .from('prestamos')
+                            .update({ estado: 'finalizado' })
+                            .eq('id', prestamo.id)
 
-                    // Registrar en historial
-                    await supabaseAdmin.rpc('registrar_cambio_estado', {
-                        p_prestamo_id: prestamo.id,
-                        p_estado_anterior: prestamo.estado,
-                        p_estado_nuevo: 'finalizado',
-                        p_dias_atraso: 0,
-                        p_motivo: motivo,
-                        p_responsable: 'sistema'
-                    })
+                        // Registrar en historial de estados del préstamo
+                        await supabaseAdmin.rpc('registrar_cambio_estado', {
+                            p_prestamo_id: prestamo.id,
+                            p_estado_anterior: prestamo.estado,
+                            p_estado_nuevo: 'finalizado',
+                            p_dias_atraso: cuotasDebidas,
+                            p_motivo: motivo,
+                            p_responsable: 'sistema'
+                        })
 
-                    resultados.cambios.push({
-                        prestamo_id: prestamo.id,
-                        cambio: 'activo -> finalizado',
-                        motivo
-                    })
-                    resultados.actualizados++
-                    continue
+                        resultados.cambios.push({
+                            prestamo_id: prestamo.id,
+                            cambio: 'activo -> finalizado',
+                            motivo
+                        })
+                        resultados.actualizados++
+                    }
+                    continue // Ya no evaluamos mora para préstamos finalizados
                 }
 
+                // SI TIENE SALDO, EVALUAMOS CAMBIOS DE MORA
+                let calculadoEstadoMora = 'normal'
+                
                 // Regla 2: Fecha fin pasada con saldo > 0 -> VENCIDO
-                if (new Date(prestamo.fecha_fin) < hoy && saldoPendiente > 0) {
-                    nuevoEstadoMora = 'vencido'
+                if (new Date(prestamo.fecha_fin) < hoy) {
+                    calculadoEstadoMora = 'vencido'
                     motivo = `Contrato vencido con saldo pendiente de $${saldoPendiente.toFixed(2)}`
                 }
                 // Regla 3: minMoroso+ cuotas de atraso -> MOROSO (según umbral_moroso_cuotas)
                 else if (cuotasDebidas >= minMoroso) {
-                    nuevoEstadoMora = 'moroso'
+                    calculadoEstadoMora = 'moroso'
                     motivo = `${cuotasDebidas} cuotas vencidas sin pagar`
                 }
                 // Regla 4: minCpp+ cuotas de atraso -> CPP (según umbral_cpp_cuotas)
-                else if (cuotasDebidas >= minCpp && cuotasDebidas < minMoroso) {
-                    nuevoEstadoMora = 'cpp'
+                else if (cuotasDebidas >= minCpp) {
+                    calculadoEstadoMora = 'cpp'
                     motivo = `${cuotasDebidas} cuotas vencidas - Cartera Pesada Potencial`
                 }
+
+                nuevoEstadoMora = calculadoEstadoMora
 
                 // Si hay cambio de estado, actualizar
                 if (nuevoEstadoMora !== prestamo.estado_mora) {
@@ -193,12 +206,14 @@ Deno.serve(async (req) => {
 
                     // Notificar a supervisores y admin si es moroso o vencido
                     if (['moroso', 'vencido'].includes(nuevoEstadoMora)) {
-                        const { data: admins } = await supabaseAdmin
+                        const { data: rawAdmins } = await supabaseAdmin
                             .from('perfiles')
                             .select('id')
                             .in('rol', ['admin', 'supervisor'])
 
-                        for (const admin of admins || []) {
+                        const admins = (rawAdmins as {id: string}[]) || []
+
+                        for (const admin of admins) {
                             await supabaseAdmin.rpc('crear_notificacion', {
                                 p_usuario_id: admin.id,
                                 p_titulo: `⚠️ Préstamo ${nuevoEstadoMora.toUpperCase()}`,

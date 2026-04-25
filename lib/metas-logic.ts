@@ -93,21 +93,35 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
                 const totalProgramado = cuotasHoy.reduce((acc: number, c: any) => acc + Number(c.monto_cuota), 0)
                 const { data: todosLosPagos } = await supabaseAdmin
                     .from('pagos')
-                    .select('cuota_id, monto_pagado, fecha_pago')
+                    .select('cuota_id, monto_pagado, fecha_pago, estado_verificacion')
                     .in('cuota_id', cuotaIds)
+                    .neq('estado_verificacion', 'rechazado')
 
                 const startOfDay = new Date(`${hoyPeruStr}T00:00:00-05:00`).getTime()
                 const endOfDay = new Date(`${hoyPeruStr}T23:59:59-05:00`).getTime()
-                const pagosPorCuota: Record<string, { hoy: number, antes: number }> = {}
-                cuotasHoy.forEach((c: any) => pagosPorCuota[c.id] = { hoy: 0, antes: 0 })
+                const pagosPorCuota: Record<string, { hoy: number, antes: number, acumulado: number }> = {}
+                cuotasHoy.forEach((c: any) => pagosPorCuota[c.id] = { hoy: 0, antes: 0, acumulado: 0 })
 
                 todosLosPagos?.forEach((p: any) => {
                     if (!pagosPorCuota[p.cuota_id]) return
+                    
+                    // Solo sumamos al acumulado lo que no esté rechazado (pendiente se suma al acumulado de la DB pero aquí lo controlamos)
+                    // Sin embargo, para consistencia total, calculamos el acumulado real desde transacciones filtradas
+                    if (p.estado_verificacion === 'rechazado') return
+                    
                     const timePago = new Date(p.fecha_pago).getTime()
-                    if (timePago >= startOfDay && timePago <= endOfDay) {
-                        pagosPorCuota[p.cuota_id].hoy += Number(p.monto_pagado)
-                    } else if (timePago < startOfDay) {
-                        pagosPorCuota[p.cuota_id].antes += Number(p.monto_pagado)
+                    const monto = Number(p.monto_pagado)
+                    
+                    // Acumulado (Para saber cuánto se ha pagado en total de forma segura)
+                    // Si es pendiente (digital), NO lo sumamos al acumulado del KPI real
+                    if (p.estado_verificacion !== 'pendiente') {
+                        pagosPorCuota[p.cuota_id].acumulado += monto
+                        
+                        if (timePago >= startOfDay && timePago <= endOfDay) {
+                            pagosPorCuota[p.cuota_id].hoy += monto
+                        } else if (timePago < startOfDay) {
+                            pagosPorCuota[p.cuota_id].antes += monto
+                        }
                     }
                 })
 
@@ -115,10 +129,14 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
                 cuotasHoy.forEach((c: any) => {
                     const metaCuota = Number(c.monto_cuota)
                     const pagos = pagosPorCuota[c.id]
-                    const totalPagadoAcumulado = Number(c.monto_pagado || 0)
-                    const pagadoAntes = Math.max(0, totalPagadoAcumulado - pagos.hoy)
+                    
+                    // Usamos el acumulado calculado por nosotros para evitar contaminantes de 'pendiente' en la DB
+                    const totalPagadoAcumulado = pagos.acumulado
+                    const pagadoAntes = pagos.antes
+                    
                     const pendienteAlInicio = Math.max(0, metaCuota - pagadoAntes)
                     if (pendienteAlInicio <= 0.01) return
+                    
                     metaEfectivaHoy += pendienteAlInicio
                     const recaudoHoyEfectivo = Math.min(pagos.hoy, pendienteAlInicio)
                     totalRecaudadoHoyEfectivo += recaudoHoyEfectivo
@@ -183,6 +201,7 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
         .select('monto_pagado, created_at')
         .eq('registrado_por', userId)
         .gte('created_at', startOfPeriod.toISOString())
+        .eq('estado_verificacion', 'aprobado') 
 
     const totalRecaudadoReal = pagosPeriodo?.reduce((acc: number, p: any) => acc + Number(p.monto_pagado || 0), 0) || 0
 

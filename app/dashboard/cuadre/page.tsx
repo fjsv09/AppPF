@@ -42,7 +42,9 @@ export default async function CuadrePage() {
   // Fetch Recent Cuadres
   const { data: recentCuadres } = await supabase
     .from('cuadres_diarios')
-    .select('*')
+    .select(`
+      *
+    `)
     .eq('asesor_id', user.id)
     .order('created_at', { ascending: false })
     .limit(5)
@@ -137,7 +139,21 @@ export default async function CuadrePage() {
                                 {c.tipo_cuadre}
                              </span>
                           </div>
-                          <p className="text-xs text-slate-500">Monto total entregado: S/ {c.saldo_entregado}</p>
+                          <p className="text-xs text-slate-500">Monto entregado: S/ {c.saldo_entregado}</p>
+                          {c.estado === 'aprobado' && (c.cuenta_caja || c.cuenta_digital) && (
+                              <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                                 {c.cuenta_caja && (
+                                    <span className="text-[9px] text-emerald-500/70 font-medium flex items-center gap-1">
+                                       🏦 {c.cuenta_caja.nombre}
+                                    </span>
+                                 )}
+                                 {c.cuenta_digital && (
+                                    <span className="text-[9px] text-blue-400/70 font-medium flex items-center gap-1">
+                                       📱 {c.cuenta_digital.nombre}
+                                    </span>
+                                 )}
+                              </div>
+                           )}
                        </div>
                        <div>
                           <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg ${

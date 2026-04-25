@@ -40,9 +40,9 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     const userRole = perfil?.rol || 'asesor'
     const exigirGpsCobranza = !!perfil?.exigir_gps_cobranza
 
-    // RESTRICCIÓN POR URL: Solo admin puede ver historial (se mantiene)
+    // RESTRICCIÓN POR URL: Solo admin y secretaria pueden ver historial (se mantiene)
     const restrictedTabs = ['finalizados', 'renovados', 'refinanciados', 'anulados', 'pendientes', 'todos'];
-    if (userRole !== 'admin' && activeTab && restrictedTabs.includes(activeTab)) {
+    if (userRole !== 'admin' && userRole !== 'secretaria' && activeTab && restrictedTabs.includes(activeTab)) {
         redirect('/dashboard/prestamos?tab=ruta_hoy');
     }
 
@@ -149,7 +149,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
 
     // --- DATA PARA DESEMBOLSO (Admin & Supervisor) ---
     let cuentasAdmin: any[] = []
-    if (userRole === 'admin' || userRole === 'supervisor') {
+    if (userRole === 'admin' || userRole === 'supervisor' || userRole === 'secretaria') {
         const { data: qAdmin } = await supabaseAdmin
             .from('cuentas_financieras')
             .select('id, nombre, saldo, cartera_id, usuarios_autorizados')
@@ -203,7 +203,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     // 2. Advisor Selection Filter (Reactivity for KPIs)
     if (filtroAsesor !== 'todos') {
         filteredList = filteredList.filter(p => p.clientes?.asesor_id === filtroAsesor)
-    } else if (userRole === 'admin' && filtroSupervisor !== 'todos') {
+    } else if ((userRole === 'admin' || userRole === 'secretaria') && filtroSupervisor !== 'todos') {
         // If Admin selects a Supervisor but not an Advisor, filter by all Advisors under that Supervisor
         const { data: profiles } = await supabaseAdmin
             .from('perfiles')
@@ -243,7 +243,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     // 2.1 Fetch Perfiles (needed before mapping for asesorBloqueoMap)
     let perfiles: any[] = []
     let asesorBloqueoMap: Record<string, boolean> = {}
-    if (userRole === 'admin' || userRole === 'supervisor') {
+    if (userRole === 'admin' || userRole === 'supervisor' || userRole === 'secretaria') {
         const { data: profiles } = await supabaseAdmin
             .from('perfiles')
             .select('*')
@@ -499,9 +499,14 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         cronograma.forEach((c: any) => {
             if (c.fecha_vencimiento <= today) {
                 const montoCuota = parseFloat(c.monto_cuota) || 0
-                const montoPagado = parseFloat(c.monto_pagado) || 0
                 
-                const pagadoHoy = (c.pagos || [])
+                // Filtrar pagos válidos (No rechazados, No pendientes para el KPI real)
+                const pagosValidos = (c.pagos || []).filter((pay: any) => 
+                    pay.estado_verificacion !== 'rechazado' && 
+                    pay.estado_verificacion !== 'pendiente'
+                );
+
+                const pagadoHoy = pagosValidos
                     .filter((pay: any) => {
                         try {
                             return new Date(pay.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Lima' }) === today;
@@ -509,7 +514,8 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                     })
                     .reduce((s: number, pay: any) => s + (Number(pay.monto_pagado) || 0), 0)
 
-                const pagadoAntes = Math.max(0, montoPagado - pagadoHoy)
+                const pagadoAcumulado = pagosValidos.reduce((s: number, pay: any) => s + (Number(pay.monto_pagado) || 0), 0)
+                const pagadoAntes = Math.max(0, pagadoAcumulado - pagadoHoy)
                 const pendienteAlInicio = Math.max(0, montoCuota - pagadoAntes)
 
                 if (pendienteAlInicio > 0.01) {
@@ -543,7 +549,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                         <div>
                             <h1 className="page-title">Panel de Préstamos</h1>
                             <p className="page-subtitle">
-                                {userRole === 'admin' ? 'Visión Global y Rentabilidad' : 
+                                {(userRole === 'admin' || userRole === 'secretaria') ? 'Visión Global y Rentabilidad' : 
                                  userRole === 'supervisor' ? 'Supervisión de Riesgo y Alertas' : 
                                  'Gestión Diaria de Cobranza'}
                             </p>
@@ -563,7 +569,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             {/* ---------------- KPI GRID (REORGANIZED COMPACT) ---------------- */}
             <div className={cn(
                 "grid grid-cols-2 gap-2 md:gap-4 mb-6",
-                userRole === 'admin' ? "lg:grid-cols-6" : "lg:grid-cols-5"
+                (userRole === 'admin' || userRole === 'secretaria') ? "lg:grid-cols-6" : "lg:grid-cols-5"
             )}>
                 {/* Meta Hoy Card (Uniform Size) */}
                 <Link href={{ query: { ...sParams, tab: 'ruta_hoy', page: '1' } }} className="bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] transition-all group">
@@ -684,13 +690,13 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                     </div>
                     <div className="relative z-10 flex">
                         <span className="bg-rose-500/10 text-rose-500 text-[6px] md:text-[8px] font-black px-1.5 py-0.5 rounded border border-rose-500/20 uppercase tracking-wider">
-                            {userRole === 'admin' ? `$${capitalEnRiesgo.toLocaleString()}` : "Riesgo"}
+                            {(userRole === 'admin' || userRole === 'secretaria') ? `$${capitalEnRiesgo.toLocaleString()}` : "Riesgo"}
                         </span>
                     </div>
                 </div>
 
-                {/* Recuperación Card (Solo Admin) */}
-                {userRole === 'admin' && (
+                {/* Recuperación Card (Solo Admin & Secretaria) */}
+                {(userRole === 'admin' || userRole === 'secretaria') && (
                     <div className="bg-[#090e16] border border-slate-800/40 rounded-xl p-2.5 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[95px] md:min-h-[125px]">
                         <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12">
                             <TrendingUp className="w-20 h-20 md:w-24 md:h-24 text-white" />
@@ -703,15 +709,15 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                         </div>
                         <div className="relative z-10 flex">
                             <span className="bg-blue-500/10 text-blue-400 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-wider">
-                                {userRole === 'admin' ? `$${totalPagado.toLocaleString()}` : "Retorno"}
+                                {(userRole === 'admin' || userRole === 'secretaria') ? `$${totalPagado.toLocaleString()}` : "Retorno"}
                             </span>
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* Admin/Supervisor Alerts Bar - More Compact */}
-            {['admin', 'supervisor'].includes(userRole) && (
+            {/* Admin/Supervisor/Secretaria Alerts Bar - More Compact */}
+            {['admin', 'supervisor', 'secretaria'].includes(userRole) && (
                 <div className="grid grid-cols-2 gap-3 mb-4">
                     <Link href={{ query: { ...sParams, tab: 'notificar', page: '1' } }} className="bg-slate-900/40 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between hover:bg-slate-900/60 transition-colors border-l-2 border-l-rose-500/40">
                         <div>
@@ -731,7 +737,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             )}
 
             <div className="mt-4 space-y-6">
-                {userRole === 'admin' && (
+                {(userRole === 'admin' || userRole === 'secretaria') && (
                     <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-3 text-xs text-slate-400 flex flex-col md:flex-row gap-4">
                         <div className="flex items-start gap-2">
                             <AlertCircle className="w-4 h-4 text-rose-500 mt-0.5 shrink-0" />

@@ -50,7 +50,7 @@ export async function POST(request: Request) {
 
         if (accion === 'aprobar') {
             const monto = parseFloat(pago.monto_pagado)
-            
+
             // 1. Cambiar el estado a aprobado
             await supabaseAdmin
                 .from('pagos')
@@ -80,9 +80,9 @@ export async function POST(request: Request) {
 
             // 3. ACTUALIZAR SALDO DE LA CUENTA DESTINO
             if (cuenta_id) {
-                const { error: rpcError } = await supabaseAdmin.rpc('incrementar_saldo_cuenta', { 
-                    p_cuenta_id: cuenta_id, 
-                    p_monto: monto 
+                const { error: rpcError } = await supabaseAdmin.rpc('incrementar_saldo_cuenta', {
+                    p_cuenta_id: cuenta_id,
+                    p_monto: monto
                 })
 
                 if (rpcError) {
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
                         .select('saldo')
                         .eq('id', cuenta_id)
                         .single()
-                    
+
                     if (currentAcc) {
                         const nuevoSaldo = (parseFloat(currentAcc.saldo?.toString() || '0')) + monto
                         await supabaseAdmin
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
                     titulo: 'Pago Aprobado ✅',
                     mensaje: `Tu cobro de S/${pago.monto_pagado} para ${pago.cronograma_cuotas?.prestamos?.clientes?.nombres} ha sido aprobado.`,
                     tipo: 'success',
-                    link: '/dashboard/pagos'
+                    link: '/dashboard/validacion-pagos?tab=historial'
                 })
             }
 
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
                 .from('pagos_distribucion')
                 .select('cuota_id, monto')
                 .eq('pago_id', pago_id)
-            
+
             if (distribuciones && distribuciones.length > 0) {
                 // Revertir cada cuota en la distribución
                 for (const dist of distribuciones) {
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
                     if (cuota) {
                         const nuevoMontoPagado = Math.max(0, parseFloat(cuota.monto_pagado) - parseFloat(dist.monto))
                         const nuevoEstado = nuevoMontoPagado >= (parseFloat(cuota.monto_cuota) - 0.01) ? 'pagado' : (nuevoMontoPagado > 0.01 ? 'parcial' : 'pendiente')
-                        
+
                         await supabaseAdmin
                             .from('cronograma_cuotas')
                             .update({ monto_pagado: nuevoMontoPagado, estado: nuevoEstado })
@@ -162,11 +162,11 @@ export async function POST(request: Request) {
                 // Fallback: Revertir solo la cuota principal (para pagos antiguos o digitales que no tengan distribución)
                 const cuotaId = pago.cuota_id
                 const { data: cuota } = await supabaseAdmin.from('cronograma_cuotas').select('monto_cuota, monto_pagado').eq('id', cuotaId).single()
-                
+
                 if (cuota) {
                     const nuevoMontoPagado = Math.max(0, parseFloat(cuota.monto_pagado) - montoRevertir)
                     const nuevoEstado = nuevoMontoPagado >= (parseFloat(cuota.monto_cuota) - 0.01) ? 'pagado' : (nuevoMontoPagado > 0.01 ? 'parcial' : 'pendiente')
-                    
+
                     await supabaseAdmin
                         .from('cronograma_cuotas')
                         .update({ monto_pagado: nuevoMontoPagado, estado: nuevoEstado })

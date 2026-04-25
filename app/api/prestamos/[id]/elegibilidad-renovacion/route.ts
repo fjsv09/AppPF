@@ -15,23 +15,34 @@ export async function GET(
     const supabaseAdmin = createAdminClient()
 
     try {
-        const { data: { user } } = await supabase.auth.getUser()
+        // 1. Obtener datos básicos, perfil y configuración en paralelo
+        const [userResponse, systemConfig] = await Promise.all([
+            supabase.auth.getUser(),
+            getFinancialConfig(supabaseAdmin)
+        ]);
+
+        const user = userResponse.data.user;
         if (!user) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
         }
 
-        // Obtener perfil para verificar rol
-        const { data: perfil } = await supabaseAdmin
-            .from('perfiles')
-            .select('rol')
-            .eq('id', user.id)
-            .single()
+        // 2. Obtener perfil, info de préstamo y origen en paralelo
+        const [perfilRes, prestamoInfoRes, origenRes, elegibilidadRes] = await Promise.all([
+            supabaseAdmin.from('perfiles').select('rol').eq('id', user.id).single(),
+            supabaseAdmin.from('prestamos').select('estado, es_paralelo, cliente_id, monto, estado_mora').eq('id', id).single(),
+            supabaseAdmin.from('renovaciones').select('prestamo_original:prestamo_original_id(estado)').eq('prestamo_nuevo_id', id).maybeSingle(),
+            supabaseAdmin.rpc('evaluar_elegibilidad_renovacion', { p_prestamo_id: id })
+        ]);
+
+        const perfil = perfilRes.data;
+        const prestamo = prestamoInfoRes.data;
+        const origen = origenRes.data;
+        const elegibilidad = elegibilidadRes.data;
 
         if (!perfil) {
             return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 403 })
         }
 
-        // Bloqueo estricto para supervisores según reglas de negocio
         if (perfil.rol === 'supervisor') {
             return NextResponse.json({ 
                 error: 'Los supervisores no tienen permisos para solicitar renovaciones.',
@@ -39,198 +50,152 @@ export async function GET(
             }, { status: 403 })
         }
 
-        // OBTENER ESTADO DEL PRÉSTAMO Y ORIGEN PARA VALIDACIONES TEMPRANAS
-        const { data: prestamoInfo } = await supabaseAdmin
-            .from('prestamos')
-            .select('estado')
-            .eq('id', id)
-            .single()
-
-        const { data: origen } = await supabaseAdmin
-            .from('renovaciones')
-            .select('prestamo_original:prestamo_original_id(estado)')
-            .eq('prestamo_nuevo_id', id)
-            .maybeSingle()
-        
         const esProductoDeRefinanciamiento = (origen?.prestamo_original as any)?.estado === 'refinanciado'
-
-        if ((esProductoDeRefinanciamiento || prestamoInfo?.estado === 'refinanciado') && perfil.rol !== 'admin') {
+        if ((esProductoDeRefinanciamiento || prestamo?.estado === 'refinanciado') && perfil.rol !== 'admin') {
             return NextResponse.json({ 
                 error: 'Este préstamo es producto de una refinanciación y solo puede ser renovado por el administrador.',
                 elegibilidad: { elegible: false, razon_bloqueo: 'Producto de refinanciación' } 
             }, { status: 403 })
         }
 
-        // Evaluar elegibilidad usando la función RPC
-        const { data: elegibilidad, error } = await supabaseAdmin
-            .rpc('evaluar_elegibilidad_renovacion', { p_prestamo_id: id })
-
-        if (error) {
-            console.error('Error evaluating eligibility:', error)
-            return NextResponse.json({ error: error.message }, { status: 400 })
+        if (elegibilidadRes.error) {
+            console.error('Error evaluating eligibility:', elegibilidadRes.error)
+            return NextResponse.json({ error: elegibilidadRes.error.message }, { status: 400 })
         }
-
-        // OBTENER DATOS DEL PRÉSTAMO PARA VALIDACIONES DE BYPASS
-        const { data: prestamo } = await supabaseAdmin
-            .from('prestamos')
-            .select('es_paralelo, cliente_id')
-            .eq('id', id)
-            .single()
 
         let responseElegibilidad = elegibilidad;
 
-        // EXCEPCIÓN ADMIN/ASESOR: Permitir renovar aunque el RPC diga que es paralelo (si el préstamo en sí no lo es para el asesor)
+        // EXCEPCIÓN ADMIN/ASESOR: Permitir renovar aunque el RPC diga que es paralelo
         const esAdmin = perfil.rol === 'admin'
         const esAsesor = perfil.rol === 'asesor'
         const esParaleloRazon = elegibilidad?.razon_bloqueo?.toLowerCase().includes('paralelo')
 
         if (elegibilidad && !elegibilidad.elegible && esParaleloRazon) {
-            // Si es Admin, siempre permitimos el bypass de paralelo.
-            // Si es Asesor, permitimos el bypass SOLO si el préstamo actual NO es el paralelo (!prestamo.es_paralelo).
             if (esAdmin || (esAsesor && prestamo && !prestamo.es_paralelo)) {
-                // Intentar obtener score real para que el modal no se vea vacío
-                const { data: scoreDataRaw } = await supabaseAdmin.rpc('calcular_score_cliente', { p_cliente_id: prestamo?.cliente_id || elegibilidad.cliente_id })
-                const scoreDataStr = typeof scoreDataRaw === 'string' ? scoreDataRaw : JSON.stringify(scoreDataRaw || '{}')
-                const scoreDetalle = JSON.parse(scoreDataStr)
-                
-                // Calcular progreso del préstamo actual para visualización realista
-                const { data: cuotasData } = await supabaseAdmin
-                    .from('cronograma_cuotas')
-                    .select('monto_cuota, monto_pagado')
-                    .eq('prestamo_id', id)
-                
-                let totalCuotas = 0;
-                let totalPagado = 0;
-                
-                if (cuotasData) {
-                    totalCuotas = cuotasData.reduce((sum, c) => sum + Number(c.monto_cuota), 0);
-                    totalPagado = cuotasData.reduce((sum, c) => sum + Number(c.monto_pagado || 0), 0);
-                }
-
-                const porcentajePagado = totalCuotas > 0 ? (totalPagado / totalCuotas) * 100 : 0;
-                const saldoPendiente = totalCuotas - totalPagado;
-                
-                // Re-obtener monto original y límites del cliente
-                const { data: prestamoFull } = await supabaseAdmin
-                    .from('prestamos')
-                    .select('monto, estado, estado_mora, clientes:cliente_id(limite_prestamo)')
-                    .eq('id', id)
-                    .single()
-                
-                const montoOriginal = prestamoFull?.monto || 0;
-                const scoreValue = parseInt(scoreDetalle.score !== undefined ? scoreDetalle.score : '50');
-                
-                // Límites según Score (reusando lógica original de elegibilidad)
-                let montoMaximo = montoOriginal;
-                let montoMinimo = montoOriginal * 0.5;
-
-                if (scoreValue >= 80) montoMaximo = montoOriginal * 1.40;
-                else if (scoreValue >= 60) montoMaximo = montoOriginal * 1.20;
-                else if (scoreValue < 40) montoMaximo = montoOriginal * 0.8;
-
-                if (saldoPendiente > 0) {
-                    montoMinimo = Math.max(montoMinimo, saldoPendiente);
-                }
-
-                const clientLimit = parseFloat((prestamoFull?.clientes as any)?.limite_prestamo || 0);
-                if (clientLimit > 0 && montoMaximo > clientLimit) {
-                    montoMaximo = clientLimit;
-                }
-
-                if (montoMaximo < montoMinimo) {
-                    montoMaximo = montoMinimo;
-                }
-
-                responseElegibilidad = {
-                    ...elegibilidad,
-                    elegible: true,
-                    score: scoreValue,
-                    score_detalle: scoreDetalle,
-                    porcentaje_pagado: parseFloat(porcentajePagado.toFixed(2)),
-                    monto_original: montoOriginal,
-                    saldo_pendiente: parseFloat(saldoPendiente.toFixed(2)),
-                    monto_maximo: parseFloat(montoMaximo.toFixed(2)),
-                    monto_minimo: parseFloat(montoMinimo.toFixed(2)),
-                    estado_prestamo: prestamoFull?.estado || 'activo',
-                    estado_mora: prestamoFull?.estado_mora || 'al_dia',
-                    requiere_excepcion: true,
-                    tipo_excepcion: esAdmin ? 'paralelo_admin' : 'paralelo_asesor_principal'
-                };
+                // Bypass paralelo... (se calculará más abajo con loanFull)
             }
         }
 
-        // [NUEVO] CALCULAR SCORES DUALES USANDO LÓGICA CENTRALIZADA (lib/financial-logic)
-        const todayPeru = getTodayPeru()
-        
-        // 1. Fetch full loan data for score
-        const { data: loanFull } = await supabaseAdmin
-            .from('prestamos')
-            .select('*, cronograma_cuotas(*), clientes(*)')
-            .eq('id', id)
-            .single()
-        
-        // 2. Fetch all client loans for reputation (Sencillo, sin pagos anidados)
-        const { data: allClientLoans } = await supabaseAdmin
-            .from('prestamos')
-            .select('*, cronograma_cuotas(*)')
-            .eq('cliente_id', prestamo?.cliente_id || responseElegibilidad.cliente_id)
+        // 3. FETCH DATA PARA SCORES (Paso crítico de optimización)
+        // Obtenemos todo el historial del cliente de una vez
+        const clienteId = prestamo?.cliente_id || responseElegibilidad.cliente_id;
 
-        // 3. Fetch TODOS los pagos del cliente de forma plana e inclusiva
+        const [loanFullRes, allClientLoansRes] = await Promise.all([
+            supabaseAdmin.from('prestamos').select('*, cronograma_cuotas(*), clientes(*)').eq('id', id).single(),
+            supabaseAdmin.from('prestamos').select('*, cronograma_cuotas(*)').eq('cliente_id', clienteId)
+        ]);
+
+        const loanFull = loanFullRes.data;
+        const allClientLoans = allClientLoansRes.data;
+
+        if (!loanFull) {
+            return NextResponse.json({ error: 'Préstamo no encontrado' }, { status: 404 })
+        }
+
+        // Fetch de todos los pagos en un solo paso
         const allClientCuotasIds = (allClientLoans || []).flatMap(l => (l.cronograma_cuotas || []).map((c: any) => c.id))
-        
         const { data: qAllPayments } = await supabaseAdmin
             .from('pagos')
             .select('*, cronograma_cuotas(prestamo_id)')
             .in('cuota_id', allClientCuotasIds)
 
-        // [ATOMICO] Obtener Salud del Préstamo (La "Verdad" de 18 PTS)
-        // Obtenemos primero el score atómico para garantizar que el ajuste se base en la realidad del dashboard.
-        const atomicHealthScore = await getLoanHealthScoreAction(supabaseAdmin, id)
+        // 4. CÁLCULO DE MÉTRICAS Y SCORES (Sin volver a consultar DB)
+        const todayPeru = getTodayPeru()
+        
+        // Pagos específicos del préstamo actual para el Health Score
+        const loanCuotasIds = new Set((loanFull.cronograma_cuotas || []).map((c: any) => c.id));
+        const currentLoanPayments = (qAllPayments || []).filter(p => p.cuota_id && loanCuotasIds.has(p.cuota_id));
 
-        // [NUEVO] Obtener configuración centralizada para parámetros de score/reputación
-        const systemConfig = await getFinancialConfig(supabaseAdmin)
+        // Calcular Health Score directamente (reemplaza getLoanHealthScoreAction)
+        const { calculateLoanMetrics } = require('@/lib/financial-logic');
+        const metrics = calculateLoanMetrics(
+            { ...loanFull, cronograma_cuotas: loanFull.cronograma_cuotas || [] },
+            todayPeru,
+            systemConfig,
+            currentLoanPayments
+        );
 
-        // [NUEVO] CALCULAR EVALUACIÓN INTEGRAL CENTRALIZADA (Garantiza paridad con el Dashboard para reputación)
+        const atomicHealthScore = {
+            ...metrics,
+            score: metrics.loanScore?.score ?? 100,
+            details: metrics.loanScore?.details ?? [],
+            pagos_puntuales: metrics.loanScore?.pagos_puntuales ?? 0,
+            pagos_tardios: metrics.loanScore?.pagos_tardios ?? 0,
+        };
+
+        // Si entramos en modo Bypass de Paralelo, actualizamos responseElegibilidad
+        if (elegibilidad && !elegibilidad.elegible && esParaleloRazon && (esAdmin || (esAsesor && !prestamo?.es_paralelo))) {
+            const totalCuotas = (loanFull.cronograma_cuotas || []).reduce((sum: number, c: any) => sum + Number(c.monto_cuota), 0);
+            const totalPagado = (loanFull.cronograma_cuotas || []).reduce((sum: number, c: any) => sum + Number(c.monto_pagado || 0), 0);
+            const porcentajePagado = totalCuotas > 0 ? (totalPagado / totalCuotas) * 100 : 0;
+            const saldoPendiente = totalCuotas - totalPagado;
+            
+            responseElegibilidad = {
+                ...elegibilidad,
+                elegible: true,
+                score: atomicHealthScore.score,
+                score_detalle: atomicHealthScore.loanScore,
+                porcentaje_pagado: parseFloat(porcentajePagado.toFixed(2)),
+                monto_original: loanFull.monto,
+                saldo_pendiente: parseFloat(saldoPendiente.toFixed(2)),
+                estado_prestamo: loanFull.estado || 'activo',
+                estado_mora: loanFull.estado_mora || 'al_dia',
+                requiere_excepcion: true,
+                tipo_excepcion: esAdmin ? 'paralelo_admin' : 'paralelo_asesor_principal'
+            };
+        }
+
+        // Evaluación integral (Reputación + Hábitos)
         const evaluation = getComprehensiveEvaluation(loanFull.clientes, allClientLoans || [], qAllPayments || [], id, systemConfig)
 
-        // [NUEVO] CALCULAR AJUSTE DE CAPITAL SEGÚN REGLAS DE NEGOCIO ACTUALIZADAS
-        // CRÍTICO: Usar el score atómico (27 en el caso del usuario) para que calculateRenovationAdjustment 
-        // detecte el riesgo y aplique la reducción del -15%.
+        // Ajuste de capital sugerido
         const adjustment = calculateRenovationAdjustment(
             atomicHealthScore.score, 
             evaluation.reputationScore, 
             responseElegibilidad.monto_original || loanFull.monto,
-            0,
+            responseElegibilidad.saldo_pendiente || 0,
             systemConfig
         )
 
-        // Actualizar respuesta con los nuevos scores y LÍMITES sincronizados
+        // Consolidar respuesta final
         const finalResponse = {
             ...responseElegibilidad,
             healthScore: atomicHealthScore.score,
             reputationScore: evaluation.reputationScore,
             loanScoreData: atomicHealthScore, 
-            reputationScoreData: evaluation, // Snapshot completo de reputación
-            // Ajustar Limites según la nueva lógica
+            reputationScoreData: evaluation,
             monto_maximo: adjustment.montoSugerido,
             monto_minimo: Math.max(responseElegibilidad.monto_minimo || 0, responseElegibilidad.saldo_pendiente || 0, (loanFull.monto * 0.5)),
             ajuste_recomendado_pct: adjustment.totalPotentialPct,
             ajuste_detalles: adjustment.detalles,
-            // Sobrescribir el score legacy si existe
             score: atomicHealthScore.score,
             config: systemConfig
         }
 
-        // Respetar Límite Global del Cliente (Techo máximo absoluto)
+        // 1. Encontrar el monto máximo histórico pagado con éxito por este cliente
+        const historicalMax = (allClientLoans || [])
+            .filter(l => ['finalizado', 'liquidado', 'renovado'].includes(l.estado))
+            .reduce((max, l) => Math.max(max, Number(l.monto || 0)), 0);
+
+        // 2. Respetar Límite Global del Cliente, pero permitir al menos su récord histórico
         const clientLimit = parseFloat((loanFull.clientes as any)?.limite_prestamo || 0)
-        if (clientLimit > 0 && finalResponse.monto_maximo > clientLimit) {
-            finalResponse.monto_maximo = clientLimit
+        
+        // El límite efectivo es el mayor entre: su límite en ficha, su préstamo anterior o su récord histórico
+        const effectiveLimit = Math.max(clientLimit, loanFull.monto, historicalMax)
+        
+        if (effectiveLimit > 0 && finalResponse.monto_maximo > effectiveLimit) {
+            finalResponse.monto_maximo = effectiveLimit
+        }
+        
+        // Garantizar que el monto_maximo no sea inferior al monto anterior si el ajuste es positivo
+        if (adjustment.totalPotentialPct >= 0 && finalResponse.monto_maximo < loanFull.monto) {
+            finalResponse.monto_maximo = loanFull.monto
         }
 
         return NextResponse.json(finalResponse)
 
     } catch (e: any) {
-        console.error('Unexpected error:', e)
+        console.error('Unexpected error in eligibility API:', e)
         return NextResponse.json({ error: e.message }, { status: 500 })
     }
 }

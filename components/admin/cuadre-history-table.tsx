@@ -134,20 +134,36 @@ export function CuadreHistoryTable({ history }: CuadreHistoryTableProps) {
                       <div className="space-y-4">
                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Desglose</p>
                          <div className="space-y-2">
-                            <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900/50 border border-slate-800">
-                               <div className="flex items-center gap-2">
-                                  <Landmark className="w-3 h-3 text-emerald-400" />
-                                  <span className="text-xs text-slate-400">Efectivo:</span>
-                               </div>
-                               <span className="text-xs font-bold text-white">S/ {item.monto_cobrado_efectivo}</span>
-                            </div>
-                            <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900/50 border border-slate-800">
-                               <div className="flex items-center gap-2">
-                                  <Smartphone className="w-3 h-3 text-blue-400" />
-                                  <span className="text-xs text-slate-400">Digital:</span>
-                               </div>
-                               <span className="text-xs font-bold text-white">S/ {item.monto_cobrado_digital}</span>
-                            </div>
+                             <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-slate-900/50 border border-slate-800">
+                                <div className="flex items-center justify-between">
+                                   <div className="flex items-center gap-2">
+                                      <Landmark className="w-3 h-3 text-emerald-400" />
+                                      <span className="text-xs text-slate-400">Efectivo:</span>
+                                   </div>
+                                   <span className="text-xs font-bold text-white">S/ {item.monto_cobrado_efectivo}</span>
+                                </div>
+                                {item.cuenta_caja && (
+                                   <div className="pl-5 flex items-center gap-1.5">
+                                      <div className="w-1 h-1 rounded-full bg-emerald-500/50" />
+                                      <span className="text-[10px] text-slate-500 uppercase font-medium">Destino: {item.cuenta_caja.nombre}</span>
+                                   </div>
+                                )}
+                             </div>
+                             <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-slate-900/50 border border-slate-800">
+                                <div className="flex items-center justify-between">
+                                   <div className="flex items-center gap-2">
+                                      <Smartphone className="w-3 h-3 text-blue-400" />
+                                      <span className="text-xs text-slate-400">Digital:</span>
+                                   </div>
+                                   <span className="text-xs font-bold text-white">S/ {item.monto_cobrado_digital}</span>
+                                </div>
+                                {item.cuenta_digital && (
+                                   <div className="pl-5 flex items-center gap-1.5">
+                                      <div className="w-1 h-1 rounded-full bg-blue-500/50" />
+                                      <span className="text-[10px] text-slate-500 uppercase font-medium">Destino: {item.cuenta_digital.nombre}</span>
+                                   </div>
+                                )}
+                             </div>
                          </div>
                       </div>
 

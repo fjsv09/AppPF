@@ -50,11 +50,26 @@ Deno.serve(async (req) => {
             throw new Error('Restricción de Seguridad: Se requiere ubicación GPS activa.')
         }
 
+        // --- ATRIBUCIÓN DE PAGO ---
+        let targetUserId = user.id
+        if (perfil?.rol === 'supervisor') {
+            const { data: qData } = await supabaseAdmin
+                .from('cronograma_cuotas')
+                .select('prestamos(clientes(asesor_id))')
+                .eq('id', cuota_id)
+                .single()
+            
+            const loanAdvisorId = qData?.prestamos?.clientes?.asesor_id
+            if (loanAdvisorId) {
+                targetUserId = loanAdvisorId
+            }
+        }
+
         // Call RPC
         const { data, error } = await supabaseAdmin.rpc('registrar_pago_db', {
             p_cuota_id: cuota_id,
             p_monto: monto,
-            p_usuario_id: user.id,
+            p_usuario_id: targetUserId,
             p_latitud: latitud,
             p_longitud: longitud
         })

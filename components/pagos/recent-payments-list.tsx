@@ -16,7 +16,7 @@ interface RecentPaymentsListProps {
     currentPage: number
     pageSize: number
     perfiles: any[]
-    userRol: 'admin' | 'supervisor' | 'asesor'
+    userRol: 'admin' | 'supervisor' | 'asesor' | 'secretaria'
     userId: string
 }
 
@@ -68,6 +68,7 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
     const currentFecha = searchParams.get('fecha') || ''
     const currentTurno = searchParams.get('turno') || 'all'
     const currentMetodo = searchParams.get('metodo') || 'all'
+    const currentPagoPor = searchParams.get('pago_por') || 'all'
 
 
     const [searchValue, setSearchValue] = useState(currentSearch)
@@ -98,8 +99,22 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
         if (userRol === 'supervisor') {
             return p.rol === 'asesor' && p.supervisor_id === userId
         }
-        return false
+        return p.id === userId
     })
+
+    // [NUEVO] Filter perfiles specifically for the "Pago Por" dropdown (Security/Privacy)
+    const pagoPorOptions = perfiles.filter(p => {
+        if (userRol === 'admin' || userRol === 'secretaria') return true;
+        if (userRol === 'supervisor') {
+            // Supervisors see themselves, their team, and higher management
+            return p.id === userId || p.supervisor_id === userId || ['admin', 'supervisor', 'secretaria'].includes(p.rol);
+        }
+        if (userRol === 'asesor') {
+            // Advisors only see themselves and the management staff
+            return p.id === userId || ['admin', 'supervisor', 'secretaria'].includes(p.rol);
+        }
+        return false;
+    });
 
     return (
         <div className="space-y-4 mt-8">
@@ -199,6 +214,26 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
                             <SelectItem value="Yape">📱 Yape</SelectItem>
                             <SelectItem value="Plin">💠 Plin</SelectItem>
                             <SelectItem value="Transferencia">🏦 Transferencia</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    {/* Pago Por Filter */}
+                    <Select value={currentPagoPor} onValueChange={(v) => handleFilterChange('pago_por', v)}>
+                        <SelectTrigger className="h-10 w-auto min-w-[130px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-colors hover:border-slate-600">
+                            <User className={cn("h-3 w-3 mr-2 shrink-0", 
+                                (currentPagoPor !== 'all' && currentPagoPor !== 'asesor' && currentPagoPor !== 'admin') ? 'text-purple-400' : 
+                                currentPagoPor !== 'all' ? 'text-purple-400/70' : 'text-slate-400'
+                            )} />
+                            <SelectValue placeholder="Pago Por" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 max-h-[300px] overflow-y-auto">
+                            <SelectItem value="all">👤 Cualquier Origen</SelectItem>
+                            
+                            {pagoPorOptions.map(p => (
+                                <SelectItem key={p.id} value={p.id} className="text-xs">
+                                    {p.rol === 'asesor' ? '👤' : '💼'} {p.nombre_completo}
+                                </SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                     

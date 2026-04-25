@@ -62,6 +62,9 @@ export function MovementsFilterBar({
       if (value === null) params.delete(key)
       else params.set(key, value)
     })
+
+    // Reset page when filters change
+    params.delete('page')
     
     startTransition(() => {
       router.replace(`${pathname}?${params.toString()}`, { scroll: false })

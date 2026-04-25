@@ -23,7 +23,7 @@ import { SimuladorPrestamoModal } from './prestamos/simulador-prestamo-modal'
 import { Calculator } from 'lucide-react'
 import { version } from '../package.json'
 
-type Role = 'admin' | 'supervisor' | 'asesor'
+type Role = 'admin' | 'supervisor' | 'asesor' | 'secretaria'
 
 interface DashboardNavProps {
     role: Role
@@ -94,35 +94,35 @@ export function DashboardNav({
     }
 
     const links = [
-        { href: '/dashboard', label: 'Inicio', icon: Home, roles: ['admin', 'supervisor', 'asesor'], category: 'Principal' },
-        { href: '/dashboard/clientes', label: 'Clientes', icon: Users, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
-        { href: '/dashboard/notificaciones', label: 'Notificaciones', icon: Bell, roles: ['admin', 'supervisor', 'asesor'], category: 'Principal' },
-        { href: '/dashboard/prestamos', label: 'Préstamos', icon: Banknote, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
-        { href: '/dashboard/perfil', label: 'Mi Perfil', icon: Contact, roles: ['admin', 'supervisor', 'asesor'], category: 'Principal' },
+        { href: '/dashboard', label: 'Inicio', icon: Home, roles: ['admin', 'supervisor', 'asesor', 'secretaria'], category: 'Principal' },
+        { href: '/dashboard/clientes', label: 'Clientes', icon: Users, roles: ['admin', 'supervisor', 'asesor', 'secretaria'], category: 'Operaciones' },
+        { href: '/dashboard/notificaciones', label: 'Notificaciones', icon: Bell, roles: ['admin', 'supervisor', 'asesor', 'secretaria'], category: 'Principal' },
+        { href: '/dashboard/prestamos', label: 'Préstamos', icon: Banknote, roles: ['admin', 'supervisor', 'asesor', 'secretaria'], category: 'Operaciones' },
+        { href: '/dashboard/perfil', label: 'Mi Perfil', icon: Contact, roles: ['admin', 'supervisor', 'asesor', 'secretaria'], category: 'Principal' },
         
         // --- Gestión Financiera ---
         { href: '/dashboard/admin/carteras', label: 'Gestionar Carteras', icon: Briefcase, roles: ['admin'], category: 'Finanzas' },
         { href: '/dashboard/admin/capital', label: 'Capital y Socios', icon: TrendingUp, roles: ['admin'], category: 'Finanzas' },
         { href: '/dashboard/admin/cuadres', label: 'Gestión de Cuadres', icon: Landmark, roles: ['admin'], category: 'Finanzas' },
 
-        { href: '/dashboard/cuadre', label: 'Cuadre de Caja', icon: Wallet, roles: ['asesor'], category: 'Finanzas' },
-        { href: '/dashboard/gastos', label: 'Gastos Operativos', icon: Receipt, roles: ['admin', 'supervisor', 'asesor'], category: 'Finanzas' },
-        { href: '/dashboard/nomina', label: 'Nómina y Bonos', icon: CreditCard, roles: ['admin', 'supervisor', 'asesor'], category: 'Finanzas' },
+        { href: '/dashboard/cuadre', label: 'Cuadre de Caja', icon: Wallet, roles: ['asesor', 'secretaria'], category: 'Finanzas' },
+        { href: '/dashboard/gastos', label: 'Gastos Operativos', icon: Receipt, roles: ['admin', 'supervisor', 'asesor', 'secretaria'], category: 'Finanzas' },
+        { href: '/dashboard/nomina', label: 'Nómina y Bonos', icon: CreditCard, roles: ['admin', 'supervisor', 'asesor', 'secretaria'], category: 'Finanzas' },
         { href: '/dashboard/admin/metas', label: 'Gestión de Metas', icon: Target, roles: ['admin'], category: 'Finanzas' },
-        { href: '/dashboard/metas', label: 'Metas y Bonos', icon: Award, roles: ['admin', 'supervisor', 'asesor'], category: 'Finanzas' },
+        { href: '/dashboard/metas', label: 'Metas y Bonos', icon: Award, roles: ['admin', 'supervisor', 'asesor', 'secretaria'], category: 'Finanzas' },
         
         // --- Operaciones ---
-        { href: '/dashboard/solicitudes', label: 'Solicitudes', icon: FileText, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
-        { href: '/dashboard/renovaciones', label: 'Renovaciones', icon: RefreshCw, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
-        { href: '/dashboard/tareas', label: 'Tareas', icon: Camera, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
-        { href: '/dashboard/pagos', label: 'Pagos', icon: Calendar, roles: ['admin', 'supervisor', 'asesor'], category: 'Operaciones' },
-        { href: '/dashboard/validacion-pagos', label: 'Validar Pagos', icon: CheckCircle, roles: ['admin'], category: 'Operaciones' },
+        { href: '/dashboard/solicitudes', label: 'Solicitudes', icon: FileText, roles: ['admin', 'supervisor', 'asesor', 'secretaria'], category: 'Operaciones' },
+        { href: '/dashboard/renovaciones', label: 'Renovaciones', icon: RefreshCw, roles: ['admin', 'supervisor', 'asesor', 'secretaria'], category: 'Operaciones' },
+        { href: '/dashboard/tareas', label: 'Tareas', icon: Camera, roles: ['admin', 'supervisor', 'asesor', 'secretaria'], category: 'Operaciones' },
+        { href: '/dashboard/pagos', label: 'Pagos', icon: Calendar, roles: ['admin', 'supervisor', 'asesor', 'secretaria'], category: 'Operaciones' },
+        { href: '/dashboard/validacion-pagos', label: 'Validar Pagos', icon: CheckCircle, roles: ['admin', 'supervisor', 'asesor', 'secretaria'], category: 'Operaciones' },
         
         // --- Gestión y Supervisión ---
         { href: '/dashboard/usuarios', label: 'Gestión de Equipo', icon: UserCog, roles: ['admin'], category: 'Gestión' },
         { href: '/dashboard/supervision', label: 'Supervisión', icon: ChartBar, roles: ['admin', 'supervisor'], category: 'Gestión' },
         { href: '/dashboard/auditoria', label: 'Auditoría', icon: History, roles: ['admin', 'supervisor'], category: 'Gestión' },
-        { href: '/dashboard/asistencia', label: 'Asistencia', icon: Clock, roles: ['admin', 'supervisor', 'asesor'], category: 'Gestión' },
+        { href: '/dashboard/asistencia', label: 'Asistencia', icon: Clock, roles: ['admin', 'supervisor', 'asesor', 'secretaria'], category: 'Gestión' },
         
         // --- Configuración y Admin ---
         { href: '/dashboard/admin/sectores', label: 'Sectores', icon: Briefcase, roles: ['admin'], category: 'Configuración' },

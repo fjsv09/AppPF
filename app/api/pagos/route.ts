@@ -139,6 +139,23 @@ export async function POST(request: Request) {
         const isDigital = ['Yape', 'Plin', 'Transferencia'].includes(metodo_pago)
         let result: any = null
 
+        // --- DETERMINAR TARGET USER ID (Para atribución de dinero/comisiones) ---
+        // [NUEVO] Si quien registra es un Supervisor, el dinero debe atribuirse al Asesor del préstamo
+        let targetUserId = user.id
+        if (perfil?.rol === 'supervisor') {
+            const { data: qData } = await supabaseAdmin
+                .from('cronograma_cuotas')
+                .select('prestamos(clientes(asesor_id))')
+                .eq('id', cuota_id)
+                .single()
+            
+            const loanAdvisorId = (qData?.prestamos as any)?.clientes?.asesor_id
+            if (loanAdvisorId) {
+                targetUserId = loanAdvisorId
+                console.log(`[PAGOS] Rol Supervisor (${user.id}) registrando cobro para Asesor ${targetUserId}`)
+            }
+        }
+
         if (isDigital) {
             // --- NUEVO FLUJO SILENCIOSO PARA PAGOS DIGITALES ---
             // 1. Obtener datos de la cuota
@@ -189,22 +206,6 @@ export async function POST(request: Request) {
         } else {
             // --- FLUJO TRADICIONAL PARA EFECTIVO ---
             
-            // [NUEVO] Si quien registra es un Supervisor, el dinero (Efectivo) debe atribuirse al Asesor del préstamo
-            let targetUserId = user.id
-            if (perfil?.rol === 'supervisor') {
-                const { data: qData } = await supabaseAdmin
-                    .from('cronograma_cuotas')
-                    .select('prestamos(clientes(asesor_id))')
-                    .eq('id', cuota_id)
-                    .single()
-                
-                const loanAdvisorId = (qData?.prestamos as any)?.clientes?.asesor_id
-                if (loanAdvisorId) {
-                    targetUserId = loanAdvisorId
-                    console.log(`Supervisor ${user.id} registrando cobro para Asesor ${targetUserId}`)
-                }
-            }
-
             const { data, error } = await supabaseAdmin.rpc('registrar_pago_db', {
                 p_cuota_id: cuota_id,
                 p_monto: monto,
@@ -225,16 +226,19 @@ export async function POST(request: Request) {
 
         // Audit Log (using Admin) - Incluye el ID real de quien hizo el pago para auditoría
         await supabaseAdmin.from('auditoria').insert({
-            usuario_id: user.id, // Auditamos al usuario REAL (Supervisor o Asesor)
+            usuario_id: user.id,
             accion: 'registro_pago',
-            tabla: 'pagos',
+            tabla_afectada: 'pagos',
             registro_id: result.pago_id || null,
-            detalles: { 
+            detalle: { 
                 metodo_pago, 
                 monto, 
                 cuota_id, 
                 rol_ejecutor: perfil?.rol,
-                atribuido_a: result.pago_id ? undefined : (perfil?.rol === 'supervisor' ? 'asesor_prestamo' : 'mismo_usuario')
+                atribuido_a: targetUserId !== user.id 
+                    ? 'asesor_prestamo' 
+                    : 'cuenta_propia',
+                target_user_id: targetUserId
             }
         })
 

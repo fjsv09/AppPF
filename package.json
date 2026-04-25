@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:cleanup": "ts-node scripts/limpiar_pruebas.ts",
+    "db:reset-total": "ts-node scripts/reinicio_total.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

@@ -30,6 +30,7 @@ export default async function DashboardPage() {
     const isAdmin = perfil?.rol === 'admin'
     const isAsesor = perfil?.rol === 'asesor'
     const isSupervisor = perfil?.rol === 'supervisor'
+    const isSecretaria = perfil?.rol === 'secretaria'
     
     // 4.5. Bloqueos de Asesor
     let blockInfo = null;
@@ -82,14 +83,14 @@ export default async function DashboardPage() {
                         Hola, <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">{perfil?.nombre_completo?.split(' ')[0] || 'Usuario'}</span>
                     </h1>
                     <p className="text-slate-400 text-xs md:text-base">
-                        {isAdmin ? 'Panel administrativo real-time.' : 'Gestión de cartera hoy.'}
+                        {isAdmin || isSecretaria ? 'Panel administrativo real-time.' : 'Gestión de cartera hoy.'}
                     </p>
                 </div>
             </div>
 
 
-            {/* ADMIN & SUPERVISOR: Command Center */}
-            {(isAdmin || isSupervisor) && (
+            {/* ADMIN, SECRETARIA & SUPERVISOR: Command Center */}
+            {(isAdmin || isSupervisor || isSecretaria) && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in slide-in-from-bottom-4 duration-700">
                     <div className="lg:col-span-2 space-y-8">
                         <OperationsHub role={perfil?.rol} />

@@ -18,7 +18,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }
 
         // Validate role
-        if (!['admin', 'supervisor', 'asesor'].includes(rol)) {
+        if (!['admin', 'supervisor', 'asesor', 'secretaria'].includes(rol)) {
             return NextResponse.json(
                 { error: 'Rol inválido' },
                 { status: 400 }

@@ -218,16 +218,21 @@ export async function POST(request: Request) {
             console.log('⚠️ Solicitud requiere excepción de admin - será escalada')
         }
 
-        // Validar monto dentro de límites
-        if (monto_solicitado > elegibilidad.monto_maximo) {
+        // [SINCRONIZACIÓN] Alinear montos límites con la lógica Dual-Score del frontend.
+        // El RPC de base de datos puede tener reglas de límites desactualizadas o más estrictas. 
+        // Confiamos en los límites calculados por la lógica de JS (enviados en el body) que el usuario vio en la interfaz.
+        const effectiveMax = Math.max(elegibilidad.monto_maximo, monto_maximo_permitido || 0);
+        const effectiveMin = Math.min(elegibilidad.monto_minimo, monto_minimo_permitido || elegibilidad.monto_minimo);
+
+        if (monto_solicitado > (effectiveMax + 0.1)) {
             return NextResponse.json({ 
-                error: `El monto solicitado ($${monto_solicitado}) excede el máximo permitido ($${elegibilidad.monto_maximo})` 
+                error: `El monto solicitado ($${monto_solicitado}) excede el máximo permitido ($${effectiveMax})` 
             }, { status: 400 })
         }
 
-        if (monto_solicitado < elegibilidad.monto_minimo) {
+        if (monto_solicitado < (effectiveMin - 0.1)) {
             return NextResponse.json({ 
-                error: `El monto solicitado ($${monto_solicitado}) es menor al mínimo permitido ($${elegibilidad.monto_minimo})` 
+                error: `El monto solicitado ($${monto_solicitado}) es menor al mínimo permitido ($${effectiveMin})` 
             }, { status: 400 })
         }
 

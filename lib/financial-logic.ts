@@ -99,7 +99,7 @@ export function calculateLoanMetrics(
   // Fuente de verdad para pagos: standalonePagos > loan.pagos > flatMap(cronograma.pagos)
   // [FILTRO SEGURIDAD] Excluir pagos rechazados explícitamente
   const pagosRaw = standalonePagos || loan.pagos || cronograma.flatMap((c: any) => c.pagos || []);
-  const pagos = pagosRaw.filter((p: any) => p.estado_verificacion !== 'rechazado');
+  const pagos = pagosRaw.filter((p: any) => p.estado_verificacion !== 'rechazado' && p.estado_verificacion !== 'pendiente');
 
   const totalPagar = Number(loan.monto) * (1 + (Number(loan.interes) / 100));
 
@@ -140,7 +140,7 @@ export function calculateLoanMetrics(
     };
   }
 
-  // 1. Meta Hoy (Específicamente cuotas que vencen hoy)
+  // 1. Meta Hoy (Especísticamente cuotas que vencen hoy)
   const cuotaDiaHoy = cronograma
     .filter((c: any) => c.fecha_vencimiento === today)
     .reduce((sum: number, c: any) => sum + Math.max(0, Number(c.monto_cuota) - (Number(c.monto_pagado) || 0)), 0);
@@ -166,7 +166,7 @@ export function calculateLoanMetrics(
     .filter((c: any) => c.fecha_vencimiento === today)
     .reduce((sum: number, c: any) => {
       const pagosDeEstaCuotaHoy = (c.pagos || [])
-        .filter((p: any) => getIsToday(p.created_at))
+        .filter((p: any) => getIsToday(p.created_at) && p.estado_verificacion !== 'rechazado' && p.estado_verificacion !== 'pendiente')
         .reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
 
       const metaCuota = Number(c.monto_cuota);
@@ -187,7 +187,7 @@ export function calculateLoanMetrics(
     .filter((c: any) => c.fecha_vencimiento === today)
     .reduce((sum: number, c: any) => {
       const pagosDeEstaCuotaHoy = (c.pagos || [])
-        .filter((p: any) => getIsToday(p.created_at))
+        .filter((p: any) => getIsToday(p.created_at) && p.estado_verificacion !== 'rechazado' && p.estado_verificacion !== 'pendiente')
         .reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
 
       const metaCuota = Number(c.monto_cuota);
@@ -402,14 +402,20 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
   });
 
   // FASE 3: Cascada FIFO Residual (Cubrir deudas antiguas o adelantar futuras)
+  let pIdx = 0;
   cronograma.forEach((q: any) => {
-    pool.forEach((p: any) => {
-      if (remainingNeeded[q.id] <= 0.01 || p.rem <= 0.01) return;
+    while (pIdx < pool.length && remainingNeeded[q.id] > 0.01) {
+      const p = pool[pIdx];
+      if (p.rem <= 0.01) {
+        pIdx++;
+        continue;
+      }
       const take = Math.min(p.rem, remainingNeeded[q.id]);
       remainingNeeded[q.id] -= take;
       p.rem -= take;
       quotaAssignments[q.id].push({ amount: take, date: p.date, p });
-    });
+      if (p.rem <= 0.01) pIdx++;
+    }
   });
 
   // 2. Cálculo de Aumentos y Penalizaciones basado en la Trazabilidad Final
@@ -430,6 +436,7 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
           if (focusPayment.isSystem) {
             increases += wPuntual;
             pagos_puntuales++; // [CORRECCIÓN] Incrementar contador para datos reales en UI
+            details.push({ label: `Pago Puntual Cuota ${c.numero_cuota}`, value: wPuntual, type: 'increase' });
             return;
           }
 
@@ -439,6 +446,7 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
           if (fechaPagoStr <= vDate) {
             increases += wPuntual;
             pagos_puntuales++;
+            details.push({ label: `Pago Puntual Cuota ${c.numero_cuota}`, value: wPuntual, type: 'increase' });
           } else {
             // Pago tarde: Calcular días de atraso al momento de pagar
             const fechaPagoObj = new Date(finishLine.date + 'T12:00:00');
@@ -489,23 +497,16 @@ export function calculateLoanScore(loan: any, pagos: any[], today: string = getT
 
   });
 
-  // 2. Castigos por Riesgo Histórico Máximo (Fusión Opción B: Comportamiento + Estado de Negocio + Fecha)
-  const isVencidoState = ['vencido', 'legal', 'castigado'].includes(loan.estado?.toLowerCase().trim() || '') ||
-    ['vencido', 'legal', 'castigado'].includes(loan.estado_mora?.toLowerCase().trim() || '') ||
-    (loan.fecha_fin && loan.fecha_fin < today);
+  // 2. Castigos por Riesgo Histórico (Uso directo de estado_mora para evitar recálculo dinámico en score)
+  const currentMora = loan.estado_mora?.toLowerCase().trim();
 
-  const totalRemaining = Object.values(remainingNeeded).reduce((a, b) => a + b, 0);
-  const lastPaymentDateStr = pool.length > 0 ? pool[pool.length - 1].date : '';
-  const wasVencidoAtSettlement = (loan.fecha_fin && lastPaymentDateStr > loan.fecha_fin);
-
-  if (maxHistoricalDelay > 30 || (isVencidoState && totalRemaining > 0.01) || (wasVencidoAtSettlement && totalRemaining <= 0.01)) {
+  if (['vencido', 'legal', 'castigado'].includes(currentMora)) {
     penalties += wVencido;
-    const label = (isVencidoState && totalRemaining > 0.01) ? 'Riesgo Crítico: PRÉSTAMO VENCIDO' : 'Riesgo Histórico: VENCIDO';
-    details.push({ label, value: wVencido, type: 'penalty' });
-  } else if (maxHistoricalDelay > 8) {
+    details.push({ label: 'Riesgo Histórico: VENCIDO', value: wVencido, type: 'penalty' });
+  } else if (currentMora === 'moroso') {
     penalties += wMoroso;
     details.push({ label: 'Riesgo Histórico: MOROSO', value: wMoroso, type: 'penalty' });
-  } else if (maxHistoricalDelay >= 2) {
+  } else if (currentMora === 'cpp') {
     penalties += wCpp;
     details.push({ label: 'Riesgo Histórico: CPP', value: wCpp, type: 'penalty' });
   }

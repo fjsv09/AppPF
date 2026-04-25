@@ -8,6 +8,7 @@ import { BackButton } from '@/components/ui/back-button'
 import { redirect } from 'next/navigation'
 import { TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CuadreTabs } from "@/components/admin/cuadre-tabs"
+import { Suspense } from 'react'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -85,41 +86,43 @@ export default async function AdminCuadresPage() {
         </div>
       </div>
 
-      <CuadreTabs defaultTab="pendientes" className="w-full">
-        <TabsList className="bg-slate-900 border border-slate-800 p-1 mb-6">
-          <TabsTrigger 
-            value="pendientes" 
-            className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400 gap-2 px-6"
-          >
-            <Clock className="w-4 h-4" />
-            Pendientes
-            {pendingCount > 0 && (
-              <span className="ml-1 bg-white text-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                {pendingCount}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger 
-            value="historial" 
-            className="data-[state=active]:bg-slate-700 data-[state=active]:text-white text-slate-400 gap-2 px-6"
-          >
-            <ListChecks className="w-4 h-4" />
-            Historial
-          </TabsTrigger>
-        </TabsList>
+      <Suspense fallback={<div className="p-20 text-center text-slate-500">Cargando gestión...</div>}>
+        <CuadreTabs defaultTab="pendientes" className="w-full">
+          <TabsList className="bg-slate-900 border border-slate-800 p-1 mb-6">
+            <TabsTrigger 
+              value="pendientes" 
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400 gap-2 px-6"
+            >
+              <Clock className="w-4 h-4" />
+              Pendientes
+              {pendingCount > 0 && (
+                <span className="ml-1 bg-white text-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  {pendingCount}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger 
+              value="historial" 
+              className="data-[state=active]:bg-slate-700 data-[state=active]:text-white text-slate-400 gap-2 px-6"
+            >
+              <ListChecks className="w-4 h-4" />
+              Historial
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="pendientes" className="space-y-4 outline-none">
-          <CuadreApproval 
-            pendingCuadres={pendingCuadres || []} 
-            adminId={user.id} 
-            globalAccounts={accounts || []} 
-          />
-        </TabsContent>
+          <TabsContent value="pendientes" className="space-y-4 outline-none">
+            <CuadreApproval 
+              pendingCuadres={pendingCuadres || []} 
+              adminId={user.id} 
+              globalAccounts={accounts || []} 
+            />
+          </TabsContent>
 
-        <TabsContent value="historial" className="space-y-4 outline-none">
-          <CuadreHistoryTable history={history || []} />
-        </TabsContent>
-      </CuadreTabs>
+          <TabsContent value="historial" className="space-y-4 outline-none">
+            <CuadreHistoryTable history={history || []} />
+          </TabsContent>
+        </CuadreTabs>
+      </Suspense>
     </div>
   )
 }

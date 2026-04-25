@@ -35,11 +35,11 @@ export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: stri
         const accountIds = accounts.map(a => a.id);
         const saldoActualTotal = accounts.reduce((acc: number, c: any) => acc + parseFloat(c.saldo || 0), 0) || 0;
 
-        // b) Flujo de hoy
+        // b) Flujo de hoy (Filtrado por cartera para evitar doble conteo de liquidaciones)
         const { data: movementsToday } = await supabase
             .from('movimientos_financieros')
             .select('monto, tipo, cuenta_origen_id, cuenta_destino_id')
-            .or(`cuenta_origen_id.in.(${accountIds.join(',')}),cuenta_destino_id.in.(${accountIds.join(',')})`)
+            .in('cartera_id', carterIds)
             .gte('created_at', startOfTodayISO);
 
         const ingresosHoy = movementsToday?.filter(m => m.cuenta_destino_id && accountIds.includes(m.cuenta_destino_id))
@@ -83,8 +83,16 @@ export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: stri
         for (const record of history) {
             if (!daysEvaluated.has(record.fecha)) {
                 daysEvaluated.add(record.fecha);
-                if ((record.tipo_cuadre !== 'final' && remainingHistorical > 1.05) || record.estado !== 'aprobado') {
-                    const statusMsg = record.estado === 'pendiente' ? 'está PENDIENTE' : (record.estado === 'rechazado' ? 'fue RECHAZADO' : 'está INCOMPLETO');
+                
+                // SOLO bloqueamos por integridad si:
+                // 1. El saldo histórico NO está saldado (remainingHistorical > 1.05)
+                // 2. O si hay algo PENDIENTE de aprobación hoy o antes (esto sí es crítico)
+                
+                const isUnresolved = record.estado === 'pendiente';
+                const isIncomplete = record.tipo_cuadre !== 'final' && record.estado === 'aprobado';
+                
+                if (isUnresolved || (isIncomplete && remainingHistorical > 1.05)) {
+                    const statusMsg = record.estado === 'pendiente' ? 'está PENDIENTE' : 'está INCOMPLETO';
                     
                     return {
                         isBlocked: true,

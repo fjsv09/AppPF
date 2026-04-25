@@ -355,40 +355,6 @@ export function PrestamosTable({
         return () => clearTimeout(timer)
     }, [localSearch, searchParams, pathname, router])
 
-    // Handler para bloquear/desbloquear pagos de un asesor (Admin only)
-    const handleToggleBloqueo = async (asesorId: string, currentlyBlocked: boolean, asesorNombre: string, e?: React.MouseEvent) => {
-        if (e) {
-            e.preventDefault()
-            e.stopPropagation()
-        }
-        setTogglingBloqueo(asesorId)
-        try {
-            const response = await fetch('/api/admin/bloquear-pagos', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ asesor_id: asesorId, bloqueado: !currentlyBlocked })
-            })
-            if (!response.ok) {
-                const err = await response.json()
-                throw new Error(err.error || 'Error al cambiar bloqueo')
-            }
-            toast.success(
-                !currentlyBlocked
-                    ? `Pagos bloqueados para ${asesorNombre}`
-                    : `Pagos desbloqueados para ${asesorNombre}`,
-                {
-                    description: !currentlyBlocked
-                        ? 'El asesor y supervisor no podrán registrar cobros.'
-                        : 'El asesor y supervisor pueden registrar cobros nuevamente.'
-                }
-            )
-            router.refresh()
-        } catch (error: any) {
-            toast.error('Error al cambiar bloqueo', { description: error.message })
-        } finally {
-            setTogglingBloqueo(null)
-        }
-    }
 
     const handleQuickPay = (prestamo: any, e?: React.MouseEvent) => {
         if (e) {
@@ -632,8 +598,11 @@ export function PrestamosTable({
                 break
 
             case 'en_curso':
-                // En Curso: Activo, Mora, CPP. (Excludes Finalizado/Anulado)
-                filtered = filtered.filter(p => ['activo'].includes(p.estado) && !['finalizado', 'anulado'].includes(p.estado))
+                // En Curso: Activo, Mora, CPP. (Excludes Finalizado/Anulado/Pagado)
+                filtered = filtered.filter(p => {
+                    const isEffectivelyPaid = (p.saldo_pendiente || p.metrics?.saldoPendiente || 0) <= 0.01;
+                    return ['activo'].includes(p.estado) && !['finalizado', 'anulado'].includes(p.estado) && !isEffectivelyPaid;
+                })
                 break
 
             case 'renovaciones':
@@ -776,7 +745,8 @@ export function PrestamosTable({
             if (p.es_renovable_estricto) counts.renovaciones++
 
             if (isActivo) {
-                counts.en_curso++
+                const isEffectivelyPaid = (p.saldo_pendiente || p.metrics?.saldoPendiente || 0) <= 0.01;
+                if (!isEffectivelyPaid) counts.en_curso++
                 counts.semana++
 
                 if (p.cuota_dia_hoy > 0.01) {
@@ -1115,9 +1085,9 @@ export function PrestamosTable({
                                         return (
                                             <Fragment key={prestamo.id}>
                                                 {showSeparator && (
-                                                    <div className="flex items-center gap-2 mb-3 mt-4 px-1">
-                                                        <div className="h-px flex-1 bg-slate-800/60" />
-                                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2 whitespace-nowrap">
+                                                    <div className="w-full flex items-center gap-2 mb-3 mt-4 px-1">
+                                                        <div className="h-px bg-indigo-500/50 w-4 rounded-full" />
+                                                        <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] whitespace-nowrap">
                                                             {isProgramado ? "Ruta Programada Hoy" : "Pagos Extra / Otras Fechas"}
                                                         </span>
                                                         <div className="h-px flex-1 bg-slate-800/60" />
@@ -1156,12 +1126,12 @@ export function PrestamosTable({
                                                                     {prestamo.clientes?.nombres}
                                                                 </h3>
                                                             </div>
-                                                                 <div className="text-right shrink-0">
-                                                                    <div className="flex-1 bg-slate-900/40 p-2.5 rounded-xl border border-slate-700/30">
-                                        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Capital</p>
-                                        <p className="text-xs font-mono font-bold text-slate-200">S/ {prestamo.monto?.toLocaleString()}</p>
-                                    </div>
+                                                            <div className="text-right shrink-0">
+                                                                <div className="flex-1 bg-slate-900/40 p-2.5 rounded-xl border border-slate-700/30">
+                                                                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Capital</p>
+                                                                    <p className="text-xs font-mono font-bold text-slate-200">S/ {prestamo.monto?.toLocaleString()}</p>
                                                                 </div>
+                                                            </div>
                                                         </div>
 
                                                         {/* Metrics Grid Compact */}
@@ -1282,521 +1252,492 @@ export function PrestamosTable({
                                     return (
                                         <Fragment key={prestamo.id}>
                                             {showSeparator && (
-                                                <div className="flex items-center gap-2 mb-3 mt-4 px-1">
-                                                    <div className="h-px flex-1 bg-slate-800/60" />
-                                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2 whitespace-nowrap">
+                                                <div className="w-full flex items-center gap-2 mb-3 mt-4 px-1">
+                                                    <div className="h-px bg-indigo-500/50 w-4 rounded-full" />
+                                                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] whitespace-nowrap">
                                                         {isProgramado ? "Ruta Programada Hoy" : "Pagos Extra / Otras Fechas"}
                                                     </span>
                                                     <div className="h-px flex-1 bg-slate-800/60" />
                                                 </div>
                                             )}
 
-                                            <div 
+                                            <div
                                                 className={cn(
                                                     "group block bg-slate-900 border border-slate-800/60 rounded-xl mb-2 relative overflow-hidden transition-all duration-200 shadow-sm hover:shadow-md hover:border-slate-700",
-                                                // Status Bar (Left Border)
-                                                (prestamo.estado === 'refinanciado' || prestamo.estado === 'renovado' || prestamo.isFinalizado || prestamo.saldo_pendiente <= 0 || (prestamo.totalCuotas > 0 && prestamo.cuotasPagadas >= prestamo.totalCuotas)) ? "border-l-[4px] border-l-slate-600 bg-slate-900/40 opacity-60 grayscale" :
-                                                    prestamo.estado_mora === 'vencido' ? "border-l-[4px] border-l-rose-500" :
-                                                        prestamo.estado_mora === 'moroso' ? "border-l-[4px] border-l-red-600" :
-                                                            prestamo.estado_mora === 'cpp' || (prestamo.deudaHoy > 0 && prestamo.cuotasAtrasadas >= 3) ? "border-l-[4px] border-l-orange-500" :
-                                                                prestamo.deudaHoy > 0 ? "border-l-[4px] border-l-amber-400" :
-                                                                    "border-l-[4px] border-l-emerald-500"
-                                            )}>
+                                                    // Status Bar (Left Border)
+                                                    (prestamo.estado === 'refinanciado' || prestamo.estado === 'renovado' || prestamo.isFinalizado || prestamo.saldo_pendiente <= 0 || (prestamo.totalCuotas > 0 && prestamo.cuotasPagadas >= prestamo.totalCuotas)) ? "border-l-[4px] border-l-slate-600 bg-slate-900/40 opacity-60 grayscale" :
+                                                        prestamo.estado_mora === 'vencido' ? "border-l-[4px] border-l-rose-500" :
+                                                            prestamo.estado_mora === 'moroso' ? "border-l-[4px] border-l-red-600" :
+                                                                prestamo.estado_mora === 'cpp' || (prestamo.deudaHoy > 0 && prestamo.cuotasAtrasadas >= 3) ? "border-l-[4px] border-l-orange-500" :
+                                                                    prestamo.deudaHoy > 0 ? "border-l-[4px] border-l-amber-400" :
+                                                                        "border-l-[4px] border-l-emerald-500"
+                                                )}>
 
-                                            {/* Compact Ledger View */}
-                                            <div className="flex flex-col py-1 px-2 gap-1 relative bg-gradient-to-br from-slate-900/50 to-slate-900/10 hover:bg-slate-800/20 transition-colors">
-                                                {/* TOP ROW: Identity & Header Status */}
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <div className="flex items-center gap-2 min-w-0">
-                                                        {/* Avatar */}
-                                                        <div className="shrink-0">
-                                                            <div className="w-8 h-8 rounded-full border border-slate-700 bg-slate-800 text-slate-300 flex items-center justify-center overflow-hidden shadow-sm">
-                                                                {prestamo.clientes?.foto_perfil ? (
-                                                                    <div onClick={(e) => e.stopPropagation()} className="w-full h-full relative z-10">
-                                                                        <ImageLightbox
-                                                                            src={prestamo.clientes.foto_perfil}
-                                                                            alt={prestamo.clientes.nombres}
-                                                                            className="w-full h-full"
-                                                                            thumbnail={
-                                                                                <>
-                                                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                                                    <img
-                                                                                        src={prestamo.clientes.foto_perfil}
-                                                                                        alt={prestamo.clientes.nombres}
-                                                                                        className="w-full h-full object-cover"
-                                                                                        loading="lazy"
-                                                                                    />
-                                                                                </>
-                                                                            }
-                                                                        />
-                                                                    </div>
-                                                                ) : (
-                                                                    <span className="font-bold text-sm">{prestamo.clientes?.nombres?.charAt(0) || '?'}</span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Name & DNI */}
-                                                        <div className="flex flex-col min-w-0">
-                                                            <h3 className="text-slate-100 font-bold text-sm leading-tight truncate pr-1">
-                                                                {prestamo.clientes?.nombres}
-                                                            </h3>
-                                                            <div className="flex flex-col gap-0.5 mt-0.5">
-
-                                                                <div className="flex items-center gap-1.5 mt-0.5">
-                                                                    {prestamo.clientes?.sectores?.nombre && (
-                                                                        <div className="flex items-center gap-1 text-[10px] text-slate-400 shrink-0">
-                                                                            <MapPin className="w-2.5 h-2.5 opacity-70 text-indigo-400" />
-                                                                            <span className="truncate max-w-[80px]">{prestamo.clientes.sectores.nombre}</span>
-                                                                        </div>
-                                                                    )}
-
-                                                                    {/* Pnd. Visita / Visitado - Next to location */}
-                                                                    {prestamo.isVisitadoHoy ? (
-                                                                        <span className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 shrink-0">
-                                                                            <MapPin className="w-2.5 h-2.5" />
-                                                                            Visitado
-                                                                        </span>
-                                                                    ) : (
-                                                                        activeFilter === 'ruta_hoy' && (
-                                                                            <span className="text-slate-500 bg-slate-500/5 border border-slate-700/50 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase transition-opacity shrink-0">
-                                                                                Pnd. Visita
-                                                                            </span>
-                                                                        )
-                                                                    )}
-
-                                                                    {/* Pararelo Label - Next to location */}
-                                                                    {prestamo.es_paralelo && (
-                                                                        <span
-                                                                            title="Este es un préstamo paralelo (el cliente tiene otros préstamos activos)."
-                                                                            className="cursor-help flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-purple-400 bg-purple-500/10 border border-purple-500/25 px-1.5 py-0.5 rounded-md shrink-0"
-                                                                        >
-                                                                            <Lock className="w-2.5 h-2.5 shrink-0" />
-                                                                            Paralelo
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                {/* Chip: Producto de Refinanciamiento */}
-                                                                {prestamoIdsProductoRefinanciamiento.includes(prestamo.id) && (
-                                                                    <div
-                                                                        className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded-md w-fit mt-0.5 cursor-help"
-                                                                        title="Este préstamo es producto de un refinanciamiento administrativo por mora previa."
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            toast.info("Préstamo Refinanciado", {
-                                                                                description: "Este préstamo es producto de un refinanciamiento administrativo por mora previa."
-                                                                            });
-                                                                        }}
-                                                                    >
-                                                                        <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
-                                                                        Refinanciado
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Top Right: Amount/Status */}
-                                                    <div className="shrink-0 text-right">
-                                                        {(() => {
-                                                            const statusUI = getLoanStatusUI(prestamo);
-                                                            const isHistoricalMora = (prestamo.isFinalizado || prestamo.estado === 'finalizado' || prestamo.estado === 'renovado' || prestamo.estado === 'refinanciado' || prestamo.saldo_pendiente <= 0) && ['vencido', 'moroso'].includes(prestamo.estado_mora);
-
-                                                            return (
-                                                                <div className="flex flex-row items-center justify-end gap-1">
-                                                                    {isHistoricalMora && (
-                                                                        <span
-                                                                            className="text-amber-500 text-xs cursor-pointer"
-                                                                            onClick={(e) => {
-                                                                                e.preventDefault()
-                                                                                e.stopPropagation()
-                                                                                toast.info(`Historial de mora: ${prestamo.estado_mora}`, {
-                                                                                    description: 'Este préstamo tuvo problemas de pago antes de ser finalizado o renovado.',
-                                                                                })
-                                                                            }}
-                                                                        >
-                                                                            ⚠️
-                                                                        </span>
-                                                                    )}
-                                                                    <Badge
-                                                                        variant="outline"
-                                                                        className={cn(
-                                                                            "text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md bg-slate-900/50",
-                                                                            statusUI.border,
-                                                                            statusUI.color,
-                                                                            statusUI.animate && "animate-pulse"
-                                                                        )}
-                                                                    >
-                                                                        {statusUI.label}
-                                                                    </Badge>
-                                                                    {/* Frecuencia Badge */}
-                                                                    <span className={cn(
-                                                                        "text-[9px] font-bold uppercase tracking-wide border px-1.5 py-0.5 rounded-md",
-                                                                        getFrequencyBadgeStyles(prestamo.frecuencia)
-                                                                    )}>
-                                                                        {prestamo.frecuencia}
-                                                                    </span>
-                                                                </div>
-                                                            )
-                                                        })()}
-                                                    </div>
-                                                </div>
-
-
-                                                {/* MIDDLE ROW: Stats & Info (Full Width, Left Aligned) */}
-                                                <div className="grid grid-cols-12 gap-1.5 items-end">
-                                                    {/* Stats & Asesor - Spans left */}
-                                                    <div className="col-span-7 flex flex-col gap-1.5">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="flex flex-col">
-                                                                <span className="text-[7px] text-slate-500 uppercase font-black tracking-wider mb-0.5">Capital</span>
-                                                                <span className="font-mono text-slate-300 text-[12px]">S/ {prestamo.monto?.toFixed(0)}</span>
-                                                            </div>
-                                                            <div className="flex flex-col">
-                                                                <span className="text-[7px] text-slate-500 uppercase font-black tracking-wider mb-0.5">Cuota</span>
-                                                                <span className="font-mono text-slate-300 text-[12px]">S/ {prestamo.valorCuota?.toFixed(0)}</span>
-                                                            </div>
-                                                            {/* New Saldo/Any Partial Section */}
-                                                            {(prestamo.saldo_cuota_parcial > 0) && (
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-[8px] text-blue-400/70 uppercase font-bold tracking-wider mb-0.5">Saldo</span>
-                                                                    <span className="font-mono text-blue-400 text-[11px] font-bold animate-pulse">
-                                                                        S/ {prestamo.saldo_cuota_parcial.toFixed(0)}
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                            {/* New Mora Section */}
-                                                            {prestamo.deudaHoy > 0 && (
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-[8px] text-red-400/70 uppercase font-bold tracking-wider mb-0.5">Mora</span>
-                                                                    <span className={cn(
-                                                                        "font-mono text-[11px]",
-                                                                        ['vencido', 'moroso'].includes(prestamo.estado_mora) ? "text-red-500" : "text-amber-500"
-                                                                    )}>
-                                                                        S/ {prestamo.deudaHoy.toFixed(0)}
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                            {(userRol === 'admin' || userRol === 'supervisor') && (
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-[8px] text-blue-500/70 uppercase font-bold tracking-wider mb-0.5">Asesor</span>
-                                                                    <span className="text-blue-300 text-[11px] flex items-center gap-1 truncate w-full">
-                                                                        <Users className="w-2.5 h-2.5 text-blue-400 shrink-0" />
-                                                                        <span className="truncate">{prestamo.asesor_nombre?.split(' ')[0] || '-'}</span>
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-
-                                                        {/* Badges */}
-                                                        <div className="flex flex-wrap items-center gap-1.5">
-                                                            {(() => {
-                                                                const isFullyPaidMobile = prestamo.isFinalizado || prestamo.saldo_pendiente <= 0 || (prestamo.cuotasPagadas >= prestamo.totalCuotas && prestamo.totalCuotas > 0);
-
-                                                                if (isFullyPaidMobile) {
-                                                                    return (
-                                                                        <div className="flex items-center gap-1.5 text-emerald-500 font-bold text-[9px] bg-emerald-500/5 px-2 py-1 rounded-md border border-emerald-500/10">
-                                                                            <CheckCircle2 className="w-2.5 h-2.5" />
-                                                                            <span>Pagado</span>
-                                                                        </div>
-                                                                    )
-                                                                } else if (prestamo.cuotasAtrasadas > 0) {
-                                                                    return (
-                                                                        <div className="flex items-center gap-1.5 text-amber-500 font-bold text-[9px] bg-amber-500/5 px-2 py-1 rounded-md border border-amber-500/10">
-                                                                            <AlertTriangle className="w-2.5 h-2.5" />
-                                                                            <span>{prestamo.cuotasAtrasadas} ATR</span>
-                                                                        </div>
-                                                                    )
-                                                                } else {
-                                                                    return (
-                                                                        <div className="flex items-center gap-1.5 text-emerald-500 font-bold text-[9px] bg-emerald-500/5 px-2 py-1 rounded-md border border-emerald-500/10">
-                                                                            <CheckCircle2 className="w-2.5 h-2.5" />
-                                                                            <span>Al día</span>
-                                                                        </div>
-                                                                    )
-                                                                }
-                                                            })()}
-                                                            {!prestamo.isFinalizado && (
-                                                                <span className="text-slate-400 text-[11px] font-bold px-1">
-                                                                    {prestamo.cuotasPagadas}/{prestamo.totalCuotas}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Actions - Bottom Right */}
-                                                    <div className="col-span-5 flex items-end justify-end gap-1 h-full">
-                                                        {(() => {
-                                                            const isEffectivelyFinalized = prestamo.isFinalizado || prestamo.estado === 'finalizado' || prestamo.estado === 'renovado' || prestamo.saldo_pendiente <= 0;
-                                                            const canRenew = prestamo.es_renovable_estricto;
-
-                                                            return (
-                                                                <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="flex items-center gap-1.5">
-                                                                    {/* WhatsApp Button */}
-                                                                    {prestamo.estado !== 'renovado' && (
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-[31px] w-[31px] rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all"
-                                                                            onClick={(e) => {
-                                                                                e.preventDefault()
-                                                                                e.stopPropagation()
-                                                                                if (prestamo.clientes?.telefono) {
-                                                                                    window.open(`https://wa.me/51${prestamo.clientes.telefono}?text=Hola ${prestamo.clientes.nombres}...`, '_blank')
+                                                {/* Compact Ledger View */}
+                                                <div className="flex flex-col py-1 px-2 gap-1 relative bg-gradient-to-br from-slate-900/50 to-slate-900/10 hover:bg-slate-800/20 transition-colors">
+                                                    {/* TOP ROW: Identity & Header Status */}
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            {/* Avatar */}
+                                                            <div className="shrink-0">
+                                                                <div className="w-8 h-8 rounded-full border border-slate-700 bg-slate-800 text-slate-300 flex items-center justify-center overflow-hidden shadow-sm">
+                                                                    {prestamo.clientes?.foto_perfil ? (
+                                                                        <div onClick={(e) => e.stopPropagation()} className="w-full h-full relative z-10">
+                                                                            <ImageLightbox
+                                                                                src={prestamo.clientes.foto_perfil}
+                                                                                alt={prestamo.clientes.nombres}
+                                                                                className="w-full h-full"
+                                                                                thumbnail={
+                                                                                    <>
+                                                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                                                        <img
+                                                                                            src={prestamo.clientes.foto_perfil}
+                                                                                            alt={prestamo.clientes.nombres}
+                                                                                            className="w-full h-full object-cover"
+                                                                                            loading="lazy"
+                                                                                        />
+                                                                                    </>
                                                                                 }
-                                                                            }}
-                                                                            disabled={!prestamo.clientes?.telefono}
-                                                                        >
-                                                                            <MessageCircle className="w-3.5 h-3.5" />
-                                                                        </Button>
+                                                                            />
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="font-bold text-sm">{prestamo.clientes?.nombres?.charAt(0) || '?'}</span>
                                                                     )}
+                                                                </div>
+                                                            </div>
 
-                                                                    {/* Renovar Button */}
-                                                                    {canRenew && (
-                                                                        // Evaluacion y validacion de refinanciacion directa admin
-                                                                        (() => {
-                                                                            const limiteMora = typeof refinanciacionMinMora === 'number' ? refinanciacionMinMora : 50;
-                                                                            const totalCuotasCalc = prestamo.numero_cuotas || prestamo.totalCuotas || 30;
-                                                                            const porcentajeMora = (totalCuotasCalc > 0) ? ((prestamo.cuotas_mora_real || 0) / totalCuotasCalc) * 100 : 0;
-                                                                            const isAdminDirectRefinance = (porcentajeMora >= limiteMora) && (userRol === 'admin' || userRol === 'supervisor');
+                                                            {/* Name & DNI */}
+                                                            <div className="flex flex-col min-w-0">
+                                                                <h3 className="text-slate-100 font-bold text-sm leading-tight truncate pr-1">
+                                                                    {prestamo.clientes?.nombres}
+                                                                </h3>
+                                                                <div className="flex flex-col gap-0.5 mt-0.5">
 
-                                                                            return (
-                                                                                <SolicitudRenovacionModal
-                                                                                    prestamoId={prestamo.id}
-                                                                                    clienteId={prestamo.cliente_id || prestamo.clientes?.id}
-                                                                                    clienteNombre={prestamo.clientes?.nombres}
-                                                                                    clienteFotoPerfil={prestamo.clientes?.foto_perfil}
-                                                                                    currentMonto={prestamo.monto}
-                                                                                    currentInteres={prestamo.interes}
-                                                                                    currentModalidad={prestamo.frecuencia?.toLowerCase() || 'diario'}
-                                                                                    currentCuotas={prestamo.numero_cuotas || prestamo.totalCuotas || 30}
-                                                                                    userRole={userRol}
-                                                                                    esRefinanciado={prestamo.estado === 'refinanciado'}
-                                                                                    isAdminDirectRefinance={isAdminDirectRefinance}
-                                                                                    esProductoDeRefinanciamiento={prestamoIdsProductoRefinanciamiento.includes(prestamo.id)}
-                                                                                    systemSchedule={systemSchedule}
-                                                                                    isBlockedByCuadre={isBlockedByCuadre}
-                                                                                    blockReasonCierre={blockReasonCierre}
-                                                                                    cuentas={cuentas}
-                                                                                    trigger={
-                                                                                        <Button
-                                                                                            variant={isAdminDirectRefinance ? "default" : "ghost"}
-                                                                                            size="icon"
-                                                                                            disabled={!canRequestDueToTime || isBlockedByCuadre || !!prestamo.clientes?.bloqueado_renovacion}
-                                                                                            className={cn(
-                                                                                                "h-[31px] w-[31px] rounded-lg transition-all flex items-center justify-center shrink-0",
-                                                                                                (!canRequestDueToTime || isBlockedByCuadre || !!prestamo.clientes?.bloqueado_renovacion) ? "opacity-40 grayscale pointer-events-none bg-slate-800/50" :
-                                                                                                    isAdminDirectRefinance
-                                                                                                        ? "bg-amber-500 hover:bg-amber-600 text-white shadow-sm border border-amber-400"
-                                                                                                        : "text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50"
-                                                                                            )}
-                                                                                            onClick={(e) => e.stopPropagation()}
-                                                                                            title={
-                                                                                                !!prestamo.clientes?.bloqueado_renovacion ? 'Cliente Bloqueado para Renovación' :
-                                                                                                    isBlockedByCuadre ? 'Bloqueado por cuadre pendiente' :
-                                                                                                        userRol === 'supervisor' ? 'Ver Evaluación' :
-                                                                                                            (isAdminDirectRefinance ? 'Refinanciar' : 'Renovar')
-                                                                                            }
-                                                                                        >
-                                                                                            {(isBlockedByCuadre || !!prestamo.clientes?.bloqueado_renovacion) ?
-                                                                                                <Lock className={cn("w-3.5 h-3.5", !!prestamo.clientes?.bloqueado_renovacion ? "text-amber-500" : "text-rose-500")} /> :
-                                                                                                <RotateCcw className="w-3.5 h-3.5" />
-                                                                                            }
-                                                                                        </Button>
-                                                                                    }
-                                                                                />
+                                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                                        {prestamo.clientes?.sectores?.nombre && (
+                                                                            <div className="flex items-center gap-1 text-[10px] text-slate-400 shrink-0">
+                                                                                <MapPin className="w-2.5 h-2.5 opacity-70 text-indigo-400" />
+                                                                                <span className="truncate max-w-[80px]">{prestamo.clientes.sectores.nombre}</span>
+                                                                            </div>
+                                                                        )}
+
+                                                                        {/* Pnd. Visita / Visitado - Next to location */}
+                                                                        {prestamo.isVisitadoHoy ? (
+                                                                            <span className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 shrink-0">
+                                                                                <MapPin className="w-2.5 h-2.5" />
+                                                                                Visitado
+                                                                            </span>
+                                                                        ) : (
+                                                                            activeFilter === 'ruta_hoy' && (
+                                                                                <span className="text-slate-500 bg-slate-500/5 border border-slate-700/50 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase transition-opacity shrink-0">
+                                                                                    Pnd. Visita
+                                                                                </span>
                                                                             )
-                                                                        })()
-                                                                    )}
+                                                                        )}
 
-                                                                    {/* Pagar Button */}
-                                                                    {!isEffectivelyFinalized && puedePagar(prestamo) && (
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            disabled={!canRequestDueToTime || isBlockedForPayments}
-                                                                            className={cn(
-                                                                                "h-[31px] w-[31px] rounded-lg transition-all flex items-center justify-center shrink-0 border",
-                                                                                isBlockedForPayments
-                                                                                    ? "opacity-40 grayscale pointer-events-none text-rose-500 bg-slate-800/50 border-slate-700/50"
-                                                                                    : "text-slate-400 bg-slate-800/40 border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/50 hover:border-emerald-700/50"
-                                                                            )}
+                                                                        {/* Pararelo Label - Next to location */}
+                                                                        {prestamo.es_paralelo && (
+                                                                            <span
+                                                                                title="Este es un préstamo paralelo (el cliente tiene otros préstamos activos)."
+                                                                                className="cursor-help flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-purple-400 bg-purple-500/10 border border-purple-500/25 px-1.5 py-0.5 rounded-md shrink-0"
+                                                                            >
+                                                                                <Lock className="w-2.5 h-2.5 shrink-0" />
+                                                                                Paralelo
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    {/* Chip: Producto de Refinanciamiento */}
+                                                                    {prestamoIdsProductoRefinanciamiento.includes(prestamo.id) && (
+                                                                        <div
+                                                                            className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded-md w-fit mt-0.5 cursor-help"
+                                                                            title="Este préstamo es producto de un refinanciamiento administrativo por mora previa."
                                                                             onClick={(e) => {
-                                                                                e.preventDefault()
-                                                                                e.stopPropagation()
-                                                                                if (!isBlockedForPayments) handleQuickPay(prestamo, e)
+                                                                                e.stopPropagation();
+                                                                                toast.info("Préstamo Refinanciado", {
+                                                                                    description: "Este préstamo es producto de un refinanciamiento administrativo por mora previa."
+                                                                                });
                                                                             }}
-                                                                            title={isBlockedForPayments ? 'Bloqueado por horario/feriado' : 'Cobrar'}
                                                                         >
-                                                                            {isBlockedForPayments ? <Lock className="w-3.5 h-3.5 text-rose-500" /> : <DollarSign className="w-3.5 h-3.5" />}
-                                                                        </Button>
+                                                                            <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                                                                            Refinanciado
+                                                                        </div>
                                                                     )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
 
-                                                                    {/* Iniciar Visita Button (GPS Control) */}
+                                                        {/* Top Right: Amount/Status */}
+                                                        <div className="shrink-0 text-right">
+                                                            {(() => {
+                                                                const statusUI = getLoanStatusUI(prestamo);
+                                                                const isHistoricalMora = (prestamo.isFinalizado || prestamo.estado === 'finalizado' || prestamo.estado === 'renovado' || prestamo.estado === 'refinanciado' || prestamo.saldo_pendiente <= 0) && ['vencido', 'moroso'].includes(prestamo.estado_mora);
 
-                                                                    {(() => {
-                                                                        if (userRol !== 'asesor' || isEffectivelyFinalized) return null;
-
-                                                                        const cronograma = (prestamo.cronograma_cuotas || []);
-                                                                        const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
-
-                                                                        const cuotaHoy = cronograma.find((c: any) => c.fecha_vencimiento === hoy && c.estado !== 'pagado');
-                                                                        const cuotaPendiente = cronograma.find((c: any) => c.estado !== 'pagado');
-                                                                        const cuotaTargetId = cuotaHoy?.id || cuotaPendiente?.id;
-
-                                                                        if (!cuotaTargetId) return null;
-
-                                                                        const clientCoords = prestamo.gps_coordenadas || (prestamo.clientes?.solicitudes?.[0]?.gps_coordenadas);
-
-                                                                        return <VisitActionButton
-                                                                            cuotaId={cuotaTargetId}
-                                                                            clientCoords={clientCoords}
-                                                                            userLoc={userLoc}
-                                                                            variant="icon"
-                                                                            className="h-[31px] w-[31px]"
-                                                                        />;
-                                                                    })()}
-                                                                    {/* Registrar Gestión Button - Para todos */}
-
-
-                                                                    {/* Dropdown Menu para opciones extra */}
-                                                                    <DropdownMenu>
-                                                                        <DropdownMenuTrigger asChild>
-                                                                            <Button variant="ghost" size="icon" className="h-[31px] w-[31px] rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-white hover:bg-slate-700 transition-all">
-                                                                                <MoreVertical className="w-3.5 h-3.5" />
-                                                                            </Button>
-                                                                        </DropdownMenuTrigger>
-                                                                        <DropdownMenuContent align="end" className="w-48 bg-slate-900 border-slate-700 text-slate-200">
-                                                                            <DropdownMenuItem
-                                                                                className="hover:bg-slate-800 cursor-pointer text-xs"
-                                                                                onClick={() => handleOpenGestion(prestamo)}
-                                                                            >
-                                                                                <MessageSquare className="w-3.5 h-3.5 mr-2 text-blue-400" />
-                                                                                Registrar Gestión
-                                                                            </DropdownMenuItem>
-                                                                            {userRol === 'admin' && (
-                                                                                <DropdownMenuItem
-                                                                                    className="hover:bg-slate-800 cursor-pointer text-xs"
-                                                                                    onClick={() => handleOpenAsignarTarea(prestamo)}
-                                                                                >
-                                                                                    <ClipboardList className="w-3.5 h-3.5 mr-2 text-amber-500" />
-                                                                                    Asignar Gestión
-                                                                                </DropdownMenuItem>
-                                                                            )}
-
-                                                                            {/* Bloquear/Desbloquear Pagos (Admin Only) */}
-                                                                            {userRol === 'admin' && prestamo.asesor_id && (
-                                                                                <>
-                                                                                    <DropdownMenuSeparator className="bg-slate-800" />
-                                                                                    <DropdownMenuItem
-                                                                                        className={cn(
-                                                                                            "cursor-pointer text-xs font-bold",
-                                                                                            prestamo.clientes?.asesor_pagos_bloqueados
-                                                                                                ? "hover:bg-emerald-900/20 text-emerald-500"
-                                                                                                : "hover:bg-rose-900/20 text-rose-500"
-                                                                                        )}
-                                                                                        disabled={togglingBloqueo === prestamo.asesor_id}
-                                                                                        onClick={() => handleToggleBloqueo(
-                                                                                            prestamo.asesor_id,
-                                                                                            !!prestamo.clientes?.asesor_pagos_bloqueados,
-                                                                                            prestamo.asesor_nombre || 'Asesor'
-                                                                                        )}
-                                                                                    >
-                                                                                        {togglingBloqueo === prestamo.asesor_id ? (
-                                                                                            <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
-                                                                                        ) : prestamo.clientes?.asesor_pagos_bloqueados ? (
-                                                                                            <Shield className="w-3.5 h-3.5 mr-2" />
-                                                                                        ) : (
-                                                                                            <ShieldOff className="w-3.5 h-3.5 mr-2" />
-                                                                                        )}
-                                                                                        {prestamo.clientes?.asesor_pagos_bloqueados ? 'Desbloquear Pagos' : 'Bloquear Pagos'}
-                                                                                    </DropdownMenuItem>
-                                                                                </>
-                                                                            )}
-
-                                                                            {/* ACCIONES DE ADMINISTRADOR */}
-                                                                            {userRol === 'admin' && (
-                                                                                <>
-                                                                                    <DropdownMenuSeparator className="bg-slate-800" />
-                                                                                    {prestamo.estado !== 'inactivo' ? (
-                                                                                        <>
-                                                                                            <DropdownMenuItem
-                                                                                                className={cn(
-                                                                                                    "hover:bg-amber-900/20 cursor-pointer text-xs font-bold",
-                                                                                                    (prestamo.total_pagado_acumulado || 0) > 0.01 ? "opacity-30 grayscale cursor-not-allowed" : "text-amber-500"
-                                                                                                )}
-                                                                                                onClick={() => {
-                                                                                                    if ((prestamo.total_pagado_acumulado || 0) > 0.01) {
-                                                                                                        toast.warning("No se puede editar: El préstamo ya tiene pagos.")
-                                                                                                        return
-                                                                                                    }
-                                                                                                    setLoanToEdit(prestamo)
-                                                                                                    setIsEditLoanModalOpen(true)
-                                                                                                }}
-                                                                                            >
-                                                                                                <Pencil className="w-3.5 h-3.5 mr-2" />
-                                                                                                Editar Préstamo
-                                                                                            </DropdownMenuItem>
-                                                                                            <DropdownMenuItem
-                                                                                                className={cn(
-                                                                                                    "hover:bg-rose-900/20 cursor-pointer text-xs font-bold",
-                                                                                                    (prestamo.total_pagado_acumulado || 0) > 0.01 ? "opacity-30 grayscale cursor-not-allowed" : "text-rose-500"
-                                                                                                )}
-                                                                                                onClick={() => {
-                                                                                                    if ((prestamo.total_pagado_acumulado || 0) > 0.01) {
-                                                                                                        toast.warning("No se puede eliminar: El préstamo ya tiene pagos.")
-                                                                                                        return
-                                                                                                    }
-                                                                                                    setLoanToDelete(prestamo)
-                                                                                                    setIsDeleteDialogOpen(true)
-                                                                                                }}
-                                                                                            >
-                                                                                                <X className="w-3.5 h-3.5 mr-2" />
-                                                                                                Eliminar Préstamo
-                                                                                            </DropdownMenuItem>
-                                                                                        </>
-                                                                                    ) : (
-                                                                                        <DropdownMenuItem
-                                                                                            className="hover:bg-emerald-900/20 cursor-pointer text-xs font-bold text-emerald-500"
-                                                                                            onClick={() => {
-                                                                                                setLoanToRestore(prestamo)
-                                                                                                setIsRestoreDialogOpen(true)
-                                                                                            }}
-                                                                                        >
-                                                                                            <RotateCcw className="w-3.5 h-3.5 mr-2" />
-                                                                                            Restaurar Préstamo
-                                                                                        </DropdownMenuItem>
-                                                                                    )}
-                                                                                </>
-                                                                            )}
-
-                                                                            <DropdownMenuItem
-                                                                                className="hover:bg-slate-800 cursor-pointer text-xs"
-                                                                                onClick={() => router.push(`/dashboard/prestamos/${prestamo.id}?tab=historial`)}
-                                                                            >
-                                                                                <Eye className="w-3.5 h-3.5 mr-2 text-slate-500" />
-                                                                                Ver Detalle
-                                                                            </DropdownMenuItem>
-                                                                            <DropdownMenuItem
-                                                                                className="hover:bg-slate-800 cursor-pointer text-xs"
+                                                                return (
+                                                                    <div className="flex flex-row items-center justify-end gap-1">
+                                                                        {isHistoricalMora && (
+                                                                            <span
+                                                                                className="text-amber-500 text-xs cursor-pointer"
                                                                                 onClick={(e) => {
+                                                                                    e.preventDefault()
                                                                                     e.stopPropagation()
-                                                                                    handleViewContract(prestamo)
+                                                                                    toast.info(`Historial de mora: ${prestamo.estado_mora}`, {
+                                                                                        description: 'Este préstamo tuvo problemas de pago antes de ser finalizado o renovado.',
+                                                                                    })
                                                                                 }}
                                                                             >
-                                                                                <Files className="w-3.5 h-3.5 mr-2 text-blue-400" />
-                                                                                {isLoadingContract && selectedContractLoan?.id === prestamo.id ? 'Cargando...' : 'Ver Documentos'}
-                                                                            </DropdownMenuItem>
-                                                                        </DropdownMenuContent>
-                                                                    </DropdownMenu>
+                                                                                ⚠️
+                                                                            </span>
+                                                                        )}
+                                                                        <Badge
+                                                                            variant="outline"
+                                                                            className={cn(
+                                                                                "text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md bg-slate-900/50",
+                                                                                statusUI.border,
+                                                                                statusUI.color,
+                                                                                statusUI.animate && "animate-pulse"
+                                                                            )}
+                                                                        >
+                                                                            {statusUI.label}
+                                                                        </Badge>
+                                                                        {/* Frecuencia Badge */}
+                                                                        <span className={cn(
+                                                                            "text-[9px] font-bold uppercase tracking-wide border px-1.5 py-0.5 rounded-md",
+                                                                            getFrequencyBadgeStyles(prestamo.frecuencia)
+                                                                        )}>
+                                                                            {prestamo.frecuencia}
+                                                                        </span>
+                                                                    </div>
+                                                                )
+                                                            })()}
+                                                        </div>
+                                                    </div>
+
+
+                                                    {/* MIDDLE ROW: Stats & Info (Full Width, Left Aligned) */}
+                                                    <div className="grid grid-cols-12 gap-1.5 items-end">
+                                                        {/* Stats & Asesor - Spans left */}
+                                                        <div className="col-span-7 flex flex-col gap-1.5">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[7px] text-slate-500 uppercase font-black tracking-wider mb-0.5">Capital</span>
+                                                                    <span className="font-mono text-slate-300 text-[12px]">S/ {prestamo.monto?.toFixed(0)}</span>
                                                                 </div>
-                                                            )
-                                                        })()}
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[7px] text-slate-500 uppercase font-black tracking-wider mb-0.5">Cuota</span>
+                                                                    <span className="font-mono text-slate-300 text-[12px]">S/ {prestamo.valorCuota?.toFixed(0)}</span>
+                                                                </div>
+                                                                {/* New Saldo/Any Partial Section */}
+                                                                {(prestamo.saldo_cuota_parcial > 0) && (
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-[8px] text-blue-400/70 uppercase font-bold tracking-wider mb-0.5">Saldo</span>
+                                                                        <span className="font-mono text-blue-400 text-[11px] font-bold animate-pulse">
+                                                                            S/ {prestamo.saldo_cuota_parcial.toFixed(0)}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                                {/* New Mora Section */}
+                                                                {prestamo.deudaHoy > 0 && (
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-[8px] text-red-400/70 uppercase font-bold tracking-wider mb-0.5">Mora</span>
+                                                                        <span className={cn(
+                                                                            "font-mono text-[11px]",
+                                                                            ['vencido', 'moroso'].includes(prestamo.estado_mora) ? "text-red-500" : "text-amber-500"
+                                                                        )}>
+                                                                            S/ {prestamo.deudaHoy.toFixed(0)}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                                {(userRol === 'admin' || userRol === 'supervisor') && (
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-[8px] text-blue-500/70 uppercase font-bold tracking-wider mb-0.5">Asesor</span>
+                                                                        <span className="text-blue-300 text-[11px] flex items-center gap-1 truncate w-full">
+                                                                            <Users className="w-2.5 h-2.5 text-blue-400 shrink-0" />
+                                                                            <span className="truncate">{prestamo.asesor_nombre?.split(' ')[0] || '-'}</span>
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Badges */}
+                                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                                {(() => {
+                                                                    const isFullyPaidMobile = prestamo.isFinalizado || prestamo.saldo_pendiente <= 0 || (prestamo.cuotasPagadas >= prestamo.totalCuotas && prestamo.totalCuotas > 0);
+
+                                                                    if (isFullyPaidMobile) {
+                                                                        return (
+                                                                            <div className="flex items-center gap-1.5 text-emerald-500 font-bold text-[9px] bg-emerald-500/5 px-2 py-1 rounded-md border border-emerald-500/10">
+                                                                                <CheckCircle2 className="w-2.5 h-2.5" />
+                                                                                <span>Pagado</span>
+                                                                            </div>
+                                                                        )
+                                                                    } else if (prestamo.cuotasAtrasadas > 0) {
+                                                                        return (
+                                                                            <div className="flex items-center gap-1.5 text-amber-500 font-bold text-[9px] bg-amber-500/5 px-2 py-1 rounded-md border border-amber-500/10">
+                                                                                <AlertTriangle className="w-2.5 h-2.5" />
+                                                                                <span>{prestamo.cuotasAtrasadas} ATR</span>
+                                                                            </div>
+                                                                        )
+                                                                    } else {
+                                                                        return (
+                                                                            <div className="flex items-center gap-1.5 text-emerald-500 font-bold text-[9px] bg-emerald-500/5 px-2 py-1 rounded-md border border-emerald-500/10">
+                                                                                <CheckCircle2 className="w-2.5 h-2.5" />
+                                                                                <span>Al día</span>
+                                                                            </div>
+                                                                        )
+                                                                    }
+                                                                })()}
+                                                                {!prestamo.isFinalizado && (
+                                                                    <span className="text-slate-400 text-[11px] font-bold px-1">
+                                                                        {prestamo.cuotasPagadas}/{prestamo.totalCuotas}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Actions - Bottom Right */}
+                                                        <div className="col-span-5 flex items-end justify-end gap-1 h-full">
+                                                            {(() => {
+                                                                const isEffectivelyFinalized = prestamo.isFinalizado || prestamo.estado === 'finalizado' || prestamo.estado === 'renovado' || prestamo.saldo_pendiente <= 0;
+                                                                const canRenew = prestamo.es_renovable_estricto;
+
+                                                                return (
+                                                                    <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="flex items-center gap-1.5">
+                                                                        {/* WhatsApp Button */}
+                                                                        {prestamo.estado !== 'renovado' && (
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-[31px] w-[31px] rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all"
+                                                                                onClick={(e) => {
+                                                                                    e.preventDefault()
+                                                                                    e.stopPropagation()
+                                                                                    if (prestamo.clientes?.telefono) {
+                                                                                        window.open(`https://wa.me/51${prestamo.clientes.telefono}?text=Hola ${prestamo.clientes.nombres}...`, '_blank')
+                                                                                    }
+                                                                                }}
+                                                                                disabled={!prestamo.clientes?.telefono}
+                                                                            >
+                                                                                <MessageCircle className="w-3.5 h-3.5" />
+                                                                            </Button>
+                                                                        )}
+
+                                                                        {/* Renovar Button */}
+                                                                        {canRenew && (
+                                                                            // Evaluacion y validacion de refinanciacion directa admin
+                                                                            (() => {
+                                                                                const limiteMora = typeof refinanciacionMinMora === 'number' ? refinanciacionMinMora : 50;
+                                                                                const totalCuotasCalc = prestamo.numero_cuotas || prestamo.totalCuotas || 30;
+                                                                                const porcentajeMora = (totalCuotasCalc > 0) ? ((prestamo.cuotas_mora_real || 0) / totalCuotasCalc) * 100 : 0;
+                                                                                const isAdminDirectRefinance = (porcentajeMora >= limiteMora) && (userRol === 'admin' || userRol === 'supervisor');
+
+                                                                                return (
+                                                                                    <SolicitudRenovacionModal
+                                                                                        prestamoId={prestamo.id}
+                                                                                        clienteId={prestamo.cliente_id || prestamo.clientes?.id}
+                                                                                        clienteNombre={prestamo.clientes?.nombres}
+                                                                                        clienteFotoPerfil={prestamo.clientes?.foto_perfil}
+                                                                                        currentMonto={prestamo.monto}
+                                                                                        currentInteres={prestamo.interes}
+                                                                                        currentModalidad={prestamo.frecuencia?.toLowerCase() || 'diario'}
+                                                                                        currentCuotas={prestamo.numero_cuotas || prestamo.totalCuotas || 30}
+                                                                                        userRole={userRol}
+                                                                                        esRefinanciado={prestamo.estado === 'refinanciado'}
+                                                                                        isAdminDirectRefinance={isAdminDirectRefinance}
+                                                                                        esProductoDeRefinanciamiento={prestamoIdsProductoRefinanciamiento.includes(prestamo.id)}
+                                                                                        systemSchedule={systemSchedule}
+                                                                                        isBlockedByCuadre={isBlockedByCuadre}
+                                                                                        blockReasonCierre={blockReasonCierre}
+                                                                                        cuentas={cuentas}
+                                                                                        trigger={
+                                                                                            <Button
+                                                                                                variant={isAdminDirectRefinance ? "default" : "ghost"}
+                                                                                                size="icon"
+                                                                                                disabled={!canRequestDueToTime || isBlockedByCuadre || !!prestamo.clientes?.bloqueado_renovacion}
+                                                                                                className={cn(
+                                                                                                    "h-[31px] w-[31px] rounded-lg transition-all flex items-center justify-center shrink-0",
+                                                                                                    (!canRequestDueToTime || isBlockedByCuadre || !!prestamo.clientes?.bloqueado_renovacion) ? "opacity-40 grayscale pointer-events-none bg-slate-800/50" :
+                                                                                                        isAdminDirectRefinance
+                                                                                                            ? "bg-amber-500 hover:bg-amber-600 text-white shadow-sm border border-amber-400"
+                                                                                                            : "text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-blue-400 hover:bg-blue-900/40 hover:border-blue-700/50"
+                                                                                                )}
+                                                                                                onClick={(e) => e.stopPropagation()}
+                                                                                                title={
+                                                                                                    !!prestamo.clientes?.bloqueado_renovacion ? 'Cliente Bloqueado para Renovación' :
+                                                                                                        isBlockedByCuadre ? 'Bloqueado por cuadre pendiente' :
+                                                                                                            userRol === 'supervisor' ? 'Ver Evaluación' :
+                                                                                                                (isAdminDirectRefinance ? 'Refinanciar' : 'Renovar')
+                                                                                                }
+                                                                                            >
+                                                                                                {(isBlockedByCuadre || !!prestamo.clientes?.bloqueado_renovacion) ?
+                                                                                                    <Lock className={cn("w-3.5 h-3.5", !!prestamo.clientes?.bloqueado_renovacion ? "text-amber-500" : "text-rose-500")} /> :
+                                                                                                    <RotateCcw className="w-3.5 h-3.5" />
+                                                                                                }
+                                                                                            </Button>
+                                                                                        }
+                                                                                    />
+                                                                                )
+                                                                            })()
+                                                                        )}
+
+                                                                        {/* Pagar Button */}
+                                                                        {!isEffectivelyFinalized && puedePagar(prestamo) && (
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                disabled={!canRequestDueToTime || isBlockedForPayments}
+                                                                                className={cn(
+                                                                                    "h-[31px] w-[31px] rounded-lg transition-all flex items-center justify-center shrink-0 border",
+                                                                                    isBlockedForPayments
+                                                                                        ? "opacity-40 grayscale pointer-events-none text-rose-500 bg-slate-800/50 border-slate-700/50"
+                                                                                        : "text-slate-400 bg-slate-800/40 border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/50 hover:border-emerald-700/50"
+                                                                                )}
+                                                                                onClick={(e) => {
+                                                                                    e.preventDefault()
+                                                                                    e.stopPropagation()
+                                                                                    if (!isBlockedForPayments) handleQuickPay(prestamo, e)
+                                                                                }}
+                                                                                title={isBlockedForPayments ? 'Bloqueado por horario/feriado' : 'Cobrar'}
+                                                                            >
+                                                                                {isBlockedForPayments ? <Lock className="w-3.5 h-3.5 text-rose-500" /> : <DollarSign className="w-3.5 h-3.5" />}
+                                                                            </Button>
+                                                                        )}
+
+                                                                        {/* Iniciar Visita Button (GPS Control) */}
+
+                                                                        {(() => {
+                                                                            if (userRol !== 'asesor' || isEffectivelyFinalized) return null;
+
+                                                                            const cronograma = (prestamo.cronograma_cuotas || []);
+                                                                            const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+
+                                                                            const cuotaHoy = cronograma.find((c: any) => c.fecha_vencimiento === hoy && c.estado !== 'pagado');
+                                                                            const cuotaPendiente = cronograma.find((c: any) => c.estado !== 'pagado');
+                                                                            const cuotaTargetId = cuotaHoy?.id || cuotaPendiente?.id;
+
+                                                                            if (!cuotaTargetId) return null;
+
+                                                                            const clientCoords = prestamo.gps_coordenadas || (prestamo.clientes?.solicitudes?.[0]?.gps_coordenadas);
+
+                                                                            return <VisitActionButton
+                                                                                cuotaId={cuotaTargetId}
+                                                                                clientCoords={clientCoords}
+                                                                                userLoc={userLoc}
+                                                                                variant="icon"
+                                                                                className="h-[31px] w-[31px]"
+                                                                            />;
+                                                                        })()}
+                                                                        {/* Registrar Gestión Button - Para todos */}
+
+
+                                                                        {/* Dropdown Menu para opciones extra */}
+                                                                        <DropdownMenu>
+                                                                            <DropdownMenuTrigger asChild>
+                                                                                <Button variant="ghost" size="icon" className="h-[31px] w-[31px] rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-white hover:bg-slate-700 transition-all">
+                                                                                    <MoreVertical className="w-3.5 h-3.5" />
+                                                                                </Button>
+                                                                            </DropdownMenuTrigger>
+                                                                            <DropdownMenuContent align="end" className="w-48 bg-slate-900 border-slate-700 text-slate-200">
+                                                                                <DropdownMenuItem
+                                                                                    className="hover:bg-slate-800 cursor-pointer text-xs"
+                                                                                    onClick={() => handleOpenGestion(prestamo)}
+                                                                                >
+                                                                                    <MessageSquare className="w-3.5 h-3.5 mr-2 text-blue-400" />
+                                                                                    Registrar Gestión
+                                                                                </DropdownMenuItem>
+                                                                                {userRol === 'admin' && (
+                                                                                    <DropdownMenuItem
+                                                                                        className="hover:bg-slate-800 cursor-pointer text-xs"
+                                                                                        onClick={() => handleOpenAsignarTarea(prestamo)}
+                                                                                    >
+                                                                                        <ClipboardList className="w-3.5 h-3.5 mr-2 text-amber-500" />
+                                                                                        Asignar Gestión
+                                                                                    </DropdownMenuItem>
+                                                                                )}
+
+
+                                                                                {/* ACCIONES DE ADMINISTRADOR */}
+                                                                                {userRol === 'admin' && (
+                                                                                    <>
+                                                                                        <DropdownMenuSeparator className="bg-slate-800" />
+                                                                                        {prestamo.estado !== 'inactivo' ? (
+                                                                                            <>
+                                                                                                <DropdownMenuItem
+                                                                                                    className={cn(
+                                                                                                        "hover:bg-amber-900/20 cursor-pointer text-xs font-bold",
+                                                                                                        (prestamo.total_pagado_acumulado || 0) > 0.01 ? "opacity-30 grayscale cursor-not-allowed" : "text-amber-500"
+                                                                                                    )}
+                                                                                                    onClick={() => {
+                                                                                                        if ((prestamo.total_pagado_acumulado || 0) > 0.01) {
+                                                                                                            toast.warning("No se puede editar: El préstamo ya tiene pagos.")
+                                                                                                            return
+                                                                                                        }
+                                                                                                        setLoanToEdit(prestamo)
+                                                                                                        setIsEditLoanModalOpen(true)
+                                                                                                    }}
+                                                                                                >
+                                                                                                    <Pencil className="w-3.5 h-3.5 mr-2" />
+                                                                                                    Editar Préstamo
+                                                                                                </DropdownMenuItem>
+                                                                                                <DropdownMenuItem
+                                                                                                    className={cn(
+                                                                                                        "hover:bg-rose-900/20 cursor-pointer text-xs font-bold",
+                                                                                                        (prestamo.total_pagado_acumulado || 0) > 0.01 ? "opacity-30 grayscale cursor-not-allowed" : "text-rose-500"
+                                                                                                    )}
+                                                                                                    onClick={() => {
+                                                                                                        if ((prestamo.total_pagado_acumulado || 0) > 0.01) {
+                                                                                                            toast.warning("No se puede eliminar: El préstamo ya tiene pagos.")
+                                                                                                            return
+                                                                                                        }
+                                                                                                        setLoanToDelete(prestamo)
+                                                                                                        setIsDeleteDialogOpen(true)
+                                                                                                    }}
+                                                                                                >
+                                                                                                    <X className="w-3.5 h-3.5 mr-2" />
+                                                                                                    Eliminar Préstamo
+                                                                                                </DropdownMenuItem>
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <DropdownMenuItem
+                                                                                                className="hover:bg-emerald-900/20 cursor-pointer text-xs font-bold text-emerald-500"
+                                                                                                onClick={() => {
+                                                                                                    setLoanToRestore(prestamo)
+                                                                                                    setIsRestoreDialogOpen(true)
+                                                                                                }}
+                                                                                            >
+                                                                                                <RotateCcw className="w-3.5 h-3.5 mr-2" />
+                                                                                                Restaurar Préstamo
+                                                                                            </DropdownMenuItem>
+                                                                                        )}
+                                                                                    </>
+                                                                                )}
+
+                                                                                <DropdownMenuItem
+                                                                                    className="hover:bg-slate-800 cursor-pointer text-xs"
+                                                                                    onClick={() => router.push(`/dashboard/prestamos/${prestamo.id}?tab=historial`)}
+                                                                                >
+                                                                                    <Eye className="w-3.5 h-3.5 mr-2 text-slate-500" />
+                                                                                    Ver Detalle
+                                                                                </DropdownMenuItem>
+                                                                                <DropdownMenuItem
+                                                                                    className="hover:bg-slate-800 cursor-pointer text-xs"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation()
+                                                                                        handleViewContract(prestamo)
+                                                                                    }}
+                                                                                >
+                                                                                    <Files className="w-3.5 h-3.5 mr-2 text-blue-400" />
+                                                                                    {isLoadingContract && selectedContractLoan?.id === prestamo.id ? 'Cargando...' : 'Ver Documentos'}
+                                                                                </DropdownMenuItem>
+                                                                            </DropdownMenuContent>
+                                                                        </DropdownMenu>
+                                                                    </div>
+                                                                )
+                                                            })()}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                </Fragment>
+                                        </Fragment>
                                     )
                                 })}
 
@@ -1934,12 +1875,13 @@ export function PrestamosTable({
                                                 return (
                                                     <Fragment key={prestamo.id}>
                                                         {showSeparator && (
-                                                            <div className="grid grid-cols-[repeat(14,minmax(0,1fr))] gap-2 px-6 py-2 bg-slate-950/40 border-y border-slate-800/50">
+                                                            <div className="grid grid-cols-[repeat(14,minmax(0,1fr))] gap-2 px-6 py-3 bg-slate-950/60 border-y border-slate-800/50">
                                                                 <div className="col-span-14 flex items-center gap-3">
-                                                                    <div className="w-1 h-3 bg-indigo-500 rounded-full" />
-                                                                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">
+                                                                    <div className="w-1.5 h-4 bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+                                                                    <span className="text-xs font-black text-indigo-300 uppercase tracking-[0.3em] whitespace-nowrap">
                                                                         {isProgramado ? "Ruta Programada Hoy" : "Pagos Extra / Otras Fechas"}
                                                                     </span>
+                                                                    <div className="h-px flex-1 bg-slate-800/40 ml-2" />
                                                                 </div>
                                                             </div>
                                                         )}
@@ -2103,12 +2045,13 @@ export function PrestamosTable({
                                             return (
                                                 <Fragment key={prestamo.id}>
                                                     {showSeparator && (
-                                                        <div className="grid grid-cols-[repeat(12,minmax(0,1fr))] gap-2 px-6 py-2 bg-slate-950/40 border-y border-slate-800/50">
+                                                        <div className="grid grid-cols-[repeat(12,minmax(0,1fr))] gap-2 px-6 py-3 bg-slate-950/60 border-y border-slate-800/50">
                                                             <div className="col-span-12 flex items-center gap-3">
-                                                                <div className="w-1 h-3 bg-indigo-500 rounded-full" />
-                                                                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">
+                                                                <div className="w-1.5 h-4 bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+                                                                <span className="text-xs font-black text-indigo-300 uppercase tracking-[0.3em] whitespace-nowrap">
                                                                     {isProgramado ? "Ruta Programada Hoy" : "Pagos Extra / Otras Fechas"}
                                                                 </span>
+                                                                <div className="h-px flex-1 bg-slate-800/40 ml-2" />
                                                             </div>
                                                         </div>
                                                     )}
@@ -2508,7 +2451,7 @@ export function PrestamosTable({
                                                                                             (prestamo.total_pagado_acumulado || 0) > 0.01 ? "opacity-30 grayscale cursor-not-allowed" : "text-rose-500"
                                                                                         )}
                                                                                         onClick={(e) => {
-                                                                                               e.stopPropagation()
+                                                                                            e.stopPropagation()
                                                                                             if ((prestamo.total_pagado_acumulado || 0) > 0.01) {
                                                                                                 toast.warning("No se puede eliminar: El préstamo ya tiene pagos.")
                                                                                                 return
@@ -2576,7 +2519,7 @@ export function PrestamosTable({
                                                                     <DropdownMenuItem
                                                                         className="hover:bg-slate-800 cursor-pointer text-xs"
                                                                         onClick={(e) => {
-                                                                            e.stopPropagation() 
+                                                                            e.stopPropagation()
                                                                             router.push(`/dashboard/prestamos/${prestamo.id}?tab=historial`)
                                                                         }}
                                                                     >

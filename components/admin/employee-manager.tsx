@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/dialog'
 import { createClient } from '@/utils/supabase/client'
 import { toast } from 'sonner'
-import { User, Shield, ShieldAlert, Edit, Power, Calendar, Wallet, Users, UserPlus, Eye, EyeOff, Clock, MapPin } from 'lucide-react'
+import { User, Shield, ShieldAlert, ShieldOff, Loader2, Edit, Power, Calendar, Wallet, Users, UserPlus, Eye, EyeOff, Clock, MapPin } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { CreateUserForm } from './create-user-form'
 
@@ -47,6 +47,7 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
   const [isCreating, setIsCreating] = useState(false)
   const [showEditPassword, setShowEditPassword] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
+  const [togglingBloqueo, setTogglingBloqueo] = useState<string | null>(null)
   const supabase = createClient()
   const router = useRouter()
 
@@ -83,6 +84,39 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
       toast.error('Error: ' + error.message)
     } finally {
       setLoading(null)
+    }
+  }
+
+  async function handleToggleBloqueo(asesorId: string, currentlyBlocked: boolean, asesorNombre: string) {
+    setTogglingBloqueo(asesorId)
+    try {
+        const response = await fetch('/api/admin/bloquear-pagos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ asesor_id: asesorId, bloqueado: !currentlyBlocked })
+        })
+        if (!response.ok) {
+            const err = await response.json()
+            throw new Error(err.error || 'Error al cambiar bloqueo')
+        }
+        
+        setEmployees(employees.map(e => e.id === asesorId ? { ...e, pagos_bloqueados: !currentlyBlocked } : e))
+        
+        toast.success(
+            !currentlyBlocked
+                ? `Pagos bloqueados para ${asesorNombre}`
+                : `Pagos desbloqueados para ${asesorNombre}`,
+            {
+                description: !currentlyBlocked
+                    ? 'El asesor y supervisor no podrán registrar cobros.'
+                    : 'El asesor y supervisor pueden registrar cobros nuevamente.'
+            }
+        )
+        router.refresh()
+    } catch (error: any) {
+        toast.error('Error al cambiar bloqueo', { description: error.message })
+    } finally {
+        setTogglingBloqueo(null)
     }
   }
 
@@ -259,6 +293,7 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
                       <Badge variant="outline" className={`text-[10px] font-bold uppercase tracking-widest ${
                         emp.rol === 'admin' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
                         emp.rol === 'supervisor' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                        emp.rol === 'secretaria' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
                         'bg-blue-500/10 text-blue-400 border-blue-500/20'
                       }`}>
                          {emp.rol}
@@ -290,9 +325,26 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
                       <Button 
                         variant="ghost" 
                         size="sm" 
+                        className={`h-8 w-8 p-0 hover:bg-slate-800 ${emp.pagos_bloqueados ? 'text-emerald-500 hover:text-emerald-400' : 'text-rose-500 hover:text-rose-400'}`}
+                        onClick={() => handleToggleBloqueo(emp.id, !!emp.pagos_bloqueados, emp.nombre_completo)}
+                        disabled={togglingBloqueo === emp.id}
+                        title={emp.pagos_bloqueados ? 'Desbloquear Pagos' : 'Bloquear Pagos'}
+                      >
+                        {togglingBloqueo === emp.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : emp.pagos_bloqueados ? (
+                          <Shield className="w-4 h-4" />
+                        ) : (
+                          <ShieldOff className="w-4 h-4" />
+                        )}
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
                         className={`h-8 w-8 p-0 hover:bg-slate-800 ${emp.activo ? 'text-rose-500 hover:text-rose-400' : 'text-emerald-500 hover:text-emerald-400'}`}
                         onClick={() => toggleStatus(emp.id, emp.activo)}
                         disabled={loading === emp.id || (emp.rol === 'admin' && emp.activo)}
+                        title={emp.activo ? 'Suspender Usuario' : 'Activar Usuario'}
                       >
                         <Power className="w-4 h-4" />
                       </Button>
@@ -320,6 +372,7 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
                   <Badge variant="outline" className={`text-[10px] font-bold uppercase tracking-widest ${
                     emp.rol === 'admin' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
                     emp.rol === 'supervisor' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                    emp.rol === 'secretaria' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
                     'bg-blue-500/10 text-blue-400 border-blue-500/20'
                   }`}>
                     {emp.rol}
@@ -356,6 +409,22 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
                     >
                       <Edit className="w-3.5 h-3.5" />
                       <span className="text-[10px] font-bold uppercase">Editar</span>
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className={`h-9 px-3 bg-slate-800 border-slate-700 flex items-center gap-2 ${emp.pagos_bloqueados ? 'text-emerald-500' : 'text-rose-500'}`}
+                      onClick={() => handleToggleBloqueo(emp.id, !!emp.pagos_bloqueados, emp.nombre_completo)}
+                      disabled={togglingBloqueo === emp.id}
+                    >
+                      {togglingBloqueo === emp.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : emp.pagos_bloqueados ? (
+                        <Shield className="w-3.5 h-3.5" />
+                      ) : (
+                        <ShieldOff className="w-3.5 h-3.5" />
+                      )}
+                      <span className="text-[10px] font-bold uppercase">{emp.pagos_bloqueados ? 'Desbloquear' : 'Bloquear'}</span>
                     </Button>
                     <Button 
                       variant="outline" 
@@ -464,6 +533,7 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
                     <SelectContent className="bg-slate-950 border-slate-800 text-white">
                         <SelectItem value="admin">Administrador</SelectItem>
                         <SelectItem value="supervisor">Supervisor</SelectItem>
+                        <SelectItem value="secretaria">Secretaria</SelectItem>
                         <SelectItem value="asesor">Asesor</SelectItem>
                     </SelectContent>
                     </Select>

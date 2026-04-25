@@ -216,7 +216,7 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
 
     // Fetch perfiles for filters (Needed here for KPI calculations and later for the directory)
     let perfiles: any[] = []
-    if (userRole === 'admin' || userRole === 'supervisor') {
+    if (userRole === 'admin' || userRole === 'supervisor' || userRole === 'secretaria') {
         const { data: perfilesData } = await supabaseAdmin
             .from('perfiles')
             .select('id, nombre_completo, rol, supervisor_id')
@@ -239,8 +239,8 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
         )
     }
 
-    // Filtro por Supervisor (Admin only)
-    if (userRole === 'admin' && filtroSupervisor !== 'todos') {
+    // Filtro por Supervisor (Admin & Secretaria only)
+    if ((userRole === 'admin' || userRole === 'secretaria') && filtroSupervisor !== 'todos') {
          const advisorIds = perfiles
             .filter(p => p.supervisor_id === filtroSupervisor)
             .map(p => p.id)
@@ -333,7 +333,7 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
                         </div>
                     </div>
                 </div>
-                {userRole === 'asesor' && (
+                {(userRole === 'asesor' || userRole === 'secretaria') && (
                     <Link href={canCreateDueToTime ? "/dashboard/solicitudes/nueva" : "#"}>
                         <Button 
                             disabled={!canCreateDueToTime}
@@ -433,7 +433,7 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
                  </Link>
 
                  {/* Card 5: Control / Reasignados */}
-                 {userRole === 'admin' ? (
+                 {(userRole === 'admin' || userRole === 'secretaria') ? (
                      <Link 
                         href={{
                             query: { ...sParams, tab: 'reasignados', page: '1' }

@@ -132,7 +132,7 @@ export default async function RenovacionesPage(props: { searchParams: Promise<{ 
                             <p className="page-subtitle">
                                 {perfil.rol === 'asesor' && 'Tus solicitudes de renovación de préstamos'}
                                 {perfil.rol === 'supervisor' && 'Solicitudes pendientes de pre-aprobación'}
-                                {perfil.rol === 'admin' && 'Todas las solicitudes de renovación'}
+                                {perfil.rol === 'admin' || perfil.rol === 'secretaria' && 'Todas las solicitudes de renovación'}
                             </p>
                         </div>
                     </div>

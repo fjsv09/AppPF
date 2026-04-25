@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils'
 
 import { MovementsFilterBar } from '@/components/admin/movements-filter-bar'
 import { SyncAccountBalance } from '@/components/admin/sync-account-balance'
+import { MovementsPagination } from '@/components/admin/movements-pagination'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,7 +45,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 interface PageProps {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ cuenta?: string, q?: string, tipo?: string }>
+  searchParams: Promise<{ cuenta?: string, q?: string, tipo?: string, page?: string }>
 }
 
 export default async function CarteraMovimientosPage({ params, searchParams }: PageProps) {
@@ -54,6 +55,10 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
   const cuentaFilter = sp.cuenta
   const qFilter = sp.q
   const tipoFilter = sp.tipo
+  const page = Number(sp.page) || 1
+  const pageSize = 10
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
 
   const supabase = await createClient()
   const adminClient = createAdminClient()
@@ -81,9 +86,9 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
     .from('movimientos_financieros')
     .select(`
        *,
-       origen:cuentas_financieras!movimientos_financieros_cuenta_origen_id_fkey(id, nombre, tipo),
-       destino:cuentas_financieras!movimientos_financieros_cuenta_destino_id_fkey(id, nombre, tipo)
-    `)
+       origen:cuentas_financieras!movimientos_financieros_cuenta_origen_id_fkey(id, nombre, tipo, carteras(nombre)),
+       destino:cuentas_financieras!movimientos_financieros_cuenta_destino_id_fkey(id, nombre, tipo, carteras(nombre))
+    `, { count: 'exact' })
     .eq('cartera_id', id)
 
   if (cuentaFilter) {
@@ -98,7 +103,12 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
     query = query.ilike('descripcion', `%${qFilter}%`)
   }
 
-  const { data: movements, error: mError } = await query.order('created_at', { ascending: false })
+  const { data: movements, error: mError, count } = await query
+    .order('created_at', { ascending: false })
+    .range(from, to)
+
+  const totalRecords = count || 0
+  const totalPages = Math.ceil(totalRecords / pageSize)
 
   const formatMoney = (val: number) => val.toLocaleString('en-US', { minimumFractionDigits: 2 })
 
@@ -174,17 +184,17 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
                                   {m.origen.nombre}
                                </p>
                                <p className="text-[8px] text-slate-500 uppercase font-medium">
-                                  {m.origen.tipo}
+                                  {m.origen.carteras?.nombre || m.origen.tipo}
                                </p>
                              </>
                            ) : (
                              m.tipo === 'ingreso' ? (
                                 <>
                                   <p className="text-[10px] font-bold text-amber-400 uppercase leading-tight">
-                                     CLIENTE
+                                     {m.descripcion?.toLowerCase().includes('cuadre') ? 'CUENTA COBRANZAS' : 'CLIENTE'}
                                   </p>
                                   <p className="text-[8px] text-amber-600/50 uppercase font-medium">
-                                     PAGADOR
+                                     {m.descripcion?.toLowerCase().includes('cuadre') ? 'ASESOR' : 'PAGADOR'}
                                   </p>
                                 </>
                              ) : (
@@ -199,17 +209,17 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
                                   {m.destino.nombre}
                                </p>
                                <p className="text-[8px] text-slate-500 uppercase font-medium">
-                                  {m.destino.tipo}
+                                  {m.destino.carteras?.nombre || m.destino.tipo}
                                </p>
                              </>
                            ) : (
                              m.tipo === 'egreso' ? (
                                 <>
                                   <p className="text-[10px] font-bold text-amber-400 uppercase leading-tight">
-                                     CLIENTE
+                                     {m.descripcion?.toLowerCase().includes('cuadre') ? 'CAJA PRINCIPAL' : 'CLIENTE'}
                                   </p>
                                   <p className="text-[8px] text-amber-600/50 uppercase font-medium">
-                                     RECEPTOR
+                                     {m.descripcion?.toLowerCase().includes('cuadre') ? 'CARTERA GLOBAL' : 'RECEPTOR'}
                                   </p>
                                 </>
                              ) : (
@@ -253,6 +263,14 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
                </tbody>
             </table>
           </div>
+          
+          {totalPages > 1 && (
+            <MovementsPagination 
+              currentPage={page}
+              totalPages={totalPages}
+              totalRecords={totalRecords}
+            />
+          )}
         </CardContent>
       </Card>
       

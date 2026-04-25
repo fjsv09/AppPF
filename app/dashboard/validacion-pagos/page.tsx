@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -46,15 +47,29 @@ import { es } from 'date-fns/locale'
 import { BackButton } from '@/components/ui/back-button'
 import { cn } from '@/lib/utils'
 
-export default function ValidacionPagosPage() {
+function ValidacionPagosContent() {
     const [pagosPendientes, setPagosPendientes] = useState<any[]>([])
     const [historial, setHistorial] = useState<any[]>([])
     const [cuentas, setCuentas] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    const [userId, setUserId] = useState<string | null>(null)
     const [userRole, setUserRole] = useState<string | null>(null)
+    const [advisors, setAdvisors] = useState<any[]>([])
+    const [selectedAsesor, setSelectedAsesor] = useState<string>('all')
     const [procesandoId, setProcesandoId] = useState<string | null>(null)
     const [selectedImage, setSelectedImage] = useState<string | null>(null)
-    const [activeTab, setActiveTab] = useState('pendientes')
+    const searchParams = useSearchParams()
+    const router = useRouter()
+    const tabParam = searchParams.get('tab')
+    
+    const [activeTab, setActiveTab] = useState(tabParam === 'historial' ? 'historial' : 'pendientes')
+    
+    // Paginación
+    const [pagePendientes, setPagePendientes] = useState(1)
+    const [pageHistorial, setPageHistorial] = useState(1)
+    const [totalPendientes, setTotalPendientes] = useState(0)
+    const [totalHistorial, setTotalHistorial] = useState(0)
+    const ITEMS_PER_PAGE = 10
     
     // Modales
     const [showAprobarModal, setShowAprobarModal] = useState(false)
@@ -67,9 +82,16 @@ export default function ValidacionPagosPage() {
 
     const supabase = createClient()
 
-    const fetchPagos = async (tipo: 'pendientes' | 'historial') => {
+    const fetchPagos = async (tipo: 'pendientes' | 'historial', currentUserId?: string, currentRole?: string, filterAsesor?: string, targetPage?: number) => {
         try {
             setLoading(true)
+            
+            const role = currentRole || userRole
+            const uid = currentUserId || userId
+            const asoFilter = filterAsesor !== undefined ? filterAsesor : selectedAsesor
+            const page = targetPage || (tipo === 'pendientes' ? pagePendientes : pageHistorial)
+            const offset = (page - 1) * ITEMS_PER_PAGE
+
             let query = supabase
                 .from('pagos')
                 .select(`
@@ -88,7 +110,7 @@ export default function ValidacionPagosPage() {
                             clientes ( nombres, telefono ) 
                         )
                     )
-                `)
+                `, { count: 'exact' })
 
             if (tipo === 'pendientes') {
                 query = query.eq('estado_verificacion', 'pendiente')
@@ -96,19 +118,43 @@ export default function ValidacionPagosPage() {
                 query = query.in('estado_verificacion', ['aprobado', 'rechazado'])
             }
 
-            const { data, error } = await query
+            // Solo mostrar validaciones de Yape
+            query = query.eq('metodo_pago', 'Yape')
+
+            // Aplicar restricciones de rol
+            if (role === 'asesor' && uid) {
+                query = query.eq('registrado_por', uid)
+            } else if (asoFilter && asoFilter !== 'all') {
+                query = query.eq('registrado_por', asoFilter)
+            }
+
+            const { data, error, count } = await query
                 .order('created_at', { ascending: false })
-                .limit(tipo === 'historial' ? 50 : 100)
+                .range(offset, offset + ITEMS_PER_PAGE - 1)
 
             if (error) throw error
-            if (tipo === 'pendientes') setPagosPendientes(data || [])
-            else setHistorial(data || [])
+            if (tipo === 'pendientes') {
+                setPagosPendientes(data || [])
+                setTotalPendientes(count || 0)
+            } else {
+                setHistorial(data || [])
+                setTotalHistorial(count || 0)
+            }
         } catch (error) {
             console.error(error)
             toast.error('Error al cargar pagos')
         } finally {
             setLoading(false)
         }
+    }
+
+    const fetchAdvisors = async () => {
+        const { data } = await supabase
+            .from('perfiles')
+            .select('id, nombre_completo, rol')
+            .in('rol', ['asesor', 'supervisor', 'admin', 'secretaria'])
+            .order('nombre_completo')
+        setAdvisors(data || [])
     }
 
     const fetchCuentas = async () => {
@@ -152,9 +198,23 @@ export default function ValidacionPagosPage() {
     }
 
     useEffect(() => {
-        fetchPagos('pendientes')
-        fetchPagos('historial')
-        fetchCuentas()
+        document.title = "Validación de Pagos | ProFinanzas"
+        const init = async () => {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+                setUserId(user.id)
+                const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single()
+                const role = perfil?.rol || 'asesor'
+                setUserRole(role)
+                
+                fetchPagos('pendientes', user.id, role)
+                fetchPagos('historial', user.id, role)
+                fetchAdvisors()
+            }
+            fetchCuentas()
+        }
+
+        init()
 
         const channel = supabase.channel('pagos_realtime_v4')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'pagos' }, () => {
@@ -165,6 +225,27 @@ export default function ValidacionPagosPage() {
 
         return () => { supabase.removeChannel(channel) }
     }, [supabase])
+
+    useEffect(() => {
+        if (userRole && userId) {
+            setPagePendientes(1)
+            setPageHistorial(1)
+            fetchPagos('pendientes', userId, userRole, selectedAsesor, 1)
+            fetchPagos('historial', userId, userRole, selectedAsesor, 1)
+        }
+    }, [selectedAsesor])
+
+    useEffect(() => {
+        if (userRole && userId) {
+            fetchPagos('pendientes')
+        }
+    }, [pagePendientes])
+
+    useEffect(() => {
+        if (userRole && userId) {
+            fetchPagos('historial')
+        }
+    }, [pageHistorial])
 
     const handleAccion = async (pagoId: string, accion: 'aprobar' | 'rechazar', params: any = {}) => {
         const { motivo, cuenta_id } = params
@@ -269,7 +350,7 @@ export default function ValidacionPagosPage() {
                         </div>
                     )}
                 </TableCell>
-                {!isHistory && (
+                {!isHistory && userRole === 'admin' && (
                     <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                             <Button 
@@ -345,7 +426,7 @@ export default function ValidacionPagosPage() {
                         )}
                     </div>
 
-                    {!isHistory && (
+                    {!isHistory && userRole === 'admin' && (
                         <div className="grid grid-cols-2 gap-3 mt-2">
                             <Button variant="outline" className="h-10 rounded-2xl border-slate-800 text-rose-400 font-black uppercase text-[10px] tracking-widest" onClick={() => openRechazarModal(pago)} disabled={isProcessing}>
                                 {isProcessing && procesandoId === pago.id ? <div className="w-3 h-3 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" /> : 'Rechazar'}
@@ -377,7 +458,12 @@ export default function ValidacionPagosPage() {
                 </div>
             </div>
 
-            <Tabs defaultValue="pendientes" className="w-full" onValueChange={setActiveTab}>
+            <Tabs value={activeTab} className="w-full" onValueChange={(val) => {
+                setActiveTab(val)
+                const params = new URLSearchParams(searchParams.toString())
+                params.set('tab', val)
+                router.replace(`?${params.toString()}`, { scroll: false })
+            }}>
                 <div className="flex items-center justify-between mb-6 bg-slate-900/30 p-1.5 rounded-2xl border border-slate-800/50 backdrop-blur-sm sticky top-0 z-40">
                     <TabsList className="bg-transparent gap-1">
                         <TabsTrigger value="pendientes" className="rounded-xl px-4 h-9 data-[state=active]:bg-indigo-600 data-[state=active]:text-white font-black uppercase text-[10px] tracking-widest transition-all">
@@ -389,9 +475,28 @@ export default function ValidacionPagosPage() {
                             Historial
                         </TabsTrigger>
                     </TabsList>
-                    <div className="px-3 flex items-center gap-2 text-slate-500">
-                        <ListFilter className="w-4 h-4" />
-                        <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Recientes Primero</span>
+                    <div className="px-3 flex items-center gap-3">
+                        {userRole !== 'asesor' && (
+                            <div className="flex items-center gap-2">
+                                <Select value={selectedAsesor} onValueChange={setSelectedAsesor}>
+                                    <SelectTrigger className="h-8 bg-slate-800/50 border-slate-700/50 rounded-lg font-bold uppercase text-[9px] w-[150px] text-slate-300">
+                                        <SelectValue placeholder="Asesor..." />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-slate-900 border-slate-800 text-white rounded-xl">
+                                        <SelectItem value="all" className="font-bold uppercase text-[9px]">Todos los Asesores</SelectItem>
+                                        {advisors.map(adv => (
+                                            <SelectItem key={adv.id} value={adv.id} className="font-bold uppercase text-[9px]">
+                                                {adv.nombre_completo}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                        <div className="flex items-center gap-2 text-slate-500">
+                            <ListFilter className="w-4 h-4" />
+                            <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Recientes Primero</span>
+                        </div>
                     </div>
                 </div>
 
@@ -419,7 +524,9 @@ export default function ValidacionPagosPage() {
                                             <TableHead className="text-slate-500 font-black uppercase text-[10px] tracking-widest w-[100px]">Monto</TableHead>
                                             <TableHead className="text-slate-500 font-black uppercase text-[10px] tracking-widest">Asesor</TableHead>
                                             <TableHead className="text-slate-500 font-black uppercase text-[10px] tracking-widest w-[60px]">Doc.</TableHead>
-                                            <TableHead className="text-right text-slate-500 font-black uppercase text-[10px] tracking-widest">Acciones</TableHead>
+                                            {!activeTab.includes('historial') && userRole === 'admin' && (
+                                                <TableHead className="text-right text-slate-500 font-black uppercase text-[10px] tracking-widest">Acciones</TableHead>
+                                            )}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -430,6 +537,34 @@ export default function ValidacionPagosPage() {
                             {/* Cards (Mobile) */}
                             <div className="grid gap-4 md:hidden animate-in fade-in duration-500">
                                 {pagosPendientes.map(pago => renderCard(pago))}
+                            </div>
+
+                            {/* Pagination Pendientes */}
+                            <div className="mt-6 flex items-center justify-between bg-slate-900/30 p-4 rounded-2xl border border-slate-800/50">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                    Mostrando {pagosPendientes.length} de {totalPendientes} resultados
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 border-slate-800 text-slate-400 hover:bg-slate-800 font-bold uppercase text-[9px] px-3 rounded-lg"
+                                        disabled={pagePendientes === 1 || loading}
+                                        onClick={() => setPagePendientes(prev => prev - 1)}
+                                    >
+                                        Anterior
+                                    </Button>
+                                    <span className="text-[10px] font-black text-white px-2">{pagePendientes}</span>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 border-slate-800 text-slate-400 hover:bg-slate-800 font-bold uppercase text-[9px] px-3 rounded-lg"
+                                        disabled={pagePendientes * ITEMS_PER_PAGE >= totalPendientes || loading}
+                                        onClick={() => setPagePendientes(prev => prev + 1)}
+                                    >
+                                        Siguiente
+                                    </Button>
+                                </div>
                             </div>
                         </>
                     )}
@@ -465,6 +600,34 @@ export default function ValidacionPagosPage() {
                             {/* Cards (Mobile) */}
                             <div className="grid gap-4 md:hidden animate-in fade-in duration-500">
                                 {historial.map(pago => renderCard(pago, true))}
+                            </div>
+
+                            {/* Pagination Historial */}
+                            <div className="mt-6 flex items-center justify-between bg-slate-900/30 p-4 rounded-2xl border border-slate-800/50">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                    Mostrando {historial.length} de {totalHistorial} resultados
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 border-slate-800 text-slate-400 hover:bg-slate-800 font-bold uppercase text-[9px] px-3 rounded-lg"
+                                        disabled={pageHistorial === 1 || loading}
+                                        onClick={() => setPageHistorial(prev => prev - 1)}
+                                    >
+                                        Anterior
+                                    </Button>
+                                    <span className="text-[10px] font-black text-white px-2">{pageHistorial}</span>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 border-slate-800 text-slate-400 hover:bg-slate-800 font-bold uppercase text-[9px] px-3 rounded-lg"
+                                        disabled={pageHistorial * ITEMS_PER_PAGE >= totalHistorial || loading}
+                                        onClick={() => setPageHistorial(prev => prev + 1)}
+                                    >
+                                        Siguiente
+                                    </Button>
+                                </div>
                             </div>
                         </>
                     )}
@@ -622,5 +785,17 @@ export default function ValidacionPagosPage() {
 
             <div className="h-24 sm:hidden" />
         </div>
+    )
+}
+
+export default function ValidacionPagosPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <div className="w-10 h-10 border-4 border-slate-800 border-t-indigo-500 rounded-full animate-spin" />
+            </div>
+        }>
+            <ValidacionPagosContent />
+        </Suspense>
     )
 }

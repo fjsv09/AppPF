@@ -99,7 +99,7 @@ export default async function SolicitudesPage() {
         blockInfo = await checkAdvisorBlocked(supabaseAdmin, user.id)
     }
 
-    let canCreateDueToTime = access.allowed || perfil?.rol === 'admin'
+    let canCreateDueToTime = access.allowed || perfil?.rol === 'admin' || perfil?.rol === 'secretaria'
     const blockReason = access.reason || 'Acceso restringido'
 
     // Agrupar por estado para mostrar tabs
@@ -127,7 +127,7 @@ export default async function SolicitudesPage() {
                         </div>
                     </div>
                 </div>
-                {perfil?.rol === 'asesor' && (
+                {(perfil?.rol === 'asesor' || perfil?.rol === 'secretaria') && (
                     <div className="flex flex-col items-end gap-3">
                         <Link href={canCreateDueToTime ? "/dashboard/solicitudes/nueva" : "#"}>
                             <Button 

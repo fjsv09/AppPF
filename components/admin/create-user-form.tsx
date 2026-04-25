@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { UserPlus, Loader2, Users, Shield, User, Eye, EyeOff, Wallet, Calendar, Clock } from 'lucide-react'
+import { UserPlus, Loader2, Users, Shield, User, Eye, EyeOff, Wallet, Calendar, Clock, UserSearch } from 'lucide-react'
 
 interface Supervisor {
     id: string
@@ -25,7 +25,7 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
         email: '',
         password: '',
         nombre: '',
-        rol: 'asesor' as 'admin' | 'supervisor' | 'asesor',
+        rol: 'asesor' as 'admin' | 'supervisor' | 'asesor' | 'secretaria',
         supervisor_id: '' as string,
         sueldo_base: '' as string,
         fecha_nacimiento: '' as string,
@@ -101,6 +101,7 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
         switch (rol) {
             case 'admin': return <Shield className="w-4 h-4 text-red-400" />
             case 'supervisor': return <Users className="w-4 h-4 text-purple-400" />
+            case 'secretaria': return <UserSearch className="w-4 h-4 text-amber-400" />
             default: return <User className="w-4 h-4 text-blue-400" />
         }
     }
@@ -264,10 +265,10 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-slate-900 border-slate-700">
-                            <SelectItem value="asesor" className="text-white hover:bg-slate-800">
+                            <SelectItem value="admin" className="text-white hover:bg-slate-800">
                                 <div className="flex items-center gap-2">
-                                    <User className="w-4 h-4 text-blue-400" />
-                                    Asesor
+                                    <Shield className="w-4 h-4 text-red-400" />
+                                    Administrador
                                 </div>
                             </SelectItem>
                             <SelectItem value="supervisor" className="text-white hover:bg-slate-800">
@@ -276,10 +277,16 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
                                     Supervisor
                                 </div>
                             </SelectItem>
-                            <SelectItem value="admin" className="text-white hover:bg-slate-800">
+                            <SelectItem value="secretaria" className="text-white hover:bg-slate-800">
                                 <div className="flex items-center gap-2">
-                                    <Shield className="w-4 h-4 text-red-400" />
-                                    Administrador
+                                    <UserSearch className="w-4 h-4 text-amber-400" />
+                                    Secretaria
+                                </div>
+                            </SelectItem>
+                            <SelectItem value="asesor" className="text-white hover:bg-slate-800">
+                                <div className="flex items-center gap-2">
+                                    <User className="w-4 h-4 text-blue-400" />
+                                    Asesor
                                 </div>
                             </SelectItem>
                         </SelectContent>
@@ -327,6 +334,7 @@ export function CreateUserForm({ onSuccess, supervisores = [] }: CreateUserFormP
                     <p className="text-xs text-slate-400">
                         {formData.rol === 'admin' && 'Acceso total al sistema. Puede gestionar usuarios, ver reportes y configurar el sistema.'}
                         {formData.rol === 'supervisor' && 'Puede ver todos los préstamos y clientes. Supervisa el trabajo de los asesores.'}
+                        {formData.rol === 'secretaria' && 'Gestión administrativa y cobros en oficina. Tiene su propia cuenta para arqueo de caja.'}
                         {formData.rol === 'asesor' && 'Puede registrar clientes, crear préstamos y registrar pagos. Acceso limitado a sus operaciones.'}
                     </p>
                 </div>

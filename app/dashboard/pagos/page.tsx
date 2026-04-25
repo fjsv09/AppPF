@@ -12,6 +12,7 @@ import { RecentPaymentsList } from '@/components/pagos/recent-payments-list'
 import { BackButton } from '@/components/ui/back-button'
 import { DashboardAlerts } from '@/components/dashboard/dashboard-alerts'
 import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
+import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
     title: 'Transacciones y Cobros'
 }
 
-export default async function PagosPage(props: { searchParams: Promise<{ fecha?: string, p_page?: string, q?: string, asesor?: string, supervisor?: string, fecha_cuota?: string, turno?: string, metodo?: string }> }) {
+export default async function PagosPage(props: { searchParams: Promise<{ fecha?: string, p_page?: string, q?: string, asesor?: string, supervisor?: string, fecha_cuota?: string, turno?: string, metodo?: string, pago_por?: string }> }) {
     const searchParams = await props.searchParams;
     const fechaParam = searchParams.fecha;
     const query = searchParams.q;
@@ -28,9 +29,10 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
     const supervisorFilter = searchParams.supervisor;
     const turnoFilter = searchParams.turno; // Turno 1 / Turno 2
     const metodoFilter = searchParams.metodo;
+    const pagoPorFilter = searchParams.pago_por;
 
     const paymentPage = Number(searchParams.p_page) || 1
-    const ITEMS_PER_PAGE = 30 // Increased for better turn analysis
+    const ITEMS_PER_PAGE = 10
 
     const supabase = await createClient()
     const supabaseAdmin = createAdminClient(
@@ -62,7 +64,7 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
     const { data: perfiles } = await supabaseAdmin
         .from('perfiles')
         .select('id, nombre_completo, rol, supervisor_id')
-        .in('rol', ['supervisor', 'asesor'])
+        .in('rol', ['admin', 'supervisor', 'asesor', 'secretaria'])
         .order('nombre_completo')
 
     // Build pagos query with role-based filtering and pagination
@@ -77,10 +79,11 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
                     clientes!inner (nombres, asesor_id)
                 )
             ),
-            perfiles!registrado_por ( nombre_completo )
+            perfiles:registrado_por ( nombre_completo, rol )
         `, { count: 'exact' })
         .not('registrado_por', 'is', null)
         .neq('estado_verificacion', 'rechazado')
+        .eq('es_autopago_renovacion', false)
 
     if (userRol === 'asesor') {
         // Asesor: Ve todos los pagos de préstamos de sus clientes (incluyendo los hechos por admin/supervisor)
@@ -104,6 +107,18 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         }
         if (asesorFilter) {
             pagosQuery = pagosQuery.eq('registrado_por', asesorFilter)
+        }
+    }
+
+    // [NUEVO] Filtro por Origen del Pago (Pago Por)
+    if (pagoPorFilter && pagoPorFilter !== 'all') {
+        if (pagoPorFilter === 'asesor') {
+            pagosQuery = pagosQuery.eq('perfiles.rol', 'asesor')
+        } else if (pagoPorFilter === 'admin') {
+            pagosQuery = pagosQuery.in('perfiles.rol', ['admin', 'supervisor', 'secretaria'])
+        } else {
+            // Filtro por usuario específico
+            pagosQuery = pagosQuery.eq('registrado_por', pagoPorFilter)
         }
     }
 
@@ -181,9 +196,10 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
     // We run a separate query for totals to respect filters but ignore pagination
     let statsQuery = supabaseAdmin
         .from('pagos')
-        .select('monto_pagado, fecha_pago, registrado_por, cronograma_cuotas!inner(prestamos!inner(clientes!inner(nombres, asesor_id)))')
+        .select('monto_pagado, fecha_pago, registrado_por, perfiles:registrado_por(rol), cronograma_cuotas!inner(prestamos!inner(clientes!inner(nombres, asesor_id)))')
         .not('registrado_por', 'is', null)
         .neq('estado_verificacion', 'rechazado')
+        .eq('es_autopago_renovacion', false)
 
     // Apply the same filters as the main list
     if (userRol !== 'admin') {
@@ -206,6 +222,16 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         }
         if (asesorFilter) {
             statsQuery = statsQuery.eq('registrado_por', asesorFilter)
+        }
+    }
+
+    if (pagoPorFilter && pagoPorFilter !== 'all') {
+        if (pagoPorFilter === 'asesor') {
+            statsQuery = statsQuery.eq('perfiles.rol', 'asesor')
+        } else if (pagoPorFilter === 'admin') {
+            statsQuery = statsQuery.in('perfiles.rol', ['admin', 'supervisor', 'secretaria'])
+        } else {
+            statsQuery = statsQuery.eq('registrado_por', pagoPorFilter)
         }
     }
 
@@ -249,6 +275,16 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         ? pagosWithTurns.filter(p => p.turno_calculado === (turnoFilter === '1' ? 'Turno 1' : 'Turno 2'))
         : pagosWithTurns
 
+    const hasFilters = Boolean(
+        fechaParam || 
+        query || 
+        asesorFilter || 
+        supervisorFilter || 
+        (turnoFilter && turnoFilter !== 'all') || 
+        (metodoFilter && metodoFilter !== 'all') || 
+        (pagoPorFilter && pagoPorFilter !== 'all')
+    )
+
     return (
         <div className="page-container">
             <DashboardAlerts
@@ -271,7 +307,7 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
             </div>
 
             {/* Daily Stats Grid */}
-            <div className="kpi-grid md:grid-cols-2">
+            <div className={cn("kpi-grid", hasFilters ? "md:grid-cols-2" : "md:grid-cols-1")}>
                 <div className="kpi-card group hover:border-emerald-500/30 flex items-center gap-4">
                     <div className="p-3 bg-emerald-500/10 rounded-xl group-hover:bg-emerald-500/20 transition-colors">
                         <DollarSign className="w-7 h-7 text-emerald-500" />
@@ -282,15 +318,17 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
                     </div>
                 </div>
 
-                <div className="kpi-card group hover:border-blue-500/30 flex items-center gap-4">
-                    <div className="p-3 bg-blue-500/10 rounded-xl group-hover:bg-blue-500/20 transition-colors">
-                        <TrendingUp className="w-7 h-7 text-blue-500" />
+                {hasFilters && (
+                    <div className="kpi-card group hover:border-blue-500/30 flex items-center gap-4 animate-in fade-in slide-in-from-right-4 duration-500">
+                        <div className="p-3 bg-blue-500/10 rounded-xl group-hover:bg-blue-500/20 transition-colors">
+                            <TrendingUp className="w-7 h-7 text-blue-500" />
+                        </div>
+                        <div>
+                            <p className="kpi-label">Total en Búsqueda</p>
+                            <h3 className="kpi-value">${totalFiltrado.toLocaleString()}</h3>
+                        </div>
                     </div>
-                    <div>
-                        <p className="kpi-label">Total en Búsqueda</p>
-                        <h3 className="kpi-value">${totalFiltrado.toLocaleString()}</h3>
-                    </div>
-                </div>
+                )}
             </div>
 
             {/* Main Content */}

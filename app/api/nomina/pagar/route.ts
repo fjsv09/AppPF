@@ -20,6 +20,17 @@ export async function POST(request: Request) {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
+        // Verificar rol admin
+        const { data: profile } = await supabaseAdmin
+            .from('perfiles')
+            .select('rol')
+            .eq('id', user.id)
+            .single()
+        
+        if (profile?.rol !== 'admin') {
+            return NextResponse.json({ error: 'Solo el administrador puede realizar pagos de nómina' }, { status: 403 })
+        }
+
         const { nominaId, trabajadorId, mes, anio, cuentaOrigenId, incluirBonos } = await request.json()
 
         // 1. Obtener nómina — buscar por ID o por trabajador/mes/año

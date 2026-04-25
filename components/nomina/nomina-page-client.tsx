@@ -47,9 +47,10 @@ import { BoletaPDF } from './boleta-pdf'
 interface NominaPageClientProps {
   trabajadores: { id: string; nombre_completo: string; rol: string }[]
   defaultUserId: string
+  currentRole: string
 }
 
-export function NominaPageClient({ trabajadores, defaultUserId }: NominaPageClientProps) {
+export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: NominaPageClientProps) {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -398,48 +399,50 @@ export function NominaPageClient({ trabajadores, defaultUserId }: NominaPageClie
               </CardContent>
             </Card>
 
-            {/* Botones de Acción (Solo Admin/Supervisor) */}
-            <div className="grid grid-cols-3 gap-3">
-              <button
-                onClick={() => setShowPagoModal(true)}
-                disabled={payrollData?.estado === 'pagado'}
-                className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all group disabled:opacity-40 text-center"
-              >
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Banknote className="w-4 h-4 text-emerald-400" />
-                </div>
-                <div>
-                  <p className="font-bold text-emerald-400 text-xs">Realizar Pago</p>
-                  <p className="text-[9px] text-slate-500 hidden sm:block">Cuota {pagosCompletados + 1}</p>
-                </div>
-              </button>
+            {/* Botones de Acción (Solo Admin) */}
+            {currentRole === 'admin' && (
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  onClick={() => setShowPagoModal(true)}
+                  disabled={payrollData?.estado === 'pagado'}
+                  className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all group disabled:opacity-40 text-center"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Banknote className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-emerald-400 text-xs">Realizar Pago</p>
+                    <p className="text-[9px] text-slate-500 hidden sm:block">Cuota {pagosCompletados + 1}</p>
+                  </div>
+                </button>
 
-              <button
-                onClick={() => setShowAdelantoModal(true)}
-                className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 hover:bg-amber-500/10 hover:border-amber-500/30 transition-all group text-center"
-              >
-                <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <PlusCircle className="w-4 h-4 text-amber-400" />
-                </div>
-                <div>
-                  <p className="font-bold text-amber-400 text-xs">Registrar Adelanto</p>
-                  <p className="text-[9px] text-slate-500 hidden sm:block">Desembolso extraordinario</p>
-                </div>
-              </button>
+                <button
+                  onClick={() => setShowAdelantoModal(true)}
+                  className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 hover:bg-amber-500/10 hover:border-amber-500/30 transition-all group text-center"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <PlusCircle className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-amber-400 text-xs">Registrar Adelanto</p>
+                    <p className="text-[9px] text-slate-500 hidden sm:block">Desembolso extraordinario</p>
+                  </div>
+                </button>
 
-              <button
-                onClick={() => setShowLiquidacionModal(true)}
-                className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-rose-500/5 border border-rose-500/10 hover:bg-rose-500/10 hover:border-rose-500/30 transition-all group text-center"
-              >
-                <div className="w-8 h-8 rounded-lg bg-rose-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <UserMinus className="w-4 h-4 text-rose-400" />
-                </div>
-                <div>
-                  <p className="font-bold text-rose-400 text-xs">Liquidación</p>
-                  <p className="text-[9px] text-slate-500 hidden sm:block">Baja de personal</p>
-                </div>
-              </button>
-            </div>
+                <button
+                  onClick={() => setShowLiquidacionModal(true)}
+                  className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-rose-500/5 border border-rose-500/10 hover:bg-rose-500/10 hover:border-rose-500/30 transition-all group text-center"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-rose-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <UserMinus className="w-4 h-4 text-rose-400" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-rose-400 text-xs">Liquidación</p>
+                    <p className="text-[9px] text-slate-500 hidden sm:block">Baja de personal</p>
+                  </div>
+                </button>
+              </div>
+            )}
 
             {/* Monto pagado acumulado */}
             {totalPagadoAcumulado > 0 && (

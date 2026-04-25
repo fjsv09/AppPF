@@ -23,8 +23,8 @@ export async function POST(request: Request) {
             .eq('id', user.id)
             .single()
 
-        if (!perfilUser || !['admin', 'supervisor'].includes(perfilUser.rol)) {
-            return NextResponse.json({ error: 'Permisos insuficientes' }, { status: 403 })
+        if (!perfilUser || perfilUser.rol !== 'admin') {
+            return NextResponse.json({ error: 'Solo el administrador puede registrar adelantos' }, { status: 403 })
         }
 
         const { trabajadorId, cuentaId, monto, concepto } = await request.json()

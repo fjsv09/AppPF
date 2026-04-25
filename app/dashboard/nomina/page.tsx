@@ -67,7 +67,7 @@ export default async function NominaPage() {
         </div>
       </div>
 
-      <NominaPageClient trabajadores={trabajadores} defaultUserId={user.id} />
+      <NominaPageClient trabajadores={trabajadores} defaultUserId={user.id} currentRole={userRole} />
     </div>
   )
 }

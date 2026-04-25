@@ -33,22 +33,24 @@ export default async function NominaPage() {
 
   const userRole = perfilUser?.rol || 'asesor'
 
-  // Si es admin, obtener lista de todos los trabajadores
   let trabajadores: { id: string; nombre_completo: string; rol: string }[] = []
+  
   if (userRole === 'admin') {
     const { data } = await supabaseAdmin
       .from('perfiles')
       .select('id, nombre_completo, rol')
       .order('nombre_completo')
     trabajadores = data || []
+  } else {
+    const { data } = await supabaseAdmin
+      .from('perfiles')
+      .select('id, nombre_completo, rol')
+      .eq('id', user.id)
+      .single()
+    trabajadores = data ? [data] : []
   }
 
-  // Para roles no-admin, mostrar su propia nómina directamente
-  if (userRole !== 'admin') {
-    return <NominaDirecta userId={user.id} />
-  }
-
-  // Para admin, mostrar con selector
+  // Mostrar página unificada
   return (
     <div className="page-container">
       <div className="page-header">
@@ -56,7 +58,7 @@ export default async function NominaPage() {
           <div className="flex items-center gap-3">
             <BackButton />
             <div>
-              <h1 className="page-title">Nómina y Sueldos</h1>
+              <h1 className="page-title">{userRole === 'admin' ? 'Gestión de Nómina' : 'Mi Nómina y Sueldo'}</h1>
               <p className="page-subtitle uppercase tracking-widest font-semibold">
                 {format(new Date(), 'MMMM yyyy', { locale: es })}
               </p>
@@ -69,6 +71,8 @@ export default async function NominaPage() {
     </div>
   )
 }
+
+// Eliminar funciones duplicadas que ya no se usarán
 
 async function NominaDirecta({ userId }: { userId: string }) {
   const supabase = await createClient()

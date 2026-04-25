@@ -7,7 +7,7 @@ import {
     AlertTriangle, CheckCircle2, ChevronRight,
     Search, Filter, Map, Download,
     FileText, User, ArrowUpRight, Banknote, ShieldCheck,
-    RotateCcw
+    RotateCcw, Loader2
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -94,12 +94,12 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
     }
 
     const performExonerate = async () => {
-        if (!confirmTarget) return
+        if (!confirmTarget || isExonerating) return
         const { id: asistenciaId, turno } = confirmTarget
         const readableTurno = turno === 'entrada' ? 'Mañana' : (turno === 'tarde' ? 'Turno Tarde' : 'Cierre')
         
         setIsExonerating(`${asistenciaId}-${turno}`)
-        setConfirmOpen(false)
+        // No cerramos el modal inmediatamente para mostrar el estado de carga en el botón
         
         try {
             const res = await fetch('/api/asistencia/exonerar', {
@@ -110,6 +110,7 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
 
             if (res.ok) {
                 toast.success(`Tardanza de ${readableTurno} exonerada`)
+                setConfirmOpen(false)
                 router.refresh()
             } else {
                 const errorData = await res.json()
@@ -727,10 +728,19 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
                             Cancelar
                         </AlertDialogCancel>
                         <AlertDialogAction 
-                            onClick={performExonerate}
-                            className="bg-amber-600 hover:bg-amber-500 text-white font-black uppercase tracking-widest text-[10px] rounded-xl h-11 px-6 shadow-lg shadow-amber-500/20"
+                            onClick={(e) => {
+                                e.preventDefault()
+                                performExonerate()
+                            }}
+                            disabled={!!isExonerating}
+                            className="bg-amber-600 hover:bg-amber-500 text-white font-black uppercase tracking-widest text-[10px] rounded-xl h-11 px-6 shadow-lg shadow-amber-500/20 min-w-[140px]"
                         >
-                            Exonerar Tardanza
+                            {isExonerating ? (
+                                <div className="flex items-center gap-2">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    <span>Procesando</span>
+                                </div>
+                            ) : 'Confirmar Exoneración'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

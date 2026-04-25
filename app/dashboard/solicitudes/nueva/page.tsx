@@ -68,15 +68,18 @@ export default function NuevaSolicitudPage() {
           return
         }
 
-        // 1. Cargar sectores activos
-        const { data: sectoresData, error: sectoresError } = await supabase
-          .from('sectores')
-          .select('id, nombre')
-          .eq('activo', true)
-          .order('orden', { ascending: true })
-          
-        if (!sectoresError && sectoresData) {
-            setSectores(sectoresData)
+        // 1. Cargar sectores activos vía API (para bypass RLS en asesores)
+        try {
+            const sectoresRes = await fetch('/api/sectores')
+            const sectoresData = await sectoresRes.json()
+            
+            if (sectoresRes.ok) {
+                setSectores(sectoresData)
+            } else {
+                console.error('Error fetching sectores via API:', sectoresData.error)
+            }
+        } catch (err) {
+            console.error('Error en fetch sectores:', err)
         }
 
         // Cargar configuración de horario (redundante pero mantenemos para compatibilidad con StepPrestamo por ahora)

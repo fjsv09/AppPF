@@ -13,10 +13,11 @@ import { ImageLightbox } from '@/components/ui/image-lightbox'
 import { UploadEvidenceButton } from '@/components/dashboard/upload-evidence-button'
 import { CompleteAuditModal } from '@/components/auditoria/complete-audit-modal'
 
-export function TareasList({ initialTareas, userId, userRol }: { initialTareas: any[], userId: string, userRol?: string }) {
+export function TareasList({ initialTareas, userId, userRol, team = [] }: { initialTareas: any[], userId: string, userRol?: string, team?: any[] }) {
     const [searchTerm, setSearchTerm] = useState('')
     const [statusFilter, setStatusFilter] = useState('todos')
     const [tipoFilter, setTipoFilter] = useState('todos')
+    const [asesorFilter, setAsesorFilter] = useState('todos')
     const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
 
     const filteredTareas = useMemo(() => {
@@ -33,15 +34,17 @@ export function TareasList({ initialTareas, userId, userRol }: { initialTareas: 
             const matchesTipo = (tipoFilter === 'todos' || tarea.tipo === tipoFilter) && 
                 tarea.tipo !== 'gestion_asignada' && 
                 tarea.tipo !== 'visita_asignada'
+            
+            const matchesAsesor = asesorFilter === 'todos' || tarea.asesor_id === asesorFilter
 
-            return matchesSearch && matchesStatus && matchesTipo
+            return matchesSearch && matchesStatus && matchesTipo && matchesAsesor
         })?.sort((a, b) => {
             let dateA = new Date(a.created_at).getTime()
             let dateB = new Date(b.created_at).getTime()
 
             return sortOrder === 'desc' ? dateB - dateA : dateA - dateB
         }) || []
-    }, [initialTareas, searchTerm, statusFilter, tipoFilter, sortOrder])
+    }, [initialTareas, searchTerm, statusFilter, tipoFilter, asesorFilter, sortOrder])
 
     return (
         <div className="space-y-4">
@@ -94,6 +97,21 @@ export function TareasList({ initialTareas, userId, userRol }: { initialTareas: 
                             <SelectItem value="auditoria_dirigida" className="text-emerald-400 focus:text-emerald-400">Auditoría Dirigida</SelectItem>
                         </SelectContent>
                     </Select>
+
+                    {(userRol === 'admin' || userRol === 'supervisor') && team.length > 0 && (
+                        <Select value={asesorFilter} onValueChange={setAsesorFilter}>
+                            <SelectTrigger className="h-10 w-auto min-w-[140px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3">
+                                <User className="w-3 h-3 mr-2 text-blue-400 shrink-0" />
+                                <SelectValue placeholder="Asesor" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 max-h-[300px]">
+                                <SelectItem value="todos">Todos Asesores</SelectItem>
+                                {team.map((m) => (
+                                    <SelectItem key={m.id} value={m.id}>{m.nombre_completo}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
 
                     <div className="flex gap-1 shrink-0 bg-slate-950/30 p-1 rounded-lg border border-slate-800/50 w-auto">
                         <div className="flex items-center px-2 text-xs text-slate-500 whitespace-nowrap">
@@ -402,6 +420,7 @@ export function TareasList({ initialTareas, userId, userRol }: { initialTareas: 
                                     setSearchTerm('')
                                     setStatusFilter('todos')
                                     setTipoFilter('todos')
+                                    setAsesorFilter('todos')
                                     setSortOrder('desc')
                                 }}
                             >

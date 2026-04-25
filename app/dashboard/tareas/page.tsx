@@ -64,40 +64,41 @@ export default async function TareasHistoryPage({
     } else if (perfil.rol === 'supervisor') {
         const { data: equipo } = await supabaseAdmin
             .from('perfiles')
-            .select('id')
+            .select('id, nombre_completo')
             .eq('supervisor_id', user.id)
         const equipoIds = equipo?.map(e => e.id) || []
+        const allMemberIds = [...equipoIds, user.id]
 
-        const { data: tareasNormales } = await supabaseAdmin
+        // 1. Obtener todas las tareas de evidencia del equipo (excluyendo auditorías de otros para filtrar después)
+        const { data: tareas } = await supabaseAdmin
             .from('tareas_evidencia')
             .select(selectStr)
-            .in('asesor_id', [...equipoIds, user.id])
-            .not('tipo', 'eq', 'auditoria_dirigida')
-            .not('tipo', 'in', ['visita_asignada', 'gestion_asignada'])
+            .in('asesor_id', allMemberIds)
             .order('created_at', { ascending: false })
-        tareasEvidencia = tareasNormales || []
 
-        const { data: visitasSup } = await supabaseAdmin
-            .from('tareas_evidencia')
-            .select(selectStr)
-            .in('asesor_id', [...equipoIds, user.id])
-            .in('tipo', ['visita_asignada', 'gestion_asignada'])
-            .order('created_at', { ascending: false })
-        tareasVisita = visitasSup || []
+        const rawTareas = tareas || []
+
+        // Filtrar por categorías
+        tareasEvidencia = rawTareas.filter(t => 
+            !t.tipo.includes('auditoria_dirigida') && 
+            t.tipo !== 'visita_asignada' && 
+            t.tipo !== 'gestion_asignada'
+        )
+
+        tareasVisita = rawTareas.filter(t => 
+            t.tipo === 'visita_asignada' || 
+            t.tipo === 'gestion_asignada'
+        )
+
+        // 2. Auditorías: Las propias + las de préstamos creados por su equipo
+        const auditsDirect = rawTareas.filter(t => t.tipo === 'auditoria_dirigida')
 
         const { data: prestamosEquipo } = await supabaseAdmin
             .from('prestamos')
             .select('id')
-            .in('created_by', [...equipoIds, user.id])
+            .in('created_by', allMemberIds)
             .eq('estado', 'activo')
         const prestamoIds = prestamosEquipo?.map(p => p.id) || []
-
-        const { data: auditsDirect } = await supabaseAdmin
-            .from('tareas_evidencia')
-            .select(selectStr)
-            .eq('asesor_id', user.id)
-            .eq('tipo', 'auditoria_dirigida')
-            .order('created_at', { ascending: false })
 
         let auditsEquipo: any[] = []
         if (prestamoIds.length > 0) {
@@ -110,13 +111,15 @@ export default async function TareasHistoryPage({
             auditsEquipo = auditsEq || []
         }
 
-        const allAuditorias = [...(auditsDirect || []), ...auditsEquipo]
+        const allAuditorias = [...auditsDirect, ...auditsEquipo]
         const seen = new Set<string>()
         tareasAuditoria = allAuditorias.filter(t => {
             if (seen.has(t.id)) return false
             seen.add(t.id)
             return true
         })
+
+        console.log(`[TareasPage] Supervisor ${user.id} - Team IDs: ${equipoIds.length} - Tasks Evid: ${tareasEvidencia.length} - Audits: ${tareasAuditoria.length} - Visitas: ${tareasVisita.length}`)
 
     } else {
         // Admin: ve todo
@@ -128,6 +131,23 @@ export default async function TareasHistoryPage({
         tareasEvidencia = tareas?.filter(t => !t.tipo.includes('auditoria_dirigida') && t.tipo !== 'visita_asignada' && t.tipo !== 'gestion_asignada') || []
         tareasAuditoria = tareas?.filter(t => t.tipo.includes('auditoria_dirigida')) || []
         tareasVisita    = tareas?.filter(t => t.tipo === 'visita_asignada' || t.tipo === 'gestion_asignada') || []
+    }
+
+    // Obtener lista de asesores para el filtro (solo para admin y supervisor)
+    let asesoresFiltro: any[] = []
+    if (perfil.rol === 'admin') {
+        const { data: allAsesores } = await supabaseAdmin
+            .from('perfiles')
+            .select('id, nombre_completo')
+            .eq('rol', 'asesor')
+            .eq('activo', true)
+        asesoresFiltro = allAsesores || []
+    } else if (perfil.rol === 'supervisor') {
+        const { data: equipo } = await supabaseAdmin
+            .from('perfiles')
+            .select('id, nombre_completo')
+            .eq('supervisor_id', user.id)
+        asesoresFiltro = equipo || []
     }
 
     // 1. Obtener préstamos que ya pagaron hoy
@@ -309,15 +329,15 @@ export default async function TareasHistoryPage({
                 </div>
 
                 <TabsContent value="evidencia" className="mt-0">
-                    <TareasList initialTareas={tareasEvidencia} userId={user.id} userRol={perfil.rol} />
+                    <TareasList initialTareas={tareasEvidencia} userId={user.id} userRol={perfil.rol} team={asesoresFiltro} />
                 </TabsContent>
 
                 <TabsContent value="auditoria" className="mt-0">
-                    <TareasList initialTareas={tareasAuditoria} userId={user.id} userRol={perfil.rol} />
+                    <TareasList initialTareas={tareasAuditoria} userId={user.id} userRol={perfil.rol} team={asesoresFiltro} />
                 </TabsContent>
 
                 <TabsContent value="gestiones" className="mt-0">
-                    <VisitasList visitas={tareasVisita} userId={user.id} />
+                    <VisitasList visitas={tareasVisita} userId={user.id} userRol={perfil.rol} team={asesoresFiltro} />
                 </TabsContent>
             </TareasTabs>
             </Suspense>

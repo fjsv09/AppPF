@@ -145,6 +145,24 @@ export async function POST(request: Request) {
                 })
             }
         }
+
+        // NOTIFICAR AL SUPERVISOR DEL CREADOR (si es asesor)
+        if (perfil?.rol === 'asesor') {
+            const { data: asesorInfo } = await supabaseAdmin
+                .from('perfiles')
+                .select('supervisor_id')
+                .eq('id', user.id)
+                .single()
+
+            if (asesorInfo?.supervisor_id && asesorInfo.supervisor_id !== user.id) {
+                await createFullNotification(asesorInfo.supervisor_id, {
+                    titulo: '📝 Nueva Gestión',
+                    mensaje: `${creadorNombre} registró una ${tipo_gestion} para ${clienteNombres}.`,
+                    link: `/dashboard/prestamos/${prestamo_id}?tab=gestiones`,
+                    tipo: 'info'
+                })
+            }
+        }
     }
 
     // Audit log

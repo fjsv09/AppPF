@@ -19,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { cn } from '@/lib/utils'
 import { formatMoney } from '@/utils/format'
-import { calculateLoanScore, calculateClientReputation } from '@/lib/financial-logic'
+import { calculateLoanScore, calculateClientReputation, calcularSimulacionFull, calcularFechasProyectadas } from '@/lib/financial-logic'
 
 interface SolicitudRenovacionModalProps {
     prestamoId: string
@@ -330,7 +330,6 @@ export function SolicitudRenovacionModal({
         const valorCuota = cuotas > 0 ? totalPagar / cuotas : 0
 
         // [NUEVO] Calcular Fecha Fin
-        const { calcularFechasProyectadas } = require('@/lib/financial-logic')
         const fechas = calcularFechasProyectadas(
             simulacion.fecha_inicio,
             cuotas,

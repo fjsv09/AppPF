@@ -8,8 +8,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
     MapPin, Navigation, Navigation2, User, AlertTriangle,
     CheckCircle2, Loader2, Send, X, ClipboardList, ExternalLink,
-    Phone, MessageSquare, DollarSign, Eye
+    Phone, MessageSquare, DollarSign, Eye, Search
 } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { QuickPayModal } from "../prestamos/quick-pay-modal"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -41,9 +43,13 @@ interface Visita {
 interface VisitasListProps {
     visitas: Visita[]
     userId: string
+    userRol?: string
+    team?: any[]
 }
 
-export function VisitasList({ visitas, userId }: VisitasListProps) {
+export function VisitasList({ visitas, userId, userRol, team = [] }: VisitasListProps) {
+    const [searchTerm, setSearchTerm] = useState('')
+    const [asesorFilter, setAsesorFilter] = useState('todos')
     const [visitaActiva, setVisitaActiva] = useState<Visita | null>(null)
     const [modalOpen, setModalOpen] = useState(false)
 
@@ -151,8 +157,16 @@ export function VisitasList({ visitas, userId }: VisitasListProps) {
         })
     }
 
-    const pendientes = visitasState.filter(v => v.estado === 'pendiente')
-    const completadas = visitasState.filter(v => v.estado === 'completada')
+    const filteredVisitas = (visitasState || []).filter(v => {
+        const searchLower = searchTerm.toLowerCase()
+        const clienteNombres = v.prestamo?.cliente?.nombres || ''
+        const matchesSearch = searchTerm === '' || clienteNombres.toLowerCase().includes(searchLower)
+        const matchesAsesor = asesorFilter === 'todos' || v.asesor_id === asesorFilter
+        return matchesSearch && matchesAsesor
+    })
+
+    const pendientes = filteredVisitas.filter(v => v.estado === 'pendiente')
+    const completadas = filteredVisitas.filter(v => v.estado === 'completada')
 
     if (visitasState.length === 0) {
         return (
@@ -167,156 +181,195 @@ export function VisitasList({ visitas, userId }: VisitasListProps) {
     }
 
     return (
-        <>
-            {/* Pendientes */}
-            {pendientes.length > 0 && (
-                <div className="space-y-3">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                        Pendientes ({pendientes.length})
-                    </p>
-                    {pendientes.map(visita => {
-                        const cliente = visita.prestamo?.cliente
-                        const mapsQuery = cliente ? encodeURIComponent(cliente.nombres) : ''
-                        return (
-                            <div key={visita.id} className="bg-gradient-to-r from-blue-950/30 to-slate-900/60 border border-blue-700/30 rounded-2xl p-4 shadow-lg">
-                                {/* Header */}
-                                <div className="flex items-start justify-between gap-3 mb-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-blue-800/30 border border-blue-700/30 flex items-center justify-center shrink-0">
-                                            <ClipboardList className="w-5 h-5 text-blue-400" />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold text-white">
-                                                {cliente?.nombres || 'Cliente'}
-                                            </p>
-                                            <p className="text-[10px] text-slate-500 font-mono">
-                                                DNI: {cliente?.dni || '—'} · Tel: {cliente?.telefono || '—'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px] shrink-0 animate-pulse">
-                                        PENDIENTE
-                                    </Badge>
-                                </div>
-
-                                {/* Instrucciones del admin */}
-                                {visita.notas && (
-                                    <div className="mb-3 px-3 py-2 rounded-lg bg-slate-900/50 border border-slate-800 text-xs text-slate-400">
-                                        <span className="text-slate-600 font-bold uppercase text-[10px]">Instrucciones: </span>
-                                        {visita.notas}
-                                    </div>
-                                )}
-
-                                {/* Acciones */}
-                        <div className="flex gap-2 items-center">
-                            {/* Link a Google Maps con GPS real del cliente o por nombre */}
-                            {(() => {
-                                const gpsUrl = visita.cliente_gps
-                                    ? `https://www.google.com/maps?q=${visita.cliente_gps}`
-                                    : cliente
-                                        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cliente.nombres)}`
-                                        : null
-                                return gpsUrl ? (
-                                    <a
-                                        href={gpsUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors px-3 py-1.5 rounded-lg bg-blue-900/20 border border-blue-800/30 hover:border-blue-700/50"
-                                    >
-                                        <ExternalLink className="w-3 h-3" />
-                                        {visita.cliente_gps ? '📍 Ver Ubicación GPS' : 'Ver en Maps'}
-                                    </a>
-                                ) : null
-                            })()}
-                                    <Link
-                                        href={`/dashboard/prestamos/${visita.prestamo_id}`}
-                                        className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg bg-slate-900/40 border border-slate-800 hover:border-slate-700"
-                                    >
-                                        <Eye className="w-3 h-3" />
-                                        Ver Préstamo
-                                    </Link>
-                                     {userId === visita.asesor_id && (
-                                        <div className="flex-1">
-                                            <Button
-                                                onClick={() => handleAbrirCompletar(visita)}
-                                                className="w-full bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold gap-1.5"
-                                            >
-                                                <Send className="w-3.5 h-3.5" />
-                                                Registrar Gestión
-                                            </Button>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="mt-2 text-[10px] text-slate-600 flex items-center gap-1">
-                                    <ClipboardList className="w-3 h-3" />
-                                    Asignada {formatDatePeru(visita.created_at)}
-                                </div>
-                            </div>
-                        )
-                    })}
+        <div className="space-y-6">
+            {/* Filters */}
+            {(userRol === 'admin' || userRol === 'supervisor') && (
+                <div className="flex flex-col md:flex-row gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 mb-4">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                        <Input
+                            placeholder="Buscar cliente..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="h-10 pl-9 bg-slate-950/50 border-slate-700 text-slate-200"
+                        />
+                    </div>
+                    {team.length > 0 && (
+                        <Select value={asesorFilter} onValueChange={setAsesorFilter}>
+                            <SelectTrigger className="h-10 w-full md:w-[200px] bg-slate-950/50 border-slate-700 text-slate-300">
+                                <User className="w-3 h-3 mr-2 text-blue-400" />
+                                <SelectValue placeholder="Filtrar por Asesor" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
+                                <SelectItem value="todos">Todos los Asesores</SelectItem>
+                                {team.map((m: any) => (
+                                    <SelectItem key={m.id} value={m.id}>{m.nombre_completo}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
                 </div>
             )}
 
-            {/* Completadas */}
-            {completadas.length > 0 && (
-                <div className="space-y-3 mt-6">
-                    <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                        Completadas ({completadas.length})
-                    </p>
-                    {completadas.map(visita => {
-                        const cliente = visita.prestamo?.cliente
-                        return (
-                            <div key={visita.id} className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 transition-all hover:bg-slate-900/60 group">
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-emerald-950/20 border border-emerald-900/30 flex items-center justify-center shrink-0">
-                                            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold text-slate-300">
-                                                {cliente?.nombres || 'Cliente'}
-                                            </p>
-                                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                                                <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[9px] h-4 py-0 uppercase">
-                                                    {visita.gestion_tipo || 'Gestión'}
-                                                </Badge>
-                                                <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
-                                                    <span>{formatDatePeru(visita.created_at)}</span>
-                                                    {visita.asesor?.nombre_completo && (
-                                                        <>
-                                                            <span className="w-1 h-1 rounded-full bg-slate-800" />
-                                                            <div className="flex items-center gap-1">
-                                                                <User className="w-2.5 h-2.5" />
-                                                                <span className="font-medium text-slate-500">{visita.asesor.nombre_completo}</span>
-                                                            </div>
-                                                        </>
-                                                    )}
+            {filteredVisitas.length === 0 ? (
+                <div className="text-center py-16 bg-slate-900/20 rounded-2xl border border-dashed border-slate-800">
+                    <div className="w-14 h-14 rounded-full bg-slate-800/50 flex items-center justify-center mx-auto mb-4">
+                        <ClipboardList className="w-7 h-7 text-slate-600" />
+                    </div>
+                    <p className="text-slate-400 font-medium">No se encontraron gestiones</p>
+                    <p className="text-slate-600 text-sm mt-1">Intenta con otros filtros o términos de búsqueda</p>
+                </div>
+            ) : (
+                <>
+                    {/* Pendientes */}
+                    {pendientes.length > 0 && (
+                        <div className="space-y-3">
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                Pendientes ({pendientes.length})
+                            </p>
+                            {pendientes.map(visita => {
+                                const cliente = visita.prestamo?.cliente
+                                return (
+                                    <div key={visita.id} className="bg-gradient-to-r from-blue-950/30 to-slate-900/60 border border-blue-700/30 rounded-2xl p-4 shadow-lg">
+                                        {/* Header */}
+                                        <div className="flex items-start justify-between gap-3 mb-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-blue-800/30 border border-blue-700/30 flex items-center justify-center shrink-0">
+                                                    <ClipboardList className="w-5 h-5 text-blue-400" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-white">
+                                                        {cliente?.nombres || 'Cliente'}
+                                                    </p>
+                                                    <p className="text-[10px] text-slate-500 font-mono">
+                                                        DNI: {cliente?.dni || '—'} · Tel: {cliente?.telefono || '—'}
+                                                    </p>
                                                 </div>
                                             </div>
+                                            <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px] shrink-0 animate-pulse">
+                                                PENDIENTE
+                                            </Badge>
+                                        </div>
+
+                                        {/* Instrucciones del admin */}
+                                        {visita.notas && (
+                                            <div className="mb-3 px-3 py-2 rounded-lg bg-slate-900/50 border border-slate-800 text-xs text-slate-400">
+                                                <span className="text-slate-600 font-bold uppercase text-[10px]">Instrucciones: </span>
+                                                {visita.notas}
+                                            </div>
+                                        )}
+
+                                        {/* Acciones */}
+                                        <div className="flex gap-2 items-center">
+                                            {(() => {
+                                                const gpsUrl = visita.cliente_gps
+                                                    ? `https://www.google.com/maps?q=${visita.cliente_gps}`
+                                                    : cliente
+                                                        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cliente.nombres)}`
+                                                        : null
+                                                return gpsUrl ? (
+                                                    <a
+                                                        href={gpsUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors px-3 py-1.5 rounded-lg bg-blue-900/20 border border-blue-800/30 hover:border-blue-700/50"
+                                                    >
+                                                        <ExternalLink className="w-3 h-3" />
+                                                        {visita.cliente_gps ? '📍 Ver Ubicación GPS' : 'Ver en Maps'}
+                                                    </a>
+                                                ) : null
+                                            })()}
+                                            <Link
+                                                href={`/dashboard/prestamos/${visita.prestamo_id}`}
+                                                className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg bg-slate-900/40 border border-slate-800 hover:border-slate-700"
+                                            >
+                                                <Eye className="w-3 h-3" />
+                                                Ver Préstamo
+                                            </Link>
+                                            {userId === visita.asesor_id && (
+                                                <div className="flex-1">
+                                                    <Button
+                                                        onClick={() => handleAbrirCompletar(visita)}
+                                                        className="w-full bg-blue-600 hover:bg-blue-500 text-white h-9 text-xs font-semibold gap-1.5"
+                                                    >
+                                                        <Send className="w-3.5 h-3.5" />
+                                                        Registrar Gestión
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="mt-2 text-[10px] text-slate-600 flex items-center gap-1">
+                                            <ClipboardList className="w-3 h-3" />
+                                            Asignada {formatDatePeru(visita.created_at)}
                                         </div>
                                     </div>
-                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-[10px] font-bold">
-                                        {visita.gestion_resultado || 'COMPLETADA'}
-                                    </Badge>
-                                </div>
+                                )
+                            })}
+                        </div>
+                    )}
 
-                                {/* Notas del asesor si existen */}
-                                {visita.gestion_notas && (
-                                    <div className="mt-2.5 ml-[3.25rem] flex flex-col gap-1 border-l-2 border-slate-800/50 pl-3">
-                                        <p className="text-[10px] font-bold text-slate-600 uppercase tracking-tight">Observaciones</p>
-                                        <p className="text-xs text-slate-500 italic leading-snug">
-                                            &quot;{visita.gestion_notas}&quot;
-                                        </p>
+                    {/* Completadas */}
+                    {completadas.length > 0 && (
+                        <div className="space-y-3 mt-6">
+                            <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                                Completadas ({completadas.length})
+                            </p>
+                            {completadas.map(visita => {
+                                const cliente = visita.prestamo?.cliente
+                                return (
+                                    <div key={visita.id} className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 transition-all hover:bg-slate-900/60 group">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-emerald-950/20 border border-emerald-900/30 flex items-center justify-center shrink-0">
+                                                    <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-slate-300">
+                                                        {cliente?.nombres || 'Cliente'}
+                                                    </p>
+                                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                                                        <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[9px] h-4 py-0 uppercase">
+                                                            {visita.gestion_tipo || 'Gestión'}
+                                                        </Badge>
+                                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
+                                                            <span>{formatDatePeru(visita.created_at)}</span>
+                                                            {visita.asesor?.nombre_completo && (
+                                                                <>
+                                                                    <span className="w-1 h-1 rounded-full bg-slate-800" />
+                                                                    <div className="flex items-center gap-1">
+                                                                        <User className="w-2.5 h-2.5" />
+                                                                        <span className="font-medium text-slate-500">{visita.asesor.nombre_completo}</span>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-[10px] font-bold">
+                                                {visita.gestion_resultado || 'COMPLETADA'}
+                                            </Badge>
+                                        </div>
+
+                                        {/* Notas del asesor si existen */}
+                                        {visita.gestion_notas && (
+                                            <div className="mt-2.5 ml-[3.25rem] flex flex-col gap-1 border-l-2 border-slate-800/50 pl-3">
+                                                <p className="text-[10px] font-bold text-slate-600 uppercase tracking-tight">Observaciones</p>
+                                                <p className="text-xs text-slate-500 italic leading-snug">
+                                                    &quot;{visita.gestion_notas}&quot;
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
-                        )
-                    })}
-                </div>
+                                )
+                            })}
+                        </div>
+                    )}
+                </>
             )}
 
-            {/* ── Modal Completar Gestión ── */}
+    {/* ── Modal Completar Gestión ── */}
             <Dialog open={modalOpen} onOpenChange={(o) => !o && handleCerrar()}>
                 <DialogContent className="bg-slate-950 border border-slate-800 text-white max-w-md p-0 gap-0 overflow-hidden">
                     <DialogHeader className="px-6 py-5 border-b border-slate-800 bg-slate-900/50">
@@ -514,6 +567,6 @@ export function VisitasList({ visitas, userId }: VisitasListProps) {
                    // router.refresh() if needed
                 }}
             />
-        </>
+        </div>
     )
 }

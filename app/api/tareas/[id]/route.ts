@@ -87,6 +87,22 @@ export async function PATCH(
                 })
             }
         }
+
+        // 2. NOTIFICAR AL SUPERVISOR DEL ASESOR
+        const { data: asesorInfo } = await supabaseAdmin
+            .from('perfiles')
+            .select('supervisor_id')
+            .eq('id', tarea.asesor_id)
+            .single()
+
+        if (asesorInfo?.supervisor_id && asesorInfo.supervisor_id !== user.id) {
+            await createFullNotification(asesorInfo.supervisor_id, {
+                titulo: '✅ Gestión Completada',
+                mensaje: `${asesorNombre} completó la gestión para ${clienteNombres}.`,
+                link: `/dashboard/prestamos/${tarea.prestamo_id}?tab=gestiones`,
+                tipo: 'success'
+            })
+        }
     }
 
     revalidatePath('/dashboard/tareas')

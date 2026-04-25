@@ -400,6 +400,40 @@ export function PrestamosTable({
         }
     }
 
+    const handleToggleBloqueo = async (asesorId: string, currentStatus: boolean, asesorNombre: string, e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault()
+            e.stopPropagation()
+        }
+
+        if (!asesorId) return
+
+        setTogglingBloqueo(asesorId)
+        try {
+            const response = await fetch('/api/admin/bloquear-pagos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    asesor_id: asesorId, 
+                    bloqueado: !currentStatus 
+                })
+            })
+
+            const result = await response.json()
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Error al actualizar el bloqueo')
+            }
+
+            toast.success(result.message || 'Estado actualizado correctamente')
+            router.refresh()
+        } catch (error: any) {
+            toast.error("Error", { description: error.message })
+        } finally {
+            setTogglingBloqueo(null)
+        }
+    }
+
     // Sectores Logic
     const sectoresList = useMemo(() => {
         const unique = new Map<string, string>()

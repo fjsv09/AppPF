@@ -19,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { cn } from '@/lib/utils'
 import { formatMoney } from '@/utils/format'
-import { calculateLoanScore, calculateClientReputation, calcularSimulacionFull, calcularFechasProyectadas } from '@/lib/financial-logic'
+import { calculateLoanScore, calculateClientReputation, calcularFechasProyectadas } from '@/lib/financial-logic'
 
 interface SolicitudRenovacionModalProps {
     prestamoId: string

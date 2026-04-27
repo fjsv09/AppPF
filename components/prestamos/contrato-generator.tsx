@@ -56,73 +56,48 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
         setViewMode('preview')
     }
 
-    const handlePrint = () => {
+    // ===== CENTRALIZED DOCUMENT CSS (used by both Print and Share) =====
+    const getDocumentCSS = () => `
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Times New Roman', Times, serif; 
+            color: #000; margin: 0; padding: 0;
+            line-height: 1.4; font-size: 11pt; 
+            background: white; width: 794px;
+        }
+        @page { size: A4; margin: 8mm; }
+        .page-break { 
+            page-break-after: always; display: block; position: relative;
+            width: 794px; min-height: 1123px;
+            padding: 40px 50px 60px 50px;
+            box-sizing: border-box; overflow: hidden; background: white;
+        }
+        .page-break:last-child { page-break-after: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 10pt; }
+        th, td { border: 1px solid #000; padding: 4px 8px; text-align: center; }
+        th { background-color: #f0f0f0; font-weight: bold; }
+        svg { width: 40px; height: 40px; }
+        @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .page-break { border: none; box-shadow: none; margin: 0; width: auto; min-height: auto; }
+        }
+    `;
+
+    // ===== CENTRALIZED DOCUMENT HTML (used by both Print and Share) =====
+    const getDocumentHTML = () => {
         const content = contentRef.current
-        if (!content) return
+        if (!content) return ''
+        return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>ProFinanzas - Documento</title><style>${getDocumentCSS()}</style></head><body>${content.innerHTML}</body></html>`
+    }
+
+    const handlePrint = () => {
+        const html = getDocumentHTML()
+        if (!html) return
 
         const printWindow = window.open('', '', 'width=900,height=800')
         if (!printWindow) return
 
-        printWindow.document.write(`
-            <html>
-                <head>
-                    <title>ProFinanzas - Documento de Préstamo</title>
-                    <style>
-                        @page { 
-                            size: A4; 
-                            margin: 10mm; 
-                        }
-                        body { 
-                            font-family: 'Times New Roman', Times, serif; 
-                            color: #000; 
-                            margin: 0; 
-                            padding: 0;
-                            line-height: 1.4;
-                            font-size: 11pt; 
-                            background-color: white;
-                        }
-                        .page-break { 
-                            page-break-after: always; 
-                            display: block; 
-                            position: relative;
-                            min-height: 277mm !important; /* Adjusted for footer */
-                            height: auto !important;
-                            margin-bottom: 0 !important;
-                            padding: 10mm 15mm 20mm 15mm !important; /* Bottom padding for footer */
-                            box-sizing: border-box !important;
-                        }
-                        .page-break:last-child { 
-                            page-break-after: auto !important; 
-                        }
-                        .print-footer {
-                            position: absolute;
-                            bottom: 10mm;
-                            left: 15mm;
-                            right: 15mm;
-                            border-top: 1px solid #eee;
-                            padding-top: 5px;
-                            display: flex;
-                            justify-content: space-between;
-                            font-size: 8pt;
-                            color: #666;
-                            font-family: sans-serif;
-                        }
-                        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 10pt; }
-                        th, td { border: 1px solid #000; padding: 4px 8px; text-align: center; }
-                        th { background-color: #f0f0f0 !important; font-weight: bold; -webkit-print-color-adjust: exact; }
-                        svg { width: 40px; height: 40px; }
-                        .small-icon svg { width: 16px; height: 16px; }
-                        @media print {
-                            body { -webkit-print-color-adjust: exact; }
-                            .page-break { border: none !important; box-shadow: none !important; }
-                        }
-                    </style>
-                </head>
-                <body>
-                    ${content.innerHTML}
-                </body>
-            </html>
-        `)
+        printWindow.document.write(html)
         printWindow.document.close()
         printWindow.focus()
         setTimeout(() => {
@@ -132,86 +107,78 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
     }
 
     const handleShare = async (e?: React.MouseEvent) => {
-        if (e) {
-            e.preventDefault()
-            e.stopPropagation()
-        }
+        if (e) { e.preventDefault(); e.stopPropagation() }
         
         const content = contentRef.current
         if (!content) return
-
-        // Step 1: Find all pages (they have the .page-break class)
-        const pages = content.querySelectorAll<HTMLElement>('.page-break')
-        if (pages.length === 0) return
 
         const docTitle = docMode === 'completo' ? 'Contrato Completo' : docMode === 'contrato' ? 'Contrato' : 'Cronograma'
         const title = `${docTitle} - ${prestamo.clientes?.nombres}`
         const fileName = `${docTitle.replace(/\s+/g, '_')}_${prestamo.clientes?.nombres.replace(/\s+/g, '_')}.pdf`
         
         try {
-            toast.loading("Generando PDF profesional...", { id: "share-pdf" })
+            toast.loading("Generando PDF...", { id: "share-pdf" })
             
-            // Create jsPDF Instance (A4, mm)
+            // Create a hidden iframe at fixed A4 pixel dimensions to avoid mobile deformation
+            const iframe = document.createElement('iframe')
+            iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:none;opacity:0;pointer-events:none;'
+            document.body.appendChild(iframe)
+
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document
+            if (!iframeDoc) throw new Error('No se pudo crear el marco de renderizado')
+
+            iframeDoc.open()
+            iframeDoc.write(getDocumentHTML())
+            iframeDoc.close()
+
+            // Wait for rendering
+            await new Promise(r => setTimeout(r, 800))
+
+            const pages = iframeDoc.querySelectorAll<HTMLElement>('.page-break')
+            if (pages.length === 0) { document.body.removeChild(iframe); return }
+
             const pdf = new jsPDF('p', 'mm', 'a4')
-            const pdfWidth = pdf.internal.pageSize.getWidth()
-            const pdfHeight = pdf.internal.pageSize.getHeight()
+            const pdfW = pdf.internal.pageSize.getWidth()
+            const pdfH = pdf.internal.pageSize.getHeight()
 
             for (let i = 0; i < pages.length; i++) {
-                const page = pages[i]
-                
-                // Capture Page as Image (Better fidelity than direct HTML printing sometimes)
-                const dataUrl = await toPng(page, {
+                const dataUrl = await toPng(pages[i], {
                     backgroundColor: '#fff',
                     pixelRatio: 2,
                     cacheBust: true,
-                    skipFonts: false
+                    width: 794,
+                    height: 1123,
                 })
-
                 if (i > 0) pdf.addPage()
-
-                // Calculate image dimensions to fit perfectly within A4
-                // Usually documents are already designed for that, but we ensure scaling
-                pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST')
+                pdf.addImage(dataUrl, 'PNG', 0, 0, pdfW, pdfH, undefined, 'FAST')
             }
 
-            // Step 3: Convert to Blob
+            document.body.removeChild(iframe)
+
             const pdfBlob = pdf.output('blob')
             const file = new File([pdfBlob], fileName, { type: 'application/pdf' })
 
-            // Share using Web Share API (PDF Support is high on mobile)
             if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                 await navigator.share({
-                    files: [file],
-                    title,
+                    files: [file], title,
                     text: `Hola ${prestamo.clientes?.nombres}, aquí tienes tu ${docTitle.toLowerCase()} oficial de ProFinanzas en PDF.`
                 })
                 toast.success("PDF Enviado", { id: "share-pdf" })
-                return
             } else {
-                // If sharing not supported, we can download it as fallback
                 const link = document.createElement('a')
                 link.href = URL.createObjectURL(pdfBlob)
                 link.download = fileName
                 link.click()
                 toast.success("PDF Descargado", { id: "share-pdf" })
-                return
             }
         } catch (err) {
             if ((err as Error).name !== 'AbortError') {
                 console.error("Error generating/sharing PDF:", err)
                 toast.error("Error al generar PDF", { description: (err as Error).message, id: "share-pdf" })
             } else {
-                 toast.dismiss("share-pdf")
-                 return
+                toast.dismiss("share-pdf")
             }
         }
-        
-        // Final fallback to WhatsApp (Link only)
-        const text = `Hola ${prestamo.clientes?.nombres}, aquí tienes tu ${docTitle.toLowerCase()} de ProFinanzas.`
-        const url = window.location.href
-        const message = encodeURIComponent(`${text}\n\nPuedes verlo aquí: ${url}`)
-        const phone = prestamo.clientes?.telefono ? `51${prestamo.clientes.telefono}` : ''
-        window.open(`https://wa.me/${phone}?text=${message}`, '_blank')
     }
 
     // Calculations
@@ -225,32 +192,34 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
     const capitalPerQuota = prestamo.monto / (cronograma.length || 1)
 
     // Inline Styles for Consistency (Preview & Print)
+    // All dimensions in px matching A4 at 96dpi (794x1123px)
     const styles = {
-        container: { fontFamily: "'Times New Roman', Times, serif", color: '#000', lineHeight: '1.4', fontSize: '14px' },
+        container: { fontFamily: "'Times New Roman', Times, serif", color: '#000', lineHeight: '1.4', fontSize: '14.7px' },
         header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid black', paddingBottom: '10px', marginBottom: '20px' },
         headerGroup: { display: 'flex', alignItems: 'center', gap: '15px' },
         logoTitle: { fontSize: '24px', fontWeight: '900', lineHeight: '1', fontFamily: 'serif' },
         logoSubtitle: { fontSize: '11px', letterSpacing: '2px', fontWeight: 'bold' },
         logoTitleRight: { fontSize: '24px', fontWeight: '900', lineHeight: '1', fontStyle: 'italic', fontFamily: 'sans-serif' },
         logoSubtitleRight: { fontSize: '11px', fontStyle: 'italic' },
-        title: { textAlign: 'center' as const, fontSize: '18px', fontWeight: 'bold', textDecoration: 'underline', margin: '20px 0' },
-        titleNoDecor: { textAlign: 'center' as const, fontSize: '16px', fontWeight: 'bold', margin: '20px 0' },
-        justify: { textAlign: 'justify' as const, marginBottom: '12px' },
+        title: { textAlign: 'center' as const, fontSize: '18px', fontWeight: 'bold', textDecoration: 'underline', margin: '18px 0' },
+        titleNoDecor: { textAlign: 'center' as const, fontSize: '16px', fontWeight: 'bold', margin: '18px 0' },
+        justify: { textAlign: 'justify' as const, marginBottom: '10px', fontSize: '14px', lineHeight: '1.45' },
         bold: { fontWeight: 'bold' },
         sectionTitle: { fontSize: '14px', fontWeight: 'bold', textDecoration: 'underline', marginBottom: '8px', display: 'block' },
-        grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px', marginBottom: '5px' },
-        signatures: { display: 'flex', justifyContent: 'space-between', marginTop: '80px', padding: '0 30px' },
-        signBox: { width: '220px', borderTop: '1px solid black', textAlign: 'center' as const, paddingTop: '5px', fontSize: '12px' },
+        grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px', marginBottom: '8px', fontSize: '13px' },
+        signatures: { display: 'flex', justifyContent: 'space-between', marginTop: '50px', padding: '0 50px' },
+        signBox: { width: '200px', textAlign: 'center' as const, fontSize: '12px' },
+        signLine: { borderTop: '1px solid black', marginBottom: '5px', width: '100%' },
         footer: {
             position: 'absolute' as const,
-            bottom: '10mm',
-            left: '15mm',
-            right: '15mm',
+            bottom: '30px',
+            left: '50px',
+            right: '50px',
             borderTop: '1px solid #eee',
             paddingTop: '5px',
             display: 'flex',
             justifyContent: 'space-between',
-            fontSize: '8pt',
+            fontSize: '10px',
             color: '#666',
             fontFamily: 'sans-serif'
         }
@@ -424,17 +393,19 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto bg-slate-950 p-4 md:p-12 flex justify-center items-start">
+                        <div className="flex-1 overflow-y-auto overflow-x-auto bg-slate-950 p-2 md:p-12 flex justify-center items-start">
+                            <div className="origin-top-left md:origin-top scale-[0.48] md:scale-100 min-w-[794px]" style={{ transformOrigin: 'top center' }}>
                             <div 
                                 ref={contentRef} 
                                 className="bg-white shadow-[0_20px_50px_rgba(0,0,0,0.5)] h-fit" 
                                 style={{ 
-                                    width: '210mm', 
-                                    minHeight: '297mm', 
+                                    width: '794px', 
+                                    minHeight: '1123px', 
                                     backgroundColor: 'white', 
                                     ...styles.container,
                                     color: 'black',
-                                    padding: '0' // Remove parent padding
+                                    padding: '0',
+                                    overflow: 'hidden'
                                 }}
                             >
                                 
@@ -442,9 +413,9 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                                 {(() => {
                                     const contractBlock = (isCopy = false) => (
                                         <div className="page-break" style={{ 
-                                            marginBottom: docMode === 'completo' ? '50px' : '0',
-                                            padding: '15mm',
-                                            minHeight: '297mm',
+                                            width: '794px',
+                                            minHeight: '1123px',
+                                            padding: '40px 50px 60px 50px',
                                             backgroundColor: 'white',
                                             boxSizing: 'border-box',
                                             position: 'relative'
@@ -452,15 +423,18 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                                             {isCopy && (
                                                 <div style={{
                                                     position: 'absolute',
-                                                    top: '10mm',
-                                                    right: '15mm',
-                                                    fontSize: '9pt',
-                                                    color: '#999',
+                                                    top: '8mm',
+                                                    right: '12mm',
+                                                    fontSize: '8pt',
+                                                    color: '#000',
                                                     fontWeight: 'bold',
                                                     textTransform: 'uppercase',
-                                                    border: '1px solid #eee',
-                                                    padding: '2px 8px',
-                                                    borderRadius: '4px'
+                                                    border: '1.5px solid #000',
+                                                    padding: '3px 10px',
+                                                    borderRadius: '0',
+                                                    letterSpacing: '1px',
+                                                    backgroundColor: '#fff',
+                                                    zIndex: 10
                                                 }}>
                                                     Copia para el Cliente
                                                 </div>
@@ -522,6 +496,7 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
 
                                             <div style={styles.signatures}>
                                                 <div style={styles.signBox}>
+                                                    <div style={styles.signLine} />
                                                     <span style={styles.bold}>PRESTATARIO</span><br/>
                                                     <div style={{marginTop: '5px', fontSize: '10pt', textTransform: 'uppercase'}}>
                                                         {prestamo.clientes?.nombres}<br/>
@@ -529,13 +504,14 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                                                     </div>
                                                 </div>
                                                 <div style={styles.signBox}>
+                                                    <div style={styles.signLine} />
                                                     <span style={styles.bold}>PROFINANZAS</span><br/>
                                                     <span style={{fontSize: '9pt'}}>Área Legal</span>
                                                 </div>
-                                                <div style={styles.footer}>
-                                                    <span>ProFinanzas - Estudio Jurídico Torres</span>
-                                                    <span>{isCopy ? 'Copia Cliente' : 'Original Empresa'}</span>
-                                                </div>
+                                            </div>
+                                            <div style={styles.footer}>
+                                                <span>ProFinanzas - Estudio Jurídico Torres</span>
+                                                <span>{isCopy ? 'Copia Cliente' : 'Original Empresa'}</span>
                                             </div>
                                         </div>
                                     );
@@ -553,8 +529,9 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                                 {/* ---------------- PAGE 2: CARGO / CRONOGRAMA ---------------- */}
                                 {(docMode === 'completo' || docMode === 'cronograma') && (
                                     <div style={{ 
-                                        padding: '15mm',
-                                        minHeight: '297mm',
+                                        width: '794px',
+                                        minHeight: '1123px',
+                                        padding: '40px 50px 60px 50px',
                                         backgroundColor: 'white',
                                         boxSizing: 'border-box',
                                         position: 'relative'
@@ -638,6 +615,7 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
 
                                         <div style={styles.signatures}>
                                             <div style={styles.signBox}>
+                                                <div style={styles.signLine} />
                                                 <span style={styles.bold}>PRESTATARIO</span><br/>
                                                 <div style={{marginTop: '5px', fontSize: '9pt', textTransform: 'uppercase'}}>
                                                     {prestamo.clientes?.nombres}<br/>
@@ -645,6 +623,7 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                                                 </div>
                                             </div>
                                             <div style={styles.signBox}>
+                                                <div style={styles.signLine} />
                                                 <span style={styles.bold}>PROFINANZAS</span><br/>
                                                 <span style={{fontSize: '9pt'}}>Área Legal</span>
                                             </div>
@@ -656,6 +635,7 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                                     </div>
                                 )}
 
+                            </div>
                             </div>
                         </div>
                     </>

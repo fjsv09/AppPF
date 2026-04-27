@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from 'sonner';
 import { ProgressProvider } from '@/components/providers/progress-provider';
 import { NotificationProvider } from '@/components/providers/notification-provider';
+import { VisibilityRefresh } from '@/components/providers/visibility-refresh';
 
 const inter = Inter({
   subsets: ["latin"],
@@ -35,7 +36,6 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description: "Gestión eficiente de préstamos y clientes",
     manifest: '/manifest.webmanifest',
-    themeColor: '#0f172a',
     appleWebApp: {
       capable: true,
       statusBarStyle: 'black-translucent',
@@ -53,6 +53,15 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+export const viewport = {
+  themeColor: '#0f172a',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+}
+
 import { SWRegistration } from '@/components/providers/sw-registration';
 
 export default function RootLayout({
@@ -66,7 +75,6 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
       </head>
       <body
         className={`${inter.variable} antialiased bg-background text-foreground font-sans`}
@@ -74,6 +82,7 @@ export default function RootLayout({
         <SWRegistration />
         <ProgressProvider>
           <NotificationProvider>
+            <VisibilityRefresh />
             {children}
           </NotificationProvider>
         </ProgressProvider>

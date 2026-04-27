@@ -162,6 +162,24 @@ export default function AuditoriaPage() {
         }
     }, [fetchLogs, perfil])
 
+    // Auto-refresh al volver al foreground (PWA iOS fix)
+    useEffect(() => {
+        let lastFetch = Date.now()
+        const MIN_INTERVAL = 30_000
+
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible' && Date.now() - lastFetch > MIN_INTERVAL) {
+                lastFetch = Date.now()
+                if (perfil?.rol === 'admin' || perfil?.rol === 'supervisor') {
+                    fetchLogs()
+                }
+            }
+        }
+
+        document.addEventListener('visibilitychange', handleVisibility)
+        return () => document.removeEventListener('visibilitychange', handleVisibility)
+    }, [fetchLogs, perfil])
+
     const handleGenerarTareas = async () => {
         setGenerating(true)
         try {

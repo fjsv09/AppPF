@@ -178,6 +178,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }
     }, [fetchUnread, supabase])
 
+    // Auto-refresh del badge cuando la app vuelve al foreground (PWA iOS fix)
+    useEffect(() => {
+        let lastFetch = Date.now()
+        const MIN_INTERVAL = 20_000 // 20 segundos mínimo entre refetches
+
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible' && Date.now() - lastFetch > MIN_INTERVAL) {
+                lastFetch = Date.now()
+                fetchUnread()
+            }
+        }
+
+        document.addEventListener('visibilitychange', handleVisibility)
+        return () => document.removeEventListener('visibilitychange', handleVisibility)
+    }, [fetchUnread])
+
     return (
         <NotificationContext.Provider value={{ unreadCount, refreshUnread: fetchUnread }}>
             {children}

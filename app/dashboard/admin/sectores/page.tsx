@@ -53,6 +53,22 @@ export default function AdminSectoresPage() {
     loadSectores()
   }, [])
 
+  // Auto-refresh al volver al foreground (PWA iOS fix)
+  useEffect(() => {
+    let lastFetch = Date.now()
+    const MIN_INTERVAL = 30_000
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastFetch > MIN_INTERVAL) {
+        lastFetch = Date.now()
+        loadSectores()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [])
+
   const handleEdit = (sector: Sector) => {
     setEditingId(sector.id)
     setFormData({

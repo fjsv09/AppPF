@@ -139,6 +139,24 @@ export default function AdminMetasPage() {
         }
     }, [])
 
+    // Auto-refresh al volver al foreground (PWA iOS fix)
+    useEffect(() => {
+        let lastFetch = Date.now()
+        const MIN_INTERVAL = 20_000
+
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible' && Date.now() - lastFetch > MIN_INTERVAL) {
+                lastFetch = Date.now()
+                fetchMetas()
+                fetchPendingBonos()
+                fetchHistoryBonos()
+            }
+        }
+
+        document.addEventListener('visibilitychange', handleVisibility)
+        return () => document.removeEventListener('visibilitychange', handleVisibility)
+    }, [])
+
     const handleConfirmDeactivate = async () => {
         if (!metaToDeactivate) return;
         setIsDeactivating(true);

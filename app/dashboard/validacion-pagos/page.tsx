@@ -226,6 +226,25 @@ function ValidacionPagosContent() {
         return () => { supabase.removeChannel(channel) }
     }, [supabase])
 
+    // Auto-refresh al volver al foreground (PWA iOS fix)
+    useEffect(() => {
+        let lastFetch = Date.now()
+        const MIN_INTERVAL = 20_000
+
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible' && Date.now() - lastFetch > MIN_INTERVAL) {
+                lastFetch = Date.now()
+                if (userId && userRole) {
+                    fetchPagos('pendientes', userId, userRole)
+                    fetchPagos('historial', userId, userRole)
+                }
+            }
+        }
+
+        document.addEventListener('visibilitychange', handleVisibility)
+        return () => document.removeEventListener('visibilitychange', handleVisibility)
+    }, [userId, userRole])
+
     useEffect(() => {
         if (userRole && userId) {
             setPagePendientes(1)

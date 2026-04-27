@@ -189,6 +189,22 @@ export default function NotificacionesPage() {
         fetchNotifications()
     }, [])
 
+    // Auto-refresh cuando la app vuelve al foreground (PWA iOS fix)
+    useEffect(() => {
+        let lastFetch = Date.now()
+        const MIN_INTERVAL = 15_000 // 15 segundos mínimo entre refetches
+
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible' && Date.now() - lastFetch > MIN_INTERVAL) {
+                lastFetch = Date.now()
+                fetchNotifications()
+            }
+        }
+
+        document.addEventListener('visibilitychange', handleVisibility)
+        return () => document.removeEventListener('visibilitychange', handleVisibility)
+    }, [fetchNotifications])
+
     const markAsRead = async (id: string) => {
         try {
             await fetch(`/api/notificaciones/${id}`, { method: 'PATCH' })

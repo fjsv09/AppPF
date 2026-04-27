@@ -76,12 +76,14 @@ export async function PATCH(
             .select('id')
             .eq('rol', 'admin')
 
-        const clienteNombres = (solicitud.cliente as any)?.nombres || 'Cliente'
+        const clienteNombres = (solicitud.cliente as any)?.nombres || solicitud.prospecto_nombres || 'Cliente'
         const supervisorName = perfil.nombre_completo || 'Un supervisor'
+        const advisorName = solicitud.asesor?.nombre_completo || 'Asesor'
+
         for (const admin of admins || []) {
             await createFullNotification(admin.id, {
                 titulo: 'Solicitud Pre-Aprobada',
-                mensaje: `Solicitud de ${clienteNombres} pre-aprobada por ${supervisorName}`,
+                mensaje: `Solicitud de ${clienteNombres} (${advisorName}) pre-aprobada por ${supervisorName}`,
                 link: `/dashboard/solicitudes/${id}`,
                 tipo: 'info'
             })

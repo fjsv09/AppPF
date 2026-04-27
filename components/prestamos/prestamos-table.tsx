@@ -145,7 +145,7 @@ export function PrestamosTable({
     const [loanToRestore, setLoanToRestore] = useState<any>(null)
     const [selectedActionAccount, setSelectedActionAccount] = useState('')
     const [loadingAction, setLoadingAction] = useState(false)
-    const [togglingBloqueo, setTogglingBloqueo] = useState<string | null>(null)
+
     const [contractOpen, setContractOpen] = useState(false)
     const [selectedContractLoan, setSelectedContractLoan] = useState<any>(null)
     const [selectedContractCronograma, setSelectedContractCronograma] = useState<any[]>([])
@@ -365,39 +365,7 @@ export function PrestamosTable({
         }
     }
 
-    const handleToggleBloqueo = async (asesorId: string, currentStatus: boolean, asesorNombre: string, e?: React.MouseEvent) => {
-        if (e) {
-            e.preventDefault()
-            e.stopPropagation()
-        }
 
-        if (!asesorId) return
-
-        setTogglingBloqueo(asesorId)
-        try {
-            const response = await fetch('/api/admin/bloquear-pagos', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    asesor_id: asesorId, 
-                    bloqueado: !currentStatus 
-                })
-            })
-
-            const result = await response.json()
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Error al actualizar el bloqueo')
-            }
-
-            toast.success(result.message || 'Estado actualizado correctamente')
-            router.refresh()
-        } catch (error: any) {
-            toast.error("Error", { description: error.message })
-        } finally {
-            setTogglingBloqueo(null)
-        }
-    }
 
     // Sectores Logic
     const sectoresList = useMemo(() => {
@@ -2480,40 +2448,7 @@ export function PrestamosTable({
                                                                         </>
                                                                     )}
 
-                                                                    {/* Bloquear/Desbloquear Pagos (Admin Only) */}
-                                                                    {userRol === 'admin' && prestamo.asesor_id && (
-                                                                        <>
-                                                                            <DropdownMenuSeparator className="bg-slate-800" />
-                                                                            <DropdownMenuItem
-                                                                                className={cn(
-                                                                                    "cursor-pointer text-xs font-bold",
-                                                                                    prestamo.clientes?.asesor_pagos_bloqueados
-                                                                                        ? "hover:bg-emerald-900/20 text-emerald-500"
-                                                                                        : "hover:bg-rose-900/20 text-rose-500"
-                                                                                )}
-                                                                                disabled={togglingBloqueo === prestamo.asesor_id}
-                                                                                onClick={(e) => {
-                                                                                    e.preventDefault()
-                                                                                    e.stopPropagation()
-                                                                                    handleToggleBloqueo(
-                                                                                        prestamo.asesor_id,
-                                                                                        !!prestamo.clientes?.asesor_pagos_bloqueados,
-                                                                                        prestamo.asesor_nombre || 'Asesor',
-                                                                                        e
-                                                                                    )
-                                                                                }}
-                                                                            >
-                                                                                {togglingBloqueo === prestamo.asesor_id ? (
-                                                                                    <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
-                                                                                ) : prestamo.clientes?.asesor_pagos_bloqueados ? (
-                                                                                    <Shield className="w-3.5 h-3.5 mr-2" />
-                                                                                ) : (
-                                                                                    <ShieldOff className="w-3.5 h-3.5 mr-2" />
-                                                                                )}
-                                                                                {prestamo.clientes?.asesor_pagos_bloqueados ? 'Desbloquear Pagos' : 'Bloquear Pagos'}
-                                                                            </DropdownMenuItem>
-                                                                        </>
-                                                                    )}
+
 
                                                                     <DropdownMenuItem
                                                                         className="hover:bg-slate-800 cursor-pointer text-xs"

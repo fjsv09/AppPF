@@ -92,10 +92,12 @@ export async function PATCH(
 
         const clienteNombres = (solicitud.cliente as any)?.nombres || 'Cliente'
         const supervisorName = perfil.nombre_completo || 'Un supervisor'
+        const advisorName = solicitud.asesor?.nombre_completo || 'Asesor'
+
         for (const admin of admins || []) {
             await createFullNotification(admin.id, {
                 titulo: '🔄 Renovación Pre-Aprobada',
-                mensaje: `Renovación de ${clienteNombres} pre-aprobada por ${supervisorName}`,
+                mensaje: `Renovación de ${clienteNombres} (${advisorName}) pre-aprobada por ${supervisorName}`,
                 link: `/dashboard/renovaciones/${id}`,
                 tipo: 'info'
             })

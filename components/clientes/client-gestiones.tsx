@@ -14,6 +14,7 @@ import { cn, formatDatePeru } from "@/lib/utils"
 import { toast } from "sonner"
 import { AsignarVisitaModal } from "@/components/gestiones/asignar-visita-modal"
 import { RegistrarGestionModal } from "@/components/gestiones/registrar-gestion-modal"
+import { PaginationControlled } from "@/components/ui/pagination-controlled"
 
 const TIPO_ICON: Record<string, any> = {
     Llamada: Phone,

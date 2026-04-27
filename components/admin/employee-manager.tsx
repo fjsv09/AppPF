@@ -443,17 +443,15 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
           </div>
 
           {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="p-4 border-t border-slate-800/50">
-              <PaginationControlled 
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                totalRecords={employees.length}
-                pageSize={ITEMS_PER_PAGE}
-              />
-            </div>
-          )}
+          <div className="p-4 border-t border-slate-800/50">
+            <PaginationControlled 
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              totalRecords={employees.length}
+              pageSize={ITEMS_PER_PAGE}
+            />
+          </div>
         </CardContent>
       </Card>
 

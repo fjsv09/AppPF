@@ -16,6 +16,8 @@ interface FinancialSummaryData {
     ganancia_total: number
     ganancia_mes: number
     gastos_mes: number
+    salidas_prestamos_mes: number
+    cobro_cuotas_mes: number
 }
 
 interface FinancialSummaryProps {
@@ -29,7 +31,7 @@ export function FinancialSummary({ asesorId, supervisorId }: FinancialSummaryPro
     const [error, setError] = useState<string | null>(null)
 
     const formatMoney = (value: number = 0): string => {
-        return value.toFixed(1).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+        return value.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
     }
 
     const fetchSummary = async () => {
@@ -85,7 +87,7 @@ export function FinancialSummary({ asesorId, supervisorId }: FinancialSummaryPro
             
             {/* Main Cards Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
-                {/* Capital Total Activo (Con Interés) - Full width on smallest mobile if desired, or 2 col */}
+                {/* Capital Total Activo (Con Interés) */}
                 <div className="col-span-2 md:col-span-1 bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl md:rounded-2xl p-3 md:p-4 hover:border-amber-500/30 transition-all group">
                    <div className="flex justify-between items-start mb-1 md:mb-2 text-slate-400">
                      <p className="font-medium text-[8px] md:text-[9px] uppercase tracking-widest">Cap. Activo (C+I)</p>
@@ -115,7 +117,18 @@ export function FinancialSummary({ asesorId, supervisorId }: FinancialSummaryPro
             </div>
 
             {/* Monthly Details Grid */}
-            <div className="grid grid-cols-2 gap-2 md:gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+                {/* Cobro Cuotas (New) */}
+                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl md:rounded-2xl p-3 md:p-4 flex items-center justify-between group hover:bg-slate-900/60 transition-colors">
+                   <div className="min-w-0">
+                      <p className="text-slate-500 font-bold text-[8px] md:text-[9px] uppercase tracking-[0.15em] mb-0.5 md:mb-1 truncate">Cobro Cuotas</p>
+                      <div className="flex flex-wrap items-baseline gap-1 md:gap-2">
+                        <span className="text-base md:text-2xl font-black text-blue-400">S/ {formatMoney(data.cobro_cuotas_mes)}</span>
+                        <Badge className="bg-blue-500/20 text-blue-400 border-none text-[6px] md:text-[8px] h-3 md:h-4 px-1 font-black">CASH</Badge>
+                      </div>
+                   </div>
+                </div>
+
                 {/* Ganancia Mes */}
                 <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl md:rounded-2xl p-3 md:p-4 flex items-center justify-between group hover:bg-slate-900/60 transition-colors">
                    <div className="min-w-0">
@@ -127,13 +140,24 @@ export function FinancialSummary({ asesorId, supervisorId }: FinancialSummaryPro
                    </div>
                 </div>
 
-                {/* Gastos Mes */}
+                {/* Gastos Mes (Operativos) */}
                 <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl md:rounded-2xl p-3 md:p-4 flex items-center justify-between group hover:bg-slate-900/60 transition-colors">
                    <div className="min-w-0">
                       <p className="text-slate-500 font-bold text-[8px] md:text-[9px] uppercase tracking-[0.15em] mb-0.5 md:mb-1 truncate">Gastos Mes</p>
                       <div className="flex flex-wrap items-baseline gap-1 md:gap-2">
                         <span className="text-base md:text-2xl font-black text-rose-500">S/ {formatMoney(data.gastos_mes)}</span>
                         <Badge className="bg-rose-500/20 text-rose-400 border-none text-[6px] md:text-[8px] h-3 md:h-4 px-1 font-black">OUT</Badge>
+                      </div>
+                   </div>
+                </div>
+
+                {/* Salidas por Préstamos (New) */}
+                <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl md:rounded-2xl p-3 md:p-4 flex items-center justify-between group hover:bg-slate-900/60 transition-colors">
+                   <div className="min-w-0">
+                      <p className="text-slate-500 font-bold text-[8px] md:text-[9px] uppercase tracking-[0.15em] mb-0.5 md:mb-1 truncate">Desembolsos</p>
+                      <div className="flex flex-wrap items-baseline gap-1 md:gap-2">
+                        <span className="text-base md:text-2xl font-black text-amber-500">S/ {formatMoney(data.salidas_prestamos_mes)}</span>
+                        <Badge className="bg-amber-500/20 text-amber-400 border-none text-[6px] md:text-[8px] h-3 md:h-4 px-1 font-black">LOAN</Badge>
                       </div>
                    </div>
                 </div>

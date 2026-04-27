@@ -56,6 +56,8 @@ interface LoanMetrics {
   saldoCuotaParcial: number; // Balance restante de la primera cuota que tenga pago parcial (>0 y <total)
   totalCuotas: number;
   cuotasPagadas: number;
+  metaTotalHoyYAtrasados: number;
+  cobradoTotalHoyYAtrasados: number;
   loanScore?: LoanScore; // Nuevo
 }
 
@@ -90,6 +92,8 @@ export function calculateLoanMetrics(
       saldoCuotaParcial: 0,
       totalCuotas: 0,
       cuotasPagadas: 0,
+      metaTotalHoyYAtrasados: 0,
+      cobradoTotalHoyYAtrasados: 0,
       loanScore: { score: 100, increases: 0, penalties: 0, details: [], pagos_puntuales: 0, pagos_tardios: 0 }
     };
   }
@@ -112,7 +116,7 @@ export function calculateLoanMetrics(
   // [SINCRONIZACIÓN] Priorizamos la suma de transacciones reales (pagos) si existen.
   // Solo usamos la suma del cronograma como fallback para préstamos migrados sin registros de pagos.
   const sumCronograma = cronograma.reduce((sum: number, c: any) => sum + (Number(c.monto_pagado) || 0), 0);
-  const totalPagadoAcumulado = (pagosRaw.length > 0) ? totalPagadoAcumuladoReal : sumCronograma;
+  const totalPagadoAcumulado = (pagosRaw.length > 0) ? Math.max(totalPagadoAcumuladoReal, sumCronograma) : sumCronograma;
 
   if (loan.estado !== 'activo') {
     return {
@@ -130,12 +134,14 @@ export function calculateLoanMetrics(
       isCritico: false,
       isMora: false,
       isAlDia: true,
-      esRenovable: false,
+      esRenovable: (loan.estado === 'finalizado' || loan.estado === 'completado' || loan.estado === 'renovado'),
       estadoCalculado: loan?.estado === 'finalizado' ? 'finalizado' : 'sin_deuda',
       valorCuotaPromedio: 0,
       saldoCuotaParcial: 0,
       totalCuotas: cronograma.length,
       cuotasPagadas: cronograma.filter((c: any) => c.estado === 'pagado').length,
+      metaTotalHoyYAtrasados: 0,
+      cobradoTotalHoyYAtrasados: 0,
       loanScore: calculateLoanScore(loan, pagos, today, config)
     };
   }
@@ -200,6 +206,28 @@ export function calculateLoanMetrics(
 
       return sum + pendienteAlInicio;
     }, 0);
+
+  // 2.6. Meta y Cobrado Eficiencia (Hoy + Atrasados): Lógica Centralizada
+  let metaTotalHoyYAtrasados = 0;
+  let cobradoTotalHoyYAtrasados = 0;
+
+  cronograma.forEach((c: any) => {
+    if (c.fecha_vencimiento <= today) {
+      const pagosDeEstaCuotaHoy = (c.pagos || [])
+        .filter((p: any) => getIsToday(p.created_at) && p.estado_verificacion !== 'rechazado' && p.estado_verificacion !== 'pendiente')
+        .reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
+
+      const metaCuota = Number(c.monto_cuota);
+      const totalPagadoAcumuladoCuota = Number(c.monto_pagado || 0);
+      const pagadoAntes = Math.max(0, totalPagadoAcumuladoCuota - pagosDeEstaCuotaHoy);
+      const pendienteAlInicio = Math.max(0, metaCuota - pagadoAntes);
+
+      if (pendienteAlInicio > 0.01) {
+        metaTotalHoyYAtrasados += pendienteAlInicio;
+        cobradoTotalHoyYAtrasados += Math.min(pagosDeEstaCuotaHoy, pendienteAlInicio);
+      }
+    }
+  });
 
   // 3. Deuda Exigible Hoy (Todo lo vencido hasta hoy inclusive)
   // Importante: Aquí recalculamos la deuda exigible basada en el TOTAL pagado acumulado real
@@ -267,8 +295,8 @@ export function calculateLoanMetrics(
   const renovacionMinPagadoDecimal = (config.renovacionMinPagado || 60) / 100;
   const esRenovable = (
     totalPagadoAcumulado >= (totalPagar * renovacionMinPagadoDecimal) &&
-    riesgoPorcentaje < 10 &&
-    !['vencido', 'legal', 'castigado'].includes(loan.estado_mora)
+    riesgoPorcentaje < 30 && // Aumentado de 10 a 30 para captar potenciales renovaciones con mora controlada
+    !['legal', 'castigado'].includes(loan.estado_mora) // Permitimos 'vencido' si tiene buen avance de pago
   );
 
   let estadoCalculado: any = 'al_dia';
@@ -297,7 +325,55 @@ export function calculateLoanMetrics(
     saldoCuotaParcial,
     totalCuotas: loan.numero_cuotas || loan.cuotas || (valorCuotaPromedio > 0 ? Math.round(totalPagar / valorCuotaPromedio) : 0) || cronograma.length,
     cuotasPagadas: valorCuotaPromedio > 0 ? Math.floor(totalPagadoAcumulado / valorCuotaPromedio) : 0,
+    metaTotalHoyYAtrasados,
+    cobradoTotalHoyYAtrasados,
     loanScore: calculateLoanScore(loan, pagos, today, config) // Integración del nuevo score
+  };
+}
+
+/**
+ * Calcula la Mora Bancaria Centralizada (Capital Vencido / Capital Original)
+ * Sincroniza la lógica del Panel de Préstamos para ser usada en dashboards de Supervisión y Admin.
+ */
+export function calculateMoraBancaria(prestamos: any[], today: string = getTodayPeru()) {
+  let totalCapitalOriginal = 0;
+  let totalCapitalVencido = 0;
+  const loansInMora = new Set<string>();
+
+  // Solo consideramos préstamos activos o en estados de riesgo para el cálculo de la cartera vigente
+  const relevantPrestamos = (prestamos || []).filter(p => 
+    ['activo', 'vencido', 'moroso', 'cpp', 'legal'].includes(p.estado)
+  );
+
+  relevantPrestamos.forEach(p => {
+    const montoCapital = parseFloat(p.monto) || 0;
+    totalCapitalOriginal += montoCapital;
+
+    const cuotas = p.cronograma_cuotas || [];
+    // Intentar obtener el número de cuotas real del préstamo, fallback a la longitud del cronograma o 30
+    const numCuotas = p.numero_cuotas || p.cuotas || cuotas.length || 30;
+    const capitalPorCuota = montoCapital / numCuotas;
+
+    cuotas.filter((c: any) => c.fecha_vencimiento <= today && c.estado !== 'pagado').forEach((c: any) => {
+      const montoCuota = parseFloat(c.monto_cuota) || 0;
+      const montoPagado = parseFloat(c.monto_pagado) || 0;
+      const pendiente = Math.max(0, montoCuota - montoPagado);
+
+      if (pendiente > 0.01) {
+        // El capital vencido se calcula proporcionalmente a cuánto de la cuota (que incluye interés) falta pagar
+        const proporcionPendiente = montoCuota > 0 ? pendiente / montoCuota : 1;
+        totalCapitalVencido += capitalPorCuota * proporcionPendiente;
+        loansInMora.add(p.id);
+      }
+    });
+  });
+
+  return {
+    tasaMorosidadCapital: totalCapitalOriginal > 0 ? (totalCapitalVencido / totalCapitalOriginal) * 100 : 0,
+    capitalVencido: totalCapitalVencido,
+    capitalOriginal: totalCapitalOriginal,
+    countLoansInMora: loansInMora.size,
+    loansInMoraIds: Array.from(loansInMora)
   };
 }
 

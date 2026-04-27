@@ -3,7 +3,7 @@ import { useState, useEffect, useTransition } from 'react'
 
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { DollarSign, TrendingUp, Search, User, Users, Briefcase, X, CalendarDays, Loader2, Clock, CreditCard, Wallet } from 'lucide-react'
+import { DollarSign, TrendingUp, Search, User, Users, Briefcase, X, CalendarDays, Loader2, Clock, CreditCard, Wallet, ArrowUpRight, ArrowRight } from 'lucide-react'
 import { PaginationControlled } from '@/components/ui/pagination-controlled'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Input } from '@/components/ui/input'
@@ -26,6 +26,53 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
     const searchParams = useSearchParams()
     const [isPending, startTransition] = useTransition()
     
+    const [isRangeMode, setIsRangeMode] = useState(Boolean(searchParams.get('fecha_inicio') || searchParams.get('fecha_fin')))
+    
+    const currentSearch = searchParams.get('q') || ''
+    const currentAsesor = searchParams.get('asesor') || 'all'
+    const currentSupervisor = searchParams.get('supervisor') || 'all'
+    const currentFecha = searchParams.get('fecha') || ''
+    const currentFechaInicio = searchParams.get('fecha_inicio') || ''
+    const currentFechaFin = searchParams.get('fecha_fin') || ''
+    const currentTurno = searchParams.get('turno') || 'all'
+    const currentMetodo = searchParams.get('metodo') || 'all'
+    const currentPagoPor = searchParams.get('pago_por') || 'all'
+
+    const [searchValue, setSearchValue] = useState(currentSearch)
+    const [tempFecha, setTempFecha] = useState(currentFecha)
+    const [tempFechaInicio, setTempFechaInicio] = useState(currentFechaInicio)
+    const [tempFechaFin, setTempFechaFin] = useState(currentFechaFin)
+    
+    useEffect(() => {
+        setSearchValue(searchParams.get('q') || '')
+    }, [searchParams.get('q')])
+
+    useEffect(() => {
+        setTempFecha(currentFecha)
+    }, [currentFecha])
+
+    useEffect(() => {
+        setTempFechaInicio(currentFechaInicio)
+    }, [currentFechaInicio])
+
+    useEffect(() => {
+        setTempFechaFin(currentFechaFin)
+    }, [currentFechaFin])
+
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            // Only apply if at least one date has changed from the searchParams
+            const hasChanged = isRangeMode 
+                ? (tempFechaInicio !== (searchParams.get('fecha_inicio') || '') || tempFechaFin !== (searchParams.get('fecha_fin') || ''))
+                : (tempFecha !== (searchParams.get('fecha') || ''))
+            
+            if (hasChanged) {
+                applyDates()
+            }
+        }, 800)
+        return () => clearTimeout(timeout)
+    }, [tempFecha, tempFechaInicio, tempFechaFin, isRangeMode])
+
     const totalPages = Math.ceil(totalRecords / pageSize)
 
     const handlePageChange = (page: number) => {
@@ -36,14 +83,58 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
         })
     }
 
-    const handleFilterChange = (key: string, value: string) => {
+    const applyDates = (forcedMode?: boolean) => {
+        const mode = forcedMode !== undefined ? forcedMode : isRangeMode
         startTransition(() => {
             const params = new URLSearchParams(searchParams.toString())
-            params.set('p_page', '1') // Reset to page 1 on filter change
-            if (value && value !== 'all') {
-                params.set(key, value)
+            params.set('p_page', '1')
+            if (mode) {
+                if (tempFechaInicio) params.set('fecha_inicio', tempFechaInicio)
+                if (tempFechaFin) params.set('fecha_fin', tempFechaFin)
+                params.delete('fecha')
             } else {
-                params.delete(key)
+                if (tempFecha) params.set('fecha', tempFecha)
+                params.delete('fecha_inicio')
+                params.delete('fecha_fin')
+            }
+            router.push(`${pathname}?${params.toString()}`, { scroll: false })
+        })
+    }
+
+    const handleFilterChange = (key: string, value: string) => {
+        if (key !== 'fecha' && key !== 'fecha_inicio' && key !== 'fecha_fin') {
+            startTransition(() => {
+                const params = new URLSearchParams(searchParams.toString())
+                params.set('p_page', '1')
+                if (value && value !== 'all') {
+                    params.set(key, value)
+                } else {
+                    params.delete(key)
+                }
+                router.push(`${pathname}?${params.toString()}`, { scroll: false })
+            })
+        }
+    }
+
+    const toggleDateMode = () => {
+        const nextMode = !isRangeMode
+        setIsRangeMode(nextMode)
+        
+        startTransition(() => {
+            const params = new URLSearchParams(searchParams.toString())
+            if (nextMode) {
+                const current = tempFecha || new Date().toISOString().split('T')[0]
+                params.set('fecha_inicio', current)
+                params.set('fecha_fin', current)
+                params.delete('fecha')
+                setTempFechaInicio(current)
+                setTempFechaFin(current)
+            } else {
+                const current = tempFechaInicio || new Date().toISOString().split('T')[0]
+                params.set('fecha', current)
+                params.delete('fecha_inicio')
+                params.delete('fecha_fin')
+                setTempFecha(current)
             }
             router.push(`${pathname}?${params.toString()}`, { scroll: false })
         })
@@ -62,21 +153,6 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
         })
     }
 
-    const currentSearch = searchParams.get('q') || ''
-    const currentAsesor = searchParams.get('asesor') || 'all'
-    const currentSupervisor = searchParams.get('supervisor') || 'all'
-    const currentFecha = searchParams.get('fecha') || ''
-    const currentTurno = searchParams.get('turno') || 'all'
-    const currentMetodo = searchParams.get('metodo') || 'all'
-    const currentPagoPor = searchParams.get('pago_por') || 'all'
-
-
-    const [searchValue, setSearchValue] = useState(currentSearch)
-    
-    useEffect(() => {
-        setSearchValue(searchParams.get('q') || '')
-    }, [searchParams.get('q')])
-
     useEffect(() => {
         const timeout = setTimeout(() => {
             if (searchValue !== (searchParams.get('q') || '')) {
@@ -86,11 +162,9 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
         return () => clearTimeout(timeout)
     }, [searchValue])
 
-    // Filter available perfiles based on role
     const supervisores = perfiles.filter(p => p.rol === 'supervisor')
     const asesores = perfiles.filter(p => {
         if (userRol === 'admin') {
-            // If supervisor is selected, only show advisors in that team
             if (currentSupervisor !== 'all') {
                 return p.rol === 'asesor' && p.supervisor_id === currentSupervisor
             }
@@ -102,19 +176,16 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
         return p.id === userId
     })
 
-    // [NUEVO] Filter perfiles specifically for the "Pago Por" dropdown (Security/Privacy)
     const pagoPorOptions = perfiles.filter(p => {
-        if (userRol === 'admin' || userRol === 'secretaria') return true;
+        if (userRol === 'admin' || userRol === 'secretaria') return true
         if (userRol === 'supervisor') {
-            // Supervisors see themselves, their team, and higher management
-            return p.id === userId || p.supervisor_id === userId || ['admin', 'supervisor', 'secretaria'].includes(p.rol);
+            return p.id === userId || p.supervisor_id === userId || ['admin', 'supervisor', 'secretaria'].includes(p.rol)
         }
         if (userRol === 'asesor') {
-            // Advisors only see themselves and the management staff
-            return p.id === userId || ['admin', 'supervisor', 'secretaria'].includes(p.rol);
+            return p.id === userId || ['admin', 'supervisor', 'secretaria'].includes(p.rol)
         }
-        return false;
-    });
+        return false
+    })
 
     return (
         <div className="space-y-4 mt-8">
@@ -128,10 +199,8 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
                 </div>
             </div>
 
-            {/* Main Filter Bar - Replicating Loans Panel Design */}
             <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
                 
-                {/* Search Input */}
                 <div className="relative w-full md:flex-1 md:max-w-none min-w-[180px]">
                     {isPending ? (
                         <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500 animate-spin z-10" />
@@ -139,113 +208,84 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     )}
                     <Input
-                        placeholder="Buscar cliente..."
-                        className="h-10 pl-9 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:bg-slate-900 transition-colors h-10 pr-8"
+                        placeholder="Buscar cliente, asesor..."
                         value={searchValue}
                         onChange={(e) => setSearchValue(e.target.value)}
+                        className="h-10 pl-9 pr-8 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 w-full focus:bg-slate-900 transition-colors"
                     />
-                    {(searchValue || currentSupervisor !== 'all' || currentAsesor !== 'all' || currentFecha) && (
+                    {searchValue && (
                         <button 
-                            onClick={() => {
-                                startTransition(() => {
-                                    setSearchValue('')
-                                    const params = new URLSearchParams(searchParams.toString())
-                                    params.delete('q')
-                                    params.delete('supervisor')
-                                    params.delete('asesor')
-                                    params.delete('fecha')
-                                    router.push(`${pathname}?${params.toString()}`)
-                                })
-                            }}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center text-slate-500 hover:text-white hover:bg-slate-800 rounded-full transition-all"
-                            title="Limpiar filtros"
+                            onClick={() => setSearchValue('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center text-slate-500 hover:text-white hover:bg-slate-800 rounded-full transition-all z-10"
                         >
                             <X className="h-3 w-3" />
                         </button>
                     )}
-
-
                 </div>
 
-                {/* Filters Row */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+                <div className="flex items-center gap-2 overflow-x-auto pb-2 -mb-2 w-full custom-scrollbar">
                     
-                     {/* Date: Fecha Pago (Principal) */}
-                    <div className="relative shrink-0">
-                        <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-400 pointer-events-none z-10" />
-                        <Input
-                            type="date"
-                            value={currentFecha}
-                            onChange={(e) => handleFilterChange('fecha', e.target.value)}
-                            title="Filtrar por fecha de pago"
-                            className="h-10 pl-10 pr-2 bg-slate-950/50 border-slate-700 text-[11px] text-slate-300 uppercase font-bold focus:bg-slate-900 border-emerald-500/20 transition-all w-[160px] [color-scheme:dark]"
-                        />
-                    </div>
-
-
-                    {/* Turno Filter */}
-                    <Select value={currentTurno} onValueChange={(v) => handleFilterChange('turno', v)}>
-                        <SelectTrigger className="h-10 w-auto min-w-[120px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-colors hover:border-slate-600">
-                            <Clock className={cn("h-3 w-3 mr-2 shrink-0", 
-                                currentTurno === '1' ? 'text-amber-400' : 
-                                currentTurno === '2' ? 'text-indigo-400' : 'text-slate-400'
-                            )} />
-                            <SelectValue placeholder="Turno" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
-                            <SelectItem value="all">Cualquier Turno</SelectItem>
-                            <SelectItem value="1">🌅 Turno Mañana (AM)</SelectItem>
-                            <SelectItem value="2">🌆 Turno Tarde (PM)</SelectItem>
-                        </SelectContent>
-                    </Select>
-
-                    {/* Metodo Filter */}
-                    <Select value={currentMetodo} onValueChange={(v) => handleFilterChange('metodo', v)}>
-                        <SelectTrigger className="h-10 w-auto min-w-[130px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-colors hover:border-slate-600">
-                            <Wallet className={cn("h-3 w-3 mr-2 shrink-0", 
-                                currentMetodo === 'Efectivo' ? 'text-emerald-400' : 
-                                currentMetodo !== 'all' ? 'text-blue-400' : 'text-slate-400'
-                            )} />
-                            <SelectValue placeholder="Método" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
-                            <SelectItem value="all">Todos los Métodos</SelectItem>
-                            <SelectItem value="Efectivo">💵 Efectivo</SelectItem>
-                            <SelectItem value="Yape">📱 Yape</SelectItem>
-                            <SelectItem value="Plin">💠 Plin</SelectItem>
-                            <SelectItem value="Transferencia">🏦 Transferencia</SelectItem>
-                        </SelectContent>
-                    </Select>
-
-                    {/* Pago Por Filter */}
-                    <Select value={currentPagoPor} onValueChange={(v) => handleFilterChange('pago_por', v)}>
-                        <SelectTrigger className="h-10 w-auto min-w-[130px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-colors hover:border-slate-600">
-                            <User className={cn("h-3 w-3 mr-2 shrink-0", 
-                                (currentPagoPor !== 'all' && currentPagoPor !== 'asesor' && currentPagoPor !== 'admin') ? 'text-purple-400' : 
-                                currentPagoPor !== 'all' ? 'text-purple-400/70' : 'text-slate-400'
-                            )} />
-                            <SelectValue placeholder="Pago Por" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-900 border-slate-800 text-slate-200 max-h-[300px] overflow-y-auto">
-                            <SelectItem value="all">👤 Cualquier Origen</SelectItem>
-                            
-                            {pagoPorOptions.map(p => (
-                                <SelectItem key={p.id} value={p.id} className="text-xs">
-                                    {p.rol === 'asesor' ? '👤' : '💼'} {p.nombre_completo}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    
-                    {/* Admin Only: Supervisor Filter */}
+                <div className="flex items-center bg-slate-950/50 border border-slate-700 rounded-2xl p-1 gap-1 pr-3">
                     {userRol === 'admin' && (
-                        <Select value={currentSupervisor} onValueChange={(v) => handleFilterChange('supervisor', v)}>
-                            <SelectTrigger className="h-10 w-auto min-w-[160px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3">
-                                <Users className="h-3 h-3 mr-2 text-purple-400 shrink-0" />
-                                <SelectValue placeholder="Supervisor" />
+                        <button
+                            onClick={toggleDateMode}
+                            title={isRangeMode ? "Cambiar a fecha única" : "Cambiar a rango de fechas"}
+                            className={cn(
+                                "h-9 w-9 shrink-0 flex items-center justify-center rounded-xl transition-all border",
+                                isRangeMode 
+                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20 border-blue-400" 
+                                    : "bg-slate-800/50 border-slate-700 text-slate-400 hover:text-white"
+                            )}
+                        >
+                            <ArrowRight className={cn("w-4 h-4 transition-transform", isRangeMode ? "rotate-180" : "")} />
+                        </button>
+                    )}
+
+                    {isRangeMode ? (
+                        <div className="flex items-center gap-0.5">
+                            <div className="relative">
+                                <CalendarDays className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+                                <Input
+                                    type="date"
+                                    value={tempFechaInicio}
+                                    onChange={(e) => setTempFechaInicio(e.target.value)}
+                                    className="h-9 pl-8 pr-2 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[135px] focus-visible:ring-0 [color-scheme:dark]"
+                                />
+                            </div>
+                            <span className="text-slate-700 font-bold px-1">/</span>
+                            <div className="relative">
+                                <CalendarDays className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+                                <Input
+                                    type="date"
+                                    value={tempFechaFin}
+                                    onChange={(e) => setTempFechaFin(e.target.value)}
+                                    className="h-9 pl-8 pr-2 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[135px] focus-visible:ring-0 [color-scheme:dark]"
+                                />
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="relative">
+                            <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                            <Input
+                                type="date"
+                                value={tempFecha}
+                                onChange={(e) => setTempFecha(e.target.value)}
+                                className="h-9 pl-9 pr-2 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[160px] focus-visible:ring-0 [color-scheme:dark]"
+                            />
+                        </div>
+                    )}
+                </div>
+
+                    {userRol === 'admin' && supervisores.length > 0 && (
+                        <Select value={currentSupervisor} onValueChange={(val) => handleFilterChange('supervisor', val)}>
+                            <SelectTrigger className="h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3">
+                                <div className="flex items-center gap-2 truncate">
+                                    <Users className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                                    <SelectValue placeholder="Supervisor" />
+                                </div>
                             </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
-                                <SelectItem value="all">Todos los supervisores</SelectItem>
+                            <SelectContent className="bg-slate-900 border-slate-700">
+                                <SelectItem value="all">Todos Supervisores</SelectItem>
                                 {supervisores.map(s => (
                                     <SelectItem key={s.id} value={s.id}>{s.nombre_completo}</SelectItem>
                                 ))}
@@ -253,60 +293,102 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
                         </Select>
                     )}
 
-                    {/* Admin & Supervisor: Advisor Filter */}
-                    {(userRol === 'admin' || userRol === 'supervisor') && (
-                        <Select value={currentAsesor} onValueChange={(v) => handleFilterChange('asesor', v)}>
-                            <SelectTrigger className="h-10 w-auto min-w-[160px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3">
-                                <Briefcase className="h-3 h-3 mr-2 text-blue-400 shrink-0" />
-                                <SelectValue placeholder="Asesor" />
+                    {(userRol === 'admin' || userRol === 'supervisor') && asesores.length > 0 && (
+                        <Select value={currentAsesor} onValueChange={(val) => handleFilterChange('asesor', val)}>
+                            <SelectTrigger className="h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3">
+                                <div className="flex items-center gap-2 truncate">
+                                    <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                                    <SelectValue placeholder="Asesor" />
+                                </div>
                             </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
-                                <SelectItem value="all">Todos los asesores</SelectItem>
+                            <SelectContent className="bg-slate-900 border-slate-700">
+                                <SelectItem value="all">Todos Asesores</SelectItem>
                                 {asesores.map(a => (
                                     <SelectItem key={a.id} value={a.id}>{a.nombre_completo}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
                     )}
+
+                    <Select value={currentTurno} onValueChange={(val) => handleFilterChange('turno', val)}>
+                        <SelectTrigger className="h-10 w-[140px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 shrink-0">
+                            <div className="flex items-center gap-2 truncate">
+                                <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                <SelectValue placeholder="Turno" />
+                            </div>
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-700">
+                            <SelectItem value="all">Todos Turnos</SelectItem>
+                            <SelectItem value="Turno 1">Turno 1 (AM)</SelectItem>
+                            <SelectItem value="Turno 2">Turno 2 (PM)</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <Select value={currentMetodo} onValueChange={(val) => handleFilterChange('metodo', val)}>
+                        <SelectTrigger className="h-10 w-[160px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 shrink-0">
+                            <div className="flex items-center gap-2 truncate">
+                                <CreditCard className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                <SelectValue placeholder="Método" />
+                            </div>
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-700">
+                            <SelectItem value="all">Todos Métodos</SelectItem>
+                            <SelectItem value="Efectivo">Efectivo</SelectItem>
+                            <SelectItem value="Transferencia">Transferencia</SelectItem>
+                            <SelectItem value="Yape">Yape</SelectItem>
+                            <SelectItem value="Plin">Plin</SelectItem>
+                            <SelectItem value="Otros">Otros</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <Select value={currentPagoPor} onValueChange={(val) => handleFilterChange('pago_por', val)}>
+                        <SelectTrigger className="h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3">
+                            <div className="flex items-center gap-2 truncate">
+                                <Briefcase className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                <SelectValue placeholder="Cobrado Por" />
+                            </div>
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-700">
+                            <SelectItem value="all">Cualquier Usuario</SelectItem>
+                            {pagoPorOptions.map(p => (
+                                <SelectItem key={p.id} value={p.id}>{p.nombre_completo}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
 
-            <div className="content-card relative min-h-[100px]">
-                {/* Central Loader Overlay */}
-                {isPending && (
-                    <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/5 backdrop-blur-[1px] animate-in fade-in duration-200">
-                        <div className="bg-slate-900/80 p-3 rounded-full border border-white/5 shadow-2xl">
-                            <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
-                        </div>
-                    </div>
-                )}
+            <div className="bg-slate-900/50 border border-slate-800/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
+                <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-slate-950/50 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500 items-center">
+                    <div className="col-span-5 md:col-span-6">Detalle del Pago / Fecha</div>
+                    <div className="col-span-3 text-right">Monto</div>
+                    <div className="col-span-4 md:col-span-3 text-right">Método</div>
+                </div>
 
-                <div className={`divide-y divide-slate-800/50 transition-opacity duration-300 ${isPending ? 'opacity-40 grayscale-[0.2]' : 'opacity-100'}`}>
-                    {pagos.map((pago: any) => (
-                        <div key={pago.id} className="p-4 hover:bg-white/5 transition-colors flex items-center justify-between gap-4 group cursor-default">
-                            <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/20 transition-all">
-                                    <DollarSign className="w-4 h-4 text-emerald-500" />
+                <div className="divide-y divide-slate-800/40">
+                    {pagos?.map((pago) => (
+                        <div key={pago.id} className="group grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-800/30 transition-all cursor-default items-center">
+                            <div className="col-span-9 md:col-span-9 flex items-center gap-4">
+                                <div className={cn(
+                                    "h-10 w-10 rounded-xl flex items-center justify-center shadow-inner shrink-0 transition-transform group-hover:scale-110",
+                                    pago.metodo_pago === 'Efectivo' ? "bg-emerald-500/10 text-emerald-500" :
+                                    pago.metodo_pago === 'Transferencia' ? "bg-blue-500/10 text-blue-500" :
+                                    "bg-purple-500/10 text-purple-500"
+                                )}>
+                                    {pago.metodo_pago === 'Efectivo' ? <Wallet className="h-5 w-5" /> :
+                                     pago.metodo_pago === 'Transferencia' ? <ArrowUpRight className="h-5 w-5" /> :
+                                     <CreditCard className="h-5 w-5" />}
                                 </div>
-                                <div>
-                                    <div className="font-medium text-slate-200 text-sm group-hover:text-white transition-colors flex items-center gap-2">
-                                        {pago.cronograma_cuotas?.prestamos?.clientes?.nombres || 'Cliente'}
-                                        {pago.metodo_pago && (
-                                            <span className={cn(
-                                                "text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider font-bold",
-                                                pago.metodo_pago === 'Efectivo' 
-                                                ? "bg-emerald-500/20 text-emerald-400" 
-                                                : "bg-blue-500/20 text-blue-400"
-                                            )}>
-                                                {pago.metodo_pago}
-                                            </span>
-                                        )}
-                                        {/* Dynamic Turn Badge */}
-                                        <span className={`text-[8px] px-1.5 py-0.5 rounded-sm font-bold uppercase tracking-wider flex items-center gap-1 ${
-                                            pago.turno_calculado === 'Turno 1' 
-                                            ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' 
-                                            : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                                        }`}>
+                                
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                        <p className="text-sm font-bold text-slate-200 truncate group-hover:text-white transition-colors">
+                                            {pago.cronograma_cuotas?.prestamos?.clientes?.nombres || 'Cliente no identificado'}
+                                        </p>
+                                        <span className={cn(
+                                            "text-[9px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter shrink-0",
+                                            pago.turno_calculado === 'Turno 1' ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-indigo-500/10 text-indigo-500 border border-indigo-500/20"
+                                        )}>
                                             {pago.turno_calculado === 'Turno 1' ? '🌅 AM' : '🌆 PM'}
                                         </span>
                                     </div>
@@ -319,10 +401,15 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
                                 </div>
                             </div>
                             
-                            <div className="text-right">
+                            <div className="col-span-3 md:col-span-3 text-right">
                                 <div className="text-base font-bold text-emerald-400 group-hover:text-emerald-300 transition-colors">
                                     +S/ {pago.monto_pagado}
                                 </div>
+                                {userRol === 'admin' && pago.interes_cobrado > 0 && (
+                                    <div className="text-[10px] font-bold text-purple-400/80 uppercase tracking-tighter">
+                                        Ganancia: S/ {pago.interes_cobrado}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -340,7 +427,6 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
                     )}
                 </div>
 
-                {/* Pagination */}
                 <div className="p-4 border-t border-slate-800">
                     <PaginationControlled 
                         currentPage={currentPage}

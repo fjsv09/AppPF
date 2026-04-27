@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition, useEffect, type ReactNode } from 'react'
-import { Plus, Receipt, Loader2 } from 'lucide-react'
+import { Plus, Receipt, Loader2, DollarSign, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -14,6 +14,7 @@ import { ExpenseList } from './expense-list'
 import { BackButton } from '@/components/ui/back-button'
 import { Suspense } from 'react'
 import { ExpenseFilters } from './expense-filters'
+import { cn } from '@/lib/utils'
 
 interface ExpenseManagerClientProps {
   expenses: any[]
@@ -23,6 +24,11 @@ interface ExpenseManagerClientProps {
   advisors: any[]
   userId: string
   userRole: string
+  stats?: {
+    gastadoHoy: number
+    totalEnBusqueda: number
+    hasFilters: boolean
+  }
 }
 
 export function ExpenseManagerClient({ 
@@ -32,7 +38,8 @@ export function ExpenseManagerClient({
   categorias, 
   advisors, 
   userId, 
-  userRole
+  userRole,
+  stats
 }: ExpenseManagerClientProps) {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -93,17 +100,42 @@ export function ExpenseManagerClient({
       </div>
 
       <div className="space-y-6">
+        {/* KPI Cards */}
+        {stats && (
+           <div className={cn("kpi-grid", stats.hasFilters ? "md:grid-cols-2" : "md:grid-cols-1")}>
+              <div className="kpi-card group hover:border-emerald-500/30 flex items-center gap-4">
+                  <div className="p-3 bg-emerald-500/10 rounded-xl group-hover:bg-emerald-500/20 transition-colors">
+                      <DollarSign className="w-7 h-7 text-emerald-500" />
+                  </div>
+                  <div>
+                      <p className="kpi-label">Gastado Hoy</p>
+                      <h3 className="kpi-value">S/ {(stats.gastadoHoy || 0).toLocaleString()}</h3>
+                  </div>
+              </div>
+
+              {stats.hasFilters && (
+                  <div className="kpi-card group hover:border-blue-500/30 flex items-center gap-4 animate-in fade-in slide-in-from-right-4 duration-500">
+                      <div className="p-3 bg-blue-500/10 rounded-xl group-hover:bg-blue-500/20 transition-colors">
+                          <TrendingUp className="w-7 h-7 text-blue-500" />
+                      </div>
+                      <div>
+                          <p className="kpi-label">Total en Búsqueda</p>
+                          <h3 className="kpi-value">S/ {(stats.totalEnBusqueda || 0).toLocaleString()}</h3>
+                      </div>
+                  </div>
+              )}
+           </div>
+        )}
+
         {/* Filters Section - Premium Sticky Bar */}
         <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-800/50 backdrop-blur-xl mb-6 w-full shadow-2xl">
-          <Suspense fallback={<div className="h-12 w-full bg-slate-900/50 animate-pulse rounded-xl" />}>
-            <ExpenseFilters 
-              advisors={advisors} 
-              categories={categorias || []} 
-              userRole={userRole || 'asesor'}
-              isPending={isPending}
-              startTransition={startTransition}
-            />
-          </Suspense>
+          <ExpenseFilters 
+            advisors={advisors} 
+            categories={categorias || []} 
+            userRole={userRole || 'asesor'}
+            isPending={isPending}
+            startTransition={startTransition}
+          />
         </div>
         
         <div className="relative">
@@ -112,6 +144,7 @@ export function ExpenseManagerClient({
             onEdit={handleEdit}
             userRole={userRole}
             isPending={isPending}
+            advisors={advisors}
           />
         </div>
       </div>

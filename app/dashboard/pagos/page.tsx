@@ -21,9 +21,11 @@ export const metadata: Metadata = {
     title: 'Transacciones y Cobros'
 }
 
-export default async function PagosPage(props: { searchParams: Promise<{ fecha?: string, p_page?: string, q?: string, asesor?: string, supervisor?: string, fecha_cuota?: string, turno?: string, metodo?: string, pago_por?: string }> }) {
+export default async function PagosPage(props: { searchParams: Promise<{ fecha?: string, fecha_inicio?: string, fecha_fin?: string, p_page?: string, q?: string, asesor?: string, supervisor?: string, fecha_cuota?: string, turno?: string, metodo?: string, pago_por?: string }> }) {
     const searchParams = await props.searchParams;
     const fechaParam = searchParams.fecha;
+    const fechaInicioParam = searchParams.fecha_inicio;
+    const fechaFinParam = searchParams.fecha_fin;
     const query = searchParams.q;
     const asesorFilter = searchParams.asesor;
     const supervisorFilter = searchParams.supervisor;
@@ -48,7 +50,7 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         .eq('id', user?.id)
         .single()
 
-    const userRol = (perfil?.rol || 'asesor') as 'admin' | 'supervisor' | 'asesor'
+    const userRol = (perfil?.rol || 'asesor') as 'admin' | 'supervisor' | 'asesor' | 'secretaria'
     const userId = user?.id || ''
 
     // [NUEVO] Lógica de Acceso al Sistema
@@ -83,7 +85,10 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         `, { count: 'exact' })
         .not('registrado_por', 'is', null)
         .neq('estado_verificacion', 'rechazado')
-        .eq('es_autopago_renovacion', false)
+    
+    if (userRol !== 'admin') {
+        pagosQuery = pagosQuery.eq('es_autopago_renovacion', false)
+    }
 
     if (userRol === 'asesor') {
         // Asesor: Ve todos los pagos de préstamos de sus clientes (incluyendo los hechos por admin/supervisor)
@@ -126,10 +131,22 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         pagosQuery = pagosQuery.ilike('cronograma_cuotas.prestamos.clientes.nombres', `%${query}%`)
     }
 
-    if (fechaParam) {
+    if (fechaInicioParam && fechaFinParam && userRol === 'admin') {
+        pagosQuery = pagosQuery.gte('fecha_pago', `${fechaInicioParam}T00:00:00`)
+            .lte('fecha_pago', `${fechaFinParam}T23:59:59`)
+    } else if (fechaParam) {
         // Filter by the day of payment
         pagosQuery = pagosQuery.gte('fecha_pago', `${fechaParam}T00:00:00`)
             .lte('fecha_pago', `${fechaParam}T23:59:59`)
+    }
+
+    // [NUEVO] Restricciones temporales por rol
+    if (userRol === 'asesor' || userRol === 'supervisor') {
+        const limitDays = userRol === 'asesor' ? 7 : 30
+        const limitDate = new Date()
+        limitDate.setDate(limitDate.getDate() - limitDays)
+        const limitDateStr = limitDate.toISOString().split('T')[0]
+        pagosQuery = pagosQuery.gte('fecha_pago', `${limitDateStr}T00:00:00`)
     }
 
 
@@ -196,10 +213,12 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
     // We run a separate query for totals to respect filters but ignore pagination
     let statsQuery = supabaseAdmin
         .from('pagos')
-        .select('monto_pagado, fecha_pago, registrado_por, perfiles:registrado_por(rol), cronograma_cuotas!inner(prestamos!inner(clientes!inner(nombres, asesor_id)))')
-        .not('registrado_por', 'is', null)
+        .select('monto_pagado, interes_cobrado, fecha_pago, registrado_por, es_autopago_renovacion, perfiles:registrado_por(rol), cronograma_cuotas!inner(prestamos!inner(clientes!inner(nombres, asesor_id)))')
         .neq('estado_verificacion', 'rechazado')
-        .eq('es_autopago_renovacion', false)
+    
+    if (userRol !== 'admin') {
+        statsQuery = statsQuery.eq('es_autopago_renovacion', false)
+    }
 
     // Apply the same filters as the main list
     if (userRol !== 'admin') {
@@ -239,12 +258,29 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         statsQuery = statsQuery.ilike('cronograma_cuotas.prestamos.clientes.nombres', `%${query}%`)
     }
 
-    if (fechaParam) {
+    if (fechaInicioParam && fechaFinParam && userRol === 'admin') {
+        statsQuery = statsQuery.gte('fecha_pago', `${fechaInicioParam}T00:00:00`)
+            .lte('fecha_pago', `${fechaFinParam}T23:59:59`)
+    } else if (fechaParam) {
         statsQuery = statsQuery.gte('fecha_pago', `${fechaParam}T00:00:00`)
             .lte('fecha_pago', `${fechaParam}T23:59:59`)
+    } else {
+        // [NUEVO] Si no hay filtro de fecha, por defecto estadísticas del MES ACTUAL
+        // para coincidir con el Resumen Financiero global
+        const startOfMonthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01T00:00:00`
+        statsQuery = statsQuery.gte('fecha_pago', startOfMonthStr)
     }
 
-    const { data: statsData } = await statsQuery.not('registrado_por', 'is', null)
+    // [NUEVO] Restricciones temporales por rol en estadísticas
+    if (userRol === 'asesor' || userRol === 'supervisor') {
+        const limitDays = userRol === 'asesor' ? 7 : 30
+        const limitDate = new Date()
+        limitDate.setDate(limitDate.getDate() - limitDays)
+        const limitDateStr = limitDate.toISOString().split('T')[0]
+        statsQuery = statsQuery.gte('fecha_pago', `${limitDateStr}T00:00:00`)
+    }
+
+    const { data: statsData } = await statsQuery
 
 
     
@@ -260,15 +296,28 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         return turno === (turnoFilter === '1' ? 'Turno 1' : 'Turno 2')
     }) || []
 
-    const totalFiltrado = filteredStats.reduce((acc: number, curr: any) => acc + (curr.monto_pagado || 0), 0) || 0
+    const totalFiltrado = filteredStats.reduce((acc: number, curr: any) => {
+        // Para el monto total (Cash), EXCLUIMOS autopagos para que coincida con el resumen global
+        if (curr.es_autopago_renovacion) return acc
+        return acc + (parseFloat(curr.monto_pagado?.toString() || '0'))
+    }, 0) || 0
+
+    const totalGananciaFiltrado = filteredStats.reduce((acc: number, curr: any) => {
+        // Para la ganancia, INCLUIMOS todo (manual + autopagos)
+        return acc + (parseFloat(curr.interes_cobrado?.toString() || '0'))
+    }, 0) || 0
 
     // Today's total for the filtered context
     const now = new Date()
     const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     
     const totalCobradoHoy = filteredStats.filter((p: any) => {
+        return p.fecha_pago.startsWith(todayISO) && !p.es_autopago_renovacion
+    }).reduce((acc: number, curr: any) => acc + (parseFloat(curr.monto_pagado?.toString() || '0')), 0) || 0
+
+    const totalGananciaHoy = filteredStats.filter((p: any) => {
         return p.fecha_pago.startsWith(todayISO)
-    }).reduce((acc: number, curr: any) => acc + (curr.monto_pagado || 0), 0) || 0
+    }).reduce((acc: number, curr: any) => acc + (parseFloat(curr.interes_cobrado?.toString() || '0')), 0) || 0
 
     // Filter main list by turn if selected
     const finalPagos = turnoFilter 
@@ -277,6 +326,8 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
 
     const hasFilters = Boolean(
         fechaParam || 
+        fechaInicioParam ||
+        fechaFinParam ||
         query || 
         asesorFilter || 
         supervisorFilter || 
@@ -307,25 +358,52 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
             </div>
 
             {/* Daily Stats Grid */}
-            <div className={cn("kpi-grid", hasFilters ? "md:grid-cols-2" : "md:grid-cols-1")}>
-                <div className="kpi-card group hover:border-emerald-500/30 flex items-center gap-4">
-                    <div className="p-3 bg-emerald-500/10 rounded-xl group-hover:bg-emerald-500/20 transition-colors">
-                        <DollarSign className="w-7 h-7 text-emerald-500" />
+            <div className={cn("kpi-grid grid-cols-2", 
+                (hasFilters && userRol === 'admin') ? "md:grid-cols-4" : 
+                (hasFilters || userRol === 'admin') ? "md:grid-cols-2" : "md:grid-cols-1"
+            )}>
+                <div className="kpi-card group hover:border-emerald-500/30 flex items-center gap-3 md:gap-4">
+                    <div className="p-2 md:p-3 bg-emerald-500/10 rounded-xl group-hover:bg-emerald-500/20 transition-colors">
+                        <DollarSign className="w-5 h-5 md:w-7 md:h-7 text-emerald-500" />
                     </div>
                     <div>
                         <p className="kpi-label">Cobrado Hoy</p>
-                        <h3 className="kpi-value">${totalCobradoHoy.toLocaleString()}</h3>
+                        <h3 className="kpi-value">S/ {totalCobradoHoy.toFixed(2)}</h3>
                     </div>
                 </div>
 
+                {userRol === 'admin' && (
+                    <div className="kpi-card group hover:border-purple-500/30 flex items-center gap-3 md:gap-4">
+                        <div className="p-2 md:p-3 bg-purple-500/10 rounded-xl group-hover:bg-purple-500/20 transition-colors">
+                            <TrendingUp className="w-5 h-5 md:w-7 md:h-7 text-purple-500" />
+                        </div>
+                        <div>
+                            <p className="kpi-label">Ganancia Hoy</p>
+                            <h3 className="kpi-value text-purple-400">S/ {totalGananciaHoy.toFixed(2)}</h3>
+                        </div>
+                    </div>
+                )}
+
                 {hasFilters && (
-                    <div className="kpi-card group hover:border-blue-500/30 flex items-center gap-4 animate-in fade-in slide-in-from-right-4 duration-500">
-                        <div className="p-3 bg-blue-500/10 rounded-xl group-hover:bg-blue-500/20 transition-colors">
-                            <TrendingUp className="w-7 h-7 text-blue-500" />
+                    <div className="kpi-card group hover:border-blue-500/30 flex items-center gap-3 md:gap-4 animate-in fade-in slide-in-from-right-4 duration-500">
+                        <div className="p-2 md:p-3 bg-blue-500/10 rounded-xl group-hover:bg-blue-500/20 transition-colors">
+                            <TrendingUp className="w-5 h-5 md:w-7 md:h-7 text-blue-500" />
                         </div>
                         <div>
                             <p className="kpi-label">Total en Búsqueda</p>
-                            <h3 className="kpi-value">${totalFiltrado.toLocaleString()}</h3>
+                            <h3 className="kpi-value">S/ {totalFiltrado.toFixed(2)}</h3>
+                        </div>
+                    </div>
+                )}
+
+                {hasFilters && userRol === 'admin' && (
+                    <div className="kpi-card group hover:border-indigo-500/30 flex items-center gap-3 md:gap-4 animate-in fade-in slide-in-from-right-4 duration-500">
+                        <div className="p-2 md:p-3 bg-indigo-500/10 rounded-xl group-hover:bg-indigo-500/20 transition-colors">
+                            <TrendingUp className="w-5 h-5 md:w-7 md:h-7 text-indigo-500" />
+                        </div>
+                        <div>
+                            <p className="kpi-label">Ganancia Búsqueda</p>
+                            <h3 className="kpi-value text-indigo-400">S/ {totalGananciaFiltrado.toFixed(2)}</h3>
                         </div>
                     </div>
                 )}

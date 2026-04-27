@@ -43,6 +43,7 @@ import { PagoModal } from './pago-modal'
 import { LiquidacionModal } from './liquidacion-modal'
 import { AdelantoModal } from './adelanto-modal'
 import { BoletaPDF } from './boleta-pdf'
+import { PaginationControlled } from '@/components/ui/pagination-controlled'
 
 interface NominaPageClientProps {
   trabajadores: { id: string; nombre_completo: string; rol: string }[]
@@ -76,7 +77,7 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
   // Paginación
   const [currentPageActividad, setCurrentPageActividad] = useState(1)
   const [currentPageBoletas, setCurrentPageBoletas] = useState(1)
-  const itemsPerPage = 5
+  const itemsPerPage = 10
   
   const supabase = createClient()
   const selectedTrabajador = trabajadores.find(t => t.id === selectedId)
@@ -580,33 +581,14 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
                 </CardContent>
                 
                 {((activeTab === 'financiero' ? actividadFinanciera.length : actividadAsistencia.length)) > itemsPerPage && (
-                    <div className="p-4 border-t border-slate-800/50 flex items-center justify-between bg-slate-900/50">
-                       <div className="flex flex-col">
-                          <span className="text-[9px] text-slate-500 uppercase font-black tracking-[0.2em]">Página</span>
-                          <span className="text-xs font-black text-blue-400">
-                            {currentPageActividad.toString().padStart(2, '0')} <span className="text-slate-700">/</span> {Math.ceil((activeTab === 'financiero' ? actividadFinanciera.length : actividadAsistencia.length) / itemsPerPage).toString().padStart(2, '0')}
-                          </span>
-                       </div>
-                       <div className="flex gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-10 w-10 p-0 rounded-xl bg-slate-950/50 border border-slate-800 hover:border-blue-500/50 hover:bg-blue-500/10 text-slate-400 hover:text-blue-400 transition-all" 
-                            disabled={currentPageActividad === 1} 
-                            onClick={(e) => { e.stopPropagation(); setCurrentPageActividad(prev => prev - 1) }}
-                          >
-                            <ChevronLeft className="w-5 h-5" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-10 w-10 p-0 rounded-xl bg-slate-950/50 border border-slate-800 hover:border-blue-500/50 hover:bg-blue-500/10 text-slate-400 hover:text-blue-400 transition-all" 
-                            disabled={currentPageActividad === Math.ceil((activeTab === 'financiero' ? actividadFinanciera.length : actividadAsistencia.length) / itemsPerPage)} 
-                            onClick={(e) => { e.stopPropagation(); setCurrentPageActividad(prev => prev + 1) }}
-                          >
-                            <ChevronRight className="w-5 h-5" />
-                          </Button>
-                       </div>
+                    <div className="p-2 border-t border-slate-800/50 bg-slate-900/50">
+                        <PaginationControlled 
+                            currentPage={currentPageActividad}
+                            totalPages={Math.ceil((activeTab === 'financiero' ? actividadFinanciera.length : actividadAsistencia.length) / itemsPerPage)}
+                            onPageChange={setCurrentPageActividad}
+                            totalRecords={activeTab === 'financiero' ? actividadFinanciera.length : actividadAsistencia.length}
+                            pageSize={itemsPerPage}
+                        />
                     </div>
                 )}
             </Card>
@@ -699,33 +681,14 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
               </CardContent>
 
               {history.length > itemsPerPage && (
-                <div className="p-4 border-t border-white/5 flex items-center justify-between mt-auto bg-slate-900/50">
-                   <div className="flex flex-col">
-                      <span className="text-[9px] text-slate-500 uppercase font-black tracking-[0.2em]">Página</span>
-                      <span className="text-xs font-black text-blue-400">
-                        {currentPageBoletas.toString().padStart(2, '0')} <span className="text-slate-700">/</span> {Math.ceil(history.length / itemsPerPage).toString().padStart(2, '0')}
-                      </span>
-                   </div>
-                   <div className="flex gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-10 w-10 p-0 rounded-xl bg-slate-950/50 border border-slate-800 hover:border-blue-500/50 hover:bg-blue-500/10 text-slate-400 hover:text-blue-400 transition-all" 
-                        disabled={currentPageBoletas === 1} 
-                        onClick={(e) => { e.stopPropagation(); setCurrentPageBoletas(prev => prev - 1) }}
-                      >
-                        <ChevronLeft className="w-5 h-5" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-10 w-10 p-0 rounded-xl bg-slate-950/50 border border-slate-800 hover:border-blue-500/50 hover:bg-blue-500/10 text-slate-400 hover:text-blue-400 transition-all" 
-                        disabled={currentPageBoletas === Math.ceil(history.length / itemsPerPage)} 
-                        onClick={(e) => { e.stopPropagation(); setCurrentPageBoletas(prev => prev + 1) }}
-                      >
-                        <ChevronRight className="w-5 h-5" />
-                      </Button>
-                   </div>
+                <div className="p-2 border-t border-white/5 bg-slate-900/50 mt-auto">
+                   <PaginationControlled 
+                      currentPage={currentPageBoletas}
+                      totalPages={Math.ceil(history.length / itemsPerPage)}
+                      onPageChange={setCurrentPageBoletas}
+                      totalRecords={history.length}
+                      pageSize={itemsPerPage}
+                   />
                 </div>
               )}
             </Card>

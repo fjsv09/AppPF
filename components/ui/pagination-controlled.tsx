@@ -21,10 +21,19 @@ export function PaginationControlled({
   pageSize = 10,
   className
 }: PaginationControlledProps) {
-  if (totalPages <= 1) return null
-
   const startRecord = (currentPage - 1) * pageSize + 1
   const endRecord = Math.min(currentPage * pageSize, totalRecords || 0)
+
+  if (totalPages <= 1) {
+    if (totalRecords === undefined || totalRecords === 0) return null
+    return (
+      <div className={cn("flex flex-col sm:flex-row items-center justify-between gap-4 py-4 px-2 w-full", className)}>
+        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+          Mostrando <span className="text-slate-200">{startRecord}-{endRecord}</span> de <span className="text-slate-200">{totalRecords}</span> registros
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={cn("flex flex-col sm:flex-row items-center justify-between gap-4 py-4 px-2 w-full", className)}>

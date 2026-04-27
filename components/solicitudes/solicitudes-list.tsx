@@ -29,6 +29,8 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
     const statusFilter = searchParams.get('status') || 'todos'
     const sortField = (searchParams.get('sortBy') as 'created_at' | 'fecha_aprobacion' | 'fecha_inicio') || 'created_at'
     const sortOrder = (searchParams.get('order') as 'desc' | 'asc') || 'desc'
+    const currentPage = Number(searchParams.get('page')) || 1
+    const ITEMS_PER_PAGE = 10
 
     // Debounce State for Search
     const [localSearch, setLocalSearch] = useState(searchTerm)
@@ -91,6 +93,13 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
             return sortOrder === 'desc' ? dateB - dateA : dateA - dateB
         }) || []
     }, [initialSolicitudes, searchTerm, statusFilter, sortField, sortOrder])
+
+    const totalPages = Math.ceil(filteredSolicitudes.length / ITEMS_PER_PAGE)
+    
+    const paginatedSolicitudes = useMemo(() => {
+        const start = (currentPage - 1) * ITEMS_PER_PAGE
+        return filteredSolicitudes.slice(start, start + ITEMS_PER_PAGE)
+    }, [filteredSolicitudes, currentPage])
 
     return (
         <div className="space-y-4 pb-32">
@@ -234,7 +243,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
 
                         {/* Content */}
                         <div className="flex flex-col gap-4 md:gap-0 md:block">
-                            {filteredSolicitudes.map((solicitud, index) => {
+                            {paginatedSolicitudes.map((solicitud, index) => {
                                 const config = estadoConfig[solicitud.estado_solicitud] || estadoConfig['pendiente_supervision']
                                 const IconComponent = config.icon
                                 const isLast = index === filteredSolicitudes.length - 1
@@ -449,6 +458,19 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                     </>
                 )}
                 </div>
+
+                {/* Pagination */}
+                {filteredSolicitudes.length > 0 && (
+                    <div className="mt-6">
+                        <PaginationControlled 
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            onPageChange={(page) => updateParams({ page: String(page) })}
+                            totalRecords={filteredSolicitudes.length}
+                            pageSize={ITEMS_PER_PAGE}
+                        />
+                    </div>
+                )}
             </div>
         </div>
     )

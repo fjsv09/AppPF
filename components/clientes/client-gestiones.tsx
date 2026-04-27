@@ -88,6 +88,9 @@ export function ClientGestiones({ loans = [], clienteId, clienteNombre = 'Client
     const [modalOpen, setModalOpen] = useState(false)
     const [asignarOpen, setAsignarOpen] = useState(false)
 
+    const [currentPage, setCurrentPage] = useState(1)
+    const ITEMS_PER_PAGE = 10
+
     const canCreate = userRol !== 'admin'
     const isAdmin = userRol === 'admin'
 
@@ -105,9 +108,13 @@ export function ClientGestiones({ loans = [], clienteId, clienteNombre = 'Client
         if (res.ok) {
             const data = await res.json()
             setGestiones(data)
+            setCurrentPage(1) // Reset to first page on loan change
         }
         setLoading(false)
     }
+
+    const totalPages = Math.ceil(gestiones.length / ITEMS_PER_PAGE)
+    const paginatedGestiones = gestiones.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
 
     return (
         <div className="flex flex-col">
@@ -186,59 +193,71 @@ export function ClientGestiones({ loans = [], clienteId, clienteNombre = 'Client
                         </p>
                     </div>
                 ) : (
-                    gestiones.map((gestion) => {
-                        const isAuditoria = gestion.tipo_gestion === 'Auditoria'
-                        const isVisita = gestion.tipo_gestion === 'Visita'
-                        const isWhatsApp = gestion.tipo_gestion === 'WhatsApp'
-                        const isLlamada = gestion.tipo_gestion === 'Llamada'
-                        const isOK = gestion.resultado === 'Confirmado OK'
-                        
-                        const resultColor = RESULTADO_COLOR[gestion.resultado] || 'bg-slate-500/20 text-slate-400 border-slate-500/30'
-                        const tipoColor = TIPO_COLOR[gestion.tipo_gestion] || 'bg-slate-500/10 text-slate-400 border-slate-500/20'
-                        const mapsUrl = gestion.coordenadas ? `https://www.google.com/maps?q=${gestion.coordenadas}` : null
+                    <>
+                        {paginatedGestiones.map((gestion) => {
+                            const isAuditoria = gestion.tipo_gestion === 'Auditoria'
+                            const isVisita = gestion.tipo_gestion === 'Visita'
+                            const isWhatsApp = gestion.tipo_gestion === 'WhatsApp'
+                            const isLlamada = gestion.tipo_gestion === 'Llamada'
+                            const isOK = gestion.resultado === 'Confirmado OK'
+                            
+                            const resultColor = RESULTADO_COLOR[gestion.resultado] || 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+                            const tipoColor = TIPO_COLOR[gestion.tipo_gestion] || 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                            const mapsUrl = gestion.coordenadas ? `https://www.google.com/maps?q=${gestion.coordenadas}` : null
 
-                        return (
-                            <div key={gestion.id} className={cn("relative pl-6 pb-3 border-l last:border-0 last:pb-0", isAuditoria ? "border-amber-900/40" : "border-slate-800/40")}>
-                                <div className={cn(
-                                    "absolute -left-[11px] top-0 w-5 h-5 rounded-full border border-slate-950 flex items-center justify-center shadow-lg",
-                                    isAuditoria ? (isOK ? "bg-emerald-900/60 border-emerald-700/40" : "bg-red-900/60 border-red-700/40")
-                                    : isVisita ? "bg-purple-900/60 border-purple-700/40" : "bg-slate-800 border-slate-700"
-                                )}>
-                                    {isLlamada && <Phone className="w-2.5 h-2.5 text-blue-400" />}
-                                    {isWhatsApp && <MessageSquare className="w-2.5 h-2.5 text-emerald-400" />}
-                                    {isVisita && <MapPin className="w-2.5 h-2.5 text-purple-400" />}
-                                    {isAuditoria && <ShieldAlert className={cn("w-2.5 h-2.5", isOK ? "text-emerald-400" : "text-red-400")} />}
-                                </div>
-                                <div className={cn("rounded-lg border p-2.5", isAuditoria ? "bg-amber-950/5 border-amber-900/20" : isVisita ? "bg-purple-950/5 border-purple-900/20" : "bg-slate-900/30 border-slate-800/40")}>
-                                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                            <Badge variant="outline" className={cn("text-[9px] border px-1 h-4 font-bold uppercase tracking-tight", tipoColor)}>{gestion.tipo_gestion}</Badge>
-                                            <Badge variant="outline" className={cn("text-[9px] border px-1 h-4 font-bold uppercase tracking-tight", resultColor)}>
-                                                {isOK && <CheckCircle2 className="w-2 h-2 mr-1" />}
-                                                {gestion.resultado}
-                                            </Badge>
-                                        </div>
-                                        <span className="text-[9px] font-medium text-slate-500">{formatDatePeru(gestion.created_at)}</span>
+                            return (
+                                <div key={gestion.id} className={cn("relative pl-6 pb-3 border-l last:border-0 last:pb-0", isAuditoria ? "border-amber-900/40" : "border-slate-800/40")}>
+                                    <div className={cn(
+                                        "absolute -left-[11px] top-0 w-5 h-5 rounded-full border border-slate-950 flex items-center justify-center shadow-lg",
+                                        isAuditoria ? (isOK ? "bg-emerald-900/60 border-emerald-700/40" : "bg-red-900/60 border-red-700/40")
+                                        : isVisita ? "bg-purple-900/60 border-purple-700/40" : "bg-slate-800 border-slate-700"
+                                    )}>
+                                        {isLlamada && <Phone className="w-2.5 h-2.5 text-blue-400" />}
+                                        {isWhatsApp && <MessageSquare className="w-2.5 h-2.5 text-emerald-400" />}
+                                        {isVisita && <MapPin className="w-2.5 h-2.5 text-purple-400" />}
+                                        {isAuditoria && <ShieldAlert className={cn("w-2.5 h-2.5", isOK ? "text-emerald-400" : "text-red-400")} />}
                                     </div>
-                                    {gestion.notas && <p className="text-[11px] text-slate-400 leading-snug italic mb-1.5 line-clamp-2">&quot;{gestion.notas}&quot;</p>}
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <div className="text-[9px] text-slate-600 font-medium flex items-center gap-1">
-                                                <Users className="w-2.5 h-2.5" />
-                                                <span>{gestion.usuario?.nombre_completo || 'Sistema'}</span>
+                                    <div className={cn("rounded-lg border p-2.5", isAuditoria ? "bg-amber-950/5 border-amber-900/20" : isVisita ? "bg-purple-950/5 border-purple-900/20" : "bg-slate-900/30 border-slate-800/40")}>
+                                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <Badge variant="outline" className={cn("text-[9px] border px-1 h-4 font-bold uppercase tracking-tight", tipoColor)}>{gestion.tipo_gestion}</Badge>
+                                                <Badge variant="outline" className={cn("text-[9px] border px-1 h-4 font-bold uppercase tracking-tight", resultColor)}>
+                                                    {isOK && <CheckCircle2 className="w-2 h-2 mr-1" />}
+                                                    {gestion.resultado}
+                                                </Badge>
                                             </div>
-                                            {isAuditoria && <Lock className="w-2.5 h-2.5 text-amber-900/40" />}
+                                            <span className="text-[9px] font-medium text-slate-500">{formatDatePeru(gestion.created_at)}</span>
                                         </div>
-                                        {mapsUrl && (
-                                            <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-purple-500 font-bold flex items-center gap-0.5">
-                                                <Navigation2 className="w-2.5 h-2.5" /> Maps
-                                            </a>
-                                        )}
+                                        {gestion.notas && <p className="text-[11px] text-slate-400 leading-snug italic mb-1.5 line-clamp-2">&quot;{gestion.notas}&quot;</p>}
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <div className="text-[9px] text-slate-600 font-medium flex items-center gap-1">
+                                                    <Users className="w-2.5 h-2.5" />
+                                                    <span>{gestion.usuario?.nombre_completo || 'Sistema'}</span>
+                                                </div>
+                                                {isAuditoria && <Lock className="w-2.5 h-2.5 text-amber-900/40" />}
+                                            </div>
+                                            {mapsUrl && (
+                                                <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-purple-500 font-bold flex items-center gap-0.5">
+                                                    <Navigation2 className="w-2.5 h-2.5" /> Maps
+                                                </a>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        )
-                    })
+                            )
+                        })}
+
+                        <div className="pt-2 border-t border-slate-800/50">
+                            <PaginationControlled 
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                onPageChange={setCurrentPage}
+                                totalRecords={gestiones.length}
+                                pageSize={ITEMS_PER_PAGE}
+                            />
+                        </div>
+                    </>
                 )}
             </div>
 

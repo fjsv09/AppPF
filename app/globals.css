@@ -266,7 +266,7 @@ body {
   }
 
   .kpi-card {
-    @apply rounded-2xl p-4 shadow-xl relative overflow-hidden transition-all duration-300;
+    @apply rounded-2xl p-3 md:p-4 shadow-xl relative overflow-hidden transition-all duration-300;
     background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(2, 6, 23, 0.95));
     border: 1px solid rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(10px);

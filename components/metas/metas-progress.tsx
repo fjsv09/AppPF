@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { esDiaHabil } from '@/lib/financial-logic'
+import { PaginationControlled } from '@/components/ui/pagination-controlled'
 
 interface MetasProgressProps {
   userId: string
@@ -57,6 +58,10 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
   const [historialDescuentos, setHistorialDescuentos] = useState<any[]>([])
   const [asesoresInfo, setAsesoresInfo] = useState<any[]>([])
   const [projectedBonuses, setProjectedBonuses] = useState<any[]>([])
+
+  const [currentPageBonos, setCurrentPageBonos] = useState(1)
+  const [currentPageDescuentos, setCurrentPageDescuentos] = useState(1)
+  const ITEMS_PER_PAGE = 10
 
   const supabase = createClient()
   const esSupervisorOAdmin = userRole === 'supervisor' || userRole === 'admin'
@@ -117,12 +122,15 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
       setBonosPagadosMes(pagadosMes)
       setBonosPendientes(pendientesORechazados)
 
+      // Quitamos el limit(20) para permitir paginación local si se desea, 
+      // pero por ahora mantendremos el limit en 50 para no sobrecargar y paginaremos esos 50.
+      // O mejor, quitamos el limit ya que son bonos de un solo asesor, no serán miles.
       const { data: histBonos } = await supabase
         .from('bonos_pagados')
         .select('*, metas_asesores(*)')
         .eq('asesor_id', userId)
         .order('created_at', { ascending: false })
-        .limit(20)
+        .limit(100) 
       setHistorialBonos(histBonos || [])
 
       const { data: histDescuentos } = await supabase
@@ -130,7 +138,7 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
         .select('*')
         .eq('trabajador_id', userId)
         .order('fecha', { ascending: false })
-        .limit(20)
+        .limit(100)
       setHistorialDescuentos(histDescuentos || [])
 
       // Fetch Real Time Stats
@@ -432,62 +440,78 @@ export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProp
               Últimos Movimientos
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y divide-slate-800/50">
-              {historialBonos.map((h, i) => {
-                const meta = h.metas_asesores;
-                let nombreBono = 'Bono de Gestión';
+          <CardContent className="p-0 flex flex-col h-full">
+            <div className="divide-y divide-slate-800/50 flex-1">
+              {(() => {
+                const start = (currentPageBonos - 1) * ITEMS_PER_PAGE
+                const paginatedBonos = historialBonos.slice(start, start + ITEMS_PER_PAGE)
                 
-                if (meta) {
-                  if (meta.meta_cobro) nombreBono = 'Bono Cobranza';
-                  else if (meta.meta_retencion_clientes) nombreBono = 'Bono Retención';
-                  else if (meta.meta_colocacion_clientes) nombreBono = 'Bono x Cliente';
-                  else if (meta.meta_cantidad_clientes) nombreBono = 'Bono Clientes Nuevos';
-                  else if (meta.meta_colocacion) nombreBono = 'Bono Colocación';
-                  else if (meta.escalones_mora) nombreBono = 'Bono Morosidad';
-                }
+                return paginatedBonos.map((h, i) => {
+                  const meta = h.metas_asesores;
+                  let nombreBono = 'Bono de Gestión';
+                  
+                  if (meta) {
+                    if (meta.meta_cobro) nombreBono = 'Bono Cobranza';
+                    else if (meta.meta_retencion_clientes) nombreBono = 'Bono Retención';
+                    else if (meta.meta_colocacion_clientes) nombreBono = 'Bono x Cliente';
+                    else if (meta.meta_cantidad_clientes) nombreBono = 'Bono Clientes Nuevos';
+                    else if (meta.meta_colocacion) nombreBono = 'Bono Colocación';
+                    else if (meta.escalones_mora) nombreBono = 'Bono Morosidad';
+                  }
 
-                return (
-                  <div key={h.id || i} className="p-3 flex items-center justify-between group hover:bg-slate-800/30 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        h.estado === 'aprobado' ? 'bg-emerald-500/10 text-emerald-500' : 
-                        h.estado === 'rechazado' ? 'bg-rose-500/10 text-rose-500' : 
-                        'bg-amber-500/10 text-amber-500'
-                      }`}>
-                        {h.estado === 'aprobado' ? <CheckCircle2 className="w-4 h-4" /> : 
-                         h.estado === 'rechazado' ? <AlertCircle className="w-4 h-4" /> : 
-                         <Clock className="w-4 h-4" />}
+                  return (
+                    <div key={h.id || i} className="p-3 flex items-center justify-between group hover:bg-slate-800/30 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          h.estado === 'aprobado' ? 'bg-emerald-500/10 text-emerald-500' : 
+                          h.estado === 'rechazado' ? 'bg-rose-500/10 text-rose-500' : 
+                          'bg-amber-500/10 text-amber-500'
+                        }`}>
+                          {h.estado === 'aprobado' ? <CheckCircle2 className="w-4 h-4" /> : 
+                           h.estado === 'rechazado' ? <AlertCircle className="w-4 h-4" /> : 
+                           <Clock className="w-4 h-4" />}
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-black text-white uppercase tracking-tight">
+                            {nombreBono} <span className="text-slate-500 font-medium ml-1">
+                              ({h.estado === 'pendiente' ? 'En Revisión' : 
+                                h.estado === 'rechazado' ? 'Rechazado' : 'Abonado'})
+                            </span>
+                          </p>
+                          <p className="text-[9px] text-slate-500 flex items-center gap-1 mt-0.5">
+                             <Calendar className="w-2.5 h-2.5" />
+                             {format(new Date(h.created_at), 'dd MMM yyyy', { locale: es })}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[11px] font-black text-white uppercase tracking-tight">
-                          {nombreBono} <span className="text-slate-500 font-medium ml-1">
-                            ({h.estado === 'pendiente' ? 'En Revisión' : 
-                              h.estado === 'rechazado' ? 'Rechazado' : 'Abonado'})
-                          </span>
-                        </p>
-                        <p className="text-[9px] text-slate-500 flex items-center gap-1 mt-0.5">
-                           <Calendar className="w-2.5 h-2.5" />
-                           {format(new Date(h.created_at), 'dd MMM yyyy', { locale: es })}
+                      <div className="text-right">
+                        <p className={`text-xs font-black ${
+                           h.estado === 'rechazado' ? 'text-rose-500 line-through opacity-50' : 'text-amber-500'
+                        }`}>
+                          S/ {Number(h.monto || 0).toLocaleString()}
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className={`text-xs font-black ${
-                         h.estado === 'rechazado' ? 'text-rose-500 line-through opacity-50' : 'text-amber-500'
-                      }`}>
-                        S/ {Number(h.monto || 0).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              })()}
               {historialBonos.length === 0 && (
                 <div className="p-10 text-center">
                   <p className="text-[11px] text-slate-600 italic">No hay movimientos recientes.</p>
                 </div>
               )}
             </div>
+            {historialBonos.length > 0 && (
+              <div className="p-3 border-t border-slate-800/50 bg-slate-900/20">
+                <PaginationControlled 
+                  currentPage={currentPageBonos}
+                  totalPages={Math.ceil(historialBonos.length / ITEMS_PER_PAGE)}
+                  onPageChange={setCurrentPageBonos}
+                  totalRecords={historialBonos.length}
+                  pageSize={ITEMS_PER_PAGE}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

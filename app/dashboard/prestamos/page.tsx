@@ -10,7 +10,7 @@ import { PrestamosTable } from "@/components/prestamos/prestamos-table";
 import { TableSkeleton } from "@/components/prestamos/table-skeleton";
 import { AdminLoanActions } from "@/components/prestamos/admin-loan-actions";
 import { BackButton } from "@/components/ui/back-button";
-import { getTodayPeru, calculateLoanMetrics } from "@/lib/financial-logic";
+import { getTodayPeru, calculateLoanMetrics, calculateMoraBancaria } from "@/lib/financial-logic";
 import { cn } from "@/lib/utils";
 import { DashboardAlerts } from "@/components/dashboard/dashboard-alerts";
 import { checkAdvisorBlocked } from "@/utils/checkAdvisorBlocked";
@@ -439,34 +439,9 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     const totalDeudaConInteres = prestamos.reduce((acc, p) => acc + (parseFloat(p.monto) * (1 + (parseFloat(p.interes)/100))), 0) || 1
     const porcentajeRecuperacion = (totalPagado / totalDeudaConInteres) * 100
 
-    // 4. Mora Bancaria (Formula: Capital Vencido / Capital Original)
-    // Formula que usa el usuario en su sistema
-    let totalCapitalOriginal = 0
-    let totalCapitalVencido = 0
-    
-    prestamos.filter(p => p.estado === 'activo').forEach(p => {
-        const montoCapital = parseFloat(p.monto) || 0
-        totalCapitalOriginal += montoCapital
-        
-        const cuotas = p.cronograma_cuotas || []
-        const numCuotas = cuotas.length || 30
-        const capitalPorCuota = montoCapital / numCuotas
-        
-        // Sumar capital de cuotas vencidas proporcionalmente (Incluye HOY)
-        cuotas.filter((c: any) => c.fecha_vencimiento <= today && c.estado !== 'pagado').forEach((c: any) => {
-            const montoCuota = parseFloat(c.monto_cuota) || 0
-            const montoPagado = parseFloat(c.monto_pagado) || 0
-            const pendiente = Math.max(0, montoCuota - montoPagado)
-            
-            if (pendiente > 0.01) {
-                const proporcionPendiente = montoCuota > 0 ? pendiente / montoCuota : 1
-                totalCapitalVencido += capitalPorCuota * proporcionPendiente
-            }
-        })
-    })
-
-    const tasaMorosidadCapital = totalCapitalOriginal > 0 ? (totalCapitalVencido / totalCapitalOriginal) * 100 : 0
-    const capitalEnRiesgo = totalCapitalVencido // Capital retenido en mora
+    const moraBancaria = calculateMoraBancaria(prestamos, today);
+    const tasaMorosidadCapital = moraBancaria.tasaMorosidadCapital;
+    const capitalEnRiesgo = moraBancaria.capitalVencido;
     
     // Alertas Graves (Supervisor Rule):
     // Daily -> 7+ overdue. Other -> 2+ overdue.
@@ -478,53 +453,29 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     const clientesEnMora = prestamos.filter(p => p.metrics?.isMora).length
 
     // Meta de Ruta Hoy: Suma de las cuotas programadas para hoy (fijo)
-    const prestamosActivosHoy = prestamos.filter(p => p.estado === 'activo')
-    const metaCobranzaHoy = prestamosActivosHoy.reduce((acc: number, p: any) => acc + (p.cuota_dia_programada || 0), 0)
-    const recaudadoTotalHoy = prestamosActivosHoy.reduce((acc: number, p: any) => acc + (p.cobrado_hoy || 0), 0)
-    const recaudadoRutaHoy = prestamosActivosHoy.reduce((acc: number, p: any) => acc + (p.cobrado_ruta_hoy || 0), 0)
+    // Meta de Ruta Hoy: Suma de las cuotas programadas para hoy (fijo)
+    // [SINCRONIZADO] Consideramos activos, legales y estados de riesgo (como en Supervisión Central)
+    const relevantForToday = prestamos.filter(p => ['activo', 'legal', 'vencido', 'moroso', 'cpp'].includes(p.estado))
+    
+    const metaCobranzaHoy = relevantForToday.reduce((acc: number, p: any) => acc + (p.cuota_dia_programada || 0), 0)
+    const recaudadoTotalHoy = relevantForToday.reduce((acc: number, p: any) => acc + (p.cobrado_hoy || 0), 0)
+    const recaudadoRutaHoy = relevantForToday.reduce((acc: number, p: any) => acc + (p.cobrado_ruta_hoy || 0), 0)
     
     // Pendientes Hoy: Clientes que tienen pago programado hoy > 0 y pendiente
-    const clientesPendientesHoy = prestamos.filter(p => p.cuota_dia_hoy > 0).length
-    const totalClientesHoy = prestamos.filter(p => (p.cuota_dia_programada || 0) > 0).length
+    const clientesPendientesHoy = relevantForToday.filter(p => p.cuota_dia_hoy > 0).length
+    const totalClientesHoy = relevantForToday.filter(p => (p.cuota_dia_programada || 0) > 0).length
     const clientesCobradosHoy = totalClientesHoy - clientesPendientesHoy
     
     // Use strictly evaluated property for perfectly synchronized counts
     const oportunidadesRenovacion = prestamos.filter(p => p.es_renovable_estricto).length
 
-    // 4.5 Eficiencia de Cobranza REUTILIZADA (Hoy + Atrasadas)
+    // 4.5 Eficiencia de Cobranza CENTRALIZADA (Hoy + Atrasadas)
     let metaEficienciaTotal = 0
     let cobradoEficienciaTotal = 0
 
-    prestamosActivosHoy.forEach(p => {
-        const cronograma = p.cronograma_cuotas || []
-        cronograma.forEach((c: any) => {
-            if (c.fecha_vencimiento <= today) {
-                const montoCuota = parseFloat(c.monto_cuota) || 0
-                
-                // Filtrar pagos válidos (No rechazados, No pendientes para el KPI real)
-                const pagosValidos = (c.pagos || []).filter((pay: any) => 
-                    pay.estado_verificacion !== 'rechazado' && 
-                    pay.estado_verificacion !== 'pendiente'
-                );
-
-                const pagadoHoy = pagosValidos
-                    .filter((pay: any) => {
-                        try {
-                            return new Date(pay.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Lima' }) === today;
-                        } catch (e) { return false; }
-                    })
-                    .reduce((s: number, pay: any) => s + (Number(pay.monto_pagado) || 0), 0)
-
-                const pagadoAcumulado = pagosValidos.reduce((s: number, pay: any) => s + (Number(pay.monto_pagado) || 0), 0)
-                const pagadoAntes = Math.max(0, pagadoAcumulado - pagadoHoy)
-                const pendienteAlInicio = Math.max(0, montoCuota - pagadoAntes)
-
-                if (pendienteAlInicio > 0.01) {
-                    metaEficienciaTotal += pendienteAlInicio
-                    cobradoEficienciaTotal += Math.min(pagadoHoy, pendienteAlInicio)
-                }
-            }
-        })
+    relevantForToday.forEach(p => {
+        metaEficienciaTotal += p.metrics.metaTotalHoyYAtrasados
+        cobradoEficienciaTotal += p.metrics.cobradoTotalHoyYAtrasados
     })
     const porcentajeEficiencia = metaEficienciaTotal > 0 ? (cobradoEficienciaTotal / metaEficienciaTotal) * 100 : 0
 

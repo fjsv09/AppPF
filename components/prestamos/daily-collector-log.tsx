@@ -14,6 +14,8 @@ import { VisitActionButton } from './visit-action-button'
 import { useRouter } from 'next/navigation'
 import { api } from '@/services/api'
 
+import { PaginationControlled } from '@/components/ui/pagination-controlled'
+
 export function DailyCollectorLog({ 
     cronograma, 
     pagos, 
@@ -31,6 +33,9 @@ export function DailyCollectorLog({
     const [isVoucherOpen, setIsVoucherOpen] = useState(false)
     const [isEditModalOpen, setIsEditModalOpen] = useState(false)
     const [quickPayOpen, setQuickPayOpen] = useState(false)
+    const [currentPage, setCurrentPage] = useState(1)
+    const ITEMS_PER_PAGE = 10
+
     const today = startOfDay(new Date())
     const todayStr = new Intl.DateTimeFormat('en-CA', { 
         timeZone: 'America/Lima', 
@@ -310,138 +315,154 @@ export function DailyCollectorLog({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/40">
-                            {allRows.map(({ date, cuota, physical }) => {
-                                const totalDay = physical.reduce((s: any, p: any) => s + Number(p.monto_pagado), 0)
-                                const qDate = startOfDay(new Date(date + 'T12:00:00')), isFuture = isAfter(qDate, today), isVirtual = !cuota
-                                const isMigrado = prestamo.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
-                                const cVal = cuota ? Number(cuota.monto_cuota || 0) : 0, pVal = cuota ? Number(cuota.monto_pagado || 0) : 0
-                                const isFull = cuota ? (pVal >= (cVal - 0.01)) : false, isPart = cuota ? (pVal > 0 && !isFull) : false
-                                 
-                                 const sources = cuota ? (waterfallData.quotaSources[cuota.id] || []) : []
-                                 const isCoveredByAdvance = sources.some((s: any) => s.type === 'advance' && s.paymentDate !== date)
+                            {(() => {
+                                const start = (currentPage - 1) * ITEMS_PER_PAGE
+                                const paginatedRows = allRows.slice(start, start + ITEMS_PER_PAGE)
                                 
-                                let st = { l: "NO PAGÓ", c: "text-rose-500 bg-rose-500/10", bg: "bg-rose-500/5" }
-                                if (isVirtual) st = { l: "EXTRA", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
-                                else if (isFull) {
-                                  if (totalDay > 0) st = { l: "PAGO", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
-                                  else if (isCoveredByAdvance) st = { l: "SISTEMA", c: "text-blue-400 bg-blue-500/10", bg: "bg-blue-500/10" }
-                                  else st = { l: "SISTEMA", c: isMigrado ? "text-sky-400 bg-sky-500/10" : "text-rose-500 bg-rose-500/10", bg: isMigrado ? "bg-sky-500/5" : "bg-rose-500/5" }
-                                } else if (isPart) {
-                                  if (totalDay > 0) st = { l: "ABONÓ", c: "text-amber-400 bg-amber-500/10", bg: "bg-amber-500/5" }
-                                  else if (isCoveredByAdvance) st = { l: "SISTEMA", c: "text-blue-400 bg-blue-500/10", bg: "bg-blue-500/10" }
-                                  else st = { l: "SISTEMA", c: isMigrado ? "text-sky-400 bg-sky-500/10" : "text-rose-500 bg-rose-500/10", bg: isMigrado ? "bg-sky-500/5" : "bg-rose-500/5" }
-                                } else if (totalDay > 0) {
-                                  // Regla de Recaudación Física: Si se cobró dinero pero se aplicó a deudas anteriores
-                                  if (totalDay >= (cVal - 0.01)) st = { l: "PAGO", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
-                                  else st = { l: "ABONÓ", c: "text-amber-400 bg-amber-500/10", bg: "bg-amber-500/5" }
-                                } else if (isFuture) st = { l: "PENDIENTE", c: "text-slate-500 bg-slate-800/20", bg: "" }
+                                return paginatedRows.map(({ date, cuota, physical }) => {
+                                    const totalDay = physical.reduce((s: any, p: any) => s + Number(p.monto_pagado), 0)
+                                    const qDate = startOfDay(new Date(date + 'T12:00:00')), isFuture = isAfter(qDate, today), isVirtual = !cuota
+                                    const isMigrado = prestamo.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+                                    const cVal = cuota ? Number(cuota.monto_cuota || 0) : 0, pVal = cuota ? Number(cuota.monto_pagado || 0) : 0
+                                    const isFull = cuota ? (pVal >= (cVal - 0.01)) : false, isPart = cuota ? (pVal > 0 && !isFull) : false
+                                     
+                                     const sources = cuota ? (waterfallData.quotaSources[cuota.id] || []) : []
+                                     const isCoveredByAdvance = sources.some((s: any) => s.type === 'advance' && s.paymentDate !== date)
+                                    
+                                    let st = { l: "NO PAGÓ", c: "text-rose-500 bg-rose-500/10", bg: "bg-rose-500/5" }
+                                    if (isVirtual) st = { l: "EXTRA", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
+                                    else if (isFull) {
+                                      if (totalDay > 0) st = { l: "PAGO", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
+                                      else if (isCoveredByAdvance) st = { l: "SISTEMA", c: "text-blue-400 bg-blue-500/10", bg: "bg-blue-500/10" }
+                                      else st = { l: "SISTEMA", c: isMigrado ? "text-sky-400 bg-sky-500/10" : "text-rose-500 bg-rose-500/10", bg: isMigrado ? "bg-sky-500/5" : "bg-rose-500/5" }
+                                    } else if (isPart) {
+                                      if (totalDay > 0) st = { l: "ABONÓ", c: "text-amber-400 bg-amber-500/10", bg: "bg-amber-500/5" }
+                                      else if (isCoveredByAdvance) st = { l: "SISTEMA", c: "text-blue-400 bg-blue-500/10", bg: "bg-blue-500/10" }
+                                      else st = { l: "SISTEMA", c: isMigrado ? "text-sky-400 bg-sky-500/10" : "text-rose-500 bg-rose-500/10", bg: isMigrado ? "bg-sky-500/5" : "bg-rose-500/5" }
+                                    } else if (totalDay > 0) {
+                                      // Regla de Recaudación Física: Si se cobró dinero pero se aplicó a deudas anteriores
+                                      if (totalDay >= (cVal - 0.01)) st = { l: "PAGO", c: "text-emerald-400 bg-emerald-500/10", bg: "bg-emerald-500/5" }
+                                      else st = { l: "ABONÓ", c: "text-amber-400 bg-amber-500/10", bg: "bg-amber-500/5" }
+                                    } else if (isFuture) st = { l: "PENDIENTE", c: "text-slate-500 bg-slate-800/20", bg: "" }
 
-                                return (
-                                    <tr key={date} className={cn("group transition-colors text-[10px]", st.bg)}>
-                                        <td className="px-3 py-4 text-center font-black text-slate-700">{cuota?.numero_cuota || 'EXT'}</td>
-                                        <td className="px-3 py-4 font-bold uppercase text-slate-400">
-                                            <div className="flex items-center gap-1"><Calendar className="w-3 h-3 text-slate-600" />{format(qDate, "eee d MMM", { locale: es })}</div>
-                                            {isVirtual && <span className="text-[7px] text-blue-500 font-extrabold block mt-0.5 ml-4">COBRO EXTRA</span>}
-                                        </td>
-                                        <td className="px-3 py-4 text-center">
-                                            <div className="flex flex-col gap-2 font-bold items-center">
-                                                {physical.map((p: any) => <div key={p.id} className="flex items-center gap-1 text-slate-300"><Clock className="w-2.5 h-2.5 text-blue-500" />{formatDatePeru(p.created_at, "time")}</div>)}
-                                                {physical.length === 0 && <span className="text-slate-800">--:--</span>}
-                                            </div>
-                                        </td>
-                                        <td className="px-3 py-4">
-                                            <div className="flex flex-col gap-2 font-bold text-slate-400">
-                                                {physical.map((p: any) => <div key={p.id} className="truncate max-w-[60px]"><User className="w-2 h-2 inline mr-0.5" />{p.perfiles?.nombre_completo?.split(' ')[0]}</div>)}
-                                                {physical.length === 0 && <span className="text-slate-800">---</span>}
-                                            </div>
-                                        </td>
-                                        <td className="px-3 py-4 text-center font-black text-slate-500">
-                                            {cuota ? `S/ ${cVal}` : '---'}
-                                        </td>
-                                        <td className="px-3 py-4 text-center">
-                                            <div className="flex flex-col gap-1 items-center">
-                                                {physical.map((p: any) => (
-                                                    <div key={p.id} className="flex items-center gap-1.5 bg-slate-950/40 px-1.5 py-1 rounded border border-slate-800/50 w-full group/v">
-                                                        <span className="text-[10px] font-black text-emerald-400 flex-1 text-left">S/ {Number(p.monto_pagado)}</span>
-                                                        <div className="flex items-center gap-0.5">
-                                                            <Button size="sm" variant="ghost" onClick={() => { setSelectedPayment(p); setIsVoucherOpen(true); }} className="h-4 w-4 p-0 text-slate-600 hover:text-emerald-400"><Receipt className="w-2.5 h-2.5" /></Button>
-                                                            {userRole === 'admin' && date === todayStr && !isPaymentLocked(p) && (
-                                                                <Button size="sm" variant="ghost" onClick={() => { setSelectedPayment(p); setIsEditModalOpen(true); }} className="h-4 w-4 p-0 text-slate-600 hover:text-blue-400"><Pencil className="w-2.5 h-2.5" /></Button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                                {physical.length === 0 && <span className="text-slate-800 font-black">S/ 0</span>}
-                                            </div>
-                                        </td>
-                                        <td className="px-3 py-4 text-center">
-                                            <div className="flex flex-col gap-2 items-center">
-                                                {physical.map((p: any) => <Badge key={p.id} variant="outline" className="text-[7px] font-black h-3.5 px-1 py-0 bg-slate-900 text-slate-500 border-slate-800 uppercase">{p.metodo_pago}</Badge>)}
-                                                {physical.length === 0 && <span className="text-slate-800">---</span>}
-                                            </div>
-                                        </td>
-                                        <td className="px-3 py-4">
-                                            <div className="space-y-1.5">
-                                                {/* 1. Destino del dinero recibido HOY */}
-                                                {physical.map((p: any) => {
-                                                    const dests = (waterfallData.paymentDestinations[p.id] || [])
-                                                    return (
-                                                        <div key={p.id} className="pl-1.5 border-l border-emerald-500/30">
-                                                            <div className="flex items-center gap-1 text-emerald-400 font-black text-[10px] uppercase">
-                                                                <CheckCircle2 className="w-3 h-3" /> Cobro en ruta
+                                    return (
+                                        <tr key={date} className={cn("group transition-colors text-[10px]", st.bg)}>
+                                            <td className="px-3 py-4 text-center font-black text-slate-700">{cuota?.numero_cuota || 'EXT'}</td>
+                                            <td className="px-3 py-4 font-bold uppercase text-slate-400">
+                                                <div className="flex items-center gap-1"><Calendar className="w-3 h-3 text-slate-600" />{format(qDate, "eee d MMM", { locale: es })}</div>
+                                                {isVirtual && <span className="text-[7px] text-blue-500 font-extrabold block mt-0.5 ml-4">COBRO EXTRA</span>}
+                                            </td>
+                                            <td className="px-3 py-4 text-center">
+                                                <div className="flex flex-col gap-2 font-bold items-center">
+                                                    {physical.map((p: any) => <div key={p.id} className="flex items-center gap-1 text-slate-300"><Clock className="w-2.5 h-2.5 text-blue-500" />{formatDatePeru(p.created_at, "time")}</div>)}
+                                                    {physical.length === 0 && <span className="text-slate-800">--:--</span>}
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-4">
+                                                <div className="flex flex-col gap-2 font-bold text-slate-400">
+                                                    {physical.map((p: any) => <div key={p.id} className="truncate max-w-[60px]"><User className="w-2 h-2 inline mr-0.5" />{p.perfiles?.nombre_completo?.split(' ')[0]}</div>)}
+                                                    {physical.length === 0 && <span className="text-slate-800">---</span>}
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-4 text-center font-black text-slate-500">
+                                                {cuota ? `S/ ${cVal}` : '---'}
+                                            </td>
+                                            <td className="px-3 py-4 text-center">
+                                                <div className="flex flex-col gap-1 items-center">
+                                                    {physical.map((p: any) => (
+                                                        <div key={p.id} className="flex items-center gap-1.5 bg-slate-950/40 px-1.5 py-1 rounded border border-slate-800/50 w-full group/v">
+                                                            <span className="text-[10px] font-black text-emerald-400 flex-1 text-left">S/ {Number(p.monto_pagado)}</span>
+                                                            <div className="flex items-center gap-0.5">
+                                                                <Button size="sm" variant="ghost" onClick={() => { setSelectedPayment(p); setIsVoucherOpen(true); }} className="h-4 w-4 p-0 text-slate-600 hover:text-emerald-400"><Receipt className="w-2.5 h-2.5" /></Button>
+                                                                {userRole === 'admin' && date === todayStr && !isPaymentLocked(p) && (
+                                                                    <Button size="sm" variant="ghost" onClick={() => { setSelectedPayment(p); setIsEditModalOpen(true); }} className="h-4 w-4 p-0 text-slate-600 hover:text-blue-400"><Pencil className="w-2.5 h-2.5" /></Button>
+                                                                )}
                                                             </div>
-                                                            {dests.map((d: any, i: number) => (
-                                                                <p key={i} className="text-[9px] text-slate-300 font-bold leading-tight ml-4">
-                                                                    → S/ {Math.round(d.amount)} a <span className={cn(d.type === 'advance' && "text-blue-400")}>{d.type === 'arrear' ? 'Atraso' : d.type === 'advance' ? 'Adelanto de Cuota' : 'Cuota'}</span> #{d.quotaNum}
+                                                        </div>
+                                                    ))}
+                                                    {physical.length === 0 && <span className="text-slate-800 font-black">S/ 0</span>}
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-4 text-center">
+                                                <div className="flex flex-col gap-2 items-center">
+                                                    {physical.map((p: any) => <Badge key={p.id} variant="outline" className="text-[7px] font-black h-3.5 px-1 py-0 bg-slate-900 text-slate-500 border-slate-800 uppercase">{p.metodo_pago}</Badge>)}
+                                                    {physical.length === 0 && <span className="text-slate-800">---</span>}
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-4">
+                                                <div className="space-y-1.5">
+                                                    {/* 1. Destino del dinero recibido HOY */}
+                                                    {physical.map((p: any) => {
+                                                        const dests = (waterfallData.paymentDestinations[p.id] || [])
+                                                        return (
+                                                            <div key={p.id} className="pl-1.5 border-l border-emerald-500/30">
+                                                                <div className="flex items-center gap-1 text-emerald-400 font-black text-[10px] uppercase">
+                                                                    <CheckCircle2 className="w-3 h-3" /> Cobro en ruta
+                                                                </div>
+                                                                {dests.map((d: any, i: number) => (
+                                                                    <p key={i} className="text-[9px] text-slate-300 font-bold leading-tight ml-4">
+                                                                        → S/ {Math.round(d.amount)} a <span className={cn(d.type === 'advance' && "text-blue-400")}>{d.type === 'arrear' ? 'Atraso' : d.type === 'advance' ? 'Adelanto de Cuota' : 'Cuota'}</span> #{d.quotaNum}
+                                                                    </p>
+                                                                ))}
+                                                                {dests.length === 0 && <p className="text-[9px] text-slate-500 ml-4">Dinero en bolsa (Excedente Final)</p>}
+                                                            </div>
+                                                        )
+                                                    })}
+
+                                                    {/* 2. Origen del pago de la cuota de HOY (si no fue pagada totalmente con dinero de hoy) */}
+                                                    {cuota && (pVal > 0) && (
+                                                        <div className="pl-1.5 border-l border-sky-500/30">
+                                                            {waterfallData.quotaSources[cuota.id]?.filter((s: any) => s.paymentDate !== date).map((s: any, i: number) => (
+                                                                <p key={i} className="text-[9px] text-sky-400 font-bold leading-tight flex items-center gap-1">
+                                                                    <ArrowRightCircle className="w-3 h-3" /> 
+                                                                    {s.type === 'system' 
+                                                                        ? 'Saldada con Excedente Anterior (Sistema)' 
+                                                                        : <span className={cn(s.type === 'advance' ? 'text-blue-400' : 'text-sky-400')}>
+                                                                            Cubierta con {s.type === 'advance' ? 'Adelanto de Cuota' : 'Excedente'} del {s.paymentDate.split('-').reverse().slice(0,2).join('/')}
+                                                                          </span>
+                                                                    }
                                                                 </p>
                                                             ))}
-                                                            {dests.length === 0 && <p className="text-[9px] text-slate-500 ml-4">Dinero en bolsa (Excedente Final)</p>}
+                                                            {/* Fallback para migración o inconsistencias */}
+                                                            {(!waterfallData.quotaSources[cuota.id]?.some((s: any) => s.paymentDate !== date)) && totalDay === 0 && isFull && isMigrado && (
+                                                                <p className="text-[8px] text-sky-400 leading-tight italic flex items-center gap-1 uppercase font-black">
+                                                                    <ArrowRightCircle className="w-2.5 h-2.5" /> Saldada (Sistema/Migración)
+                                                                </p>
+                                                            )}
                                                         </div>
-                                                    )
-                                                })}
+                                                    )}
 
-                                                {/* 2. Origen del pago de la cuota de HOY (si no fue pagada totalmente con dinero de hoy) */}
-                                                {cuota && (pVal > 0) && (
-                                                    <div className="pl-1.5 border-l border-sky-500/30">
-                                                        {waterfallData.quotaSources[cuota.id]?.filter((s: any) => s.paymentDate !== date).map((s: any, i: number) => (
-                                                            <p key={i} className="text-[9px] text-sky-400 font-bold leading-tight flex items-center gap-1">
-                                                                <ArrowRightCircle className="w-3 h-3" /> 
-                                                                {s.type === 'system' 
-                                                                    ? 'Saldada con Excedente Anterior (Sistema)' 
-                                                                    : <span className={cn(s.type === 'advance' ? 'text-blue-400' : 'text-sky-400')}>
-                                                                        Cubierta con {s.type === 'advance' ? 'Adelanto de Cuota' : 'Excedente'} del {s.paymentDate.split('-').reverse().slice(0,2).join('/')}
-                                                                      </span>
-                                                                }
-                                                            </p>
-                                                        ))}
-                                                        {/* Fallback para migración o inconsistencias */}
-                                                        {(!waterfallData.quotaSources[cuota.id]?.some((s: any) => s.paymentDate !== date)) && totalDay === 0 && isFull && isMigrado && (
-                                                            <p className="text-[8px] text-sky-400 leading-tight italic flex items-center gap-1 uppercase font-black">
-                                                                <ArrowRightCircle className="w-2.5 h-2.5" /> Saldada (Sistema/Migración)
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                    {/* 3. Caso Extra (Cobros sin cuota asociada en esa fecha pero que no son pagos físicos hoy) */}
+                                                    {isVirtual && totalDay === 0 && <p className="text-[9px] text-emerald-400/60 leading-tight font-bold">Regularización automática de saldos.</p>}
 
-                                                {/* 3. Caso Extra (Cobros sin cuota asociada en esa fecha pero que no son pagos físicos hoy) */}
-                                                {isVirtual && totalDay === 0 && <p className="text-[9px] text-emerald-400/60 leading-tight font-bold">Regularización automática de saldos.</p>}
-
-                                                {/* 4. Faltantes */}
-                                                {cuota && !isFuture && !isFull && totalDay === 0 && (
-                                                    <p className="text-[9px] text-rose-500 uppercase font-bold flex items-center gap-1">
-                                                        <XCircle className="w-3 h-3" /> Faltante de cuota
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </td>
-                                        {userRole !== 'asesor' && <td className="px-3 py-4 text-center"><div className="flex flex-col gap-2 items-center">{physical.map((p: any) => <div key={p.id}>{p.voucher_compartido ? <CheckCircle className="w-2.5 h-2.5 text-emerald-500" /> : <ShieldAlert className="w-2.5 h-2.5 text-red-500" />}</div>)}</div></td>}
-                                        <td className="px-3 py-4 text-center"><Badge variant="outline" className={cn("text-[8px] font-black uppercase tracking-tighter h-5", st.c)}>{st.l}</Badge></td>
-                                    </tr>
-                                )
-                            })}
+                                                    {/* 4. Faltantes */}
+                                                    {cuota && !isFuture && !isFull && totalDay === 0 && (
+                                                        <p className="text-[9px] text-rose-500 uppercase font-bold flex items-center gap-1">
+                                                            <XCircle className="w-3 h-3" /> Faltante de cuota
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            {userRole !== 'asesor' && <td className="px-3 py-4 text-center"><div className="flex flex-col gap-2 items-center">{physical.map((p: any) => <div key={p.id}>{p.voucher_compartido ? <CheckCircle className="w-2.5 h-2.5 text-emerald-500" /> : <ShieldAlert className="w-2.5 h-2.5 text-red-500" />}</div>)}</div></td>}
+                                            <td className="px-3 py-4 text-center"><Badge variant="outline" className={cn("text-[8px] font-black uppercase tracking-tighter h-5", st.c)}>{st.l}</Badge></td>
+                                        </tr>
+                                    )
+                                })
+                            })()}
                         </tbody>
                     </table>
                 </div>
+                {allRows.length > 0 && (
+                  <div className="p-4 border-t border-slate-800 bg-slate-950/40">
+                    <PaginationControlled 
+                      currentPage={currentPage}
+                      totalPages={Math.ceil(allRows.length / ITEMS_PER_PAGE)}
+                      onPageChange={setCurrentPage}
+                      totalRecords={allRows.length}
+                      pageSize={ITEMS_PER_PAGE}
+                    />
+                  </div>
+                )}
             </div>
             <PaymentVoucher open={isVoucherOpen} onOpenChange={setIsVoucherOpen} payment={selectedPayment} allPayments={pagos} loan={prestamo} client={cliente || prestamo.clientes} cronograma={cronograma} userRole={userRole} />
             

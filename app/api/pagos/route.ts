@@ -158,16 +158,24 @@ export async function POST(request: Request) {
 
         if (isDigital) {
             // --- NUEVO FLUJO SILENCIOSO PARA PAGOS DIGITALES ---
-            // 1. Obtener datos de la cuota
-            const { data: cuota, error: cErr } = await supabaseAdmin
+            // 1. Obtener datos de la cuota y del préstamo para el desglose
+            const { data: cuotaRaw, error: cErr } = await supabaseAdmin
                 .from('cronograma_cuotas')
-                .select('monto_cuota, monto_pagado')
+                .select('monto_cuota, monto_pagado, prestamos(interes)')
                 .eq('id', cuota_id)
                 .single()
             
             if (cErr) return NextResponse.json({ error: 'Cuota no encontrada' }, { status: 404 })
+            const cuota = cuotaRaw as any
+            const tasaInteres = parseFloat(cuota.prestamos?.interes || '0')
+            
+            // Cálculo del desglose (Interés Simple / Flat)
+            // ratio = tasa / (100 + tasa)
+            const montoFloat = parseFloat(monto)
+            const interesCobrado = Math.round((montoFloat * (tasaInteres / (100 + tasaInteres))) * 100) / 100
+            const capitalCobrado = Math.round((montoFloat - interesCobrado) * 100) / 100
 
-            const nuevoMontoPagado = (parseFloat(cuota.monto_pagado) || 0) + parseFloat(monto)
+            const nuevoMontoPagado = (parseFloat(cuota.monto_pagado) || 0) + montoFloat
             const nuevoEstado = nuevoMontoPagado >= parseFloat(cuota.monto_cuota) ? 'pagado' : 'pendiente'
 
             // 2. Actualizar Cuota
@@ -186,6 +194,8 @@ export async function POST(request: Request) {
                 .insert({
                     cuota_id,
                     monto_pagado: monto,
+                    capital_cobrado: capitalCobrado,
+                    interes_cobrado: interesCobrado,
                     registrado_por: user.id,
                     metodo_pago,
                     latitud,

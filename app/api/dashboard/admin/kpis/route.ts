@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
+import { calculateLoanMetrics, getTodayPeru, calculateMoraBancaria } from '@/lib/financial-logic'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,9 +31,9 @@ export async function GET(request: Request) {
 
     let targetAsesorIds: string[] | null = null
 
-    if (filterAsesorId) {
+    if (filterAsesorId && filterAsesorId !== 'all' && filterAsesorId !== 'null' && filterAsesorId !== '') {
         targetAsesorIds = [filterAsesorId]
-    } else if (filterSupervisorId) {
+    } else if (filterSupervisorId && filterSupervisorId !== 'all' && filterSupervisorId !== 'null' && filterSupervisorId !== '') {
         const { data: team } = await supabaseAdmin
             .from('perfiles')
             .select('id')
@@ -41,11 +42,8 @@ export async function GET(request: Request) {
         targetAsesorIds = team?.map(a => a.id) || []
     }
 
-    const today = new Date().toISOString().split('T')[0]
-    const startOfMonth = new Date()
-    startOfMonth.setDate(1)
-    startOfMonth.setHours(0, 0, 0, 0)
-    const startOfMonthISO = startOfMonth.toISOString()
+    const today = getTodayPeru()
+    const startOfMonthISO = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01T00:00:00`
 
     // ============================================
     // BLOQUE 1: FINANZAS
@@ -58,9 +56,16 @@ export async function GET(request: Request) {
             id, 
             monto, 
             interes, 
+            es_paralelo,
+            estado,
+            estado_mora,
+            cliente_id,
+            cuotas,
+            frecuencia,
+            fecha_inicio,
             clientes!inner(asesor_id)
         `)
-        .in('estado', ['activo', 'vencido', 'moroso', 'cpp'])
+        .in('estado', ['activo', 'vencido', 'moroso', 'cpp', 'legal'])
 
     if (targetAsesorIds) {
         loansQuery.in('clientes.asesor_id', targetAsesorIds)
@@ -71,24 +76,37 @@ export async function GET(request: Request) {
     
     // Map raw result to a cleaner format
     const loans = loansRaw?.map((l: any) => ({
-        id: l.id,
-        monto: l.monto,
-        interes: l.interes,
+        ...l,
         asesor_id: l.clientes?.asesor_id
     }))
     const loanIds = loans?.map(l => l.id) || []
 
     let capital_activo_sin_interes = 0
     let capital_activo_con_interes = 0
-    let capital_original_total = 0 
+    let capital_original_total = 0
+    let total_renovables = 0
+    let totalVencidos = 0
+    let totalAlertaCritica = 0
+    let totalAdvertencia = 0
+    
+    // 1.5. Configuración del Sistema
+    const { data: configSistema } = await supabaseAdmin.from('configuracion_sistema').select('clave, valor')
+    const config = {
+        renovacionMinPagado: parseInt(configSistema?.find(c => c.clave === 'renovacion_min_pagado')?.valor || '60'),
+        umbralCpp: parseInt(configSistema?.find(c => c.clave === 'umbral_cpp_cuotas')?.valor || '4'),
+        umbralMoroso: parseInt(configSistema?.find(c => c.clave === 'umbral_moroso_cuotas')?.valor || '7'),
+        umbralCppOtros: parseInt(configSistema?.find(c => c.clave === 'umbral_cpp_otros')?.valor || '1'),
+        umbralMorosoOtros: parseInt(configSistema?.find(c => c.clave === 'umbral_moroso_otros')?.valor || '2')
+    }
 
     if (loanIds.length > 0) {
         // 2. Fetch installments for these loans
         const { data: allCuotas } = await supabaseAdmin
             .from('cronograma_cuotas')
-            .select('prestamo_id, monto_cuota, monto_pagado, estado')
+            .select('prestamo_id, monto_cuota, monto_pagado, estado, fecha_vencimiento')
             .in('prestamo_id', loanIds)
-            .neq('estado', 'pagado')
+            // No filtramos por estado aquí porque calculateLoanMetrics necesita todo el cronograma
+            // para calcular saldo pendiente correctamente
 
         // Group cuotas by loan
         const cuotasByLoan = new Map<string, any[]>()
@@ -103,6 +121,26 @@ export async function GET(request: Request) {
             capital_original_total += montoCapital
 
             const cuotas = cuotasByLoan.get(p.id) || []
+            // Inyectar cuotas en el objeto loan para calculateLoanMetrics
+            p.cronograma_cuotas = cuotas
+
+            const metrics = calculateLoanMetrics(p, today, config)
+            if (metrics.esRenovable) total_renovables++
+
+            // --- LÓGICA DE RIESGO (Sincronizada con Supervisor Dashboard) ---
+            const crono = p.cronograma_cuotas || [];
+            const sorted = [...crono].sort((a, b) => new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime());
+            const lastDate = sorted.length > 0 ? sorted[sorted.length - 1].fecha_vencimiento : null;
+            
+            const isActuallyVencido = lastDate && lastDate < today && metrics.saldoPendiente > 1.0 && metrics.cuotasAtrasadas > 0;
+            
+            if (isActuallyVencido) {
+                totalVencidos++;
+            } else { 
+                if (metrics.isCritico) totalAlertaCritica++; 
+                else if (metrics.isMora) totalAdvertencia++; 
+            }
+
             if (cuotas.length > 0) {
                 // We need the TOTAL count of cuotas for SIN INTERES calculation
                 // But as an optimization, if we don't have it, we can't be precise for 'parcial'
@@ -129,13 +167,15 @@ export async function GET(request: Request) {
         })
     }
 
-    // Ganancias: Interés cobrado
+    // Pagos y Cobros
     const pagosQuery = supabaseAdmin
         .from('pagos')
         .select(`
             id,
-            interes_cobrado, 
+            interes_cobrado,
+            monto_pagado,
             fecha_pago,
+            es_autopago_renovacion,
             cronograma_cuotas!inner (
                 prestamos!inner (
                     clientes!inner (
@@ -144,6 +184,7 @@ export async function GET(request: Request) {
                 )
             )
         `)
+        .neq('estado_verificacion', 'rechazado')
 
     if (targetAsesorIds) {
         pagosQuery.in('cronograma_cuotas.prestamos.clientes.asesor_id', targetAsesorIds)
@@ -154,88 +195,80 @@ export async function GET(request: Request) {
 
     let ganancia_mes = 0
     let ganancia_total = 0
+    let cobro_cuotas_mes = 0
     
     todosLosPagos?.forEach((p: any) => {
         const interes = parseFloat(p.interes_cobrado || 0)
+        const montoTotal = parseFloat(p.monto_pagado || 0)
         ganancia_total += interes
         
-        if (p.fecha_pago && new Date(p.fecha_pago) >= startOfMonth) {
+        if (p.fecha_pago && p.fecha_pago >= startOfMonthISO) {
             ganancia_mes += interes
+            // Solo sumar al cobro de cuotas si no es un autopago de renovación (que es virtual)
+            // Y nos aseguramos de que sea cash (no autopago)
+            if (p.es_autopago_renovacion !== true) {
+                cobro_cuotas_mes += montoTotal
+            }
         }
     })
 
-    // Gastos del Mes
+    // Gastos del Mes y Salidas por Préstamos
     const gastosQuery = supabaseAdmin
         .from('movimientos_financieros')
-        .select('monto')
+        .select('monto, categoria_id, descripcion, registrado_por, cartera_id')
         .eq('tipo', 'egreso')
         .gte('created_at', startOfMonthISO)
 
-    if (targetAsesorIds) {
-        // Here we filter by creator if the expense is recorded by the advisor
-        gastosQuery.in('registrado_por', targetAsesorIds)
+    if (targetAsesorIds && targetAsesorIds.length > 0) {
+        // Obtenemos carteras para filtrar los desembolsos de este asesor/equipo
+        const { data: userCarteras } = await supabaseAdmin
+            .from('carteras')
+            .select('id')
+            .in('asesor_id', targetAsesorIds)
+        
+        const carteraIds = userCarteras?.map(c => c.id) || []
+        
+        // Filtro: movimientos registrados por el asesor (gastos manuales) 
+        // O movimientos vinculados a sus carteras (desembolsos de préstamos aprobados por admin)
+        let orFilter = `registrado_por.in.(${targetAsesorIds.join(',')})`
+        if (carteraIds.length > 0) {
+            orFilter += `,cartera_id.in.(${carteraIds.join(',')})`
+        }
+        gastosQuery.or(orFilter)
     }
 
-    const { data: gastosMesData } = await gastosQuery
+    const { data: gastosMesRaw } = await gastosQuery
 
     let gastos_mes = 0
-    gastosMesData?.forEach(g => {
-        gastos_mes += parseFloat(g.monto || 0)
+    let salidas_prestamos_mes = 0
+    
+    gastosMesRaw?.forEach(g => {
+        const monto = parseFloat(g.monto || 0)
+        const desc = (g.descripcion || '').toLowerCase()
+        
+        if (g.categoria_id !== null) {
+            // Gastos registrados por usuarios (tienen categoría)
+            gastos_mes += monto
+        } else {
+            // Movimientos de sistema (sin categoría): Préstamos, Renovaciones, Nómina
+            const isPayroll = desc.includes('nómina') || desc.includes('nomina') || desc.includes('sueldo') || desc.includes('adelanto')
+            const isSettlement = desc.includes('cuadre') || desc.includes('liquidación') || desc.includes('liquidacion')
+            
+            if (!isPayroll && !isSettlement) {
+                // Si no es nómina ni liquidación de cuadre, es un desembolso (Préstamo, Renovación, etc.)
+                salidas_prestamos_mes += monto
+            }
+        }
     })
 
     // ============================================
     // BLOQUE 2: RIESGO
     // ============================================
 
-    // ============================================
-    // BLOQUE 2: RIESGO
-    // ============================================
-
-    let capital_vencido = 0
-    const prestamosEnMoraSet = new Set<string>()
-
-    if (loanIds.length > 0) {
-        // Fetch ALL cuotas for these loans to calculate total count (for precise capital ratio)
-        // and identifying overdue ones
-        const { data: vCuotas } = await supabaseAdmin
-            .from('cronograma_cuotas')
-            .select('prestamo_id, monto_cuota, monto_pagado, estado, fecha_vencimiento')
-            .in('prestamo_id', loanIds)
-            .lte('fecha_vencimiento', today)
-            .in('estado', ['pendiente', 'parcial', 'atrasado', 'vencido'])
-
-        // Process each overdue installment
-        vCuotas?.forEach(c => {
-            const loan = loans?.find(l => l.id === c.prestamo_id)
-            if (!loan) return
-
-            const montoCapital = parseFloat(loan.monto) || 0
-            const montoCuota = parseFloat(c.monto_cuota) || 0
-            const montoPagado = parseFloat(c.monto_pagado) || 0
-            const pendiente = Math.max(0, montoCuota - montoPagado)
-
-            if (pendiente > 0.01) {
-                // Approximate capital without interest per quota
-                const tasaInteres = parseFloat(loan.interes) || 0
-                const ratioCapital = 1 / (1 + (tasaInteres / 100))
-                
-                const proporcionPendiente = montoCuota > 0 ? pendiente / montoCuota : 1
-                const capitalCuota = (montoCapital / 24) * proporcionPendiente // Assuming 24 as a fallback or calculating it better
-                
-                // More precise: we need the number of installments for each loan
-                // For now, let's use the ratioCapital approximation which is very close
-                capital_vencido += pendiente * ratioCapital
-                prestamosEnMoraSet.add(c.prestamo_id)
-            }
-        })
-    }
-
-    // Tasa de morosidad = (Capital Vencido / Capital ORIGINAL) × 100
-    const tasa_morosidad_capital = capital_original_total > 0 
-        ? (capital_vencido / capital_original_total) * 100 
-        : 0
-
-    const clientes_en_mora = prestamosEnMoraSet.size
+    const moraBancaria = calculateMoraBancaria(loans || [], today);
+    const tasa_morosidad_capital = moraBancaria.tasaMorosidadCapital;
+    const capital_vencido = moraBancaria.capitalVencido;
+    const clientes_en_mora = moraBancaria.countLoansInMora;
 
     // Clientes castigados
     const { count: clientes_castigados } = await supabaseAdmin
@@ -247,28 +280,63 @@ export async function GET(request: Request) {
     // BLOQUE 3: OPERATIVIDAD
     // ============================================
 
-    // Renovaciones del mes
-    const { data: renovacionesMes, count: renovaciones_cantidad } = await supabaseAdmin
+    // Renovaciones del mes (Sincronizado con filtros)
+    let renovQuery = supabaseAdmin
         .from('renovaciones')
         .select(`
             saldo_pendiente_original,
-            prestamo_nuevo:prestamo_nuevo_id (monto)
+            prestamo_nuevo:prestamo_nuevo_id!inner (
+                monto,
+                clientes!inner (asesor_id)
+            )
         `, { count: 'exact' })
         .gte('fecha_renovacion', startOfMonthISO)
+
+    if (targetAsesorIds) {
+        renovQuery.in('prestamo_nuevo.clientes.asesor_id', targetAsesorIds)
+    }
+
+    const { data: renovacionesMes, count: renovaciones_cantidad } = await renovQuery
 
     let renovaciones_volumen = 0
     renovacionesMes?.forEach((r: any) => {
         renovaciones_volumen += parseFloat(r.prestamo_nuevo?.monto || 0)
     })
 
-    // Total clientes ACTIVOS
-    const { data: clientesConDeuda } = await supabaseAdmin
-        .from('prestamos')
-        .select('cliente_id')
-        .eq('estado', 'activo')
+    // Total clientes ACTIVOS (Sincronizado con Cobranza Vigente)
+    const { data: renovacionesRefinanciamiento } = await supabaseAdmin
+        .from('renovaciones')
+        .select('prestamo_nuevo_id, prestamo_original:prestamo_original_id(estado)')
+    
+    const prestamoIdsProductoRefinanciamiento = new Set(
+        (renovacionesRefinanciamiento || [])
+            .filter((r: any) => (r.prestamo_original as any)?.estado === 'refinanciado')
+            .map((r: any) => r.prestamo_nuevo_id as string)
+            .filter(Boolean)
+    )
 
-    const clientesUnicos = new Set(clientesConDeuda?.map(p => p.cliente_id) || [])
-    const total_clientes_activos = clientesUnicos.size
+    const clientesConActivoVigente = new Set()
+    const clientesConDeudaCualquiera = new Set() // Para filtrar recaptables
+    
+    // Usamos 'loans' y 'cuotasByLoan' que ya tenemos cargados al inicio del API
+    loans?.forEach(p => {
+        const metrics = calculateLoanMetrics(p, today, config)
+        
+        const isMainLoan = !p.es_paralelo
+        const isNotRefinancedProduct = !prestamoIdsProductoRefinanciamiento.has(p.id)
+        const isNotVencido = p.estado_mora !== 'vencido'
+        const hasBalance = metrics.saldoPendiente > 0.01
+
+        if (p.estado === 'activo') {
+            clientesConDeudaCualquiera.add(p.cliente_id)
+        }
+
+        if (p.estado === 'activo' && isMainLoan && isNotRefinancedProduct && isNotVencido && hasBalance) {
+            clientesConActivoVigente.add(p.cliente_id)
+        }
+    })
+
+    const total_clientes_activos = clientesConActivoVigente.size
 
     // ============================================
     // BLOQUE 4: OPORTUNIDADES (Recaptables)
@@ -286,12 +354,10 @@ export async function GET(request: Request) {
         .eq('estado', 'finalizado')
         .order('created_at', { ascending: false })
 
-    // Filtrar clientes que NO tienen préstamo activo
-    const clientesConActivo = new Set(clientesConDeuda?.map(p => p.cliente_id) || [])
-    
+    // Filtrar clientes que NO tienen ningún préstamo activo (usando el set que poblamos arriba)
     const recaptablesMap = new Map<string, any>()
     clientesFinalizados?.forEach((p: any) => {
-        if (!clientesConActivo.has(p.cliente_id) && !recaptablesMap.has(p.cliente_id)) {
+        if (!clientesConDeudaCualquiera.has(p.cliente_id) && !recaptablesMap.has(p.cliente_id)) {
             // Encontrar última fecha de pago
             const pagos = p.cronograma_cuotas?.filter((c: any) => c.fecha_pago) || []
             const ultimoPago = pagos.length > 0 
@@ -346,6 +412,8 @@ export async function GET(request: Request) {
             ganancia_total: Math.round(ganancia_total * 100) / 100,
             ganancia_mes: Math.round(ganancia_mes * 100) / 100,
             gastos_mes: Math.round(gastos_mes * 100) / 100,
+            salidas_prestamos_mes: Math.round(salidas_prestamos_mes * 100) / 100,
+            cobro_cuotas_mes: Math.round(cobro_cuotas_mes * 100) / 100,
             _debug: {
                 loansFound: loans?.length || 0,
                 loanIds: loanIds.length,
@@ -361,14 +429,18 @@ export async function GET(request: Request) {
             capital_vencido: Math.round(capital_vencido * 100) / 100,
             tasa_morosidad_capital: Math.round(tasa_morosidad_capital * 100) / 100,
             clientes_en_mora,
-            clientes_castigados: clientes_castigados || 0
+            clientes_castigados: clientes_castigados || 0,
+            total_vencidos: totalVencidos,
+            total_critica: totalAlertaCritica,
+            total_advertencia: totalAdvertencia
         },
         operatividad: {
             renovaciones_mes: {
                 cantidad: renovaciones_cantidad || 0,
                 volumen: Math.round(renovaciones_volumen * 100) / 100
             },
-            total_clientes_activos
+            total_clientes_activos,
+            total_renovables
         },
         oportunidades: {
             recaptables

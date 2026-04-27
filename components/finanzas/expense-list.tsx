@@ -28,9 +28,10 @@ interface ExpenseListProps {
   onEdit?: (expense: any) => void
   userRole?: string
   isPending?: boolean
+  advisors?: any[]
 }
 
-export function ExpenseList({ expenses, onEdit, userRole, isPending }: ExpenseListProps) {
+export function ExpenseList({ expenses, onEdit, userRole, isPending, advisors = [] }: ExpenseListProps) {
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 10
 
@@ -40,6 +41,10 @@ export function ExpenseList({ expenses, onEdit, userRole, isPending }: ExpenseLi
     const start = (currentPage - 1) * ITEMS_PER_PAGE
     return expenses.slice(start, start + ITEMS_PER_PAGE)
   }, [expenses, currentPage])
+
+  const getUserInfo = (userId: string) => {
+    return advisors.find(a => a.id === userId)
+  }
 
   if (expenses.length === 0) {
     return (
@@ -147,6 +152,9 @@ export function ExpenseList({ expenses, onEdit, userRole, isPending }: ExpenseLi
               <TableRow className="border-slate-800 hover:bg-transparent">
                 <TableHead className="text-slate-400 font-bold text-[10px] md:text-xs h-9">Fecha</TableHead>
                 <TableHead className="text-slate-400 font-bold text-[10px] md:text-xs h-9">Categoría</TableHead>
+                {userRole === 'admin' && (
+                   <TableHead className="text-slate-400 font-bold text-[10px] md:text-xs h-9">Registrado por</TableHead>
+                )}
                 <TableHead className="text-slate-400 font-bold text-[10px] md:text-xs h-9">Descripción</TableHead>
                 <TableHead className="text-slate-400 font-bold text-[10px] md:text-xs h-9 hidden md:table-cell">Cuenta</TableHead>
                 <TableHead className="text-slate-400 font-bold text-[10px] md:text-xs text-center h-9">Evidencia</TableHead>
@@ -175,6 +183,23 @@ export function ExpenseList({ expenses, onEdit, userRole, isPending }: ExpenseLi
                       <span className="text-[10px] md:text-xs text-slate-200 truncate">{expense.categorias_gastos?.nombre || 'General'}</span>
                     </div>
                   </TableCell>
+                  {userRole === 'admin' && (
+                    <TableCell className="py-2">
+                      {(() => {
+                        const creator = getUserInfo(expense.registrado_por)
+                        return (
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-slate-200 truncate max-w-[120px]">
+                              {creator?.nombre_completo || 'N/A'}
+                            </span>
+                            <span className="text-[8px] text-slate-500 uppercase font-black tracking-tighter">
+                              {creator?.rol || 'N/A'}
+                            </span>
+                          </div>
+                        )
+                      })()}
+                    </TableCell>
+                  )}
                   <TableCell className="py-2 min-w-[120px]">
                     <p className="text-[10px] md:text-xs text-slate-400 truncate max-w-[150px]" title={expense.descripcion}>
                       {expense.descripcion || 'Sin descripción'}
@@ -240,17 +265,15 @@ export function ExpenseList({ expenses, onEdit, userRole, isPending }: ExpenseLi
         </div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-800/50">
-            <PaginationControlled 
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-              totalRecords={expenses.length}
-              pageSize={ITEMS_PER_PAGE}
-            />
-          </div>
-        )}
+        <div className="p-4 border-t border-slate-800/50">
+          <PaginationControlled 
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalRecords={expenses.length}
+            pageSize={ITEMS_PER_PAGE}
+          />
+        </div>
       </CardContent>
     </Card>
   )

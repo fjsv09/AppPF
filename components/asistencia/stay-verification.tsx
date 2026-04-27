@@ -116,13 +116,37 @@ export function StayVerification() {
         checkStatus(true)
     }, [checkStatus])
 
-    // Intervalo de pings (cada 3 minutos)
+    // Intervalo de actualización de tiempo (cada 1 minuto)
     useEffect(() => {
         if (!status || status.estado !== 'pendiente') return
 
+        const updateTimer = () => {
+            const ahora = new Date()
+            const inicio = new Date(status.inicio)
+            const transcurrido = Math.floor((ahora.getTime() - inicio.getTime()) / 60000)
+            const restante = Math.max(0, status.minutos_permanencia - transcurrido)
+            
+            if (restante !== status.restante) {
+                setStatus(prev => prev ? { ...prev, restante } : null)
+                
+                // Si llegamos a 0 por primera vez, disparar ping inmediato
+                if (restante === 0 && !verifying) {
+                    requestLocationAndPing()
+                }
+            }
+        }
+
+        const interval = setInterval(updateTimer, 60000) // 1 minuto
+        return () => clearInterval(interval)
+    }, [status, verifying, requestLocationAndPing])
+
+    // Intervalo de pings de seguridad (cada 5 minutos si no ha terminado)
+    useEffect(() => {
+        if (!status || status.estado !== 'pendiente' || status.restante === 0) return
+
         const interval = setInterval(() => {
             requestLocationAndPing()
-        }, 180000) // 3 minutos
+        }, 300000) // 5 minutos
 
         return () => clearInterval(interval)
     }, [status, requestLocationAndPing])
@@ -150,10 +174,16 @@ export function StayVerification() {
                         Verificando Permanencia
                     </p>
                     <div className="flex items-center gap-2">
-                        <p className="text-sm font-bold text-white">
-                            {status.restante} minutos restantes
+                        <p className={cn(
+                            "text-sm font-bold",
+                            status.restante === 0 ? "text-emerald-400 animate-pulse" : "text-white"
+                        )}>
+                            {status.restante === 0 ? 'Verificando finalización...' : `${status.restante} minutos restantes`}
                         </p>
-                        <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+                        <span className={cn(
+                            "flex h-1.5 w-1.5 rounded-full animate-ping",
+                            status.restante === 0 ? "bg-emerald-400" : "bg-blue-500"
+                        )} />
                     </div>
                 </div>
 

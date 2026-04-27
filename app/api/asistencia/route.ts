@@ -86,8 +86,8 @@ export async function GET() {
         let isMarked = !!asistencia?.hora_entrada
 
         // Lógica Acumulativa:
-        // 1. Si no ha marcado entrada Y no hay una permanencia pendiente, pedir entrada
-        if (!asistencia?.hora_entrada && asistencia?.permanencia_entrada_estado !== 'pendiente') {
+        // 1. Si no ha marcado entrada (o falló permanencia), pedir entrada
+        if ((!asistencia?.hora_entrada || asistencia?.permanencia_entrada_estado === 'incumplido') && asistencia?.permanencia_entrada_estado !== 'pendiente') {
             eventRequired = 'entrada'
             isMarked = false
         }

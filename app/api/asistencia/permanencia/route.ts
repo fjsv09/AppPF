@@ -59,42 +59,7 @@ export async function POST(request: Request) {
         const radioMaximo = parseFloat(config?.asistencia_radio_metros || '150')
         const minsRequeridos = parseInt(config?.asistencia_minutos_permanencia || '15')
 
-        // 1. Calcular distancia (Haversine)
-        const R = 6371000
-        const dLat = (oficinaLat - lat) * Math.PI / 180
-        const dLon = (oficinaLon - lon) * Math.PI / 180
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat * Math.PI / 180) * Math.cos(oficinaLat * Math.PI / 180) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2)
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-        const distancia = R * c
-
-        // 2. Verificar si está fuera de rango
-        if (distancia > radioMaximo) {
-            // Marcar como INCUMPLIDO
-            await supabaseAdmin.from('asistencia_personal').update({
-                permanencia_entrada_estado: 'incumplido',
-                permanencia_entrada_fin: new Date().toISOString()
-            }).eq('id', record.id)
-
-            // Registrar en auditoría
-            await supabaseAdmin.from('auditoria').insert({
-                tabla: 'asistencia_personal',
-                accion: 'permanencia_fallida',
-                registro_id: record.id,
-                usuario_id: user.id,
-                detalles: {
-                    motivo: 'fuera_de_rango',
-                    distancia: Math.round(distancia),
-                    radio_maximo: radioMaximo,
-                    lat, lon
-                }
-            })
-
-            return NextResponse.json({ success: true, estado: 'incumplido', message: 'Fuera de rango' })
-        }
-
-        // 3. Verificar si el tiempo ha pasado
+        // 2. Verificar si el tiempo ha pasado (Prioridad sobre la distancia)
         const inicio = new Date(record.permanencia_entrada_inicio)
         const transcurridoMins = (now.getTime() - inicio.getTime()) / 60000
 
@@ -187,6 +152,42 @@ export async function POST(request: Request) {
                 hora_entrada: horaEntradaOficial
             })
         }
+
+        // 3. Verificar si está fuera de rango (Solo si no ha cumplido el tiempo aún)
+        const R = 6371000
+        const dLat = (oficinaLat - lat) * Math.PI / 180
+        const dLon = (oficinaLon - lon) * Math.PI / 180
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat * Math.PI / 180) * Math.cos(oficinaLat * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2)
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        const distancia = R * c
+
+        if (distancia > radioMaximo) {
+            // Marcar como INCUMPLIDO y borrar hora_entrada para permitir re-marcar
+            await supabaseAdmin.from('asistencia_personal').update({
+                hora_entrada: null,
+                permanencia_entrada_estado: 'incumplido',
+                permanencia_entrada_fin: new Date().toISOString()
+            }).eq('id', record.id)
+
+            // Registrar en auditoría
+            await supabaseAdmin.from('auditoria').insert({
+                tabla: 'asistencia_personal',
+                accion: 'permanencia_fallida',
+                registro_id: record.id,
+                usuario_id: user.id,
+                detalles: {
+                    motivo: 'fuera_de_rango',
+                    distancia: Math.round(distancia),
+                    radio_maximo: radioMaximo,
+                    lat, lon
+                }
+            })
+
+            return NextResponse.json({ success: true, estado: 'incumplido', message: 'Fuera de rango' })
+        }
+
 
         // Sigue pendiente
         return NextResponse.json({ success: true, estado: 'pendiente', transcurrido: Math.floor(transcurridoMins) })

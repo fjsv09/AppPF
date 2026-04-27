@@ -16,15 +16,6 @@ import { useEffect, useState, useCallback } from 'react'
 export function ScreenProtection({ children, userName }: { children: React.ReactNode; userName?: string }) {
     const [isBlurred, setIsBlurred] = useState(false)
 
-    // Handle visibility change — blur content when app is not focused
-    const handleVisibilityChange = useCallback(() => {
-        if (document.visibilityState === 'hidden') {
-            setIsBlurred(true)
-        } else {
-            // Small delay to prevent flash on resume
-            setTimeout(() => setIsBlurred(false), 300)
-        }
-    }, [])
 
     // Block screenshot-related key combos
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -71,7 +62,6 @@ export function ScreenProtection({ children, userName }: { children: React.React
 
     useEffect(() => {
         // Register event listeners
-        document.addEventListener('visibilitychange', handleVisibilityChange)
         document.addEventListener('keydown', handleKeyDown)
         document.addEventListener('contextmenu', handleContextMenu)
 
@@ -111,13 +101,12 @@ export function ScreenProtection({ children, userName }: { children: React.React
         document.head.appendChild(styleEl)
 
         return () => {
-            document.removeEventListener('visibilitychange', handleVisibilityChange)
             document.removeEventListener('keydown', handleKeyDown)
             document.removeEventListener('contextmenu', handleContextMenu)
             const existingStyle = document.getElementById('screen-protection-styles')
             if (existingStyle) existingStyle.remove()
         }
-    }, [handleVisibilityChange, handleKeyDown, handleContextMenu])
+    }, [handleKeyDown, handleContextMenu])
 
     return (
         <div 

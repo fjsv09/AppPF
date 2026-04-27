@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { CheckCircle2, AlertTriangle, ExternalLink, Calendar, Image as ImageIcon, Search, X, User, Activity, Filter, Shield, Phone } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, ExternalLink, Calendar, Image as ImageIcon, Search, X, User, Activity, Filter, Shield, Phone, XCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -186,8 +186,12 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                                             <CheckCircle2 className="w-3 h-3 mr-1"/> Completada
                                                         </Badge>
                                                     ) : (
-                                                        <Badge className="text-[10px] py-0 h-5 border px-1.5 bg-amber-500/20 text-amber-400 border-amber-500/30">
-                                                            <AlertTriangle className="w-3 h-3 mr-1"/> Pendiente
+                                                        <Badge className={cn(
+                                                            "text-[10px] py-0 h-5 border px-1.5",
+                                                            tarea.notas ? "bg-rose-500/20 text-rose-400 border-rose-500/30" : "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                                                        )}>
+                                                            <AlertTriangle className="w-3 h-3 mr-1"/> 
+                                                            {tarea.notas ? 'Rechazada' : 'Pendiente'}
                                                         </Badge>
                                                     )}
                                                 </div>
@@ -208,6 +212,14 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                                     </span>
                                                 </div>
                                             </div>
+
+                                            {/* Motivo de rechazo o notas */}
+                                            {tarea.notas && tarea.estado === 'pendiente' && (
+                                                <div className="mx-0.5 mt-2 px-3 py-2 rounded-lg bg-rose-500/5 border border-rose-500/10 text-[11px] text-rose-300/80 animate-in fade-in slide-in-from-top-1 duration-300">
+                                                    <span className="text-rose-500/60 font-bold uppercase text-[9px] block mb-0.5 tracking-wider">Motivo de rechazo:</span>
+                                                    <span className="italic leading-relaxed">&quot;{tarea.notas}&quot;</span>
+                                                </div>
+                                            )}
 
                                             <div className="flex items-center justify-between gap-2 mt-1.5 pt-2.5 border-t border-slate-800/40">
                                                  <div className="flex items-center gap-2">
@@ -242,7 +254,11 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                                                </div>
                                                             ) : null}
                                                          </div>
-                                                     ) : tarea.estado === 'pendiente' && (userId === tarea.asesor_id || (tarea.tipo.includes('auditoria') && (userRol === 'admin' || userRol === 'supervisor'))) ? (
+                                                     ) : tarea.estado === 'pendiente' && (
+                                                      userId === tarea.asesor_id || 
+                                                      userRol === 'admin' || 
+                                                      (userRol === 'supervisor' && (team?.some(m => m.id === tarea.asesor_id) || userId === tarea.asesor_id))
+                                                  ) ? (
                                                          <div className="transform scale-[0.85] origin-right -my-1">
                                                              {tarea.tipo.includes('auditoria_dirigida') ? (
                                                                  <CompleteAuditModal 
@@ -346,8 +362,12 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                                         <CheckCircle2 className="w-3 h-3 mr-1" /> Completada
                                                     </Badge>
                                                 ) : (
-                                                    <Badge className="text-[10px] py-0 h-5 border px-2 bg-amber-500/20 text-amber-400 border-amber-500/30 animate-pulse w-max">
-                                                        <AlertTriangle className="w-3 h-3 mr-1" /> Pendiente
+                                                    <Badge className={cn(
+                                                        "text-[10px] py-0 h-5 border px-2 w-max animate-pulse",
+                                                        tarea.notas ? "bg-rose-500/20 text-rose-400 border-rose-500/30" : "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                                                    )}>
+                                                        <AlertTriangle className="w-3 h-3 mr-1" /> 
+                                                        {tarea.notas ? 'Rechazada' : 'Pendiente'}
                                                     </Badge>
                                                 )}
                                             </div>
@@ -374,7 +394,11 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                                              </div>
                                                          )}
                                                       </div>
-                                                 ) : tarea.estado === 'pendiente' && (userId === tarea.asesor_id || (tarea.tipo.includes('auditoria') && (userRol === 'admin' || userRol === 'supervisor'))) ? (
+                                                 ) : tarea.estado === 'pendiente' && (
+                                                          userId === tarea.asesor_id || 
+                                                          userRol === 'admin' || 
+                                                          (userRol === 'supervisor' && (team?.some(m => m.id === tarea.asesor_id) || userId === tarea.asesor_id))
+                                                      ) ? (
                                                      <div className="transform scale-90">
                                                          {tarea.tipo.includes('auditoria_dirigida') ? (
                                                              <CompleteAuditModal 
@@ -411,6 +435,21 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                                     <RejectEvidenceButton tareaId={tarea.id} />
                                                 )}
                                             </div>
+
+                                            {/* Motivo de rechazo / Notas en Desktop */}
+                                            {tarea.notas && tarea.estado === 'pendiente' && (
+                                                <div className="col-span-12 px-6 pb-4 -mt-1 animate-in fade-in slide-in-from-top-2 duration-500">
+                                                    <div className="ml-11 px-4 py-3 rounded-xl bg-rose-500/5 border border-rose-500/10 text-xs text-rose-200/90 border-l-4 border-l-rose-500 shadow-lg shadow-rose-950/20">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                           <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                                                           <span className="text-rose-500 font-bold uppercase text-[10px] tracking-widest">Evidencia Rechazada</span>
+                                                        </div>
+                                                        <p className="italic font-medium leading-relaxed pl-5 ml-0.5 border-l border-rose-500/20">
+                                                           &quot;{tarea.notas}&quot;
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )
                                 })}

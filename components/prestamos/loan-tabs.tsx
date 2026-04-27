@@ -329,6 +329,12 @@ export function LoanTabs({
                                             <p className="text-amber-200 font-medium font-outfit uppercase tracking-wider">Evidencia requerida</p>
                                             <p className="text-slate-400 text-sm mt-1 max-w-xs px-4">Esta tarea de evidencia técnica aún no ha sido completada por el asesor.</p>
                                         </div>
+                                        {tareaEvidencia.notas && (
+                                            <div className="max-w-xs px-4 py-2 rounded-lg bg-rose-500/5 border border-rose-500/10 text-rose-300/80 text-xs italic text-center animate-in zoom-in duration-300">
+                                                <span className="font-bold text-[9px] block mb-1 uppercase tracking-widest text-rose-500/60">Motivo de rechazo:</span>
+                                                &quot;{tareaEvidencia.notas}&quot;
+                                            </div>
+                                        )}
                                         <div className="pt-2">
                                             <UploadEvidenceButton 
                                                 tareaId={tareaEvidencia.id}

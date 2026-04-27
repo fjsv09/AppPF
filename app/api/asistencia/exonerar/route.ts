@@ -45,27 +45,57 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Registro no encontrado' }, { status: 404 })
         }
 
+        // Obtener configuración para tiempos por defecto
+        const { data: configRows } = await supabaseAdmin
+            .from('configuracion_sistema')
+            .select('clave, valor')
+            .in('clave', [
+                'horario_apertura',
+                'horario_fin_turno_1',
+                'horario_cierre',
+                'asistencia_descuento_por_minuto'
+            ])
+        
+        const config = configRows?.reduce((acc: any, curr) => {
+            acc[curr.clave] = curr.valor
+            return acc
+        }, {})
+
+        const descuentoPorMinuto = parseFloat(config?.asistencia_descuento_por_minuto || '0.15')
+
         // Determinar qué columna anular
         const updates: any = {}
         let tardanzaAAnularMinutos = 0
+        let isForcedEntry = false
 
         if (turno === 'entrada') {
             tardanzaAAnularMinutos = asistencia.tardanza_entrada || 0
             updates.tardanza_entrada = 0
+            if (!asistencia.hora_entrada) {
+                updates.hora_entrada = config?.horario_apertura || '08:00'
+                isForcedEntry = true
+            }
         } else if (turno === 'tarde') {
             tardanzaAAnularMinutos = asistencia.tardanza_turno_tarde || 0
             updates.tardanza_turno_tarde = 0
+            if (!asistencia.hora_turno_tarde) {
+                updates.hora_turno_tarde = config?.horario_fin_turno_1 || '13:30'
+                isForcedEntry = true
+            }
         } else if (turno === 'cierre') {
             tardanzaAAnularMinutos = asistencia.tardanza_cierre || 0
             updates.tardanza_cierre = 0
+            if (!asistencia.hora_cierre) {
+                updates.hora_cierre = config?.horario_cierre || '19:00'
+                isForcedEntry = true
+            }
         }
 
-        if (tardanzaAAnularMinutos === 0) {
+        if (tardanzaAAnularMinutos === 0 && !isForcedEntry) {
             return NextResponse.json({ success: true, message: 'Ya estaba exonerado' })
         }
 
-        // 1. Actualizar el registro de asistencia con el turno en 0
-        // No calculamos los totales aquí todavía para evitar race conditions
+        // 1. Actualizar el registro de asistencia
         const { data: asistenciaActualizada, error: errorAsistencia } = await supabaseAdmin
             .from('asistencia_personal')
             .update(updates)
@@ -75,18 +105,11 @@ export async function POST(request: Request) {
 
         if (errorAsistencia) throw errorAsistencia
 
-        // 2. Recalcular totales del día basados en la realidad actual de los turnos
+        // 2. Recalcular totales del día
         const minutosRestantes = (asistenciaActualizada.tardanza_entrada || 0) + 
                                 (asistenciaActualizada.tardanza_turno_tarde || 0) + 
                                 (asistenciaActualizada.tardanza_cierre || 0)
         
-        const { data: configRows } = await supabaseAdmin
-            .from('configuracion_sistema')
-            .select('valor')
-            .eq('clave', 'asistencia_descuento_por_minuto')
-            .single()
-        
-        const descuentoPorMinuto = parseFloat(configRows?.valor || '0.15')
         const nuevoDescuentoDia = parseFloat((minutosRestantes * descuentoPorMinuto).toFixed(2))
 
         await supabaseAdmin
@@ -99,12 +122,11 @@ export async function POST(request: Request) {
             .eq('id', asistenciaId)
 
         const usuarioId = asistencia.usuario_id
-        const fechaRecord = new Date(asistencia.fecha + 'T12:00:00') // Evitar problemas de zona horaria
+        const fechaRecord = new Date(asistencia.fecha + 'T12:00:00')
         const mes = fechaRecord.getMonth() + 1
         const anio = fechaRecord.getFullYear()
 
-        // 3. Si se anuló descuento, sincronizar la nómina
-        // Para evitar race conditions, sumamos TODOS los descuentos del mes del trabajador
+        // 3. Sincronizar la nómina
         const firstDay = new Date(anio, mes - 1, 1).toISOString().split('T')[0]
         const lastDay = new Date(anio, mes, 0).toISOString().split('T')[0]
 
@@ -131,42 +153,46 @@ export async function POST(request: Request) {
                 .update({ descuentos: parseFloat(nuevoTotalDescuentosMes.toFixed(2)) })
                 .eq('id', nomina.id)
 
-            // Registrar ajuste para trazabilidad
             const readableTurno = turno === 'entrada' ? 'Mañana' : (turno === 'tarde' ? 'Turno Tarde' : 'Cierre')
             const montoExonerado = parseFloat((tardanzaAAnularMinutos * descuentoPorMinuto).toFixed(2))
             
-            if (montoExonerado > 0) {
+            if (montoExonerado > 0 || isForcedEntry) {
                 await supabaseAdmin.from('transacciones_personal').insert({
                     trabajador_id: usuarioId,
                     nomina_id: nomina.id,
                     tipo: 'ajuste_positivo',
                     monto: montoExonerado,
-                    descripcion: `Ajuste Positivo: Exoneración de Tardanza (${readableTurno}) — ${asistencia.fecha}`,
+                    descripcion: isForcedEntry 
+                        ? `Exoneración de Asistencia (Trabajo en Campo: ${readableTurno}) — ${asistencia.fecha}`
+                        : `Ajuste Positivo: Exoneración de Tardanza (${readableTurno}) — ${asistencia.fecha}`,
                     metadatos: {
                         asistencia_id: asistenciaId,
                         turno: turno,
-                        minutos_exonerados: tardanzaAAnularMinutos
+                        minutos_exonerados: tardanzaAAnularMinutos,
+                        campo: isForcedEntry
                     },
                     registrado_por: user.id
                 })
             }
         }
 
-        // 3. Registrar auditoría con el turno específico
+        // 4. Registrar auditoría
         await supabaseAdmin.from('auditoria').insert({
             tabla_afectada: 'asistencia_personal',
-            accion: 'exoneracion_tardanza',
+            accion: isForcedEntry ? 'exoneracion_asistencia_campo' : 'exoneracion_tardanza',
             registro_id: asistenciaId,
             usuario_id: user.id,
             detalle: {
                 turno_exonerado: turno,
                 minutos_anulados: tardanzaAAnularMinutos,
+                es_campo: isForcedEntry,
                 asistencia_anterior: asistencia,
-                motivo: 'Trabajo en campo / Exoneración manual de turno'
+                motivo: isForcedEntry ? 'Trabajo en campo (asistencia forzada)' : 'Exoneración manual de tardanza'
             }
         })
 
-        return NextResponse.json({ success: true, message: 'Tardanza exonerada correctamente' })
+        return NextResponse.json({ success: true, message: 'Tardanza/Asistencia exonerada correctamente' })
+
     } catch (error: any) {
         console.error('[EXONERAR ASISTENCIA]', error)
         return NextResponse.json({ error: error.message }, { status: 500 })

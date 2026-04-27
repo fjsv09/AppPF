@@ -20,7 +20,7 @@ export async function PATCH(
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
         }
 
-        const { data: perfil } = await supabaseAdmin.from('perfiles').select('rol').eq('id', user.id).single()
+        const { data: perfil } = await supabaseAdmin.from('perfiles').select('rol, nombre_completo').eq('id', user.id).single()
 
         if (perfil?.rol !== 'admin' && perfil?.rol !== 'supervisor') {
             return NextResponse.json({ error: 'No tienes permisos para rechazar esta evidencia' }, { status: 403 })
@@ -46,7 +46,8 @@ export async function PATCH(
             .update({
                 estado: 'pendiente',
                 evidencia_url: null,
-                completada_en: null
+                completada_en: null,
+                notas: motivo // Guardar el motivo del rechazo en notas
             })
             .eq('id', id)
             .select()
@@ -76,9 +77,11 @@ export async function PATCH(
 
         const targetTab = tarea.tipo.includes('auditoria') ? 'auditoria' : 'evidencia'
         
+        const rejectingUserName = perfil?.nombre_completo || 'Administración'
+        
         await createFullNotification(tarea.asesor_id, {
             titulo: '❌ Evidencia Rechazada',
-            mensaje: `Se ha rechazado la evidencia de ${clienteNombres}. Por favor corrige y vuelve a subir una nueva foto. Motivo: ${motivo || 'No especificado'}`,
+            mensaje: `${rejectingUserName} ha rechazado la evidencia de ${clienteNombres}. Motivo: ${motivo || 'No especificado'}`,
             link: `/dashboard/tareas?tab=${targetTab}`,
             tipo: 'error'
         })

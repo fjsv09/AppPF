@@ -427,12 +427,17 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
                                                                 {record.distancia_entrada ?? record.distancia_oficina}m
                                                             </span>
                                                         </div>
-                                                        {record.tardanza_entrada > 0 && userRole === 'admin' && (
+                                                        {userRole === 'admin' && (
                                                             <button 
                                                                 onClick={() => handleExonerate(record.id, 'entrada')}
                                                                 disabled={isExonerating === `${record.id}-entrada`}
-                                                                className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-500 hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all shadow-md shrink-0 flex items-center justify-center active:scale-90"
-                                                                title="Exonerar Entrada"
+                                                                className={cn(
+                                                                    "w-7 h-7 rounded-lg transition-all shadow-md shrink-0 flex items-center justify-center active:scale-90 border",
+                                                                    record.tardanza_entrada > 0 
+                                                                        ? "bg-amber-500/10 border-amber-500/30 text-amber-500 hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30"
+                                                                        : "bg-slate-800/50 border-slate-700/30 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30"
+                                                                )}
+                                                                title={record.hora_entrada ? "Exonerar Tardanza de Entrada" : "Exonerar Asistencia en Campo"}
                                                             >
                                                                 <ShieldCheck className="w-4.5 h-4.5" />
                                                             </button>
@@ -470,12 +475,17 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
                                                                         {record.distancia_tarde ?? record.distancia_oficina}m
                                                                     </span>
                                                                 </div>
-                                                                {record.tardanza_turno_tarde > 0 && userRole === 'admin' && (
+                                                                {userRole === 'admin' && (
                                                                     <button 
                                                                         onClick={() => handleExonerate(record.id, 'tarde')}
                                                                         disabled={isExonerating === `${record.id}-tarde`}
-                                                                        className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-500 hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all shadow-md shrink-0 flex items-center justify-center active:scale-90"
-                                                                        title="Exonerar Turno Tarde"
+                                                                        className={cn(
+                                                                            "w-7 h-7 rounded-lg transition-all shadow-md shrink-0 flex items-center justify-center active:scale-90 border",
+                                                                            record.tardanza_turno_tarde > 0 
+                                                                                ? "bg-amber-500/10 border-amber-500/30 text-amber-500 hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30"
+                                                                                : "bg-slate-800/50 border-slate-700/30 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30"
+                                                                        )}
+                                                                        title={record.hora_turno_tarde ? "Exonerar Tardanza Turno Tarde" : "Exonerar Asistencia Campo"}
                                                                     >
                                                                         <ShieldCheck className="w-4.5 h-4.5" />
                                                                     </button>
@@ -483,8 +493,18 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
                                                             </div>
                                                         </>
                                                     ) : (
-                                                        <div className="h-[44px] flex items-center justify-center text-slate-800 italic text-[10px] font-black tracking-widest">
-                                                            ESPERANDO
+                                                        <div className="h-[44px] flex items-center justify-between">
+                                                            <span className="text-slate-800 italic text-[10px] font-black tracking-widest uppercase">ESPERANDO</span>
+                                                            {userRole === 'admin' && (
+                                                                <button 
+                                                                    onClick={() => handleExonerate(record.id, 'tarde')}
+                                                                    disabled={isExonerating === `${record.id}-tarde`}
+                                                                    className="w-8 h-8 rounded-lg bg-slate-800/50 border border-slate-700/30 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all flex items-center justify-center active:scale-90 shadow-lg"
+                                                                    title="Exonerar Asistencia Campo"
+                                                                >
+                                                                    <ShieldCheck className="w-5 h-5" />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
@@ -519,12 +539,17 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
                                                                         {record.distancia_cierre ?? record.distancia_oficina}m
                                                                     </span>
                                                                 </div>
-                                                                {record.tardanza_cierre > 0 && userRole === 'admin' && (
+                                                                {userRole === 'admin' && (
                                                                     <button 
                                                                         onClick={() => handleExonerate(record.id, 'cierre')}
                                                                         disabled={isExonerating === `${record.id}-cierre`}
-                                                                        className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-500 hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all shadow-md shrink-0 flex items-center justify-center active:scale-90"
-                                                                        title="Exonerar Cierre"
+                                                                        className={cn(
+                                                                            "w-7 h-7 rounded-lg transition-all shadow-md shrink-0 flex items-center justify-center active:scale-90 border",
+                                                                            record.tardanza_cierre > 0 
+                                                                                ? "bg-amber-500/10 border-amber-500/30 text-amber-500 hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30"
+                                                                                : "bg-slate-800/50 border-slate-700/30 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30"
+                                                                        )}
+                                                                        title={record.hora_cierre ? "Exonerar Tardanza Cierre" : "Exonerar Asistencia Campo"}
                                                                     >
                                                                         <ShieldCheck className="w-4.5 h-4.5" />
                                                                     </button>
@@ -532,8 +557,18 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
                                                             </div>
                                                         </>
                                                     ) : (
-                                                        <div className="h-[44px] flex items-center justify-center text-slate-800 italic text-[10px] font-black tracking-widest">
-                                                            ESPERANDO
+                                                        <div className="h-[44px] flex items-center justify-between">
+                                                            <span className="text-slate-800 italic text-[10px] font-black tracking-widest uppercase">ESPERANDO</span>
+                                                            {userRole === 'admin' && (
+                                                                <button 
+                                                                    onClick={() => handleExonerate(record.id, 'cierre')}
+                                                                    disabled={isExonerating === `${record.id}-cierre`}
+                                                                    className="w-8 h-8 rounded-lg bg-slate-800/50 border border-slate-700/30 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all flex items-center justify-center active:scale-90 shadow-lg"
+                                                                    title="Exonerar Asistencia Campo"
+                                                                >
+                                                                    <ShieldCheck className="w-5 h-5" />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
@@ -651,11 +686,17 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
                                                         >
                                                             <MapPin className="w-4 h-4" />
                                                         </a>
-                                                        {((step.late || 0) > 0 && userRole === 'admin') && (
+                                                        {userRole === 'admin' && (
                                                             <button
                                                                 onClick={() => handleExonerate(record.id, step.key as any)}
                                                                 disabled={isExonerating === `${record.id}-${step.key}`}
-                                                                className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 flex items-center justify-center active:scale-90"
+                                                                className={cn(
+                                                                    "w-8 h-8 rounded-xl transition-all flex items-center justify-center active:scale-90 border",
+                                                                    (step.late || 0) > 0 
+                                                                        ? "bg-amber-500/10 border-amber-500/30 text-amber-500"
+                                                                        : "bg-slate-800/50 border-slate-700/30 text-slate-500"
+                                                                )}
+                                                                title={step.time ? "Exonerar Tardanza" : "Exonerar Asistencia Campo"}
                                                             >
                                                                 <ShieldCheck className="w-4.5 h-4.5" />
                                                             </button>
@@ -663,7 +704,19 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
                                                     </div>
                                                 </>
                                             ) : (
-                                                <span className="text-[10px] text-slate-700 italic font-black uppercase tracking-[0.2em]">Pendiente</span>
+                                                <>
+                                                    <span className="text-[10px] text-slate-700 italic font-black uppercase tracking-[0.2em]">Pendiente</span>
+                                                    {userRole === 'admin' && (
+                                                        <button 
+                                                            onClick={() => handleExonerate(record.id, step.key as any)}
+                                                            disabled={isExonerating === `${record.id}-${step.key}`}
+                                                            className="w-9 h-9 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all flex items-center justify-center active:scale-90 shadow-xl"
+                                                            title="Exonerar Asistencia Campo"
+                                                        >
+                                                            <ShieldCheck className="w-5 h-5" />
+                                                        </button>
+                                                    )}
+                                                </>
                                             )}
                                         </div>
                                     </div>
@@ -716,11 +769,12 @@ export function AttendanceTable({ initialData, usuarios, currentFilters, userRol
                             Confirmar Exoneración
                         </AlertDialogTitle>
                         <AlertDialogDescription className="text-slate-400 text-sm">
-                            ¿Estás seguro de que deseas exonerar la tardanza del turno 
-                            <span className="text-amber-500 font-bold ml-1">
+                            ¿Estás seguro de que deseas exonerar el turno 
+                            <span className="text-amber-500 font-bold mx-1">
                                 {confirmTarget?.turno === 'entrada' ? 'Mañana' : (confirmTarget?.turno === 'tarde' ? 'Turno Tarde' : 'Cierre')}
                             </span>? 
-                            Esta acción eliminará el descuento aplicado en el historial y nómina.
+                            Si el trabajador está en campo, esta acción marcará el turno como asistido puntualmente.
+                            Esta acción eliminará cualquier descuento aplicado.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter className="gap-2">

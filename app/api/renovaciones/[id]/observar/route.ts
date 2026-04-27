@@ -36,7 +36,7 @@ export async function PATCH(
         // Verificar solicitud
         const { data: solicitud } = await supabaseAdmin
             .from('solicitudes_renovacion')
-            .select('*, asesor:asesor_id(id, nombre_completo)')
+            .select('*, asesor:asesor_id(id, nombre_completo), cliente:cliente_id(nombres)')
             .eq('id', id)
             .single()
 
@@ -75,9 +75,10 @@ export async function PATCH(
         }
 
         // Notificar al asesor
+        const clienteNombres = (solicitud.cliente as any)?.nombres || 'Cliente'
         await createFullNotification(solicitud.asesor_id, {
             titulo: '⚠️ Renovación con Observaciones',
-            mensaje: `Tu solicitud de renovación requiere correcciones: ${observacion.substring(0, 50)}...`,
+            mensaje: `Tu solicitud de renovación para ${clienteNombres} requiere correcciones: ${observacion.substring(0, 50)}...`,
             link: `/dashboard/renovaciones/${id}`,
             tipo: 'warning'
         })

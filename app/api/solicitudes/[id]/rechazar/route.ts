@@ -35,7 +35,7 @@ export async function PATCH(
         // Verificar solicitud
         const { data: solicitud } = await supabaseAdmin
             .from('solicitudes')
-            .select('*, asesor:asesor_id(id, nombre_completo)')
+            .select('*, asesor:asesor_id(id, nombre_completo), cliente:cliente_id(nombres)')
             .eq('id', id)
             .single()
 
@@ -83,9 +83,10 @@ export async function PATCH(
         }
 
         // Notificar al asesor
+        const clienteNombres = (solicitud.cliente as any)?.nombres || 'Cliente'
         await createFullNotification(solicitud.asesor_id, {
             titulo: '❌ Solicitud Rechazada',
-            mensaje: `La solicitud por $${solicitud.monto_solicitado} ha sido rechazada: ${motivo}`,
+            mensaje: `La solicitud de ${clienteNombres} ha sido rechazada: ${motivo}`,
             link: `/dashboard/solicitudes/${id}`,
             tipo: 'error'
         })

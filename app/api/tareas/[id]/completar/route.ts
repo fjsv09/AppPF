@@ -53,7 +53,8 @@ export async function PATCH(
             .update({
                 estado: 'completada',
                 evidencia_url: evidencia_url,
-                completada_en: new Date().toISOString()
+                completada_en: new Date().toISOString(),
+                notas: null // Limpiar motivo de rechazo al completar de nuevo
             })
             .eq('id', id)
             .select()

@@ -222,9 +222,10 @@ export async function PATCH(
         }
 
         // ===== NOTIFICAR AL ASESOR =====
+        const nombreClienteNotif = solicitud.cliente?.nombres || solicitud.prospecto_nombres || 'Cliente'
         await createFullNotification(solicitud.asesor_id, {
             titulo: '✅ Solicitud Aprobada',
-            mensaje: `La solicitud por $${solicitud.monto_solicitado} ha sido aprobada. Préstamo creado.`,
+            mensaje: `La solicitud de ${nombreClienteNotif} ha sido aprobada. Préstamo creado.`,
             link: `/dashboard/prestamos/${prestamo.id}`,
             tipo: 'success'
         })

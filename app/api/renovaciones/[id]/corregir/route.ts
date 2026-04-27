@@ -24,7 +24,7 @@ export async function PATCH(
         // Verificar solicitud y que pertenece al usuario
         const { data: solicitud } = await supabaseAdmin
             .from('solicitudes_renovacion')
-            .select('*')
+            .select('*, asesor:asesor_id(nombre_completo), cliente:cliente_id(nombres)')
             .eq('id', id)
             .single()
 
@@ -84,10 +84,13 @@ export async function PATCH(
         }
 
         // Notificar al supervisor
+        const advisorName = (solicitud.asesor as any)?.nombre_completo || 'El asesor'
+        const clienteNombres = (solicitud.cliente as any)?.nombres || 'Cliente'
+
         if (solicitud.supervisor_id) {
             await createFullNotification(solicitud.supervisor_id, {
                 titulo: '🔄 Renovación Corregida',
-                mensaje: `El asesor ha corregido la solicitud de renovación por $${updated.monto_solicitado}`,
+                mensaje: `${advisorName} ha corregido la solicitud de renovación de ${clienteNombres}`,
                 link: `/dashboard/renovaciones/${id}`,
                 tipo: 'info'
             })
@@ -101,7 +104,7 @@ export async function PATCH(
             for (const sup of supervisores || []) {
                 await createFullNotification(sup.id, {
                     titulo: '🔄 Renovación Corregida',
-                    mensaje: `Solicitud de renovación corregida por $${updated.monto_solicitado}`,
+                    mensaje: `Solicitud de renovación de ${clienteNombres} corregida por ${advisorName}`,
                     link: `/dashboard/renovaciones/${id}`,
                     tipo: 'info'
                 })

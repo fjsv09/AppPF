@@ -35,7 +35,7 @@ export async function PATCH(
         // Verificar solicitud
         const { data: solicitud } = await supabaseAdmin
             .from('solicitudes_renovacion')
-            .select('*, asesor:asesor_id(id, nombre_completo)')
+            .select('*, asesor:asesor_id(id, nombre_completo), cliente:cliente_id(nombres)')
             .eq('id', id)
             .single()
     
@@ -84,9 +84,11 @@ export async function PATCH(
         }
     
         // Notificar al asesor
+        const clienteNombres = (solicitud.cliente as any)?.nombres || 'Cliente'
+        const rejectingUserName = perfil.nombre_completo || perfil.rol
         await createFullNotification(solicitud.asesor_id, {
             titulo: '❌ Renovación Rechazada',
-            mensaje: `La solicitud de renovación por $${solicitud.monto_solicitado} fue rechazada por ${perfil.rol}: ${motivo.substring(0, 50)}...`,
+            mensaje: `La solicitud de renovación de ${clienteNombres} fue rechazada por ${rejectingUserName}: ${motivo.substring(0, 50)}...`,
             link: `/dashboard/renovaciones/${id}`,
             tipo: 'error'
         })

@@ -24,7 +24,7 @@ export async function PATCH(
         // Verificar solicitud y que el usuario sea el asesor dueño
         const { data: solicitud } = await supabaseAdmin
             .from('solicitudes')
-            .select('*, asesor:asesor_id(id, nombre_completo)')
+            .select('*, asesor:asesor_id(id, nombre_completo), cliente:cliente_id(nombres)')
             .eq('id', id)
             .single()
 
@@ -115,17 +115,19 @@ export async function PATCH(
             return NextResponse.json({ error: updateError.message }, { status: 400 })
         }
 
-        // Notificar al supervisor que hay corrección
         const { data: perfil } = await supabaseAdmin
             .from('perfiles')
             .select('supervisor_id')
             .eq('id', user.id)
             .single()
 
+        const advisorName = solicitud.asesor?.nombre_completo || 'Un asesor'
+        const clienteNombres = (solicitud.cliente as any)?.nombres || 'Cliente'
+
         if (perfil?.supervisor_id) {
             await createFullNotification(perfil.supervisor_id, {
                 titulo: '📝 Solicitud Corregida',
-                mensaje: `La solicitud por $${monto_solicitado} ha sido corregida y requiere nueva revisión`,
+                mensaje: `${advisorName} ha corregido la solicitud de ${clienteNombres}.`,
                 link: `/dashboard/solicitudes/${id}`,
                 tipo: 'info'
             })
@@ -139,7 +141,7 @@ export async function PATCH(
             for (const sup of supervisores || []) {
                 await createFullNotification(sup.id, {
                     titulo: '📝 Solicitud Corregida',
-                    mensaje: `Solicitud por $${monto_solicitado} corregida y lista para revisión`,
+                    mensaje: `${advisorName} corrigió la solicitud de ${clienteNombres}. Lista para revisión.`,
                     link: `/dashboard/solicitudes/${id}`,
                     tipo: 'info'
                 })

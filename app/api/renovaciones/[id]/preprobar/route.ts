@@ -36,7 +36,7 @@ export async function PATCH(
         // Verificar solicitud
         const { data: solicitud } = await supabaseAdmin
             .from('solicitudes_renovacion')
-            .select('*, asesor:asesor_id(id, nombre_completo)')
+            .select('*, asesor:asesor_id(id, nombre_completo), cliente:cliente_id(nombres)')
             .eq('id', id)
             .single()
 
@@ -90,10 +90,12 @@ export async function PATCH(
             .select('id')
             .eq('rol', 'admin')
 
+        const clienteNombres = (solicitud.cliente as any)?.nombres || 'Cliente'
+        const supervisorName = perfil.nombre_completo || 'Un supervisor'
         for (const admin of admins || []) {
             await createFullNotification(admin.id, {
                 titulo: '🔄 Renovación Pre-Aprobada',
-                mensaje: `Renovación por $${solicitud.monto_solicitado} para ${solicitud.cliente?.nombres || 'Cliente'} lista para aprobación final`,
+                mensaje: `Renovación de ${clienteNombres} pre-aprobada por ${supervisorName}`,
                 link: `/dashboard/renovaciones/${id}`,
                 tipo: 'info'
             })

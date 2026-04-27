@@ -35,7 +35,7 @@ export async function PATCH(
         // Verificar que la solicitud existe y está en estado correcto
         const { data: solicitud } = await supabaseAdmin
             .from('solicitudes')
-            .select('*, asesor:asesor_id(id, nombre_completo)')
+            .select('*, asesor:asesor_id(id, nombre_completo), cliente:cliente_id(nombres)')
             .eq('id', id)
             .single()
 
@@ -76,10 +76,12 @@ export async function PATCH(
             .select('id')
             .eq('rol', 'admin')
 
+        const clienteNombres = (solicitud.cliente as any)?.nombres || 'Cliente'
+        const supervisorName = perfil.nombre_completo || 'Un supervisor'
         for (const admin of admins || []) {
             await createFullNotification(admin.id, {
                 titulo: 'Solicitud Pre-Aprobada',
-                mensaje: `Solicitud por $${solicitud.monto_solicitado} lista para aprobación final`,
+                mensaje: `Solicitud de ${clienteNombres} pre-aprobada por ${supervisorName}`,
                 link: `/dashboard/solicitudes/${id}`,
                 tipo: 'info'
             })

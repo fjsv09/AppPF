@@ -86,7 +86,7 @@ export async function POST(request: Request) {
         // Verificar que es asesor o admin
         const { data: perfil } = await supabaseAdmin
             .from('perfiles')
-            .select('id, rol, supervisor_id')
+            .select('id, rol, supervisor_id, nombre_completo')
             .eq('id', user.id)
             .single()
 
@@ -148,12 +148,15 @@ export async function POST(request: Request) {
         }
 
         // 3.5 Validar Límite de Préstamo del Cliente (si no es un nuevo prospecto)
+        let clientDisplayName = prospecto_nombres || 'Cliente'
         if (cliente_id) {
             const { data: clientInfo } = await supabaseAdmin
                 .from('clientes')
-                .select('limite_prestamo')
+                .select('limite_prestamo, nombres')
                 .eq('id', cliente_id)
                 .single()
+            
+            clientDisplayName = clientInfo?.nombres || 'Cliente'
             
             const clientLimit = parseFloat(clientInfo?.limite_prestamo || 0)
             if (clientLimit > 0 && parseFloat(monto_solicitado) > clientLimit) {
@@ -243,11 +246,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: createError.message }, { status: 400 })
         }
 
+        const advisorName = perfil.nombre_completo || 'Un asesor'
+
         // Obtener supervisor del asesor para notificar
         if (perfil.supervisor_id) {
             await createFullNotification(perfil.supervisor_id, {
                 titulo: 'Nueva Solicitud de Crédito',
-                mensaje: `${perfil.rol === 'asesor' ? 'Un asesor' : 'El usuario'} ha creado una solicitud por $${monto_solicitado}`,
+                mensaje: `${advisorName} ha creado una solicitud para ${clientDisplayName}`,
                 link: `/dashboard/solicitudes/${solicitud.id}`,
                 tipo: 'info'
             })
@@ -261,7 +266,7 @@ export async function POST(request: Request) {
             for (const sup of supervisores || []) {
                 await createFullNotification(sup.id, {
                     titulo: 'Nueva Solicitud de Crédito',
-                    mensaje: `Nueva solicitud por $${monto_solicitado} pendiente de revisión`,
+                    mensaje: `${advisorName} creó una solicitud para ${clientDisplayName}`,
                     link: `/dashboard/solicitudes/${solicitud.id}`,
                     tipo: 'info'
                 })

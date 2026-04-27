@@ -85,7 +85,7 @@ export async function POST(request: Request) {
         // Verificar perfil
         const { data: perfil } = await supabaseAdmin
             .from('perfiles')
-            .select('id, rol, supervisor_id')
+            .select('id, rol, supervisor_id, nombre_completo')
             .eq('id', user.id)
             .single()
 
@@ -130,7 +130,7 @@ export async function POST(request: Request) {
         // NUEVA VALIDACIÓN: Verificar estado del préstamo para restricciones de rol
         const { data: prestamoInfo } = await supabaseAdmin
             .from('prestamos')
-            .select('cliente_id, estado, cliente:clientes(bloqueado_renovacion)')
+            .select('cliente_id, estado, cliente:clientes(nombres, bloqueado_renovacion)')
             .eq('id', prestamo_id)
             .single()
 
@@ -275,10 +275,13 @@ export async function POST(request: Request) {
 
         // Notificar a supervisores (Si es admin, se auto-pre-aprueba sin notificar)
         if (perfil.rol !== 'admin') {
+            const advisorName = perfil.nombre_completo || 'Un asesor'
+            const clienteNombres = (prestamoInfo.cliente as any)?.nombres || 'Cliente'
+
             if (perfil.supervisor_id) {
                 await createFullNotification(perfil.supervisor_id, {
                     titulo: '🔄 Nueva Solicitud de Renovación',
-                    mensaje: `Solicitud de renovación por $${monto_solicitado} - Score: ${elegibilidad.score}${elegibilidad.requiere_excepcion ? ' (Requiere Excepción)' : ''}`,
+                    mensaje: `${advisorName} ha creado una solicitud de renovación para ${clienteNombres}. Score: ${elegibilidad.score}${elegibilidad.requiere_excepcion ? ' (Requiere Excepción)' : ''}`,
                     link: `/dashboard/renovaciones/${solicitud.id}`,
                     tipo: elegibilidad.requiere_excepcion ? 'warning' : 'info'
                 })
@@ -292,7 +295,7 @@ export async function POST(request: Request) {
                 for (const sup of supervisores || []) {
                     await createFullNotification(sup.id, {
                         titulo: '🔄 Nueva Solicitud de Renovación',
-                        mensaje: `Solicitud de renovación por $${monto_solicitado}${elegibilidad.requiere_excepcion ? ' (Requiere Excepción)' : ''}`,
+                        mensaje: `${advisorName} creó una solicitud de renovación para ${clienteNombres}.${elegibilidad.requiere_excepcion ? ' (Requiere Excepción)' : ''}`,
                         link: `/dashboard/renovaciones/${solicitud.id}`,
                         tipo: elegibilidad.requiere_excepcion ? 'warning' : 'info'
                     })

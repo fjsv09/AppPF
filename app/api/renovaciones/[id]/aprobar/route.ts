@@ -175,9 +175,10 @@ export async function PATCH(
             if (cronogramaError) throw new Error(`Error generando cronograma: ${cronogramaError.message}`);
 
             // 5. Notificar al asesor
+            const clienteNombres = (solicitud.cliente as any)?.nombres || 'Cliente'
             await createFullNotification(solicitud.asesor_id, {
                 titulo: '✅ Renovación Aprobada',
-                mensaje: `La renovación por $${solicitud.monto_solicitado} ha sido aprobada. Nuevo préstamo creado.`,
+                mensaje: `La renovación de ${clienteNombres} ha sido aprobada. Nuevo préstamo creado.`,
                 link: `/dashboard/prestamos/${resultado.prestamo_nuevo_id}`,
                 tipo: 'success'
             })

@@ -172,8 +172,8 @@ export default async function CarteraMovimientosPage({ params, searchParams }: P
                                 {m.tipo === 'ingreso' ? <ArrowDownCircle className="w-4 h-4" /> : <ArrowUpCircle className="w-4 h-4" />}
                              </div>
                              <div>
-                                <p className="text-[10px] font-black text-white">{new Date(m.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' })}</p>
-                                <p className="text-[9px] text-slate-500 font-mono">{new Date(m.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}</p>
+                                <p className="text-[10px] font-black text-white">{new Date(m.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', timeZone: 'America/Lima' })}</p>
+                                <p className="text-[9px] text-slate-500 font-mono">{new Date(m.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' })}</p>
                              </div>
                           </div>
                        </td>

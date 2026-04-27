@@ -73,9 +73,17 @@ export function EditLoanModal({ open, onOpenChange, prestamo, onSuccess }: EditL
     const fetchCuentas = async () => {
         setFetchingCuentas(true)
         try {
+            // Solo cuentas de la cartera del admin (Cartera Global)
+            const { data: globalCartera } = await supabase
+                .from('carteras')
+                .select('id')
+                .ilike('nombre', '%Global%')
+                .single()
+
             const { data } = await supabase
                 .from('cuentas_financieras')
                 .select('*')
+                .eq('cartera_id', globalCartera?.id || '8d6abe49-cc8a-4428-a089-86e0aa4edee0')
                 .order('nombre')
             
             if (data) setCuentas(data)

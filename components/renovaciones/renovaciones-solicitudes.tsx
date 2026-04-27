@@ -373,7 +373,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                                             {estado.label}
                                         </Badge>
                                         <span className="text-[9px] text-slate-500 font-mono" suppressHydrationWarning>
-                                            {new Date(sol.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                            {new Date(sol.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' })}
                                         </span>
                                         {sol.requiere_excepcion && (
                                             <Badge className="bg-amber-500/10 border-amber-500/20 text-amber-500 text-[9px] py-0 h-4">
@@ -536,10 +536,10 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                                         {/* Fecha */}
                                         <div className="col-span-2 flex flex-col items-center justify-center text-center">
                                             <span className="text-xs font-medium text-slate-300">
-                                                {new Date(sol.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                                {new Date(sol.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' })}
                                             </span>
                                             <span className="text-[10px] text-slate-500 font-mono" suppressHydrationWarning>
-                                                {new Date(sol.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
+                                                {new Date(sol.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' })}
                                             </span>
                                         </div>
 

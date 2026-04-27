@@ -31,24 +31,36 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Solo administradores pueden realizar migraciones' }, { status: 403 })
         }
 
-        const { loans } = await request.json()
+        const { loans, cuenta_id } = await request.json()
         if (!loans || !Array.isArray(loans) || loans.length === 0) {
             return NextResponse.json({ error: 'Datos incompletos: Se requiere lista de préstamos' }, { status: 400 })
         }
 
-        // 2. Buscar la cuenta "Efectivo Global" en la cartera global
-        const { data: cuentasGlobal } = await supabaseAdmin
-            .from('cuentas_financieras')
-            .select('*')
-            .eq('cartera_id', GLOBAL_CARTERA_ID)
-            .order('nombre')
+        // 2. Buscar la cuenta financiera destino
+        let cuentaEfectivo: any = null
 
-        // Buscar una cuenta que contenga "efectivo" o la primera disponible
-        let cuentaEfectivo = cuentasGlobal?.find(c => c.nombre?.toLowerCase().includes('efectivo'))
-            || cuentasGlobal?.[0]
+        if (cuenta_id) {
+            // Usar la cuenta específica proporcionada por el usuario
+            const { data: cuentaEspecifica } = await supabaseAdmin
+                .from('cuentas_financieras')
+                .select('*')
+                .eq('id', cuenta_id)
+                .single()
+            cuentaEfectivo = cuentaEspecifica
+        } else {
+            // Fallback: Buscar cuenta "Efectivo Global" en la cartera global
+            const { data: cuentasGlobal } = await supabaseAdmin
+                .from('cuentas_financieras')
+                .select('*')
+                .eq('cartera_id', GLOBAL_CARTERA_ID)
+                .order('nombre')
+
+            cuentaEfectivo = cuentasGlobal?.find(c => c.nombre?.toLowerCase().includes('efectivo'))
+                || cuentasGlobal?.[0]
+        }
 
         if (!cuentaEfectivo) {
-            return NextResponse.json({ error: 'No se encontró la cuenta Efectivo Global' }, { status: 404 })
+            return NextResponse.json({ error: 'No se encontró la cuenta financiera seleccionada' }, { status: 404 })
         }
 
         // 3. Calcular neto del lote para validar saldo
@@ -301,7 +313,7 @@ export async function POST(request: Request) {
                 await supabaseAdmin
                     .from('movimientos_financieros')
                     .insert({
-                        cartera_id: GLOBAL_CARTERA_ID,
+                        cartera_id: cuentaEfectivo.cartera_id || GLOBAL_CARTERA_ID,
                         cuenta_origen_id: cuentaEfectivo.id,
                         monto,
                         tipo: 'egreso',
@@ -320,7 +332,7 @@ export async function POST(request: Request) {
                     await supabaseAdmin
                         .from('movimientos_financieros')
                         .insert({
-                            cartera_id: GLOBAL_CARTERA_ID,
+                            cartera_id: cuentaEfectivo.cartera_id || GLOBAL_CARTERA_ID,
                             cuenta_origen_id: cuentaEfectivo.id,
                             monto: ingresoTotal,
                             tipo: 'ingreso',
@@ -336,7 +348,7 @@ export async function POST(request: Request) {
                     await supabaseAdmin
                         .from('movimientos_financieros')
                         .insert({
-                            cartera_id: GLOBAL_CARTERA_ID,
+                            cartera_id: cuentaEfectivo.cartera_id || GLOBAL_CARTERA_ID,
                             cuenta_origen_id: cuentaEfectivo.id,
                             monto: montoAbonado,
                             tipo: 'ingreso',
@@ -353,7 +365,7 @@ export async function POST(request: Request) {
                     await supabaseAdmin
                         .from('movimientos_financieros')
                         .insert({
-                            cartera_id: GLOBAL_CARTERA_ID,
+                            cartera_id: cuentaEfectivo.cartera_id || GLOBAL_CARTERA_ID,
                             cuenta_origen_id: cuentaEfectivo.id,
                             monto: interesExtra,
                             tipo: 'ingreso',

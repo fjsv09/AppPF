@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import * as XLSX from 'xlsx'
 import {
     Dialog,
@@ -16,8 +16,18 @@ import { Input } from "../ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table"
 import { Progress } from "../ui/progress"
 import { toast } from "sonner"
-import { FileUp, Download, CheckCircle2, AlertCircle, Loader2, FileSpreadsheet, Users, Banknote, Receipt, ArrowRightLeft, TrendingUp, TrendingDown, Info } from 'lucide-react'
+import { FileUp, Download, CheckCircle2, AlertCircle, Loader2, FileSpreadsheet, Users, Banknote, Receipt, ArrowRightLeft, TrendingUp, TrendingDown, Info, Wallet, ChevronDown } from 'lucide-react'
 import { Badge } from '../ui/badge'
+import { createClient } from '@/utils/supabase/client'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select'
+
+const GLOBAL_CARTERA_ID = '00000000-0000-0000-0000-000000000000'
 
 interface BulkImportModalProps {
   isOpen: boolean
@@ -35,6 +45,39 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
   const [progress, setProgress] = useState(0)
   const [results, setResults] = useState<any | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Account selector state
+  const [cuentas, setCuentas] = useState<any[]>([])
+  const [selectedCuentaId, setSelectedCuentaId] = useState<string>('')
+  const [loadingCuentas, setLoadingCuentas] = useState(false)
+
+  // Fetch all financial accounts when modal opens
+  const fetchCuentas = useCallback(async () => {
+    setLoadingCuentas(true)
+    try {
+      const supabase = createClient()
+      const { data: cuentasData } = await supabase
+        .from('cuentas_financieras')
+        .select('id, nombre, tipo, saldo, cartera_id, carteras(nombre)')
+        .eq('cartera_id', GLOBAL_CARTERA_ID)
+        .order('nombre')
+      setCuentas(cuentasData || [])
+      // Auto-select the first account that contains 'efectivo' in its name
+      const defaultCuenta = cuentasData?.find((c: any) => c.nombre?.toLowerCase().includes('efectivo'))
+        || cuentasData?.[0]
+      if (defaultCuenta) setSelectedCuentaId(defaultCuenta.id)
+    } catch (err) {
+      console.error('Error fetching accounts:', err)
+    } finally {
+      setLoadingCuentas(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isOpen) fetchCuentas()
+  }, [isOpen, fetchCuentas])
+
+  const selectedCuenta = useMemo(() => cuentas.find(c => c.id === selectedCuentaId), [cuentas, selectedCuentaId])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
@@ -217,11 +260,11 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
           break
         case 'prestamos':
           endpoint = '/api/migracion/prestamos'
-          body = { loans: data }
+          body = { loans: data, cuenta_id: selectedCuentaId || undefined }
           break
         case 'gastos':
           endpoint = '/api/migracion/gastos'
-          body = { expenses: data }
+          body = { expenses: data, cuenta_id: selectedCuentaId || undefined }
           break
       }
 
@@ -267,7 +310,7 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
   const tabs: { id: ImportTab; label: string; icon: React.ReactNode; accent: string; desc: string }[] = [
     { id: 'clientes', label: 'Clientes', icon: <Users className="w-4 h-4" />, accent: 'blue', desc: 'Solo registro de cartera' },
     { id: 'prestamos', label: 'Préstamos', icon: <Banknote className="w-4 h-4" />, accent: 'emerald', desc: 'Con movimientos financieros' },
-    { id: 'gastos', label: 'Gastos', icon: <Receipt className="w-4 h-4" />, accent: 'amber', desc: 'Descuenta de Efectivo Global' },
+    { id: 'gastos', label: 'Gastos', icon: <Receipt className="w-4 h-4" />, accent: 'amber', desc: 'Descuenta de cuenta seleccionada' },
   ]
 
   const currentAccent = tabs.find(t => t.id === activeTab)?.accent || 'blue'
@@ -372,6 +415,56 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                 </div>
               </div>
 
+              {/* ===== ACCOUNT SELECTOR (Préstamos & Gastos only) ===== */}
+              {(activeTab === 'prestamos' || activeTab === 'gastos') && (
+                <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Wallet className="w-4 h-4 text-blue-400" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cuenta Financiera Destino</p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <Select value={selectedCuentaId} onValueChange={setSelectedCuentaId} disabled={loadingCuentas}>
+                      <SelectTrigger className="bg-slate-900/60 border-slate-700 text-white h-10 rounded-lg text-xs focus:ring-1 focus:ring-blue-500/40 transition-all w-full sm:w-auto sm:min-w-[320px]">
+                        {loadingCuentas ? (
+                          <span className="flex items-center gap-2 text-slate-500">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Cargando cuentas...
+                          </span>
+                        ) : (
+                          <SelectValue placeholder="Seleccionar cuenta" />
+                        )}
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-950 border-slate-800 text-white rounded-lg backdrop-blur-xl max-h-64">
+                        {cuentas.map((c) => (
+                          <SelectItem key={c.id} value={c.id} className="text-xs focus:bg-blue-500/10">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold">{c.nombre}</span>
+                              <span className="text-slate-500">({c.tipo})</span>
+                              <span className="text-emerald-400 font-mono text-[10px]">S/ {parseFloat(c.saldo || 0).toFixed(2)}</span>
+                              {c.carteras?.nombre && (
+                                <span className="text-[9px] text-slate-600">— {c.carteras.nombre}</span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedCuenta && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[9px] h-5 px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-mono">
+                          Saldo: S/ {parseFloat(selectedCuenta.saldo || 0).toFixed(2)}
+                        </Badge>
+                        {selectedCuenta.carteras?.nombre && (
+                          <Badge variant="outline" className="text-[9px] h-5 px-2 bg-blue-500/10 text-blue-400 border-blue-500/30">
+                            {selectedCuenta.carteras.nombre}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[9px] text-slate-600 mt-2">Los egresos e ingresos de la migración se cargarán a esta cuenta.</p>
+                </div>
+              )}
+
               {/* ===== LOAN FINANCIAL SUMMARY ===== */}
               {activeTab === 'prestamos' && data.length > 0 && loanSummary && (
                 <div className={cn(
@@ -413,7 +506,7 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                         ${loanSummary.neto.toFixed(2)}
                       </p>
                       <p className="text-[9px] text-slate-500 mt-0.5">
-                        {loanSummary.neto <= 0 ? "✅ No requiere saldo adicional (más ingresos que egresos)" : "⚠️ Se descontará de Efectivo Global"}
+                        {loanSummary.neto <= 0 ? "✅ No requiere saldo adicional (más ingresos que egresos)" : `⚠️ Se descontará de ${selectedCuenta?.nombre || 'la cuenta seleccionada'}`}
                       </p>
                     </div>
                   </div>
@@ -429,7 +522,7 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                         <Receipt className="w-5 h-5 text-amber-400" />
                       </div>
                       <div>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Total a Descontar de Efectivo Global</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Total a Descontar de {selectedCuenta?.nombre || 'Cuenta Seleccionada'}</p>
                         <h4 className="text-lg font-black text-amber-400">${totalGastos.toFixed(2)}</h4>
                       </div>
                     </div>
@@ -505,7 +598,7 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                  )}
                  {activeTab === 'gastos' && results.totalDescontado > 0 && (
                    <div className="col-span-3 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-center">
-                      <p className="text-[10px] text-amber-400/70 font-bold uppercase tracking-tight">Total Descontado Efectivo Global</p>
+                      <p className="text-[10px] text-amber-400/70 font-bold uppercase tracking-tight">Total Descontado de {selectedCuenta?.nombre || 'Cuenta'}</p>
                       <h3 className="text-lg font-black text-amber-400">${results.totalDescontado.toFixed(2)}</h3>
                    </div>
                  )}

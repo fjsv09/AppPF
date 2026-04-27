@@ -285,7 +285,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                              {config.label}
                                                          </Badge>
                                                           <span className="text-[9px] text-slate-500 font-mono" suppressHydrationWarning>
-                                                              {new Date(solicitud.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                                              {new Date(solicitud.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' })}
                                                           </span>
                                                     </div>
                                                 </div>
@@ -393,10 +393,10 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                             {/* Fecha */}
                                             <div className="col-span-2 flex flex-col items-center justify-center text-center">
                                                 <span className="text-xs font-medium text-slate-300">
-                                                    {new Date(solicitud.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                                    {new Date(solicitud.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' })}
                                                 </span>
                                                 <span className="text-[10px] text-slate-500 font-mono" suppressHydrationWarning>
-                                                    {new Date(solicitud.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
+                                                    {new Date(solicitud.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' })}
                                                 </span>
                                             </div>
 

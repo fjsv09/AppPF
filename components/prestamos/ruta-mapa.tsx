@@ -392,7 +392,7 @@ export default function RutaMapa({
                                                 <div className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest">Monto Recaudado</div>
                                                 <div className="text-2xl font-black text-emerald-700">${item.monto_pagado}</div>
                                                 <div className="text-[10px] text-slate-500 mt-1">
-                                                    {new Date(item.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
+                                                    {new Date(item.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' })}
                                                 </div>
                                             </div>
                                             {item.distancia_cobro !== null && (

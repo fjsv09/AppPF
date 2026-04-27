@@ -64,12 +64,19 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
     // Obtener cuentas administrativas (Caja/Banco) si es admin y está pre-aprobado
     let cuentasAdmin: any[] = []
     if (perfil?.rol === 'admin' && solicitud.estado_solicitud === 'pre_aprobado') {
+        // [NUEVO] Solo cuentas de la cartera del admin (Cartera Global)
+        const { data: globalCartera } = await supabaseAdmin
+            .from('carteras')
+            .select('id')
+            .ilike('nombre', '%Global%')
+            .single()
+
         const { data: cuentas } = await supabaseAdmin
             .from('cuentas_financieras')
             .select('id, nombre, saldo, tipo, cartera_id, usuarios_autorizados')
+            .eq('cartera_id', globalCartera?.id || '8d6abe49-cc8a-4428-a089-86e0aa4edee0')
             .order('nombre')
         
-        // El admin debería poder elegir de cualquier cuenta o al menos ver todas para desembolsar
         cuentasAdmin = cuentas || []
     }
 

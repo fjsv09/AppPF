@@ -207,7 +207,7 @@ export async function PATCH(
             // 8. Notificar sobre la evidencia pendiente (Sistema + Push)
             await createFullNotification(solicitud.asesor_id, {
                 titulo: '📷 Evidencia Requerida',
-                mensaje: `Se requiere foto de evidencia para la renovación de ${solicitud.cliente?.nombres || 'Cliente'}.`,
+                mensaje: `Se requiere foto de evidencia para la renovación de ${clienteNombres}.`,
                 link: `/dashboard/tareas?tab=evidencia`,
                 tipo: 'warning'
             })

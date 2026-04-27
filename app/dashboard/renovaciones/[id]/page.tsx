@@ -166,15 +166,20 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
 
     let cuentasAdmin: any[] = []
     if (perfil?.rol === 'admin' && ['pre_aprobado', 'pendiente_supervision'].includes(solicitud.estado_solicitud)) {
+        // [NUEVO] Solo cuentas de la cartera del admin (Cartera Global)
+        const { data: globalCartera } = await supabaseAdmin
+            .from('carteras')
+            .select('id')
+            .ilike('nombre', '%Global%')
+            .single()
+
         const { data: cuentas } = await supabaseAdmin
             .from('cuentas_financieras')
             .select('id, nombre, saldo, tipo, cartera_id, usuarios_autorizados')
+            .eq('cartera_id', globalCartera?.id || '8d6abe49-cc8a-4428-a089-86e0aa4edee0')
             .order('nombre')
         
-        cuentasAdmin = (cuentas || []).filter((c: any) => 
-            c.cartera_id === '00000000-0000-0000-0000-000000000000' || 
-            (c.usuarios_autorizados && c.usuarios_autorizados.length > 0)
-        )
+        cuentasAdmin = cuentas || []
     }
 
     // Obtener logo del sistema para el ticket

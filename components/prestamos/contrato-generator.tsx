@@ -29,7 +29,7 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
     const contentRef = useRef<HTMLDivElement>(null)
 
     const isControlled = controlledOpen !== undefined
-    const open = isControlled ? controlledOpen : internalOpen
+    const isOpen = isControlled ? controlledOpen : internalOpen
     
     const setOpen = (val: boolean) => {
         if (isControlled) {
@@ -66,9 +66,12 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
         printWindow.document.write(`
             <html>
                 <head>
-                    <title>Contrato-${prestamo.id}</title>
+                    <title>ProFinanzas - Documento de Préstamo</title>
                     <style>
-                        @page { size: A4; margin: 10mm 20mm 20mm 20mm; }
+                        @page { 
+                            size: A4; 
+                            margin: 10mm; 
+                        }
                         body { 
                             font-family: 'Times New Roman', Times, serif; 
                             color: #000; 
@@ -76,17 +79,42 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                             padding: 0;
                             line-height: 1.4;
                             font-size: 11pt; 
+                            background-color: white;
                         }
-                        .page-break { page-break-after: always; display: block; position: relative; }
+                        .page-break { 
+                            page-break-after: always; 
+                            display: block; 
+                            position: relative;
+                            min-height: 277mm !important; /* Adjusted for footer */
+                            height: auto !important;
+                            margin-bottom: 0 !important;
+                            padding: 10mm 15mm 20mm 15mm !important; /* Bottom padding for footer */
+                            box-sizing: border-box !important;
+                        }
+                        .page-break:last-child { 
+                            page-break-after: auto !important; 
+                        }
+                        .print-footer {
+                            position: absolute;
+                            bottom: 10mm;
+                            left: 15mm;
+                            right: 15mm;
+                            border-top: 1px solid #eee;
+                            padding-top: 5px;
+                            display: flex;
+                            justify-content: space-between;
+                            font-size: 8pt;
+                            color: #666;
+                            font-family: sans-serif;
+                        }
                         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 10pt; }
                         th, td { border: 1px solid #000; padding: 4px 8px; text-align: center; }
-                        th { background-color: #f0f0f0; font-weight: bold; }
-                        /* Ensure Lucide Icons Render */
+                        th { background-color: #f0f0f0 !important; font-weight: bold; -webkit-print-color-adjust: exact; }
                         svg { width: 40px; height: 40px; }
                         .small-icon svg { width: 16px; height: 16px; }
-                        /* Print specific overrides */
                         @media print {
                             body { -webkit-print-color-adjust: exact; }
+                            .page-break { border: none !important; box-shadow: none !important; }
                         }
                     </style>
                 </head>
@@ -212,11 +240,24 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
         sectionTitle: { fontSize: '14px', fontWeight: 'bold', textDecoration: 'underline', marginBottom: '8px', display: 'block' },
         grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px', marginBottom: '5px' },
         signatures: { display: 'flex', justifyContent: 'space-between', marginTop: '80px', padding: '0 30px' },
-        signBox: { width: '220px', borderTop: '1px solid black', textAlign: 'center' as const, paddingTop: '5px', fontSize: '12px' }
+        signBox: { width: '220px', borderTop: '1px solid black', textAlign: 'center' as const, paddingTop: '5px', fontSize: '12px' },
+        footer: {
+            position: 'absolute' as const,
+            bottom: '10mm',
+            left: '15mm',
+            right: '15mm',
+            borderTop: '1px solid #eee',
+            paddingTop: '5px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: '8pt',
+            color: '#666',
+            fontFamily: 'sans-serif'
+        }
     }
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={isOpen} onOpenChange={setOpen}>
             {(trigger || (!isControlled && !trigger)) && (
                 <DialogTrigger asChild>
                     {trigger || (
@@ -230,6 +271,9 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
             )}
             
             <DialogContent className={`${viewMode === 'menu' ? 'max-w-md' : 'max-w-5xl h-[90vh]'} bg-slate-900 border-slate-700/50 p-0 overflow-hidden flex flex-col text-slate-100 shadow-2xl`}>
+                <DialogHeader className="sr-only">
+                    <DialogTitle>Generador de Contratos</DialogTitle>
+                </DialogHeader>
                 
                 {viewMode === 'menu' ? (
                     <div className="flex flex-col p-6 gap-6">
@@ -348,30 +392,34 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                 ) : (
                     <>
                         {/* Visual Header for Preview */}
-                        <div className="p-4 border-b border-slate-700 bg-slate-900 flex justify-between items-center shadow-sm z-10 shrink-0">
-                            <div className="flex items-center gap-4">
-                                <Button variant="ghost" size="sm" onClick={() => setViewMode('menu')} className="text-slate-400 hover:text-white hover:bg-slate-800 h-8 px-2 gap-1 font-bold">
+                        <div className="p-3 md:p-4 border-b border-slate-700 bg-slate-900 flex justify-between items-center shadow-sm z-10 shrink-0">
+                            <div className="flex items-center gap-1.5 md:gap-4 overflow-hidden">
+                                <Button variant="ghost" size="sm" onClick={() => setViewMode('menu')} className="text-slate-400 hover:text-white hover:bg-slate-800 h-8 px-1.5 md:px-2 gap-1 font-bold">
                                     <ChevronLeft className="w-4 h-4" />
-                                    Volver
+                                    <span className="hidden md:inline">Volver</span>
                                 </Button>
-                                <div className="h-6 w-px bg-slate-800" />
-                                <h3 className="font-bold flex items-center gap-2 text-white">
-                                    <Printer className="w-4 h-4 text-blue-400" />
-                                    {docMode === 'completo' ? 'Contrato Completo' : docMode === 'contrato' ? 'Contrato Legal' : 'Cronograma / Cargo'}
+                                <div className="h-6 w-px bg-slate-800 hidden sm:block" />
+                                <h3 className="font-bold flex items-center gap-2 text-white truncate">
+                                    <Printer className="w-4 h-4 text-blue-400 shrink-0 hidden sm:block" />
+                                    <span className="truncate text-[13px] md:text-sm">
+                                        {docMode === 'completo' ? 'Contrato Completo' : docMode === 'contrato' ? 'Contrato Legal' : 'Cronograma / Cargo'}
+                                    </span>
                                 </h3>
                             </div>
-                             <div className="flex gap-2">
-                                <Button variant="outline" size="sm" onClick={() => setOpen(false)} className="border-slate-700 text-slate-300 hover:bg-slate-800 bg-transparent h-8">
-                                    Cerrar
+                             <div className="flex gap-1.5 md:gap-2 shrink-0">
+                                <Button variant="outline" size="sm" onClick={() => setOpen(false)} className="border-slate-700 text-slate-300 hover:bg-slate-800 bg-transparent h-8 px-2 md:px-3">
+                                    <span className="hidden md:inline">Cerrar</span>
+                                    <span className="md:hidden">X</span>
                                 </Button>
-                                <Button variant="outline" size="sm" onClick={handleShare} className="border-emerald-700/50 text-emerald-500 hover:bg-emerald-900/20 bg-emerald-500/10 h-8 font-bold gap-2">
+                                <Button variant="outline" size="sm" onClick={handleShare} className="border-emerald-700/50 text-emerald-500 hover:bg-emerald-900/20 bg-emerald-500/10 h-8 font-bold gap-1 md:gap-2 px-2 md:px-3">
                                     <Share2 className="w-3.5 h-3.5" />
-                                    <span className="hidden sm:inline">Compartir PDF</span>
-                                    <span className="sm:hidden">Compartir</span>
+                                    <span className="hidden md:inline">Compartir PDF</span>
+                                    <span className="md:hidden">PDF</span>
                                 </Button>
-                                <Button size="sm" onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 font-bold h-8 px-4 shadow-lg shadow-blue-900/40">
+                                <Button size="sm" onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white gap-1 md:gap-2 font-bold h-8 px-2 md:px-4 shadow-lg shadow-blue-900/40">
                                     <Printer className="w-4 h-4" />
-                                    Imprimir
+                                    <span className="hidden md:inline">Imprimir</span>
+                                    <span className="md:hidden text-xs">Print</span>
                                 </Button>
                             </div>
                         </div>
@@ -390,94 +438,126 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                                 }}
                             >
                                 
-                                {/* ---------------- PAGE 1: CONTRATO LEGAL ---------------- */}
-                                {(docMode === 'completo' || docMode === 'contrato') && (
-                                    <div className="page-break" style={{ 
-                                        marginBottom: docMode === 'completo' ? '50px' : '0',
-                                        padding: '15mm',
-                                        minHeight: '297mm',
-                                        backgroundColor: 'white',
-                                        boxSizing: 'border-box'
-                                    }}>
-                                        {/* Header */}
-                                        <div style={styles.header}>
-                                            <div style={styles.headerGroup}>
-                                                <Scale size={48} strokeWidth={1.5} color="black" />
-                                                <div>
-                                                    <div style={styles.logoTitle}>TORRES</div>
-                                                    <div style={styles.logoSubtitle}>ESTUDIO JURIDICO</div>
+                                {/* ---------------- PAGE 1: CONTRATO LEGAL (Original & Copy) ---------------- */}
+                                {(() => {
+                                    const contractBlock = (isCopy = false) => (
+                                        <div className="page-break" style={{ 
+                                            marginBottom: docMode === 'completo' ? '50px' : '0',
+                                            padding: '15mm',
+                                            minHeight: '297mm',
+                                            backgroundColor: 'white',
+                                            boxSizing: 'border-box',
+                                            position: 'relative'
+                                        }}>
+                                            {isCopy && (
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    top: '10mm',
+                                                    right: '15mm',
+                                                    fontSize: '9pt',
+                                                    color: '#999',
+                                                    fontWeight: 'bold',
+                                                    textTransform: 'uppercase',
+                                                    border: '1px solid #eee',
+                                                    padding: '2px 8px',
+                                                    borderRadius: '4px'
+                                                }}>
+                                                    Copia para el Cliente
+                                                </div>
+                                            )}
+                                            {/* Header */}
+                                            <div style={styles.header}>
+                                                <div style={styles.headerGroup}>
+                                                    <Scale size={48} strokeWidth={1.5} color="black" />
+                                                    <div>
+                                                        <div style={styles.logoTitle}>TORRES</div>
+                                                        <div style={styles.logoSubtitle}>ESTUDIO JURIDICO</div>
+                                                    </div>
+                                                </div>
+                                                <div style={{...styles.headerGroup, textAlign: 'right', justifyContent: 'flex-end'}}>
+                                                    <div>
+                                                        <div style={styles.logoTitleRight}>ProFinanzas</div>
+                                                        <div style={styles.logoSubtitleRight}>Financiamiento Inmediato</div>
+                                                    </div>
+                                                    <ShieldCheck size={48} strokeWidth={1.5} color="black" />
                                                 </div>
                                             </div>
-                                            <div style={{...styles.headerGroup, textAlign: 'right', justifyContent: 'flex-end'}}>
-                                                <div>
-                                                    <div style={styles.logoTitleRight}>ProFinanzas</div>
-                                                    <div style={styles.logoSubtitleRight}>Financiamiento Inmediato</div>
+
+                                            <div style={styles.title}>CONTRATO DE PRÉSTAMO</div>
+
+                                            <p style={styles.justify}>
+                                                Conste por el presente contrato Privado de Préstamo de Dinero que celebramos de una parte la Empresa 
+                                                <span style={styles.bold}> “PROFINANZAS”</span> de propiedad de <span style={styles.bold}>“ESTUDIO DE ABOGADOS TORRES”</span> a quien en adelante se le denominara 
+                                                <span style={styles.bold}> EL PRESTAMISTA</span> y de la otra parte el Cliente: <span style={{...styles.bold, textTransform: 'uppercase'}}>{prestamo.clientes?.nombres}</span>, 
+                                                identificado con el Documento: <span style={styles.bold}>{prestamo.clientes?.dni}</span>, a quien en adelante se le denominará 
+                                                <span style={styles.bold}> EL PRESTATARIO</span>, ambas partes llegan a los acuerdos siguientes:
+                                            </p>
+
+                                            <div style={styles.justify}>
+                                                <span style={{display: 'block', fontWeight: 'bold', marginBottom: '2px'}}>PRIMERO:</span>
+                                                EL PRESTAMISTA cede en calidad de PRÉSTAMO al PRESTATARIO la suma o el monto de: 
+                                                <span style={styles.bold}> S/.{prestamo.monto.toFixed(2)}</span> al PRESTATARIO el día: <span style={{...styles.bold, textTransform: 'uppercase'}}>{fechaInicioStr}</span>
+                                            </div>
+
+                                            <div style={styles.justify}>
+                                                <span style={{display: 'block', fontWeight: 'bold', marginBottom: '2px'}}>SEGUNDO:</span>
+                                                El prestatario acepta dicho dinero en calidad de préstamo y asegura haber recibido el total del dinero a la firma del presente documento, 
+                                                por lo que se compromete a devolver dicha suma de dinero en cuotas o un solo pago según sea el caso en la fecha o fechas acordadas, 
+                                                asimismo ambas partes acuerdan que el pago del préstamo con intereses incluidos será la suma o monto de: 
+                                                <span style={styles.bold}> S/.{totalPagar.toFixed(2)}</span>
+                                            </div>
+
+                                            <div style={styles.justify}>
+                                                <span style={{display: 'block', fontWeight: 'bold', marginBottom: '2px'}}>TERCERO:</span>
+                                                En caso de incumplimiento de parte del PRESTATARIO, EL PRESTAMISTA queda en facultad de recurrir a las 
+                                                <span style={styles.bold}> autoridades pertinentes y hacer valer sus derechos</span>, o en su defecto 
+                                                <span style={styles.bold}> cobrar una cantidad por concepto de mora</span>, por lo que el presente documento es suficiente medio probatorio y vale como RECIBO.
+                                            </div>
+
+                                            <div style={styles.justify}>
+                                                <span style={{display: 'block', fontWeight: 'bold', marginBottom: '2px'}}>CUARTO:</span>
+                                                Ambas partes señalan y aseguran que en la celebración del mismo no ha mediado error, dolo de nulidad o anulabilidad 
+                                                que pudiera invalidar el contenido del mismo, por lo que proceden a firmar este contrato a la fecha: {fechaInicioStr}.
+                                            </div>
+
+                                            <div style={styles.signatures}>
+                                                <div style={styles.signBox}>
+                                                    <span style={styles.bold}>PRESTATARIO</span><br/>
+                                                    <div style={{marginTop: '5px', fontSize: '10pt', textTransform: 'uppercase'}}>
+                                                        {prestamo.clientes?.nombres}<br/>
+                                                        DNI: {prestamo.clientes?.dni}
+                                                    </div>
                                                 </div>
-                                                <ShieldCheck size={48} strokeWidth={1.5} color="black" />
-                                            </div>
-                                        </div>
-
-                                        <div style={styles.title}>CONTRATO DE PRÉSTAMO</div>
-
-                                        <p style={styles.justify}>
-                                            Conste por el presente contrato Privado de Préstamo de Dinero que celebramos de una parte la Empresa 
-                                            <span style={styles.bold}> “PROFINANZAS”</span> de propiedad de <span style={styles.bold}>“ESTUDIO DE ABOGADOS TORRES”</span> a quien en adelante se le denominara 
-                                            <span style={styles.bold}> EL PRESTAMISTA</span> y de la otra parte el Cliente: <span style={{...styles.bold, textTransform: 'uppercase'}}>{prestamo.clientes?.nombres}</span>, 
-                                            identificado con el Documento: <span style={styles.bold}>{prestamo.clientes?.dni}</span>, a quien en adelante se le denominará 
-                                            <span style={styles.bold}> EL PRESTATARIO</span>, ambas partes llegan a los acuerdos siguientes:
-                                        </p>
-
-                                        <div style={styles.justify}>
-                                            <span style={{display: 'block', fontWeight: 'bold', marginBottom: '2px'}}>PRIMERO:</span>
-                                            EL PRESTAMISTA cede en calidad de PRÉSTAMO al PRESTATARIO la suma o el monto de: 
-                                            <span style={styles.bold}> S/.{prestamo.monto.toFixed(2)}</span> al PRESTATARIO el día: <span style={{...styles.bold, textTransform: 'uppercase'}}>{fechaInicioStr}</span>
-                                        </div>
-
-                                        <div style={styles.justify}>
-                                            <span style={{display: 'block', fontWeight: 'bold', marginBottom: '2px'}}>SEGUNDO:</span>
-                                            El prestatario acepta dicho dinero en calidad de préstamo y asegura haber recibido el total del dinero a la firma del presente documento, 
-                                            por lo que se compromete a devolver dicha suma de dinero en cuotas o un solo pago según sea el caso en la fecha o fechas acordadas, 
-                                            asimismo ambas partes acuerdan que el pago del préstamo con intereses incluidos será la suma o monto de: 
-                                            <span style={styles.bold}> S/.{totalPagar.toFixed(2)}</span>
-                                        </div>
-
-                                        <div style={styles.justify}>
-                                            <span style={{display: 'block', fontWeight: 'bold', marginBottom: '2px'}}>TERCERO:</span>
-                                            En caso de incumplimiento de parte del PRESTATARIO, EL PRESTAMISTA queda en facultad de recurrir a las 
-                                            <span style={styles.bold}> autoridades pertinentes y hacer valer sus derechos</span>, o en su defecto 
-                                            <span style={styles.bold}> cobrar una cantidad por concepto de mora</span>, por lo que el presente documento es suficiente medio probatorio y vale como RECIBO.
-                                        </div>
-
-                                        <div style={styles.justify}>
-                                            <span style={{display: 'block', fontWeight: 'bold', marginBottom: '2px'}}>CUARTO:</span>
-                                            Ambas partes señalan y aseguran que en la celebración del mismo no ha mediado error, dolo de nulidad o anulabilidad 
-                                            que pudiera invalidar el contenido del mismo, por lo que proceden a firmar este contrato a la fecha: {fechaInicioStr}.
-                                        </div>
-
-                                        <div style={styles.signatures}>
-                                            <div style={styles.signBox}>
-                                                <span style={styles.bold}>PRESTATARIO</span><br/>
-                                                <div style={{marginTop: '5px', fontSize: '10pt', textTransform: 'uppercase'}}>
-                                                    {prestamo.clientes?.nombres}<br/>
-                                                    DNI: {prestamo.clientes?.dni}
+                                                <div style={styles.signBox}>
+                                                    <span style={styles.bold}>PROFINANZAS</span><br/>
+                                                    <span style={{fontSize: '9pt'}}>Área Legal</span>
+                                                </div>
+                                                <div style={styles.footer}>
+                                                    <span>ProFinanzas - Estudio Jurídico Torres</span>
+                                                    <span>{isCopy ? 'Copia Cliente' : 'Original Empresa'}</span>
                                                 </div>
                                             </div>
-                                            <div style={styles.signBox}>
-                                                <span style={styles.bold}>PROFINANZAS</span><br/>
-                                                <span style={{fontSize: '9pt'}}>Área Legal</span>
-                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    );
+
+                                    if (docMode === 'contrato') return contractBlock(false);
+                                    if (docMode === 'completo') return (
+                                        <>
+                                            {contractBlock(false)}
+                                            {contractBlock(true)}
+                                        </>
+                                    );
+                                    return null;
+                                })()}
 
                                 {/* ---------------- PAGE 2: CARGO / CRONOGRAMA ---------------- */}
                                 {(docMode === 'completo' || docMode === 'cronograma') && (
                                     <div style={{ 
-                                        pageBreakBefore: docMode === 'completo' ? 'always' : 'auto',
                                         padding: '15mm',
                                         minHeight: '297mm',
                                         backgroundColor: 'white',
-                                        boxSizing: 'border-box'
+                                        boxSizing: 'border-box',
+                                        position: 'relative'
                                     }} className="page-break">
                                         {/* Header Repeated */}
                                         <div style={styles.header}>
@@ -568,6 +648,10 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                                                 <span style={styles.bold}>PROFINANZAS</span><br/>
                                                 <span style={{fontSize: '9pt'}}>Área Legal</span>
                                             </div>
+                                        </div>
+                                        <div style={styles.footer}>
+                                            <span>ProFinanzas - Estudio Jurídico Torres</span>
+                                            <span>Cargo de Recepción y Cronograma</span>
                                         </div>
                                     </div>
                                 )}

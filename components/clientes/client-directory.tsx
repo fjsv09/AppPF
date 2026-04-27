@@ -344,7 +344,8 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                     return p.estado === 'activo' && 
                            !isEffectivelyFinalized &&
                            !p.es_paralelo && 
-                           p.estado !== 'refinanciado'
+                           p.estado !== 'refinanciado' &&
+                           !prestamoIdsProductoRefinanciamiento.includes(p.id)
                 })
                 if (!mainActiveLoan) return false
                 if (mainActiveLoan.estado_mora === 'vencido') return false

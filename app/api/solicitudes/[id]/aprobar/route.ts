@@ -38,19 +38,21 @@ export async function PATCH(
         }
 
         // --- VALIDAR SALDO SI HAY CUENTA DE ORIGEN ---
-        if (cuentaOrigenId) {
-            const { data: cuenta, error: cuentaError } = await supabaseAdmin
-                .from('cuentas_financieras')
-                .select('*')
-                .eq('id', cuentaOrigenId)
-                .single()
-            
-            if (cuentaError || !cuenta) {
-                return NextResponse.json({ error: 'Cuenta de origen no encontrada' }, { status: 404 })
-            }
-            
-            cuentaSeleccionada = cuenta
+        if (!cuentaOrigenId) {
+            return NextResponse.json({ error: 'Debe seleccionar una cuenta de origen para el desembolso.' }, { status: 400 })
         }
+
+        const { data: cuenta, error: cuentaError } = await supabaseAdmin
+            .from('cuentas_financieras')
+            .select('*')
+            .eq('id', cuentaOrigenId)
+            .single()
+        
+        if (cuentaError || !cuenta) {
+            return NextResponse.json({ error: 'Cuenta de origen no encontrada' }, { status: 404 })
+        }
+        
+        cuentaSeleccionada = cuenta
 
         // Verificar solicitud
         const { data: solicitud } = await supabaseAdmin

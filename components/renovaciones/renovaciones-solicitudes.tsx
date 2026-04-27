@@ -575,16 +575,6 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                                                     </Button>
                                                 </>
                                             )}
-                                            {userRole === 'admin' && sol.estado_solicitud === 'pre_aprobado' && (
-                                                <>
-                                                    <Button size="sm" variant="outline" className="h-8 w-8 p-0 border-red-600/50 text-red-400 hover:bg-red-900/40" onClick={() => openAction('rechazar', sol)} title="Rechazar">
-                                                        <XCircle className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button size="sm" className="h-8 w-8 p-0 bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/40" onClick={() => openAction('aprobar', sol)} title="Aprobar Renovación">
-                                                        <CheckCircle2 className="h-4 w-4" />
-                                                    </Button>
-                                                </>
-                                            )}
                                             {sol.estado_solicitud === 'aprobado' && (
                                                 <Button 
                                                     size="sm" 

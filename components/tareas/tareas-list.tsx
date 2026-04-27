@@ -12,6 +12,7 @@ import { formatMoney } from '@/utils/format'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
 import { UploadEvidenceButton } from '@/components/dashboard/upload-evidence-button'
 import { CompleteAuditModal } from '@/components/auditoria/complete-audit-modal'
+import { RejectEvidenceButton } from '@/components/tareas/reject-evidence-button'
 
 export function TareasList({ initialTareas, userId, userRol, team = [] }: { initialTareas: any[], userId: string, userRol?: string, team?: any[] }) {
     const [searchTerm, setSearchTerm] = useState('')
@@ -209,12 +210,17 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                             </div>
 
                                             <div className="flex items-center justify-between gap-2 mt-1.5 pt-2.5 border-t border-slate-800/40">
-                                                 <Link 
-                                                    href={`/dashboard/prestamos/${tarea.prestamo_id}?tab=historial`} 
-                                                    className="flex items-center gap-1.5 text-[12px] text-blue-400 hover:text-blue-300 font-medium transition-colors"
-                                                 >
-                                                    <ExternalLink className="w-3.5 h-3.5" /> Ir al Préstamo
-                                                 </Link>
+                                                 <div className="flex items-center gap-2">
+                                                     <Link 
+                                                        href={`/dashboard/prestamos/${tarea.prestamo_id}?tab=historial`} 
+                                                        className="flex items-center gap-1.5 text-[12px] text-blue-400 hover:text-blue-300 font-medium transition-colors"
+                                                     >
+                                                        <ExternalLink className="w-3.5 h-3.5" /> Ir al Préstamo
+                                                     </Link>
+                                                     {tarea.estado === 'completada' && (userRol === 'admin' || userRol === 'supervisor') && (
+                                                         <RejectEvidenceButton tareaId={tarea.id} />
+                                                     )}
+                                                 </div>
                                                  
                                                  <div>
                                                     {tarea.estado === 'completada' ? (
@@ -401,6 +407,9 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                                 >
                                                     <ExternalLink className="w-4 h-4" />
                                                 </Link>
+                                                {tarea.estado === 'completada' && (userRol === 'admin' || userRol === 'supervisor') && (
+                                                    <RejectEvidenceButton tareaId={tarea.id} />
+                                                )}
                                             </div>
                                         </div>
                                     )

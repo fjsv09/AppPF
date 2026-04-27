@@ -76,6 +76,7 @@ export async function POST(request: Request) {
             total: expenses.length,
             success: 0,
             skipped: 0,
+            skippedData: [] as any[],
             errors: [] as string[],
             totalDescontado: 0
         }

@@ -37,6 +37,7 @@ export async function POST(request: Request) {
             total: clients.length,
             success: 0,
             skipped: 0,
+            skippedData: [] as any[],
             errors: [] as string[]
         }
 
@@ -71,6 +72,11 @@ export async function POST(request: Request) {
 
                 if (existingClient) {
                     results.skipped++
+                    results.skippedData.push({
+                        dni,
+                        nombres,
+                        motivo: 'El cliente ya existe en el sistema (DNI duplicado)'
+                    })
                     continue
                 }
 

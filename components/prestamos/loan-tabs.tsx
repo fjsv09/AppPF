@@ -9,6 +9,7 @@ import { CalendarDays, History, MessageSquare, Camera, AlertCircle, ShieldCheck,
 import { ScoreIndicator, ScoreBreakdown } from "@/components/ui/score-indicator"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { UploadEvidenceButton } from "@/components/dashboard/upload-evidence-button"
+import { RejectEvidenceButton } from "@/components/tareas/reject-evidence-button"
 import { DailyCollectorLog } from "./daily-collector-log"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect, useCallback, useTransition } from "react"
@@ -262,12 +263,17 @@ export function LoanTabs({
                                         <h3 className="text-base font-bold text-white/90">Registro de Evidencia</h3>
                                         <p className="text-slate-500 text-[11px] leading-tight">Validación visual de desembolso y documentos.</p>
                                     </div>
-                                    <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider ${
-                                        tareaEvidencia.estado === 'completada' 
-                                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                                    }`}>
-                                        {tareaEvidencia.estado === 'completada' ? 'COMPLETADA' : 'PENDIENTE'}
+                                    <div className="flex items-center gap-2">
+                                        <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider ${
+                                            tareaEvidencia.estado === 'completada' 
+                                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                        }`}>
+                                            {tareaEvidencia.estado === 'completada' ? 'COMPLETADA' : 'PENDIENTE'}
+                                        </div>
+                                        {tareaEvidencia.estado === 'completada' && (userRole === 'admin' || userRole === 'supervisor') && (
+                                            <RejectEvidenceButton tareaId={tareaEvidencia.id} />
+                                        )}
                                     </div>
                                 </div>
 

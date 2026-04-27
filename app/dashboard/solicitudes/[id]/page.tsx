@@ -69,10 +69,8 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
             .select('id, nombre, saldo, tipo, cartera_id, usuarios_autorizados')
             .order('nombre')
         
-        cuentasAdmin = (cuentas || []).filter((c: any) => 
-            c.cartera_id === '00000000-0000-0000-0000-000000000000' || 
-            (c.usuarios_autorizados && c.usuarios_autorizados.length > 0)
-        )
+        // El admin debería poder elegir de cualquier cuenta o al menos ver todas para desembolsar
+        cuentasAdmin = cuentas || []
     }
 
     // Calcular total estimado

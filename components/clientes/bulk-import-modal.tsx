@@ -102,7 +102,7 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
           fecha_inicio: '2025-01-15',
           ya_pagado: 'NO',
           monto_abonado: 350,
-          asesor_nombre: 'Franklin Ferre'
+          interes_extra: 50
         }]
         sheetName = 'Préstamos Migración'
         fileName = 'plantilla_migracion_prestamos.xlsx'
@@ -142,6 +142,7 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
       const yaPagado = (l.ya_pagado || l.YaPagado || 'NO').toString().toUpperCase().trim()
       const esPagado = yaPagado === 'SI' || yaPagado === 'SÍ' || yaPagado === 'YES'
       const montoAbonado = parseFloat(l.monto_abonado || l.MontoAbonado || 0)
+      const interesExtra = parseFloat(l.interes_extra || l.InteresExtra || l.extra || 0)
 
       if (monto > 0) {
         totalDesembolsos += monto
@@ -152,6 +153,7 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
           if (montoAbonado > 0) totalIngresos += montoAbonado
           activos++
         }
+        totalIngresos += interesExtra
       }
     })
 
@@ -162,6 +164,41 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
     if (activeTab !== 'gastos') return 0
     return data.reduce((acc, e) => acc + parseFloat(e.monto || e.Monto || 0), 0)
   }, [data, activeTab])
+
+  const validationErrors = useMemo(() => {
+    if (data.length === 0) return []
+    return data.map(row => {
+      const errors: string[] = []
+      if (activeTab === 'prestamos') {
+        const dni = (row.dni_cliente || row.DNI || row.dni || '').toString().trim()
+        const monto = parseFloat(row.monto || row.Monto || 0)
+        const cuotas = parseInt(row.cuotas || row.Cuotas || 0)
+        const interes = parseFloat(row.interes || row.Interes || 0)
+
+        if (!dni) errors.push('DNI faltante')
+        if (isNaN(monto) || monto <= 0) errors.push('Monto <= 0')
+        if (isNaN(cuotas) || cuotas <= 0) errors.push('Cuotas <= 0')
+        if (monto > 0 && cuotas > 0) {
+          const montoTotal = monto * (1 + (interes / 100))
+          if ((montoTotal / cuotas) < 0.01) errors.push('Cuota $0.00')
+        }
+      } else if (activeTab === 'clientes') {
+        const dni = (row.dni || row.DNI || '').toString().trim()
+        const nombres = (row.nombres || row.NOMBRES || row.Nombre || '').toString().trim()
+        if (!dni) errors.push('DNI faltante')
+        if (!nombres) errors.push('Nombre faltante')
+      } else if (activeTab === 'gastos') {
+        const desc = (row.descripcion || row.Descripcion || '').toString().trim()
+        const monto = parseFloat(row.monto || row.Monto || 0)
+        if (!desc) errors.push('Descripción faltante')
+        if (isNaN(monto) || monto <= 0) errors.push('Monto <= 0')
+      }
+      return errors
+    })
+  }, [data, activeTab])
+
+  const hasValidationErrors = useMemo(() => validationErrors.some(e => e.length > 0), [validationErrors])
+  const errorCount = useMemo(() => validationErrors.filter(e => e.length > 0).length, [validationErrors])
 
   // ===== UPLOAD =====
   const handleUpload = async () => {
@@ -420,6 +457,19 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                   </div>
                 </div>
               )}
+
+              {/* ===== VALIDATION WARNING ===== */}
+              {data.length > 0 && hasValidationErrors && (
+                <div className="p-4 rounded-xl border bg-red-500/10 border-red-500/30 flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-red-500/20">
+                    <AlertCircle className="w-5 h-5 text-red-400" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-red-400">Se detectaron {errorCount} registros con errores de formato.</p>
+                    <p className="text-[10px] text-red-400/70">Revise la tabla de previsualización para corregir los datos antes de importar.</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -474,6 +524,26 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                     </div>
                  </div>
                )}
+
+               {results.skippedData?.length > 0 && (
+                 <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                    <div className="flex items-center gap-2 mb-2">
+                       <Info className="w-4 h-4 text-amber-500" />
+                       <h5 className="text-xs font-bold text-slate-400 uppercase">Registros Omitidos</h5>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
+                       {results.skippedData.map((skip: any, i: number) => (
+                         <div key={i} className="text-[10px] bg-slate-900/50 p-2 rounded border border-slate-800 flex justify-between items-start gap-4">
+                            <div>
+                               <span className="text-blue-400 font-mono font-bold mr-2">{skip.dni}</span>
+                               <span className="text-slate-200">{skip.nombres}</span>
+                            </div>
+                            <span className="text-amber-500/80 italic shrink-0">{skip.motivo}</span>
+                         </div>
+                       ))}
+                    </div>
+                 </div>
+               )}
             </div>
           )}
 
@@ -497,22 +567,35 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                             <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Referencia</TableHead>
                             <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Sector</TableHead>
                             <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Negocio</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Asesor</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Estado</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {data.slice(0, 10).map((row, i) => (
-                            <TableRow key={i} className="border-slate-800 hover:bg-slate-900/30">
-                              <TableCell className="text-xs font-mono text-blue-400">{row.dni || row.DNI || '---'}</TableCell>
-                              <TableCell className="text-xs font-bold text-slate-200">{row.nombres || row.NOMBRES || row.Nombre || '---'}</TableCell>
-                              <TableCell className="text-xs text-slate-500">{row.telefono || row.Telefono || '---'}</TableCell>
-                              <TableCell className="text-xs text-slate-600 truncate max-w-[150px]">{row.direccion || row.Direccion || '---'}</TableCell>
-                              <TableCell className="text-xs text-slate-600 truncate max-w-[120px]">{row.referencia || row.Referencia || '---'}</TableCell>
-                              <TableCell className="text-xs text-purple-400 uppercase">{row.sector || row.Sector || '---'}</TableCell>
-                              <TableCell className="text-xs text-slate-500">{row.giro_negocio || row.GiroNegocio || '---'}</TableCell>
-                              <TableCell className="text-xs text-slate-300 font-medium">{row.asesor_nombre || row.asesor || row.Asesor || '---'}</TableCell>
-                            </TableRow>
-                          ))}
+                          {data.slice(0, 50).map((row, i) => {
+                            const errors = validationErrors[i] || []
+                            return (
+                              <TableRow key={i} className={cn("border-slate-800 hover:bg-slate-900/30", errors.length > 0 && "bg-red-500/5")}>
+                                <TableCell className="text-xs font-mono text-blue-400">{row.dni || row.DNI || '---'}</TableCell>
+                                <TableCell className="text-xs font-bold text-slate-200">{row.nombres || row.NOMBRES || row.Nombre || '---'}</TableCell>
+                                <TableCell className="text-xs text-slate-500">{row.telefono || row.Telefono || '---'}</TableCell>
+                                <TableCell className="text-xs text-slate-600 truncate max-w-[150px]">{row.direccion || row.Direccion || '---'}</TableCell>
+                                <TableCell className="text-xs text-slate-600 truncate max-w-[120px]">{row.referencia || row.Referencia || '---'}</TableCell>
+                                <TableCell className="text-xs text-purple-400 uppercase">{row.sector || row.Sector || '---'}</TableCell>
+                                <TableCell className="text-xs text-slate-500">{row.giro_negocio || row.GiroNegocio || '---'}</TableCell>
+                                <TableCell>
+                                  {errors.length > 0 ? (
+                                    <Badge variant="outline" className="text-[9px] h-5 px-2 bg-red-500/10 text-red-400 border-red-500/30">
+                                      {errors.join(', ')}
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-[9px] h-5 px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                      Listo
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
                         </TableBody>
                       </Table>
                     )}
@@ -530,15 +613,17 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                             <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Fecha Inicio</TableHead>
                             <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Estado</TableHead>
                             <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Abonado</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Asesor</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Int. Extra</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Validación</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {data.slice(0, 10).map((row, i) => {
+                          {data.slice(0, 50).map((row, i) => {
+                            const errors = validationErrors[i] || []
                             const yaPagado = (row.ya_pagado || row.YaPagado || 'NO').toString().toUpperCase().trim()
                             const esPagado = yaPagado === 'SI' || yaPagado === 'SÍ' || yaPagado === 'YES'
                             return (
-                              <TableRow key={i} className="border-slate-800 hover:bg-slate-900/30">
+                              <TableRow key={i} className={cn("border-slate-800 hover:bg-slate-900/30", errors.length > 0 && "bg-red-500/5")}>
                                 <TableCell className="text-xs font-mono text-blue-400">{row.dni_cliente || row.DNI || row.dni || '---'}</TableCell>
                                 <TableCell className="text-xs text-emerald-400 font-black">${parseFloat(row.monto || row.Monto || 0).toFixed(2)}</TableCell>
                                 <TableCell className="text-xs text-slate-400">{row.interes || row.Interes || '0'}%</TableCell>
@@ -556,7 +641,22 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="text-xs text-amber-400 font-bold">${parseFloat(row.monto_abonado || row.MontoAbonado || 0).toFixed(2)}</TableCell>
-                                <TableCell className="text-xs text-slate-300 font-medium">{row.asesor_nombre || row.asesor || row.Asesor || '---'}</TableCell>
+                                <TableCell className="text-xs text-blue-400 font-bold">${parseFloat(row.interes_extra || row.InteresExtra || row.extra || 0).toFixed(2)}</TableCell>
+                                <TableCell>
+                                  {errors.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                      {errors.map((err, idx) => (
+                                        <Badge key={idx} variant="outline" className="text-[8px] h-4 px-1 bg-red-500/10 text-red-400 border-red-500/30">
+                                          {err}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <Badge variant="outline" className="text-[9px] h-5 px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                      Válido
+                                    </Badge>
+                                  )}
+                                </TableCell>
                               </TableRow>
                             )
                           })}
@@ -574,18 +674,33 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                             <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Categoría</TableHead>
                             <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Registrado Por</TableHead>
                             <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Fecha</TableHead>
+                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Validación</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {data.slice(0, 10).map((row, i) => (
-                            <TableRow key={i} className="border-slate-800 hover:bg-slate-900/30">
-                              <TableCell className="text-xs text-slate-200 font-medium truncate max-w-[200px]">{row.descripcion || row.Descripcion || '---'}</TableCell>
-                              <TableCell className="text-xs text-amber-400 font-black">${parseFloat(row.monto || row.Monto || 0).toFixed(2)}</TableCell>
-                              <TableCell className="text-xs text-purple-400">{row.categoria || row.Categoria || '---'}</TableCell>
-                              <TableCell className="text-xs text-slate-300">{row.registrado_por_nombre || row.registrado_por || row.RegistradoPor || '---'}</TableCell>
-                              <TableCell className="text-xs text-slate-500 font-mono">{row.fecha_registro || row.FechaRegistro || row.fecha || '---'}</TableCell>
-                            </TableRow>
-                          ))}
+                          {data.slice(0, 50).map((row, i) => {
+                            const errors = validationErrors[i] || []
+                            return (
+                              <TableRow key={i} className={cn("border-slate-800 hover:bg-slate-900/30", errors.length > 0 && "bg-red-500/5")}>
+                                <TableCell className="text-xs text-slate-200 font-medium truncate max-w-[200px]">{row.descripcion || row.Descripcion || '---'}</TableCell>
+                                <TableCell className="text-xs text-amber-400 font-black">${parseFloat(row.monto || row.Monto || 0).toFixed(2)}</TableCell>
+                                <TableCell className="text-xs text-purple-400">{row.categoria || row.Categoria || '---'}</TableCell>
+                                <TableCell className="text-xs text-slate-300">{row.registrado_por_nombre || row.registrado_por || row.RegistradoPor || '---'}</TableCell>
+                                <TableCell className="text-xs text-slate-500 font-mono">{row.fecha_registro || row.FechaRegistro || row.fecha || '---'}</TableCell>
+                                <TableCell>
+                                  {errors.length > 0 ? (
+                                    <Badge variant="outline" className="text-[9px] h-5 px-2 bg-red-500/10 text-red-400 border-red-500/30">
+                                      {errors.join(', ')}
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-[9px] h-5 px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                      Válido
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
                         </TableBody>
                       </Table>
                     )}
@@ -593,7 +708,7 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                     {/* Overflow indicator */}
                     {data.length > 10 && (
                       <div className="text-center py-3 text-[10px] text-slate-600 font-bold italic bg-slate-900/20 border-t border-slate-800">
-                        ... y {data.length - 10} registros adicionales detectados.
+                        ... y {data.length - 50} registros adicionales detectados. (Mostrando primeros 50)
                       </div>
                     )}
                 </div>

@@ -58,6 +58,7 @@ export async function POST(request: Request) {
         for (const l of loans) {
             const monto = parseFloat(l.monto || l.Monto || 0)
             const interes = parseFloat(l.interes || l.Interes || 0)
+            const interesExtra = parseFloat(l.interes_extra || l.InteresExtra || l.extra || 0)
             const yaPagado = (l.ya_pagado || l.YaPagado || '').toString().toUpperCase().trim()
             const montoAbonado = parseFloat(l.monto_abonado || l.MontoAbonado || 0)
 
@@ -70,6 +71,8 @@ export async function POST(request: Request) {
                     // Préstamo activo con abonos
                     totalIngresos += montoAbonado
                 }
+                // El interés extra es un ingreso adicional directo
+                totalIngresos += interesExtra
             }
         }
 
@@ -91,6 +94,7 @@ export async function POST(request: Request) {
             total: loans.length,
             success: 0,
             skipped: 0,
+            skippedData: [] as any[],
             errors: [] as string[],
             totalDesembolsado: 0,
             totalIngresado: 0
@@ -110,6 +114,7 @@ export async function POST(request: Request) {
                 const fechaInicio = (l.fecha_inicio || l.FechaInicio || new Date().toISOString().split('T')[0]).toString().trim()
                 const yaPagado = (l.ya_pagado || l.YaPagado || 'NO').toString().toUpperCase().trim()
                 const montoAbonado = parseFloat(l.monto_abonado || l.MontoAbonado || 0)
+                const interesExtra = parseFloat(l.interes_extra || l.InteresExtra || l.extra || 0)
                 const montoTotalDeuda = Math.round(monto * (1 + (interes / 100)) * 100) / 100
                 
                 // Un préstamo se considera pagado si explícitamente se marca como tal 
@@ -140,10 +145,12 @@ export async function POST(request: Request) {
                     continue
                 }
 
-                // c. Mapear asesor
-                const asesorName = (l.asesor_nombre || l.asesor || l.Asesor || '').toString().trim()
+                // c. Mapear asesor (Prioridad al asesor ya vinculado al cliente)
                 let asesorId = cliente.asesor_id || user.id
-                if (asesorName) {
+                const asesorName = (l.asesor_nombre || l.asesor || l.Asesor || '').toString().trim()
+                
+                // Solo si el cliente no tiene asesor asignado intentamos buscar por nombre del excel
+                if (!cliente.asesor_id && asesorName) {
                     const mappedId = perfilMap.get(asesorName.toLowerCase().trim())
                     if (mappedId) asesorId = mappedId
                 }
@@ -340,6 +347,22 @@ export async function POST(request: Request) {
                     results.totalIngresado += montoAbonado
                 }
 
+                // I.2.b INGRESO EXTRA: Interés por "no pago" de cuotas
+                if (interesExtra > 0) {
+                    currentBalance += interesExtra
+                    await supabaseAdmin
+                        .from('movimientos_financieros')
+                        .insert({
+                            cartera_id: GLOBAL_CARTERA_ID,
+                            cuenta_origen_id: cuentaEfectivo.id,
+                            monto: interesExtra,
+                            tipo: 'ingreso',
+                            descripcion: `[MIGRACIÓN] Interés Extra (No Pago Cuotas) - Cliente: ${cliente.nombres} (DNI: ${dniCliente})`,
+                            registrado_por: user.id
+                        })
+                    results.totalIngresado += interesExtra
+                }
+
                 // I.3 Actualizar saldo de la cuenta
                 await supabaseAdmin
                     .from('cuentas_financieras')
@@ -358,6 +381,7 @@ export async function POST(request: Request) {
                         interes,
                         estado: esPagado ? 'finalizado' : 'activo',
                         monto_abonado: montoAbonado,
+                        interes_extra: interesExtra,
                         fecha_original: fechaInicio,
                         origen: 'migracion_sistema_anterior'
                     }

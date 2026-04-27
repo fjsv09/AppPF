@@ -114,8 +114,14 @@ export default function AdminSectoresPage() {
         })
         
         if (!res.ok) {
-           const err = await res.json()
-           throw new Error(err.error || 'Error al crear')
+           let errorText = 'Error al crear';
+           try {
+             const err = await res.json()
+             errorText = err.error || errorText
+           } catch (e) {
+             errorText = `Error del servidor (${res.status})`
+           }
+           throw new Error(errorText)
         }
         
         toast.success('Sector creado exitosamente')

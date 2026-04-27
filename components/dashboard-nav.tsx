@@ -21,7 +21,9 @@ import {
 import { useSidebar } from './providers/sidebar-provider'
 import { SimuladorPrestamoModal } from './prestamos/simulador-prestamo-modal'
 import { Calculator } from 'lucide-react'
-import { version } from '../package.json'
+import packageJson from '../package.json'
+const version = packageJson.version
+
 
 type Role = 'admin' | 'supervisor' | 'asesor' | 'secretaria'
 

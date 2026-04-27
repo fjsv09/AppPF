@@ -235,6 +235,15 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                             fotoPerfil={solicitud.cliente?.foto_perfil}
                             className="bg-slate-800/50 border-slate-700"
                         />
+                        {solicitud.prestamo_nuevo_id && (
+                            <Link 
+                                href={`/dashboard/prestamos/${solicitud.prestamo_nuevo_id}`}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all"
+                            >
+                                <DollarSign className="w-4 h-4" />
+                                Ir al Préstamo
+                            </Link>
+                        )}
                     </div>
                 </div>
 

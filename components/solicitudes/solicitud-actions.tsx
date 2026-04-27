@@ -26,6 +26,7 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
     const [observacion, setObservacion] = useState('')
     const [motivoRechazo, setMotivoRechazo] = useState('')
     const [cuentaOrigenId, setCuentaOrigenId] = useState<string>('')
+    const [prestamoId, setPrestamoId] = useState<string | null>(null)
     
     const router = useRouter()
 
@@ -52,6 +53,9 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
             }
 
             if (action === 'aprobar') {
+                if (result.prestamo?.id) {
+                    setPrestamoId(result.prestamo.id)
+                }
                 setShowSuccess(true)
             } else {
                 toast.success(
@@ -349,6 +353,16 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
                                 Notificar por WhatsApp
                             </Button>
                             
+                            {prestamoId && (
+                                <Button 
+                                    onClick={() => router.push(`/dashboard/prestamos/${prestamoId}`)}
+                                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold h-10 rounded-xl flex items-center justify-center gap-2 mb-2"
+                                >
+                                    <DollarSign className="w-4 h-4" />
+                                    Ir al Préstamo Aprobado
+                                </Button>
+                            )}
+
                             <Button 
                                 onClick={closeAndRefresh}
                                 disabled={!wasNotified}

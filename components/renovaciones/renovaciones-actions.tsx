@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CheckCircle2, XCircle, MessageSquare, Loader2, AlertTriangle } from 'lucide-react'
+import { CheckCircle2, XCircle, MessageSquare, Loader2, AlertTriangle, DollarSign } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { CorrectionForm } from './correction-form'
@@ -29,6 +29,7 @@ export function RenovacionesActions({ solicitud, userRole, userId, cuentasAdmin 
     const [loading, setLoading] = useState(false)
     const [inputText, setInputText] = useState('')
     const [cuentaOrigenId, setCuentaOrigenId] = useState<string>('')
+    const [prestamoNuevoId, setPrestamoNuevoId] = useState<string | null>(null)
 
     const handleAction = async () => {
         if (!actionDialog) return
@@ -74,6 +75,9 @@ export function RenovacionesActions({ solicitud, userRole, userId, cuentasAdmin 
             )
             
             if (actionDialog === 'aprobar') {
+                if (result.prestamo_nuevo_id) {
+                    setPrestamoNuevoId(result.prestamo_nuevo_id)
+                }
                 setShowSuccess(true)
             } else {
                 setActionDialog(null)
@@ -321,6 +325,16 @@ export function RenovacionesActions({ solicitud, userRole, userId, cuentasAdmin 
                                     </svg>
                                     Notificar por WhatsApp
                                 </Button>
+
+                                {prestamoNuevoId && (
+                                    <Button 
+                                        onClick={() => router.push(`/dashboard/prestamos/${prestamoNuevoId}`)}
+                                        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold h-10 rounded-xl flex items-center justify-center gap-2"
+                                    >
+                                        <DollarSign className="w-4 h-4" />
+                                        Ir al Nuevo Préstamo
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     )}

@@ -80,6 +80,18 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
         cuentasAdmin = cuentas || []
     }
 
+    // [NUEVO] Si está aprobada, buscar el préstamo asociado
+    let prestamoAsociado = null
+    if (solicitud.estado_solicitud === 'aprobado') {
+        const { data: prestamo } = await supabaseAdmin
+            .from('prestamos')
+            .select('id')
+            .eq('solicitud_id', id)
+            .maybeSingle()
+        
+        prestamoAsociado = prestamo
+    }
+
     // Calcular total estimado
     const total = solicitud.monto_solicitado * (1 + solicitud.interes / 100)
     const cuotaEstimada = total / solicitud.cuotas
@@ -107,6 +119,16 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
                         </div>
                     </div>
                 </div>
+                
+                {prestamoAsociado && (
+                    <Link 
+                        href={`/dashboard/prestamos/${prestamoAsociado.id}`}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all ml-auto"
+                    >
+                        <DollarSign className="w-4 h-4" />
+                        Ir al Préstamo Aprobado
+                    </Link>
+                )}
             </div>
 
             {/* Alert for pending action */}

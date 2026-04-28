@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { MapPin, Clock, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { MapPin, Clock, Loader2, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +17,7 @@ export function StayVerification() {
     const [loading, setLoading] = useState(true)
     const [verifying, setVerifying] = useState(false)
     const [lastPosition, setLastPosition] = useState<{ lat: number, lon: number } | null>(null)
+    const [isHovered, setIsHovered] = useState(false)
 
     const checkStatus = useCallback(async (isInitial = false) => {
         try {
@@ -104,11 +105,14 @@ export function StayVerification() {
             },
             (error) => {
                 console.error('[GEO_ERROR]', error)
-                toast.error('Error de GPS', {
-                    description: 'No se pudo obtener tu ubicación para la verificación de permanencia.'
-                })
+                // Solo mostrar toast de error si no es un error de timeout recurrente
+                if (error.code !== 3) {
+                    toast.error('Error de GPS', {
+                        description: 'No se pudo obtener tu ubicación para la verificación de permanencia.'
+                    })
+                }
             },
-            { enableHighAccuracy: true }
+            { enableHighAccuracy: true, timeout: 10000 }
         )
     }, [sendPing])
 
@@ -116,7 +120,7 @@ export function StayVerification() {
         checkStatus(true)
     }, [checkStatus])
 
-    // Intervalo de actualización de tiempo (cada 1 minuto)
+    // Intervalo de actualización de tiempo (cada 30 segundos para mayor precisión)
     useEffect(() => {
         if (!status || status.estado !== 'pendiente') return
 
@@ -128,83 +132,162 @@ export function StayVerification() {
             
             if (restante !== status.restante) {
                 setStatus(prev => prev ? { ...prev, restante } : null)
-                
-                // Si llegamos a 0 por primera vez, disparar ping inmediato
-                if (restante === 0 && !verifying) {
-                    requestLocationAndPing()
-                }
+            }
+
+            // Si llegamos a 0 y no estamos verificando, forzar ping
+            if (restante === 0 && !verifying) {
+                requestLocationAndPing()
             }
         }
 
-        const interval = setInterval(updateTimer, 60000) // 1 minuto
+        const interval = setInterval(updateTimer, 30000)
         return () => clearInterval(interval)
     }, [status, verifying, requestLocationAndPing])
 
-    // Intervalo de pings de seguridad (cada 5 minutos si no ha terminado)
+    // Intervalo de pings de seguridad 
     useEffect(() => {
-        if (!status || status.estado !== 'pendiente' || status.restante === 0) return
+        if (!status || status.estado !== 'pendiente') return
+
+        // Si ya llegó a 0, ping cada 15 segundos para salir lo antes posible
+        // Si no, cada 5 minutos
+        const intervalTime = status.restante === 0 ? 15000 : 300000
 
         const interval = setInterval(() => {
             requestLocationAndPing()
-        }, 300000) // 5 minutos
+        }, intervalTime)
 
         return () => clearInterval(interval)
     }, [status, requestLocationAndPing])
 
+    const progress = useMemo(() => {
+        if (!status) return 0
+        const completed = status.minutos_permanencia - status.restante
+        return Math.min(100, (completed / status.minutos_permanencia) * 100)
+    }, [status])
+
     if (loading || !status) return null
 
     return (
-        <div className="fixed bottom-24 right-4 z-50 animate-in fade-in slide-in-from-right-4 duration-500">
-            <div className="backdrop-blur-md bg-slate-900/80 border border-blue-500/30 rounded-2xl p-4 shadow-2xl flex items-center gap-4 min-w-[240px]">
-                <div className="relative">
-                    <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
-                        {verifying ? (
-                            <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
-                        ) : (
-                            <MapPin className="w-5 h-5 text-blue-400 animate-pulse" />
+        <div 
+            className="fixed bottom-20 right-6 z-50 flex flex-col items-end gap-3"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
+            {/* Tooltip Detallado */}
+            <div className={cn(
+                "bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl transition-all duration-300 transform origin-bottom-right w-64",
+                isHovered ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-90 translate-y-4 pointer-events-none"
+            )}>
+                <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                        Permanencia
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                        <div className={cn("w-2 h-2 rounded-full", status.restante === 0 ? "bg-emerald-500 animate-pulse" : "bg-blue-500 animate-ping")} />
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">En Curso</span>
+                    </div>
+                </div>
+
+                <div className="space-y-3">
+                    <div>
+                        <p className="text-xs text-slate-400 mb-1">Tiempo Restante</p>
+                        <p className={cn(
+                            "text-xl font-bold leading-none",
+                            status.restante === 0 ? "text-emerald-400" : "text-white"
+                        )}>
+                            {status.restante === 0 ? '¡Tiempo completado!' : `${status.restante} minutos`}
+                        </p>
+                        {status.restante === 0 && (
+                            <p className="text-[10px] text-emerald-400/70 mt-1 animate-pulse">
+                                Verificando ubicación final...
+                            </p>
                         )}
                     </div>
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center border-2 border-slate-900">
-                        <Clock className="w-2 h-2 text-white" />
-                    </div>
-                </div>
 
-                <div className="flex-1">
-                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-0.5">
-                        Verificando Permanencia
-                    </p>
-                    <div className="flex items-center gap-2">
-                        <p className={cn(
-                            "text-sm font-bold",
-                            status.restante === 0 ? "text-emerald-400 animate-pulse" : "text-white"
-                        )}>
-                            {status.restante === 0 ? 'Verificando finalización...' : `${status.restante} minutos restantes`}
+                    <div className="pt-2 border-t border-white/5">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Info className="w-3 h-3 text-amber-400" />
+                            <p className="text-[10px] text-amber-200/80 font-medium leading-tight">
+                                No cierres la app ni salgas de la oficina.
+                            </p>
+                        </div>
+                        <p className="text-[9px] text-slate-500 leading-relaxed italic">
+                            ⚠️ Si sales del rango, la asistencia no será registrada y deberás marcar de nuevo.
                         </p>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                        <span className="text-[9px] text-slate-500 uppercase font-bold">GPS</span>
                         <span className={cn(
-                            "flex h-1.5 w-1.5 rounded-full animate-ping",
-                            status.restante === 0 ? "bg-emerald-400" : "bg-blue-500"
-                        )} />
+                            "text-[10px] font-mono",
+                            lastPosition ? "text-emerald-400" : "text-amber-400"
+                        )}>
+                            {lastPosition ? 'SEÑAL ACTIVA' : 'BUSCANDO...'}
+                        </span>
                     </div>
                 </div>
+            </div>
 
-                <div className="h-8 w-px bg-slate-800" />
+            {/* Círculo Principal (FAB) */}
+            <button 
+                className={cn(
+                    "group relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-500",
+                    "bg-slate-900 border border-white/10 shadow-[0_0_20px_rgba(0,0,0,0.4)]",
+                    isHovered ? "scale-110 border-blue-500/50 ring-4 ring-blue-500/10" : "scale-100"
+                )}
+            >
+                {/* Progress Ring */}
+                <svg className="absolute inset-0 w-full h-full -rotate-90">
+                    <circle
+                        cx="28"
+                        cy="28"
+                        r="25"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        className="text-white/5"
+                    />
+                    <circle
+                        cx="28"
+                        cy="28"
+                        r="25"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        strokeDasharray={2 * Math.PI * 25}
+                        strokeDashoffset={2 * Math.PI * 25 * (1 - progress / 100)}
+                        strokeLinecap="round"
+                        className={cn(
+                            "transition-all duration-1000",
+                            status.restante === 0 ? "text-emerald-500" : "text-blue-500"
+                        )}
+                    />
+                </svg>
 
-                <div className="text-right">
-                    <p className="text-[8px] text-slate-500 uppercase font-bold tracking-tighter">
-                        Precisión GPS
-                    </p>
-                    <p className="text-[10px] text-slate-300 font-mono">
-                        {lastPosition ? 'Activa' : 'Pendiente'}
-                    </p>
+                {/* Content */}
+                <div className="relative flex flex-col items-center justify-center">
+                    {verifying ? (
+                        <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+                    ) : status.restante === 0 ? (
+                        <MapPin className="w-5 h-5 text-emerald-400 animate-pulse" />
+                    ) : (
+                        <div className="flex flex-col items-center">
+                            <span className="text-sm font-black text-white leading-none">
+                                {status.restante}
+                            </span>
+                            <span className="text-[7px] text-blue-400 font-bold uppercase tracking-tighter">
+                                MIN
+                            </span>
+                        </div>
+                    )}
                 </div>
-            </div>
-            
-            {/* Warning under the main box */}
-            <div className="mt-2 bg-amber-500/10 border border-amber-500/20 rounded-xl p-2 max-w-[300px] shadow-lg animate-in slide-in-from-bottom-2 duration-700">
-                <p className="text-[9px] text-amber-200/60 leading-tight">
-                    ⚠️ <strong>Si sales del rango</strong>, la asistencia no será registrada y deberás marcar de nuevo.
-                </p>
-            </div>
+
+                {/* Indicator dot */}
+                <div className={cn(
+                    "absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-slate-900 transition-colors duration-500",
+                    status.restante === 0 ? "bg-emerald-500" : "bg-blue-500"
+                )} />
+            </button>
         </div>
     )
 }

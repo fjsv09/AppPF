@@ -163,7 +163,7 @@ export function StayVerification() {
     const isComplete = status.restante <= 0
 
     return (
-        <div className="fixed bottom-24 left-4 z-[100] flex flex-col items-start gap-3 pointer-events-none">
+        <div className="fixed bottom-[calc(80px+env(safe-area-inset-bottom,0px))] md:bottom-8 md:left-[280px] left-4 z-[100] flex flex-col items-start gap-3 pointer-events-none transition-all duration-500">
             {/* Expanded Content */}
             {isExpanded && (
                 <div className="pointer-events-auto bg-slate-900/95 backdrop-blur-xl border border-blue-500/30 rounded-3xl p-5 shadow-[0_20px_50px_rgba(0,0,0,0.5)] w-72 animate-in zoom-in-95 slide-in-from-bottom-10 fade-in duration-300 origin-bottom-left">

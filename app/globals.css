@@ -156,10 +156,10 @@ body {
 /* ── Fix iOS PWA: Force GPU layer for fixed mobile nav ── */
 @supports (-webkit-touch-callout: none) {
   .mobile-bottom-nav {
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
     -webkit-transform: translateZ(0);
     transform: translateZ(0);
     -webkit-backface-visibility: hidden;

@@ -388,7 +388,7 @@ export function DashboardNav({
                             <span className="text-[10px] font-medium mt-1">Más</span>
                         </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" side="top" className="w-56 bg-slate-900 border-slate-800 mb-2">
+                    <DropdownMenuContent align="end" side="top" className="w-56 bg-slate-900 border-slate-800 mb-2 max-h-[70vh] overflow-y-auto custom-scrollbar">
                         <DropdownMenuLabel className="text-slate-400 text-xs uppercase tracking-wider">Opciones</DropdownMenuLabel>
                         <DropdownMenuSeparator className="bg-slate-800" />
 

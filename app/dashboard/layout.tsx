@@ -151,7 +151,7 @@ export default async function DashboardLayout({
         userName={userName} 
         attendanceInitialData={attendanceInitialData}
       >
-        <div className="h-dvh w-full overflow-hidden flex flex-col text-slate-200">
+        <div className="fixed inset-0 w-full overflow-hidden flex flex-col text-slate-200">
           <DashboardNav 
             role={userRole} 
             userName={userName} 

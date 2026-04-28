@@ -351,7 +351,7 @@ export function DashboardNav({
             </nav>
 
             {/* Mobile Bottom Nav */}
-            <nav className="mobile-bottom-nav md:hidden border-t border-white/10 pt-2 px-4">
+            <nav className="mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 border-t border-white/10 bg-slate-950/95 backdrop-blur-xl p-2 px-4 flex justify-around items-center z-40 shadow-[0_-5px_20px_rgba(0,0,0,0.5)]" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>
                 {filteredLinks.slice(0, 4).map((link) => {
                     const Icon = link.icon
                     const isActive = pathname === link.href
@@ -388,12 +388,7 @@ export function DashboardNav({
                             <span className="text-[10px] font-medium mt-1">Más</span>
                         </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent 
-                        align="end" 
-                        side="top" 
-                        sideOffset={10}
-                        className="w-64 bg-slate-900 border-slate-800 mb-2 max-h-[60dvh] overflow-y-auto custom-scrollbar shadow-2xl animate-in slide-in-from-bottom-2 duration-200"
-                    >
+                    <DropdownMenuContent align="end" side="top" className="w-56 bg-slate-900 border-slate-800 mb-2">
                         <DropdownMenuLabel className="text-slate-400 text-xs uppercase tracking-wider">Opciones</DropdownMenuLabel>
                         <DropdownMenuSeparator className="bg-slate-800" />
 

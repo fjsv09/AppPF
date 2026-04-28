@@ -48,13 +48,39 @@ interface ClientesMapaProps {
     clientes: any[]
 }
 
+// Peru Geographic Bounds (Approximate)
+const PERU_BOUNDS = {
+    minLat: -18.5,
+    maxLat: 0.1,
+    minLng: -81.5,
+    maxLng: -68.5
+}
+
+const isValidPeruCoord = (lat: number, lng: number) => {
+    if (isNaN(lat) || isNaN(lng)) return false;
+    return lat >= PERU_BOUNDS.minLat && lat <= PERU_BOUNDS.maxLat && 
+           lng >= PERU_BOUNDS.minLng && lng <= PERU_BOUNDS.maxLng;
+}
+
 // Helper component to auto-fit the map bounds to the markers
 function BoundsAutoFitter({ markers }: { markers: [number, number][] }) {
     const map = useMap();
     useEffect(() => {
         if (markers.length > 0) {
-            const bounds = L.latLngBounds(markers);
-            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+            try {
+                const bounds = L.latLngBounds(markers);
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+                }
+            } catch (err) {
+                console.error("Error fitting bounds:", err);
+            }
+            
+            // Invalidate size after a short delay to handle container animations
+            const timer = setTimeout(() => {
+                map.invalidateSize();
+            }, 500);
+            return () => clearTimeout(timer);
         }
     }, [map, markers]);
     return null;
@@ -80,7 +106,8 @@ export default function ClientesMapa({ clientes }: ClientesMapaProps) {
         const lat = parseFloat(latStr.trim())
         const lng = parseFloat(lngStr.trim())
 
-        if (isNaN(lat) || isNaN(lng)) return null;
+        // Use strict Peru validation
+        if (!isValidPeruCoord(lat, lng)) return null;
 
         // Determine status logic
         let icon = icons.active
@@ -114,10 +141,12 @@ export default function ClientesMapa({ clientes }: ClientesMapaProps) {
     if (mapItems.length === 0) {
         return (
             <div className="h-[500px] w-full rounded-2xl bg-slate-900/50 border border-slate-800 flex flex-col items-center justify-center text-slate-500 gap-4">
-                <MapIcon className="w-12 h-12 opacity-20" />
+                <div className="bg-slate-800/50 p-6 rounded-full">
+                    <MapIcon className="w-12 h-12 opacity-20 text-white" />
+                </div>
                 <div className="text-center">
-                    <p className="font-medium text-slate-400">No hay coordenadas disponibles</p>
-                    <p className="text-sm">Ninguno de los clientes actualmente filtrados tiene un GPS asignado.</p>
+                    <p className="font-bold text-slate-300">No hay coordenadas válidas</p>
+                    <p className="text-sm opacity-60">Ninguno de los clientes tiene un GPS asignado dentro de Perú.</p>
                 </div>
             </div>
         )
@@ -129,6 +158,7 @@ export default function ClientesMapa({ clientes }: ClientesMapaProps) {
     return (
         <div className="h-[600px] w-full rounded-2xl overflow-hidden border border-slate-800 shadow-xl relative z-10 group">
             <MapContainer 
+                key={`${mapItems.length}-${markersList[0]?.[0] || 'empty'}`}
                 center={center} 
                 zoom={13} 
                 scrollWheelZoom={true} 

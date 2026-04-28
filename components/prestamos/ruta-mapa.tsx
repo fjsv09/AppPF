@@ -92,13 +92,40 @@ interface RutaMapaProps {
     perfiles?: any[]
 }
 
+// Peru Geographic Bounds (Approximate)
+const PERU_BOUNDS = {
+    minLat: -18.5,
+    maxLat: 0.1,
+    minLng: -81.5,
+    maxLng: -68.5
+}
+
+const isValidPeruCoord = (lat: number, lng: number) => {
+    if (isNaN(lat) || isNaN(lng)) return false;
+    // Check if coordinates are within Peru + small buffer
+    return lat >= PERU_BOUNDS.minLat && lat <= PERU_BOUNDS.maxLat && 
+           lng >= PERU_BOUNDS.minLng && lng <= PERU_BOUNDS.maxLng;
+}
+
 // Helper component to auto-fit the map bounds to the markers
 function BoundsAutoFitter({ markers }: { markers: [number, number][] }) {
     const map = useMap();
     useEffect(() => {
         if (markers.length > 0) {
-            const bounds = L.latLngBounds(markers);
-            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+            try {
+                const bounds = L.latLngBounds(markers);
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+                }
+            } catch (err) {
+                console.error("Error fitting bounds:", err);
+            }
+            
+            // Invalidate size after a short delay to handle container animations
+            const timer = setTimeout(() => {
+                map.invalidateSize();
+            }, 500);
+            return () => clearTimeout(timer);
         }
     }, [map, markers]);
     return null;
@@ -150,7 +177,8 @@ export default function RutaMapa({
                     if (latStr && lngStr) {
                         const lat = parseFloat(latStr.trim())
                         const lng = parseFloat(lngStr.trim())
-                        if (!isNaN(lat) && !isNaN(lng)) {
+                        // Ignore [0,0], NaN and outside Peru
+                        if (isValidPeruCoord(lat, lng)) {
                             const statusUI = getLoanStatusUI(p);
                             items.push({
                                 ...p,
@@ -183,7 +211,11 @@ export default function RutaMapa({
                         .filter((pag: any) => {
                             if (!pag || !pag.created_at) return false;
                             const fechaPago = new Date(pag.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
-                            const isCorrectDate = fechaPago === hoyPeru && pag.latitud && pag.longitud;
+                            // Ignore invalid coords and outside Peru
+                            const lat = parseFloat(pag.latitud);
+                            const lng = parseFloat(pag.longitud);
+                            const hasCoords = isValidPeruCoord(lat, lng);
+                            const isCorrectDate = fechaPago === hoyPeru && hasCoords;
                             if (!isCorrectDate) return false;
                             if (userRole === 'supervisor' && currentUserId) {
                                 return myAdvisorIds.includes(pag.registrado_por) || pag.registrado_por === currentUserId;
@@ -195,8 +227,8 @@ export default function RutaMapa({
                         items.push({
                             ...p,
                             id: `${p.id}-payment-${idx}`,
-                            lat: pag.latitud,
-                            lng: pag.longitud,
+                            lat: parseFloat(pag.latitud),
+                            lng: parseFloat(pag.longitud),
                             isPayment: true,
                             icon: createCustomIcon('', true),
                             monto_pagado: pag.monto_pagado,
@@ -204,8 +236,8 @@ export default function RutaMapa({
                             distancia_cobro: coordsStr ? calculateDistance(
                                 parseFloat(coordsStr.split(',')[0]), 
                                 parseFloat(coordsStr.split(',')[1]), 
-                                pag.latitud, 
-                                pag.longitud
+                                parseFloat(pag.latitud), 
+                                parseFloat(pag.longitud)
                             ) : null
                         });
                     });
@@ -275,13 +307,16 @@ export default function RutaMapa({
     if (rawItems.length === 0) {
         return (
             <div className="h-[400px] w-full rounded-xl bg-slate-900 border border-slate-800 flex flex-col items-center justify-center text-slate-500 gap-4">
-                <MapPin className="w-12 h-12 opacity-20" />
-                <p>No se encontraron coordenadas GPS válidas para la ruta de hoy.</p>
+                <div className="bg-slate-800/50 p-6 rounded-full">
+                    <MapPin className="w-12 h-12 opacity-20 text-white" />
+                </div>
+                <div className="text-center space-y-1">
+                    <p className="text-slate-300 font-bold">No hay ubicaciones para mostrar</p>
+                    <p className="text-sm opacity-60">Los préstamos filtrados no tienen coordenadas GPS válidas en Perú.</p>
+                </div>
             </div>
         )
     }
-
-
 
     // Default center (Lima, if nothing else)
     const center: [number, number] = markersList.length > 0 ? markersList[0] : [-12.0464, -77.0428]
@@ -289,6 +324,7 @@ export default function RutaMapa({
     return (
         <div className="h-[500px] w-full rounded-2xl overflow-hidden border border-slate-800 shadow-xl relative z-10 group">
             <MapContainer 
+                key={`${rawItems.length}-${markersList[0]?.[0] || 'empty'}`}
                 center={center} 
                 zoom={13} 
                 scrollWheelZoom={true} 

@@ -5,13 +5,14 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { User, DollarSign, Calendar, Hash, RefreshCw, FileText, CheckCircle, Clock, AlertCircle, XCircle, MapPin, Eye } from 'lucide-react'
+import { User, DollarSign, Calendar, Hash, RefreshCw, FileText, CheckCircle, Clock, AlertCircle, XCircle, MapPin, Eye, MessageSquare } from 'lucide-react'
 
 import { SolicitudActions } from '@/components/solicitudes/solicitud-actions'
 import { SolicitudRealtime } from '@/components/solicitudes/solicitud-realtime'
 import { formatMoney, formatDate } from '@/utils/format'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
 import { BackButton } from '@/components/ui/back-button'
 
 export const dynamic = 'force-dynamic'
@@ -96,6 +97,36 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
     const total = solicitud.monto_solicitado * (1 + solicitud.interes / 100)
     const cuotaEstimada = total / solicitud.cuotas
 
+    // [NUEVO] Obtener historial de observaciones y correcciones (Auditoría)
+    const { data: allAuditoriaLogs } = await supabaseAdmin
+        .from('auditoria')
+        .select(`
+            *,
+            usuario:usuario_id(id, nombre_completo, rol)
+        `)
+        .eq('tabla_afectada', 'solicitudes')
+        .order('created_at', { ascending: false })
+
+    const auditoriaLogs = (allAuditoriaLogs || []).filter(log => {
+        try {
+            const det = typeof log.detalle === 'string' ? JSON.parse(log.detalle) : log.detalle
+            const logId = (det?.solicitud_id || det?.id || '').toString().toLowerCase()
+            return logId === id.toLowerCase()
+        } catch (e) {
+            return false
+        }
+    }).filter(log => [
+        'observar_solicitud', 
+        'corregir_solicitud', 
+        'rechazar_solicitud', 
+        'aprobar_solicitud', 
+        'preprobar_solicitud'
+    ].includes(log.accion))
+
+    // Consolidar logs únicos por timestamp para evitar duplicados si los hubiera
+    const uniqueLogs = Array.from(new Map(auditoriaLogs.map(log => [log.id, log])).values())
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
     return (
         <div className="page-container max-w-4xl mx-auto">
             {/* Componente para actualización en tiempo real */}
@@ -131,11 +162,85 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
                 )}
             </div>
 
-            {/* Alert for pending action */}
+            {/* Alert for pending action (Restored for immediate visibility) */}
             {solicitud.estado_solicitud === 'en_correccion' && solicitud.observacion_supervisor && (
-                <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/30">
+                <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 mb-6">
                     <p className="text-sm font-bold text-orange-400 mb-1">⚠️ Observación del Supervisor</p>
                     <p className="text-orange-200">{solicitud.observacion_supervisor}</p>
+                </div>
+            )}
+
+            {solicitud.estado_solicitud === 'rechazado' && solicitud.motivo_rechazo && (
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 mb-6">
+                    <p className="text-sm font-bold text-red-400 mb-1">❌ Motivo de Rechazo</p>
+                    <p className="text-red-200">{solicitud.motivo_rechazo}</p>
+                </div>
+            )}
+
+            {/* [NUEVO] Historial de Gestión */}
+            {uniqueLogs.length > 0 && (
+                <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-3 px-1">
+                        <MessageSquare className="w-4 h-4 text-slate-400" />
+                        <h2 className="text-sm font-bold text-slate-300 uppercase tracking-tight">Historial de Gestión</h2>
+                    </div>
+                    <Card className="bg-slate-900 border-slate-800 shadow-sm overflow-hidden rounded-2xl">
+                        <CardContent className="p-0">
+                            <div className="divide-y divide-slate-800/50">
+                                {uniqueLogs.map((log) => {
+                                    const isObservacion = log.accion === 'observar_solicitud'
+                                    const isRechazo = log.accion === 'rechazar_solicitud'
+                                    const isCorreccion = log.accion === 'corregir_solicitud'
+                                    const isAprobacion = log.accion === 'aprobar_solicitud'
+                                    const isPreAprobacion = log.accion === 'preprobar_solicitud'
+                                    
+                                    const det = typeof log.detalle === 'string' ? JSON.parse(log.detalle) : log.detalle
+                                    
+                                    return (
+                                        <div key={log.id} className="p-4 hover:bg-slate-800/20 transition-colors">
+                                            <div className="flex items-start gap-3">
+                                                <div className={cn(
+                                                    "p-1.5 rounded-full mt-0.5",
+                                                    isObservacion ? "bg-orange-500/10 text-orange-400" :
+                                                    isRechazo ? "bg-red-500/10 text-red-400" :
+                                                    isAprobacion ? "bg-emerald-500/10 text-emerald-400" :
+                                                    "bg-blue-500/10 text-blue-400"
+                                                )}>
+                                                    {isObservacion ? <MessageSquare className="w-3.5 h-3.5" /> : 
+                                                     isRechazo ? <XCircle className="w-3.5 h-3.5" /> : 
+                                                     isAprobacion ? <CheckCircle className="w-3.5 h-3.5" /> :
+                                                     <RefreshCw className="w-3.5 h-3.5" />}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex justify-between items-center mb-1">
+                                                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                                                            {isObservacion ? 'Observación' : 
+                                                             isRechazo ? 'Rechazo' : 
+                                                             isPreAprobacion ? 'Pre-Aprobación' :
+                                                             isAprobacion ? 'Aprobación Final' : 'Reenvío / Corrección'}
+                                                        </span>
+                                                        <span className="text-[10px] font-mono text-slate-500" suppressHydrationWarning>
+                                                            {format(new Date(log.created_at), "d MMM, HH:mm", { locale: es })}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
+                                                        {det?.observacion || det?.motivo || (isCorreccion ? 'El asesor corrigió los datos y reenvió la solicitud.' : isAprobacion ? 'La solicitud fue aprobada definitivamente y se generó el préstamo.' : '')}
+                                                    </p>
+                                                    <div className="mt-2 flex items-center gap-1.5">
+                                                        <span className="text-[10px] text-slate-500">Por:</span>
+                                                        <span className="text-[10px] font-medium text-slate-400">
+                                                            {log.usuario?.nombre_completo || 'Usuario del sistema'} 
+                                                            <span className="ml-1 opacity-60">({log.usuario?.rol})</span>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
             )}
 
@@ -512,6 +617,8 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
                     </div>
                 </CardContent>
             </Card>
+
+
 
             {/* Acciones según rol */}
             <SolicitudActions 

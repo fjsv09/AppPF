@@ -277,7 +277,11 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
 
         // Extract Coordinates
         const solicitudesCoords = p.clientes?.solicitudes
-            ?.filter((s: any) => s.gps_coordenadas)
+            ?.filter((s: any) => {
+                if (!s.gps_coordenadas) return false;
+                const [lat, lng] = s.gps_coordenadas.split(',').map((c: string) => parseFloat(c.trim()));
+                return !isNaN(lat) && !isNaN(lng) && (Math.abs(lat) > 0.0001 || Math.abs(lng) > 0.0001);
+            })
             ?.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         const gps_coordenadas = solicitudesCoords?.[0]?.gps_coordenadas || null
 

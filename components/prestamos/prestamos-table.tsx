@@ -973,7 +973,7 @@ export function PrestamosTable({
                                 {isPending ? <Loader2 className="w-3 h-3 mr-2 animate-spin text-emerald-400" /> : <MapPin className="w-3 h-3 mr-2 text-emerald-400 shrink-0" />}
                                 <SelectValue placeholder="Sector" />
                             </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-slate-700">
+                            <SelectContent className="bg-slate-900 border-slate-800">
                                 <SelectItem value="todos">Todos Sectores</SelectItem>
                                 {sectoresList.map((s: any) => (
                                     <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>

@@ -28,7 +28,8 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
     // --- URL STATE MANAGEMENT ---
     const searchTerm = searchParams.get('search') || ''
     const statusFilter = searchParams.get('status') || 'todos'
-    const sortField = (searchParams.get('sortBy') as 'created_at' | 'fecha_aprobacion' | 'fecha_inicio') || 'created_at'
+    const asesorFilter = searchParams.get('asesor') || 'todos'
+    const sortField = (searchParams.get('sortBy') as 'created_at' | 'fecha_aprobacion' | 'fecha_inicio' | 'updated_at') || 'updated_at'
     const sortOrder = (searchParams.get('order') as 'desc' | 'asc') || 'desc'
     const currentPage = Number(searchParams.get('page')) || 1
     const ITEMS_PER_PAGE = 10
@@ -62,9 +63,24 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                     params.set(key, value)
                 }
             })
+            // Al cambiar filtros (excepto página), resetear a página 1
+            if (!updates.page) params.set('page', '1')
             router.replace(`${pathname}?${params.toString()}`, { scroll: false })
         })
     }
+
+    // Lista de asesores únicos para filtrar (solo para admin/supervisor)
+    const asesoresList = useMemo(() => {
+        const unique = new Map<string, string>()
+        initialSolicitudes?.forEach((s: any) => {
+            if (s.asesor_id && s.asesor?.nombre_completo) {
+                unique.set(s.asesor_id, s.asesor.nombre_completo)
+            }
+        })
+        return Array.from(unique.entries())
+            .map(([id, nombre]) => ({ id, nombre }))
+            .sort((a, b) => a.nombre.localeCompare(b.nombre))
+    }, [initialSolicitudes])
 
     const filteredSolicitudes = useMemo(() => {
         return initialSolicitudes?.filter(solicitud => {
@@ -77,8 +93,9 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                 dniCliente.includes(searchLower)
             
             const matchesStatus = statusFilter === 'todos' || solicitud.estado_solicitud === statusFilter
+            const matchesAsesor = asesorFilter === 'todos' || solicitud.asesor_id === asesorFilter
 
-            return matchesSearch && matchesStatus
+            return matchesSearch && matchesStatus && matchesAsesor
         })?.sort((a, b) => {
             let dateA = new Date(a.created_at).getTime()
             let dateB = new Date(b.created_at).getTime()
@@ -89,11 +106,14 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
             } else if (sortField === 'fecha_inicio') {
                 dateA = a.fecha_inicio ? new Date(a.fecha_inicio).getTime() : 0
                 dateB = b.fecha_inicio ? new Date(b.fecha_inicio).getTime() : 0
+            } else if (sortField === 'updated_at') {
+                dateA = a.updated_at ? new Date(a.updated_at).getTime() : new Date(a.created_at).getTime()
+                dateB = b.updated_at ? new Date(b.updated_at).getTime() : new Date(b.created_at).getTime()
             }
 
             return sortOrder === 'desc' ? dateB - dateA : dateA - dateB
         }) || []
-    }, [initialSolicitudes, searchTerm, statusFilter, sortField, sortOrder])
+    }, [initialSolicitudes, searchTerm, statusFilter, asesorFilter, sortField, sortOrder])
 
     const totalPages = Math.ceil(filteredSolicitudes.length / ITEMS_PER_PAGE)
     
@@ -143,6 +163,21 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                         </SelectContent>
                     </Select>
 
+                    {(perfil?.rol === 'admin' || perfil?.rol === 'supervisor') && asesoresList.length > 0 && (
+                        <Select value={asesorFilter} onValueChange={(val) => updateParams({ asesor: val })}>
+                            <SelectTrigger className="h-10 w-auto min-w-[140px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3">
+                                <Users className="w-3 h-3 mr-2 text-blue-400 shrink-0" />
+                                <SelectValue placeholder="Asesor" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
+                                <SelectItem value="todos">Todos Asesores</SelectItem>
+                                {asesoresList.map((asesor) => (
+                                    <SelectItem key={asesor.id} value={asesor.id}>{asesor.nombre}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+
                     <div className="flex gap-1 shrink-0 bg-slate-950/30 p-1 rounded-lg border border-slate-800/50 w-auto">
                         <Select value={sortField} onValueChange={(val) => updateParams({ sortBy: val })}>
                             <SelectTrigger className="h-10 w-auto min-w-[110px] bg-transparent border-0 text-slate-300 focus:ring-0 text-xs px-2 shrink-0">
@@ -150,6 +185,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                 <SelectValue placeholder="Ordenar" />
                             </SelectTrigger>
                             <SelectContent className="bg-slate-900 border-slate-800 text-slate-300">
+                                <SelectItem value="updated_at" className="cursor-pointer">Fecha Edición</SelectItem>
                                 <SelectItem value="created_at" className="cursor-pointer">Fecha Creación</SelectItem>
                                 <SelectItem value="fecha_inicio" className="cursor-pointer">Fecha Inicio</SelectItem>
                                 <SelectItem value="fecha_aprobacion" className="cursor-pointer">Fecha Aprobación</SelectItem>
@@ -236,7 +272,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                         >
                             <div className="col-span-3">Cliente</div>
                             <div className="col-span-2 text-right">Monto</div>
-                            <div className="col-span-2 text-center">Fecha</div>
+                            <div className="col-span-2 text-center">Última Edición</div>
                             <div className="col-span-2 text-left pl-4">Asesor</div>
                             <div className="col-span-2 text-center">Estado</div>
                             <div className="col-span-1 text-right">Acción</div>
@@ -284,9 +320,9 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                              <IconComponent className="w-3 h-3" />
                                                              {config.label}
                                                          </Badge>
-                                                          <span className="text-[9px] text-slate-500 font-mono" suppressHydrationWarning>
-                                                              {new Date(solicitud.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' })}
-                                                          </span>
+                                                         <span className="text-[9px] text-slate-500 font-mono" title="Última edición" suppressHydrationWarning>
+                                                             {new Date(solicitud.updated_at || solicitud.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' })}
+                                                        </span>
                                                     </div>
                                                 </div>
 
@@ -393,10 +429,10 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                             {/* Fecha */}
                                             <div className="col-span-2 flex flex-col items-center justify-center text-center">
                                                 <span className="text-xs font-medium text-slate-300">
-                                                    {new Date(solicitud.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' })}
+                                                    {new Date(solicitud.updated_at || solicitud.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' })}
                                                 </span>
                                                 <span className="text-[10px] text-slate-500 font-mono" suppressHydrationWarning>
-                                                    {new Date(solicitud.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' })}
+                                                    {new Date(solicitud.updated_at || solicitud.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' })}
                                                 </span>
                                             </div>
 

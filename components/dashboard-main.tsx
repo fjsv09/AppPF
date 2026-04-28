@@ -8,7 +8,7 @@ export function DashboardMain({ children }: { children: React.ReactNode }) {
 
   return (
     <main className={cn(
-      "transition-all duration-300 p-6 md:p-10 pt-8 pb-24 md:pb-10 w-full min-h-screen",
+      "transition-all duration-300 p-6 md:p-10 pt-8 pb-24 md:pb-10 w-full min-h-dvh",
       isCollapsed ? "md:pl-24" : "md:pl-80"
     )}>
       {children}

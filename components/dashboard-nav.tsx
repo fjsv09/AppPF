@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { Home, Users, Banknote, Calendar, ShieldAlert, History, LogOut, Settings, ChartBar, FileText, Menu, RefreshCw, Cog, Briefcase, Camera, Bell, Landmark, Wallet, UserCog, Receipt, CreditCard, Target, Award, Contact, ChevronLeft, ChevronRight, Clock, Loader2, TrendingUp, CheckCircle } from 'lucide-react'
+import { Home, Users, Banknote, Calendar, ShieldAlert, History, LogOut, Settings, ChartBar, FileText, Menu, RefreshCw, Cog, Briefcase, Camera, Bell, Landmark, Wallet, UserCog, Receipt, CreditCard, Target, Award, Contact, ChevronLeft, ChevronRight, Clock, Loader2, TrendingUp, CheckCircle, Tag } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Button } from './ui/button'
@@ -128,6 +128,7 @@ export function DashboardNav({
         
         // --- Configuración y Admin ---
         { href: '/dashboard/admin/sectores', label: 'Sectores', icon: Briefcase, roles: ['admin'], category: 'Configuración' },
+        { href: '/dashboard/admin/categorias', label: 'Categorías', icon: Tag, roles: ['admin'], category: 'Configuración' },
         { href: '/dashboard/config-sistema', label: 'Configuración', icon: Cog, roles: ['admin'], category: 'Configuración' },
         { href: '/dashboard/alertas', label: 'Alertas', icon: ShieldAlert, roles: ['admin'], category: 'Configuración' },
         { href: '/dashboard/configuracion/feriados', label: 'Feriados', icon: Calendar, roles: ['admin'], category: 'Configuración' },

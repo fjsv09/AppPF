@@ -344,11 +344,17 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             if (prestamoIdsConSolicitudPendiente.includes(prestamo.id)) return false
             if (!['activo', 'finalizado'].includes(prestamo.estado)) return false
 
-            // Role based rules
+            // Reglas de Negocio Estrictas:
+            // 1. Solo se puede renovar el préstamo más reciente (si tiene varios finalizados/migrados)
+            if (mgmt && prestamo.id !== mgmt.latestLoanId) return false
+
+            // 2. Si el préstamo está finalizado pero el cliente ya tiene otro préstamo ACTIVO, el viejo no es renovable
+            if (prestamo.estado === 'finalizado' && mgmt.hasActive) return false
+
+            // Role based rules (Paralelos)
             const isAdminOrSupervisor = userRole === 'admin' || userRole === 'supervisor'
             if (!isAdminOrSupervisor) {
                 if (prestamo.es_paralelo) return false
-                if (prestamo.estado === 'finalizado' && mgmt.hasActive) return false
             }
 
             const isRefinanciado = prestamo.estado === 'refinanciado'

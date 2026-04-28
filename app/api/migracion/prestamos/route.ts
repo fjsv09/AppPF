@@ -1,6 +1,7 @@
 import { createClient } from '../../../../utils/supabase/server'
 import { createAdminClient } from '../../../../utils/supabase/admin'
 import { NextResponse } from 'next/server'
+import { addDays, addWeeks, addMonths, format } from 'date-fns'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,10 +9,36 @@ const GLOBAL_CARTERA_ID = '00000000-0000-0000-0000-000000000000'
 
 /**
  * POST /api/migracion/prestamos
- * Importación masiva de préstamos históricos del sistema anterior.
- * Crea movimientos financieros para egresos (desembolsos) e ingresos (pagos),
- * actualizando el saldo de la cuenta Efectivo Global.
+ * Importación masiva de préstamos históricos.
+ * Maneja tanto préstamos ya pagados como activos con abonos previos.
  */
+
+function normalizeDate(dateStr: any): string {
+    if (!dateStr) return new Date().toISOString().split('T')[0];
+    if (dateStr instanceof Date) return dateStr.toISOString().split('T')[0];
+    
+    const str = String(dateStr).trim();
+    
+    // Formato DD/MM/YYYY o DD-MM-YYYY
+    const dmyMatch = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (dmyMatch) {
+        const [_, day, month, year] = dmyMatch;
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    
+    // Si ya parece YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+        return str.split(' ')[0];
+    }
+
+    try {
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    } catch (e) {}
+
+    return new Date().toISOString().split('T')[0];
+}
+
 export async function POST(request: Request) {
     const supabase = await createClient()
     const supabaseAdmin = createAdminClient()
@@ -20,7 +47,6 @@ export async function POST(request: Request) {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-        // 1. Verificar rol admin
         const { data: perfil } = await supabaseAdmin
             .from('perfiles')
             .select('rol')
@@ -36,71 +62,21 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Datos incompletos: Se requiere lista de préstamos' }, { status: 400 })
         }
 
-        // 2. Buscar la cuenta financiera destino
-        let cuentaEfectivo: any = null
-
+        // 1. Obtener cuenta financiera
+        let cuentaFinanciera: any = null
         if (cuenta_id) {
-            // Usar la cuenta específica proporcionada por el usuario
-            const { data: cuentaEspecifica } = await supabaseAdmin
-                .from('cuentas_financieras')
-                .select('*')
-                .eq('id', cuenta_id)
-                .single()
-            cuentaEfectivo = cuentaEspecifica
-        } else {
-            // Fallback: Buscar cuenta "Efectivo Global" en la cartera global
-            const { data: cuentasGlobal } = await supabaseAdmin
-                .from('cuentas_financieras')
-                .select('*')
-                .eq('cartera_id', GLOBAL_CARTERA_ID)
-                .order('nombre')
-
-            cuentaEfectivo = cuentasGlobal?.find(c => c.nombre?.toLowerCase().includes('efectivo'))
-                || cuentasGlobal?.[0]
+            const { data } = await supabaseAdmin.from('cuentas_financieras').select('*').eq('id', cuenta_id).single()
+            cuentaFinanciera = data
         }
 
-        if (!cuentaEfectivo) {
-            return NextResponse.json({ error: 'No se encontró la cuenta financiera seleccionada' }, { status: 404 })
+        if (!cuentaFinanciera) {
+            const { data: cuentas } = await supabaseAdmin.from('cuentas_financieras').select('*').eq('cartera_id', GLOBAL_CARTERA_ID).order('nombre')
+            cuentaFinanciera = cuentas?.find(c => c.nombre?.toLowerCase().includes('efectivo')) || cuentas?.[0]
         }
 
-        // 3. Calcular neto del lote para validar saldo
-        let totalDesembolsos = 0
-        let totalIngresos = 0
-
-        for (const l of loans) {
-            const monto = parseFloat(l.monto || l.Monto || 0)
-            const interes = parseFloat(l.interes || l.Interes || 0)
-            const interesExtra = parseFloat(l.interes_extra || l.InteresExtra || l.extra || 0)
-            const yaPagado = (l.ya_pagado || l.YaPagado || '').toString().toUpperCase().trim()
-            const montoAbonado = parseFloat(l.monto_abonado || l.MontoAbonado || 0)
-
-            if (monto > 0) {
-                totalDesembolsos += monto
-                if (yaPagado === 'SI' || yaPagado === 'SÍ' || yaPagado === 'YES') {
-                    // Préstamo pagado: ingreso = capital + interés
-                    totalIngresos += monto * (1 + interes / 100)
-                } else if (montoAbonado > 0) {
-                    // Préstamo activo con abonos
-                    totalIngresos += montoAbonado
-                }
-                // El interés extra es un ingreso adicional directo
-                totalIngresos += interesExtra
-            }
+        if (!cuentaFinanciera) {
+            return NextResponse.json({ error: 'No se encontró una cuenta financiera para procesar los movimientos' }, { status: 404 })
         }
-
-        const netoRequerido = totalDesembolsos - totalIngresos
-        if (netoRequerido > 0 && cuentaEfectivo.saldo < netoRequerido) {
-            return NextResponse.json({
-                error: `Saldo insuficiente en Efectivo Global. Disponible: $${cuentaEfectivo.saldo?.toFixed(2)}, Neto requerido: $${netoRequerido.toFixed(2)} (Desembolsos: $${totalDesembolsos.toFixed(2)} - Ingresos: $${totalIngresos.toFixed(2)})`
-            }, { status: 400 })
-        }
-
-        // Precargar datos de referencia
-        const { data: perfilesData } = await supabaseAdmin
-            .from('perfiles')
-            .select('id, nombre_completo')
-            .eq('activo', true)
-        const perfilMap = new Map(perfilesData?.map((p: any) => [p.nombre_completo.toLowerCase().trim(), p.id]) || [])
 
         const results = {
             total: loans.length,
@@ -112,305 +88,229 @@ export async function POST(request: Request) {
             totalIngresado: 0
         }
 
-        let currentBalance = parseFloat(cuentaEfectivo.saldo)
+        const createdLoanIds: string[] = []
+        let currentBalance = parseFloat(cuentaFinanciera.saldo)
 
-        // 4. Procesar cada préstamo
+        // 2. Procesar cada préstamo
         for (const l of loans) {
             try {
-                // a. Validar campos mínimos
-                const dniCliente = (l.dni_cliente || l.DNI || l.dni || '').toString().trim()
+                const dni = (l.dni_cliente || l.DNI || l.dni || '').toString().trim()
                 const monto = parseFloat(l.monto || l.Monto || 0)
                 const interes = parseFloat(l.interes || l.Interes || 0)
                 const cuotas = parseInt(l.cuotas || l.Cuotas || 0)
-                const modalidad = (l.modalidad || l.frecuencia || l.Modalidad || 'diario').toString().toLowerCase().trim()
-                const fechaInicio = (l.fecha_inicio || l.FechaInicio || new Date().toISOString().split('T')[0]).toString().trim()
-                const yaPagado = (l.ya_pagado || l.YaPagado || 'NO').toString().toUpperCase().trim()
-                const montoAbonado = parseFloat(l.monto_abonado || l.MontoAbonado || 0)
-                const interesExtra = parseFloat(l.interes_extra || l.InteresExtra || l.extra || 0)
-                const montoTotalDeuda = Math.round(monto * (1 + (interes / 100)) * 100) / 100
-                
-                // Un préstamo se considera pagado si explícitamente se marca como tal 
-                // o si el monto abonado cubre el total de la deuda (con margen de 0.05)
-                const esPagado = yaPagado === 'SI' || yaPagado === 'SÍ' || yaPagado === 'YES' || (montoAbonado >= montoTotalDeuda - 0.05)
+                const modalidad = (l.modalidad || l.Modalidad || 'diario').toLowerCase().trim()
+                const fechaInicio = normalizeDate(l.fecha_inicio || l.FechaInicio)
+                const yaPagadoStr = (l.ya_pagado || l.YaPagado || 'NO').toString().toUpperCase().trim()
+                const esPagado = yaPagadoStr === 'SI' || yaPagadoStr === 'SÍ' || yaPagadoStr === 'YES'
+                const montoAbonado = parseFloat(l.monto_abonado || l.MontoAbonado || l['Monto Abonado'] || 0)
+                const interesExtra = parseFloat(l.interes_extra || l.InteresExtra || l.extra || l['Interes Extra'] || l['Interés Extra'] || l['interes extra'] || 0)
 
-                // Validación Estricta: No permitir montos o cuotas en cero o negativas
-                if (!dniCliente || monto <= 0 || cuotas <= 0) {
-                    results.errors.push(`Fila omitida [DNI: ${dniCliente || 'vacío'}]: Datos inválidos o faltantes. (Monto: ${monto}, Cuotas: ${cuotas})`)
+                if (!dni || monto <= 0 || cuotas <= 0) {
+                    results.errors.push(`Fila omitida: Datos inválidos para DNI "${dni}"`)
                     continue
                 }
 
-                // Prevención de error de Cuota $0.00 (Mínimo 0.01 por cuota)
-                if ((montoTotalDeuda / cuotas) < 0.01) {
-                    results.errors.push(`Fila omitida [DNI: ${dniCliente}]: El cálculo de cuota resulta en $0.00. Verifique Monto/Interés/Cuotas en su Excel.`)
-                    continue
-                }
-
-                // b. Buscar cliente por DNI
+                // A. Buscar cliente por DNI
                 const { data: cliente } = await supabaseAdmin
                     .from('clientes')
                     .select('id, nombres, asesor_id')
-                    .eq('dni', dniCliente)
+                    .eq('dni', dni)
                     .maybeSingle()
 
                 if (!cliente) {
-                    results.errors.push(`Cliente no encontrado con DNI: ${dniCliente}. Importe primero los clientes.`)
+                    results.skipped++
+                    results.skippedData.push({ dni, nombres: l.nombres || 'Desconocido', motivo: 'El cliente no existe en la base de datos' })
                     continue
                 }
 
-                // c. Mapear asesor (Prioridad al asesor ya vinculado al cliente)
-                let asesorId = cliente.asesor_id || user.id
-                const asesorName = (l.asesor_nombre || l.asesor || l.Asesor || '').toString().trim()
-                
-                // Solo si el cliente no tiene asesor asignado intentamos buscar por nombre del excel
-                if (!cliente.asesor_id && asesorName) {
-                    const mappedId = perfilMap.get(asesorName.toLowerCase().trim())
-                    if (mappedId) asesorId = mappedId
+                // B. Generar Cronograma Real (Con domingos y feriados)
+                const { data: holidaysData } = await supabaseAdmin.from('feriados').select('fecha')
+                const holidaysSet = new Set(holidaysData?.map((h: any) => h.fecha) || [])
+
+                const schedule = []
+                let currentDate = new Date(fechaInicio + 'T12:00:00Z')
+                const totalToPay = monto * (1 + (interes / 100))
+                const quotaAmount = Math.round((totalToPay / cuotas) * 100) / 100
+
+                // Regla de día libre para cobro diario
+                if (modalidad === 'diario') {
+                    currentDate.setDate(currentDate.getDate() + 1)
                 }
 
-                // D. Crear Solicitud (como registro migrado)
-                const { data: solicitud, error: solicitudError } = await supabaseAdmin
-                    .from('solicitudes')
-                    .insert({
-                        cliente_id: cliente.id,
-                        asesor_id: asesorId,
-                        admin_id: user.id,
-                        estado_solicitud: 'aprobado',
-                        fecha_aprobacion: new Date().toISOString(),
-                        monto_solicitado: monto,
-                        interes,
-                        cuotas,
-                        modalidad,
-                        fecha_inicio_propuesta: fechaInicio,
-                        motivo_prestamo: 'Migración de datos - Sistema Anterior',
-                        observacion_supervisor: `Préstamo migrado del sistema anterior. ${esPagado ? 'YA PAGADO.' : `Abonado: $${montoAbonado}`}`
-                    })
-                    .select()
-                    .single()
+                let abonoRestante = esPagado ? totalToPay : montoAbonado
+                let quotasCount = 0
 
-                if (solicitudError) throw new Error(`Error creando solicitud: ${solicitudError.message}`)
+                while (quotasCount < cuotas) {
+                    let nextDate = new Date(currentDate)
+                    
+                    if (modalidad === 'diario') nextDate.setDate(nextDate.getDate() + 1)
+                    else if (modalidad === 'semanal') nextDate.setDate(nextDate.getDate() + 7)
+                    else if (modalidad === 'quincenal') nextDate.setDate(nextDate.getDate() + 14)
+                    else if (modalidad === 'mensual') nextDate.setMonth(nextDate.getMonth() + 1)
 
-                // E. Calcular fecha fin
-                const dateInicio = new Date(fechaInicio)
-                let dateFin = new Date(dateInicio)
-                if (modalidad === 'diario') dateFin.setDate(dateFin.getDate() + cuotas)
-                else if (modalidad === 'semanal') dateFin.setDate(dateFin.getDate() + (cuotas * 7))
-                else if (modalidad === 'quincenal') dateFin.setDate(dateFin.getDate() + (cuotas * 15))
-                else if (modalidad === 'mensual') dateFin.setMonth(dateFin.getMonth() + cuotas)
-
-                // F. Crear Préstamo
-                const { data: prestamo, error: prestamoError } = await supabaseAdmin
-                    .from('prestamos')
-                    .insert({
-                        cliente_id: cliente.id,
-                        solicitud_id: solicitud.id,
-                        monto,
-                        interes,
-                        fecha_inicio: fechaInicio,
-                        fecha_fin: dateFin.toISOString().split('T')[0],
-                        frecuencia: modalidad,
-                        cuotas,
-                        estado: esPagado ? 'finalizado' : 'activo',
-                        estado_mora: 'ok',
-                        bloqueo_cronograma: false,
-                        observacion_supervisor: `Préstamo migrado del sistema anterior. ${esPagado ? 'YA PAGADO.' : `Abonado: $${montoAbonado}`}`,
-                        created_by: asesorId
-                    })
-                    .select()
-                    .single()
-
-                if (prestamoError) throw new Error(`Error creando préstamo: ${prestamoError.message}`)
-
-                // G. Generar Cronograma
-                const { error: cronogramaError } = await supabaseAdmin.rpc('generar_cronograma_db', {
-                    p_prestamo_id: prestamo.id
-                })
-                if (cronogramaError) throw new Error(`Error generando cronograma: ${cronogramaError.message}`)
-
-                // H. Si tiene pagos, marcar cuotas como pagadas
-                if (esPagado || montoAbonado > 0) {
-                    // Obtener cuotas del cronograma ordenadas por número de cuota
-                    const { data: cuotasCronograma } = await supabaseAdmin
-                        .from('cronograma_cuotas')
-                        .select('id, monto_cuota')
-                        .eq('prestamo_id', prestamo.id)
-                        .order('numero_cuota', { ascending: true })
-
-                    if (cuotasCronograma && cuotasCronograma.length > 0) {
-                        if (esPagado) {
-                            // Marcar TODAS las cuotas como pagadas
-                            for (const cuota of cuotasCronograma) {
-                                await supabaseAdmin
-                                    .from('cronograma_cuotas')
-                                    .update({
-                                        estado: 'pagado',
-                                        monto_pagado: cuota.monto_cuota
-                                    })
-                                    .eq('id', cuota.id)
-                            }
-                        } else if (montoAbonado > 0) {
-                            // Marcar cuotas proporcionalmente según monto abonado
-                            let remaining = montoAbonado
-                            for (const cuota of cuotasCronograma) {
-                                if (remaining <= 0) break
-                                const montoCuota = parseFloat(cuota.monto_cuota || '0')
-                                
-                                if (remaining >= montoCuota - 0.01) {
-                                    // Cuota completa pagada
-                                    await supabaseAdmin
-                                        .from('cronograma_cuotas')
-                                        .update({
-                                            estado: 'pagado',
-                                            monto_pagado: montoCuota
-                                        })
-                                        .eq('id', cuota.id)
-                                    remaining -= montoCuota
-                                } else {
-                                    // Cuota parcialmente pagada
-                                    await supabaseAdmin
-                                        .from('cronograma_cuotas')
-                                        .update({
-                                            estado: 'parcial',
-                                            monto_pagado: remaining
-                                        })
-                                        .eq('id', cuota.id)
-                                    remaining = 0
-                                }
-                            }
+                    let isValidDay = false
+                    let checkDate = new Date(nextDate)
+                    let daySafety = 0
+                    while (!isValidDay && daySafety < 30) {
+                        daySafety++
+                        const dayOfWeek = checkDate.getDay() // 0 = Domingo
+                        const dateStr = checkDate.toISOString().split('T')[0]
+                        if (dayOfWeek === 0 || holidaysSet.has(dateStr)) {
+                            checkDate.setDate(checkDate.getDate() + 1)
+                        } else {
+                            isValidDay = true
                         }
                     }
-                }
-
-                // H.2 Sincronización final de estado (Redundante para seguridad)
-                const { data: finalCronograma } = await supabaseAdmin
-                    .from('cronograma_cuotas')
-                    .select('monto_cuota, monto_pagado')
-                    .eq('prestamo_id', prestamo.id)
-                
-                if (finalCronograma) {
-                    const totalMonto = finalCronograma.reduce((sum, c) => sum + Number(c.monto_cuota), 0)
-                    const totalPagado = finalCronograma.reduce((sum, c) => sum + Number(c.monto_pagado), 0)
                     
-                    if (totalMonto <= totalPagado + 0.01) {
-                        await supabaseAdmin
-                            .from('prestamos')
-                            .update({ estado: 'finalizado' })
-                            .eq('id', prestamo.id)
+                    let estadoCuota = 'pendiente'
+                    let montoPagadoCuota = 0
+
+                    if (esPagado) {
+                        estadoCuota = 'pagado'
+                        montoPagadoCuota = quotaAmount
+                    } else if (abonoRestante >= quotaAmount) {
+                        estadoCuota = 'pagado'
+                        montoPagadoCuota = quotaAmount
+                        abonoRestante -= quotaAmount
+                    } else if (abonoRestante > 0) {
+                        montoPagadoCuota = abonoRestante
+                        abonoRestante = 0
                     }
+
+                    schedule.push({
+                        numero_cuota: quotasCount + 1,
+                        fecha_vencimiento: checkDate.toISOString().split('T')[0],
+                        monto_cuota: quotaAmount,
+                        estado: estadoCuota,
+                        monto_pagado: montoPagadoCuota
+                    })
+                    quotasCount++
+                    currentDate = checkDate
                 }
 
-                // I. Bloquear cronograma para que no sea borrador
-                await supabaseAdmin
+                const fechaFin = schedule[schedule.length - 1].fecha_vencimiento
+
+                // C. Crear Préstamo
+                const { data: prestamo, error: loanError } = await supabaseAdmin
                     .from('prestamos')
-                    .update({ bloqueo_cronograma: true })
-                    .eq('id', prestamo.id)
-
-                // J. MOVIMIENTOS FINANCIEROS — Todo debe cuadrar
-                // NOTA: No se usa created_at histórico para que los movimientos
-                // aparezcan en la fecha actual. La fecha original se incluye en la descripción.
-
-                // I.1 EGRESO: Desembolso del préstamo
-                currentBalance -= monto
-                await supabaseAdmin
-                    .from('movimientos_financieros')
                     .insert({
-                        cartera_id: cuentaEfectivo.cartera_id || GLOBAL_CARTERA_ID,
-                        cuenta_origen_id: cuentaEfectivo.id,
+                        cliente_id: cliente.id,
                         monto,
-                        tipo: 'egreso',
-                        descripcion: `[MIGRACIÓN] Desembolso préstamo - Cliente: ${cliente.nombres} (DNI: ${dniCliente}) - Fecha original: ${fechaInicio}`,
-                        registrado_por: user.id
+                        interes,
+                        cuotas,
+                        frecuencia: modalidad,
+                        fecha_inicio: fechaInicio,
+                        fecha_fin: fechaFin,
+                        estado: esPagado ? 'finalizado' : 'activo',
+                        created_by: user.id,
+                        observacion_supervisor: '[MIGRACIÓN] Importado del sistema anterior'
                     })
+                    .select()
+                    .single()
 
+                if (loanError) throw new Error(`Error creando préstamo: ${loanError.message}`)
+                createdLoanIds.push(prestamo.id)
+
+                // D. Insertar Cronograma
+                const scheduleWithId = schedule.map(s => ({ 
+                    prestamo_id: prestamo.id,
+                    numero_cuota: s.numero_cuota,
+                    monto_cuota: s.monto_cuota,
+                    fecha_vencimiento: s.fecha_vencimiento,
+                    estado: s.estado,
+                    monto_pagado: s.monto_pagado
+                }))
+                const { error: cronoError } = await supabaseAdmin.from('cronograma_cuotas').insert(scheduleWithId)
+                if (cronoError) throw new Error(`Error cronograma: ${cronoError.message}`)
+
+                // D. Movimientos Financieros
+                // 1. Egreso por desembolso
+                await supabaseAdmin.from('movimientos_financieros').insert({
+                    cartera_id: cuentaFinanciera.cartera_id || GLOBAL_CARTERA_ID,
+                    cuenta_origen_id: cuentaFinanciera.id,
+                    monto,
+                    tipo: 'egreso',
+                    descripcion: `[MIGRACIÓN] Desembolso préstamo #${prestamo.id.split('-')[0]} - DNI: ${dni}`,
+                    registrado_por: user.id,
+                    created_at: fechaInicio + 'T10:00:00Z'
+                })
+                currentBalance -= monto
                 results.totalDesembolsado += monto
 
-                // I.2 INGRESO: Pagos recibidos
-                if (esPagado) {
-                    // Préstamo completamente pagado: ingreso = capital + interés
-                    const ingresoTotal = monto * (1 + interes / 100)
-                    currentBalance += ingresoTotal
-
-                    await supabaseAdmin
-                        .from('movimientos_financieros')
-                        .insert({
-                            cartera_id: cuentaEfectivo.cartera_id || GLOBAL_CARTERA_ID,
-                            cuenta_origen_id: cuentaEfectivo.id,
-                            monto: ingresoTotal,
-                            tipo: 'ingreso',
-                            descripcion: `[MIGRACIÓN] Pago completo préstamo - Cliente: ${cliente.nombres} (DNI: ${dniCliente}) - Capital: $${monto} + Interés: $${(monto * interes / 100).toFixed(2)}`,
-                            registrado_por: user.id
-                        })
-
-                    results.totalIngresado += ingresoTotal
-                } else if (montoAbonado > 0) {
-                    // Préstamo con abonos parciales
-                    currentBalance += montoAbonado
-
-                    await supabaseAdmin
-                        .from('movimientos_financieros')
-                        .insert({
-                            cartera_id: cuentaEfectivo.cartera_id || GLOBAL_CARTERA_ID,
-                            cuenta_origen_id: cuentaEfectivo.id,
-                            monto: montoAbonado,
-                            tipo: 'ingreso',
-                            descripcion: `[MIGRACIÓN] Pagos parciales préstamo - Cliente: ${cliente.nombres} (DNI: ${dniCliente}) - Abonado: $${montoAbonado.toFixed(2)} de $${(monto * (1 + interes / 100)).toFixed(2)}`,
-                            registrado_por: user.id
-                        })
-
-                    results.totalIngresado += montoAbonado
+                // 2. Ingresos por pagos previos
+                const regularPayments = esPagado ? totalToPay : montoAbonado
+                
+                // 2a. Cobro acumulado regular
+                if (regularPayments > 0) {
+                    await supabaseAdmin.from('movimientos_financieros').insert({
+                        cartera_id: cuentaFinanciera.cartera_id || GLOBAL_CARTERA_ID,
+                        cuenta_destino_id: cuentaFinanciera.id,
+                        monto: regularPayments,
+                        tipo: 'ingreso',
+                        descripcion: `[MIGRACIÓN] Cobro acumulado préstamo #${prestamo.id.split('-')[0]} - DNI: ${dni}`,
+                        registrado_por: user.id,
+                        created_at: new Date().toISOString()
+                    })
+                    currentBalance += regularPayments
+                    results.totalIngresado += regularPayments
                 }
 
-                // I.2.b INGRESO EXTRA: Interés por "no pago" de cuotas
+                // 2b. Interés Extra (Prórroga)
                 if (interesExtra > 0) {
+                    await supabaseAdmin.from('movimientos_financieros').insert({
+                        cartera_id: cuentaFinanciera.cartera_id || GLOBAL_CARTERA_ID,
+                        cuenta_destino_id: cuentaFinanciera.id,
+                        monto: interesExtra,
+                        tipo: 'ingreso',
+                        descripcion: `[MIGRACIÓN] Interés extra (prórroga) préstamo #${prestamo.id.split('-')[0]} - DNI: ${dni}`,
+                        registrado_por: user.id,
+                        created_at: new Date().toISOString()
+                    })
                     currentBalance += interesExtra
-                    await supabaseAdmin
-                        .from('movimientos_financieros')
-                        .insert({
-                            cartera_id: cuentaEfectivo.cartera_id || GLOBAL_CARTERA_ID,
-                            cuenta_origen_id: cuentaEfectivo.id,
-                            monto: interesExtra,
-                            tipo: 'ingreso',
-                            descripcion: `[MIGRACIÓN] Interés Extra (No Pago Cuotas) - Cliente: ${cliente.nombres} (DNI: ${dniCliente})`,
-                            registrado_por: user.id
-                        })
                     results.totalIngresado += interesExtra
                 }
 
-                // I.3 Actualizar saldo de la cuenta
-                await supabaseAdmin
-                    .from('cuentas_financieras')
-                    .update({ saldo: currentBalance })
-                    .eq('id', cuentaEfectivo.id)
+                // E. Actualizar Saldo Final de la cuenta
+                await supabaseAdmin.from('cuentas_financieras').update({ saldo: currentBalance }).eq('id', cuentaFinanciera.id)
 
-                // J. Auditoría
+                // F. Auditoría
                 await supabaseAdmin.from('auditoria').insert({
                     usuario_id: user.id,
                     accion: 'migracion_prestamo',
                     tabla_afectada: 'prestamos',
-                    detalle: {
-                        prestamo_id: prestamo.id,
-                        cliente_id: cliente.id,
-                        monto,
-                        interes,
-                        estado: esPagado ? 'finalizado' : 'activo',
-                        monto_abonado: montoAbonado,
-                        interes_extra: interesExtra,
-                        fecha_original: fechaInicio,
-                        origen: 'migracion_sistema_anterior'
-                    }
+                    registro_id: prestamo.id,
+                    detalle: { dni, monto, esPagado, montoAbonado, interesExtra }
                 })
 
                 results.success++
 
             } catch (err: any) {
-                console.error('Row Import Error:', err.message)
-                results.errors.push(`Error en préstamo (DNI: ${l.dni_cliente || 'N/A'}): ${err.message}`)
+                console.error('Loan Row Error:', err.message)
+                results.errors.push(`Error en DNI ${l.dni_cliente || 'N/A'}: ${err.message}`)
             }
+        }
+
+        // G. Limpieza de notificaciones y tareas generadas por triggers
+        // Al ser datos migrados, no queremos que se generen auditorías dirigidas ni tareas de evidencia automáticas.
+        if (createdLoanIds.length > 0) {
+            // 1. Borrar tareas de evidencia autogeneradas
+            await supabaseAdmin
+                .from('tareas_evidencia')
+                .delete()
+                .in('prestamo_id', createdLoanIds)
+
+            // 2. Borrar notificaciones de Auditoría Dirigida
+            await supabaseAdmin
+                .from('notificaciones')
+                .delete()
+                .eq('titulo', '⚖️ Auditoría Dirigida')
+                .gt('created_at', new Date(Date.now() - 300000).toISOString()) // Creadas en los últimos 5 min
         }
 
         return NextResponse.json(results)
 
     } catch (error: any) {
-        console.error('Critical Migration Error:', error)
+        console.error('Critical Loan Migration Error:', error)
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 }

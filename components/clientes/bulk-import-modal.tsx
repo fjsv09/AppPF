@@ -51,20 +51,40 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
   const [selectedCuentaId, setSelectedCuentaId] = useState<string>('')
   const [loadingCuentas, setLoadingCuentas] = useState(false)
 
+  // DNIs validation state
+  const [existingDnis, setExistingDnis] = useState<Set<string>>(new Set())
+  const [isLoadingDnis, setIsLoadingDnis] = useState(false)
+
   // Fetch all financial accounts when modal opens
   const fetchCuentas = useCallback(async () => {
     setLoadingCuentas(true)
     try {
       const supabase = createClient()
-      const { data: cuentasData } = await supabase
+      const { data: cuentasData, error } = await supabase
         .from('cuentas_financieras')
         .select('id, nombre, tipo, saldo, cartera_id, carteras(nombre)')
-        .eq('cartera_id', GLOBAL_CARTERA_ID)
         .order('nombre')
-      setCuentas(cuentasData || [])
+      
+      if (error) console.error('Error fetching accounts:', error)
+      
+      // Filter for admin/global accounts in JS for better debugging/resilience
+      const adminCuentas = (cuentasData || []).filter(c => {
+        const carteraNombre = Array.isArray(c.carteras) 
+          ? c.carteras[0]?.nombre 
+          : (c.carteras as any)?.nombre;
+          
+        return c.cartera_id === GLOBAL_CARTERA_ID || 
+               carteraNombre?.toLowerCase().includes('global') ||
+               carteraNombre?.toLowerCase().includes('admin');
+      })
+
+      console.log('Total accounts found:', cuentasData?.length || 0)
+      console.log('Admin accounts filtered:', adminCuentas.length)
+
+      setCuentas(adminCuentas)
       // Auto-select the first account that contains 'efectivo' in its name
-      const defaultCuenta = cuentasData?.find((c: any) => c.nombre?.toLowerCase().includes('efectivo'))
-        || cuentasData?.[0]
+      const defaultCuenta = adminCuentas.find((c: any) => c.nombre?.toLowerCase().includes('efectivo'))
+        || adminCuentas[0]
       if (defaultCuenta) setSelectedCuentaId(defaultCuenta.id)
     } catch (err) {
       console.error('Error fetching accounts:', err)
@@ -73,9 +93,33 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
     }
   }, [])
 
+  // Fetch all existing client DNIs for validation
+  const fetchExistingDnis = useCallback(async () => {
+    setIsLoadingDnis(true)
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('clientes')
+        .select('dni')
+      
+      if (error) throw error
+      
+      const dnis = new Set(data?.map(c => c.dni.toString().trim()) || [])
+      setExistingDnis(dnis)
+      console.log('Fetched existing DNIs:', dnis.size)
+    } catch (err) {
+      console.error('Error fetching DNIs:', err)
+    } finally {
+      setIsLoadingDnis(false)
+    }
+  }, [])
+
   useEffect(() => {
-    if (isOpen) fetchCuentas()
-  }, [isOpen, fetchCuentas])
+    if (isOpen) {
+      fetchCuentas()
+      fetchExistingDnis()
+    }
+  }, [isOpen, fetchCuentas, fetchExistingDnis])
 
   const selectedCuenta = useMemo(() => cuentas.find(c => c.id === selectedCuentaId), [cuentas, selectedCuentaId])
 
@@ -99,8 +143,21 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
       const formattedData = jsonData.map(row => {
           const newRow = { ...row }
           for (const key in newRow) {
-              if (newRow[key] instanceof Date) {
-                  newRow[key] = newRow[key].toISOString().split('T')[0]
+              const val = newRow[key]
+              if (val instanceof Date) {
+                  newRow[key] = val.toISOString().split('T')[0]
+              } else if (typeof val === 'string' && val.includes('/')) {
+                  // Intentar parsear formato DD/MM/YYYY
+                  const parts = val.split('/')
+                  if (parts.length === 3) {
+                      const day = parts[0].padStart(2, '0')
+                      const month = parts[1].padStart(2, '0')
+                      const year = parts[2]
+                      // Validar que sean números y año tenga 4 dígitos
+                      if (!isNaN(Number(day)) && !isNaN(Number(month)) && year.length === 4) {
+                          newRow[key] = `${year}-${month}-${day}`
+                      }
+                  }
               }
           }
           return newRow
@@ -175,7 +232,8 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
   const loanSummary = useMemo(() => {
     if (activeTab !== 'prestamos') return null
     let totalDesembolsos = 0
-    let totalIngresos = 0
+    let totalIngresosRegulares = 0
+    let totalInteresExtra = 0
     let pagados = 0
     let activos = 0
 
@@ -190,17 +248,26 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
       if (monto > 0) {
         totalDesembolsos += monto
         if (esPagado) {
-          totalIngresos += monto * (1 + interes / 100)
+          totalIngresosRegulares += monto * (1 + interes / 100)
           pagados++
         } else {
-          if (montoAbonado > 0) totalIngresos += montoAbonado
+          if (montoAbonado > 0) totalIngresosRegulares += montoAbonado
           activos++
         }
-        totalIngresos += interesExtra
+        totalInteresExtra += interesExtra
       }
     })
 
-    return { totalDesembolsos, totalIngresos, neto: totalDesembolsos - totalIngresos, pagados, activos }
+    const totalIngresosGral = totalIngresosRegulares + totalInteresExtra
+    return { 
+      totalDesembolsos, 
+      totalIngresosRegulares, 
+      totalInteresExtra, 
+      totalIngresosGral,
+      neto: totalDesembolsos - totalIngresosGral, 
+      pagados, 
+      activos 
+    }
   }, [data, activeTab])
 
   const totalGastos = useMemo(() => {
@@ -217,24 +284,42 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
         const monto = parseFloat(row.monto || row.Monto || 0)
         const cuotas = parseInt(row.cuotas || row.Cuotas || 0)
         const interes = parseFloat(row.interes || row.Interes || 0)
+        const fechaInicio = (row.fecha_inicio || row.FechaInicio || '').toString().trim()
+        const modalidad = (row.modalidad || row.Modalidad || '').toString().toLowerCase().trim()
 
         if (!dni) errors.push('DNI faltante')
-        if (isNaN(monto) || monto <= 0) errors.push('Monto <= 0')
-        if (isNaN(cuotas) || cuotas <= 0) errors.push('Cuotas <= 0')
+        else if (!existingDnis.has(dni)) errors.push('Cliente no existe en BD')
+        
+        if (isNaN(monto) || monto <= 0) errors.push('Monto inválido')
+        if (isNaN(cuotas) || cuotas <= 0) errors.push('Cuotas inválidas')
+        
+        // Date format validation (YYYY-MM-DD)
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+        if (!fechaInicio) errors.push('Fecha inicio faltante')
+        else if (!dateRegex.test(fechaInicio)) errors.push('Fecha inválida (usar YYYY-MM-DD)')
+        
+        const validModalidades = ['diario', 'semanal', 'quincenal', 'mensual']
+        if (!modalidad) errors.push('Modalidad faltante')
+        else if (!validModalidades.includes(modalidad)) errors.push(`Modalidad inválida: ${modalidad}`)
+
         if (monto > 0 && cuotas > 0) {
           const montoTotal = monto * (1 + (interes / 100))
-          if ((montoTotal / cuotas) < 0.01) errors.push('Cuota $0.00')
+          if ((montoTotal / cuotas) < 0.01) errors.push('Cuota demasiado baja ($0.00)')
         }
       } else if (activeTab === 'clientes') {
         const dni = (row.dni || row.DNI || '').toString().trim()
         const nombres = (row.nombres || row.NOMBRES || row.Nombre || '').toString().trim()
         if (!dni) errors.push('DNI faltante')
+        else if (dni.length < 8) errors.push('DNI debe tener al menos 8 dígitos')
         if (!nombres) errors.push('Nombre faltante')
       } else if (activeTab === 'gastos') {
         const desc = (row.descripcion || row.Descripcion || '').toString().trim()
         const monto = parseFloat(row.monto || row.Monto || 0)
+        const fecha = row.fecha_registro || row.FechaRegistro || row.fecha || ''
+        
         if (!desc) errors.push('Descripción faltante')
-        if (isNaN(monto) || monto <= 0) errors.push('Monto <= 0')
+        if (isNaN(monto) || monto <= 0) errors.push('Monto inválido')
+        if (!fecha) errors.push('Fecha faltante')
       }
       return errors
     })
@@ -433,19 +518,25 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                           <SelectValue placeholder="Seleccionar cuenta" />
                         )}
                       </SelectTrigger>
-                      <SelectContent className="bg-slate-950 border-slate-800 text-white rounded-lg backdrop-blur-xl max-h-64">
-                        {cuentas.map((c) => (
-                          <SelectItem key={c.id} value={c.id} className="text-xs focus:bg-blue-500/10">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold">{c.nombre}</span>
-                              <span className="text-slate-500">({c.tipo})</span>
-                              <span className="text-emerald-400 font-mono text-[10px]">S/ {parseFloat(c.saldo || 0).toFixed(2)}</span>
-                              {c.carteras?.nombre && (
-                                <span className="text-[9px] text-slate-600">— {c.carteras.nombre}</span>
-                              )}
-                            </div>
-                          </SelectItem>
-                        ))}
+                      <SelectContent position="popper" className="bg-slate-950 border-slate-800 text-white rounded-lg backdrop-blur-xl max-h-64 z-[2000]">
+                        {cuentas.length === 0 ? (
+                          <div className="p-4 text-center">
+                            <p className="text-[10px] text-slate-500">No se encontraron cuentas financieras</p>
+                          </div>
+                        ) : (
+                          cuentas.map((c) => (
+                            <SelectItem key={c.id} value={c.id} className="text-xs focus:bg-blue-500/10">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold">{c.nombre}</span>
+                                <span className="text-slate-500">({c.tipo})</span>
+                                <span className="text-emerald-400 font-mono text-[10px]">S/ {parseFloat(c.saldo || 0).toFixed(2)}</span>
+                                {((Array.isArray(c.carteras) ? c.carteras[0]?.nombre : c.carteras?.nombre) as any) && (
+                                  <span className="text-[9px] text-slate-600">— {(Array.isArray(c.carteras) ? c.carteras[0]?.nombre : c.carteras?.nombre) as any}</span>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                     {selectedCuenta && (
@@ -453,9 +544,9 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                         <Badge variant="outline" className="text-[9px] h-5 px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-mono">
                           Saldo: S/ {parseFloat(selectedCuenta.saldo || 0).toFixed(2)}
                         </Badge>
-                        {selectedCuenta.carteras?.nombre && (
+                        {((Array.isArray(selectedCuenta.carteras) ? selectedCuenta.carteras[0]?.nombre : selectedCuenta.carteras?.nombre) as any) && (
                           <Badge variant="outline" className="text-[9px] h-5 px-2 bg-blue-500/10 text-blue-400 border-blue-500/30">
-                            {selectedCuenta.carteras.nombre}
+                            {(Array.isArray(selectedCuenta.carteras) ? selectedCuenta.carteras[0]?.nombre : selectedCuenta.carteras?.nombre) as any}
                           </Badge>
                         )}
                       </div>
@@ -494,11 +585,18 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                     <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
                       <div className="flex items-center gap-1">
                         <TrendingUp className="w-3 h-3 text-emerald-400" />
-                        <p className="text-[9px] text-emerald-400 font-bold uppercase">Ingresos Pagos</p>
+                        <p className="text-[9px] text-emerald-400 font-bold uppercase">Pagos Regulares</p>
                       </div>
-                      <p className="text-lg font-black text-emerald-400">${loanSummary.totalIngresos.toFixed(2)}</p>
+                      <p className="text-lg font-black text-emerald-400">${loanSummary.totalIngresosRegulares.toFixed(2)}</p>
                     </div>
-                    <div className={cn("p-3 rounded-lg border col-span-2 md:col-span-2",
+                    <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
+                      <div className="flex items-center gap-1">
+                        <TrendingUp className="w-3 h-3 text-blue-400" />
+                        <p className="text-[9px] text-blue-400 font-bold uppercase">Intereses Extra</p>
+                      </div>
+                      <p className="text-lg font-black text-blue-400">${loanSummary.totalInteresExtra.toFixed(2)}</p>
+                    </div>
+                    <div className={cn("p-3 rounded-lg border col-span-2 md:col-span-1",
                       loanSummary.neto > 0 ? "bg-amber-500/10 border-amber-500/30" : "bg-emerald-500/10 border-emerald-500/30"
                     )}>
                       <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Neto Requerido</p>
@@ -551,16 +649,64 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                 </div>
               )}
 
-              {/* ===== VALIDATION WARNING ===== */}
-              {data.length > 0 && hasValidationErrors && (
-                <div className="p-4 rounded-xl border bg-red-500/10 border-red-500/30 flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-red-500/20">
-                    <AlertCircle className="w-5 h-5 text-red-400" />
+              {/* ===== VALIDATION WARNING & SUMMARY ===== */}
+              {data.length > 0 && (
+                <div className={cn(
+                  "p-4 rounded-xl border transition-all duration-300",
+                  hasValidationErrors 
+                    ? "bg-red-500/10 border-red-500/30" 
+                    : "bg-emerald-500/10 border-emerald-500/30"
+                )}>
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "p-2 rounded-lg",
+                      hasValidationErrors ? "bg-red-500/20" : "bg-emerald-500/20"
+                    )}>
+                      {hasValidationErrors ? (
+                        <AlertCircle className="w-5 h-5 text-red-400" />
+                      ) : (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className={cn("text-sm font-bold", hasValidationErrors ? "text-red-400" : "text-emerald-400")}>
+                        {hasValidationErrors 
+                          ? `Se detectaron ${errorCount} registros con errores de validación.` 
+                          : "Todos los datos son válidos y están listos para migrar."}
+                      </p>
+                      <p className="text-[10px] opacity-70">
+                        {hasValidationErrors 
+                          ? "Debe corregir los errores en su archivo y volver a cargarlo para poder continuar."
+                          : "Revise el resumen contable arriba antes de proceder con la carga final."}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-red-400">Se detectaron {errorCount} registros con errores de formato.</p>
-                    <p className="text-[10px] text-red-400/70">Revise la tabla de previsualización para corregir los datos antes de importar.</p>
-                  </div>
+
+                  {hasValidationErrors && (
+                    <div className="mt-4 space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                      <h5 className="text-[10px] font-bold text-red-300 uppercase tracking-wider mb-2">Detalle de Errores por Fila:</h5>
+                      {validationErrors.map((errors, idx) => {
+                        if (errors.length === 0) return null
+                        const row = data[idx]
+                        const identifier = row.dni || row.dni_cliente || row.DNI || row.descripcion || `Fila ${idx + 1}`
+                        return (
+                          <div key={idx} className="bg-red-950/30 p-2 rounded border border-red-500/20 flex items-start gap-2">
+                            <span className="text-[9px] font-mono text-red-400 bg-red-500/10 px-1 rounded shrink-0">#{idx + 1}</span>
+                            <div className="flex-1">
+                              <p className="text-[10px] font-bold text-slate-300">{identifier}</p>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {errors.map((err, i) => (
+                                  <Badge key={i} variant="outline" className="text-[8px] h-4 bg-red-500/20 text-red-300 border-red-500/30">
+                                    {err}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -838,18 +984,22 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
           {!results && (
             <Button 
                 onClick={handleUpload} 
-                disabled={data.length === 0 || isUploading}
+                disabled={data.length === 0 || isUploading || hasValidationErrors}
                 className={cn(
-                  "text-white min-w-[200px] shadow-lg font-bold",
-                  currentAccent === 'blue' && "bg-blue-600 hover:bg-blue-500 shadow-blue-900/20",
-                  currentAccent === 'emerald' && "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20",
-                  currentAccent === 'amber' && "bg-amber-600 hover:bg-amber-500 shadow-amber-900/20",
+                  "text-white min-w-[250px] shadow-lg font-black uppercase tracking-widest h-12 text-xs",
+                  hasValidationErrors 
+                    ? "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700" 
+                    : (currentAccent === 'blue' ? "bg-blue-600 hover:bg-blue-500 shadow-blue-900/20" :
+                       currentAccent === 'emerald' ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20" :
+                       "bg-amber-600 hover:bg-amber-500 shadow-amber-900/20")
                 )}
             >
                 {isUploading ? (
-                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Procesando...</>
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Procesando Migración...</>
+                ) : hasValidationErrors ? (
+                    <><AlertCircle className="w-4 h-4 mr-2" /> Corrija Errores para Subir</>
                 ) : (
-                    <><CheckCircle2 className="w-4 h-4 mr-2" /> Iniciar Migración ({data.length || 0})</>
+                    <><CheckCircle2 className="w-4 h-4 mr-2" /> Aprobar y Subir Migración ({data.length || 0})</>
                 )}
             </Button>
           )}

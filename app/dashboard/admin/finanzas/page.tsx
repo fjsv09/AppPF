@@ -1,7 +1,7 @@
 import { Metadata } from 'next'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
-import { Landmark, Smartphone, TrendingUp, PieChart, Briefcase, Wallet, ArrowUpRight, ArrowDownRight, Users } from 'lucide-react'
+import { Landmark, Smartphone, TrendingUp, PieChart, Briefcase, Wallet, ArrowUpRight, ArrowDownRight, Users, Tag } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -67,6 +67,12 @@ export default async function AdminFinanzasPage() {
           </div>
         </div>
         <div className="flex gap-2">
+            <Link href="/dashboard/admin/categorias">
+                <Button variant="outline" className="bg-slate-900 border-slate-800 text-slate-300">
+                    <Tag className="w-4 h-4 mr-2" />
+                    Categorías
+                </Button>
+            </Link>
             <Link href="/dashboard/admin/carteras">
                 <Button variant="outline" className="bg-slate-900 border-slate-800 text-slate-300">
                     <Briefcase className="w-4 h-4 mr-2" />

@@ -173,7 +173,9 @@ export default async function GastosPage({ searchParams }: PageProps) {
   const { data: categorias } = await supabase
     .from('categorias_gastos')
     .select('*')
-    .order('nombre')
+    .eq('activo', true)
+    .order('orden', { ascending: true })
+    .order('nombre', { ascending: true })
 
   return (
     <ExpenseManagerClient 

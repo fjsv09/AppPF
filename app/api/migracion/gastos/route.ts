@@ -11,6 +11,33 @@ const GLOBAL_CARTERA_ID = '00000000-0000-0000-0000-000000000000'
  * Importación masiva de gastos históricos del sistema anterior.
  * Descuenta de la cuenta Efectivo Global y registra con las fechas originales.
  */
+
+function normalizeDate(dateStr: any): string {
+    if (!dateStr) return new Date().toISOString();
+    if (dateStr instanceof Date) return dateStr.toISOString();
+    
+    const str = String(dateStr).trim();
+    
+    // Formato DD/MM/YYYY o DD-MM-YYYY
+    const dmyMatch = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (dmyMatch) {
+        const [_, day, month, year] = dmyMatch;
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00Z`;
+    }
+    
+    // Si ya parece YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+        return str.includes('T') ? str : `${str.split(' ')[0]}T12:00:00Z`;
+    }
+
+    // Fallback: intentar parsear normalmente
+    try {
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) return d.toISOString();
+    } catch (e) {}
+
+    return new Date().toISOString();
+}
 export async function POST(request: Request) {
     const supabase = await createClient()
     const supabaseAdmin = createAdminClient()
@@ -124,18 +151,7 @@ export async function POST(request: Request) {
                 }
 
                 // Parsear fecha de registro
-                let fechaRegistro: string | null = null
-                if (fechaRegistroRaw) {
-                    if (fechaRegistroRaw instanceof Date) {
-                        fechaRegistro = fechaRegistroRaw.toISOString()
-                    } else {
-                        // Intentar parsear como fecha
-                        const parsed = new Date(fechaRegistroRaw)
-                        if (!isNaN(parsed.getTime())) {
-                            fechaRegistro = parsed.toISOString()
-                        }
-                    }
-                }
+                const fechaRegistro = normalizeDate(fechaRegistroRaw)
 
                 // Insertar movimiento financiero
                 const insertData: any = {

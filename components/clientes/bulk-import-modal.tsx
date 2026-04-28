@@ -3,12 +3,12 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import * as XLSX from 'xlsx'
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "../ui/dialog"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/button"
@@ -44,6 +44,7 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
   const [isUploading, setIsUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [results, setResults] = useState<any | null>(null)
+  const [isDataConfirmed, setIsDataConfirmed] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Account selector state
@@ -55,6 +56,10 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
   const [existingDnis, setExistingDnis] = useState<Set<string>>(new Set())
   const [isLoadingDnis, setIsLoadingDnis] = useState(false)
 
+  // Categories validation state
+  const [validCategories, setValidCategories] = useState<string[]>([])
+  const [loadingCategories, setLoadingCategories] = useState(false)
+
   // Fetch all financial accounts when modal opens
   const fetchCuentas = useCallback(async () => {
     setLoadingCuentas(true)
@@ -64,18 +69,18 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
         .from('cuentas_financieras')
         .select('id, nombre, tipo, saldo, cartera_id, carteras(nombre)')
         .order('nombre')
-      
+
       if (error) console.error('Error fetching accounts:', error)
-      
+
       // Filter for admin/global accounts in JS for better debugging/resilience
       const adminCuentas = (cuentasData || []).filter(c => {
-        const carteraNombre = Array.isArray(c.carteras) 
-          ? c.carteras[0]?.nombre 
+        const carteraNombre = Array.isArray(c.carteras)
+          ? c.carteras[0]?.nombre
           : (c.carteras as any)?.nombre;
-          
-        return c.cartera_id === GLOBAL_CARTERA_ID || 
-               carteraNombre?.toLowerCase().includes('global') ||
-               carteraNombre?.toLowerCase().includes('admin');
+
+        return c.cartera_id === GLOBAL_CARTERA_ID ||
+          carteraNombre?.toLowerCase().includes('global') ||
+          carteraNombre?.toLowerCase().includes('admin');
       })
 
       console.log('Total accounts found:', cuentasData?.length || 0)
@@ -101,9 +106,9 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
       const { data, error } = await supabase
         .from('clientes')
         .select('dni')
-      
+
       if (error) throw error
-      
+
       const dnis = new Set(data?.map(c => c.dni.toString().trim()) || [])
       setExistingDnis(dnis)
       console.log('Fetched existing DNIs:', dnis.size)
@@ -114,12 +119,35 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
     }
   }, [])
 
+  // Fetch all expense categories
+  const fetchCategories = useCallback(async () => {
+    setLoadingCategories(true)
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('categorias_gastos')
+        .select('nombre')
+        .eq('activo', true)
+
+      if (error) throw error
+
+      const categoryNames = (data || []).map(c => c.nombre.toLowerCase().trim())
+      setValidCategories(categoryNames)
+      console.log('Fetched valid categories:', categoryNames.length)
+    } catch (err) {
+      console.error('Error fetching categories:', err)
+    } finally {
+      setLoadingCategories(false)
+    }
+  }, [])
+
   useEffect(() => {
     if (isOpen) {
       fetchCuentas()
       fetchExistingDnis()
+      fetchCategories()
     }
-  }, [isOpen, fetchCuentas, fetchExistingDnis])
+  }, [isOpen, fetchCuentas, fetchExistingDnis, fetchCategories])
 
   const selectedCuenta = useMemo(() => cuentas.find(c => c.id === selectedCuentaId), [cuentas, selectedCuentaId])
 
@@ -127,6 +155,7 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
     const selectedFile = e.target.files?.[0]
     if (selectedFile) {
       setFile(selectedFile)
+      setIsDataConfirmed(false)
       parseExcel(selectedFile)
     }
   }
@@ -139,30 +168,30 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
       const wsname = wb.SheetNames[0]
       const ws = wb.Sheets[wsname]
       const jsonData: any[] = XLSX.utils.sheet_to_json(ws)
-      
+
       const formattedData = jsonData.map(row => {
-          const newRow = { ...row }
-          for (const key in newRow) {
-              const val = newRow[key]
-              if (val instanceof Date) {
-                  newRow[key] = val.toISOString().split('T')[0]
-              } else if (typeof val === 'string' && val.includes('/')) {
-                  // Intentar parsear formato DD/MM/YYYY
-                  const parts = val.split('/')
-                  if (parts.length === 3) {
-                      const day = parts[0].padStart(2, '0')
-                      const month = parts[1].padStart(2, '0')
-                      const year = parts[2]
-                      // Validar que sean números y año tenga 4 dígitos
-                      if (!isNaN(Number(day)) && !isNaN(Number(month)) && year.length === 4) {
-                          newRow[key] = `${year}-${month}-${day}`
-                      }
-                  }
+        const newRow = { ...row }
+        for (const key in newRow) {
+          const val = newRow[key]
+          if (val instanceof Date) {
+            newRow[key] = val.toISOString().split('T')[0]
+          } else if (typeof val === 'string' && val.includes('/')) {
+            // Intentar parsear formato DD/MM/YYYY
+            const parts = val.split('/')
+            if (parts.length === 3) {
+              const day = parts[0].padStart(2, '0')
+              const month = parts[1].padStart(2, '0')
+              const year = parts[2]
+              // Validar que sean números y año tenga 4 dígitos
+              if (!isNaN(Number(day)) && !isNaN(Number(month)) && year.length === 4) {
+                newRow[key] = `${year}-${month}-${day}`
               }
+            }
           }
-          return newRow
+        }
+        return newRow
       })
-      
+
       setData(formattedData)
     }
     reader.readAsBinaryString(file)
@@ -259,14 +288,14 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
     })
 
     const totalIngresosGral = totalIngresosRegulares + totalInteresExtra
-    return { 
-      totalDesembolsos, 
-      totalIngresosRegulares, 
-      totalInteresExtra, 
+    return {
+      totalDesembolsos,
+      totalIngresosRegulares,
+      totalInteresExtra,
       totalIngresosGral,
-      neto: totalDesembolsos - totalIngresosGral, 
-      pagados, 
-      activos 
+      neto: totalDesembolsos - totalIngresosGral,
+      pagados,
+      activos
     }
   }, [data, activeTab])
 
@@ -289,7 +318,7 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
 
         if (!dni) errors.push('DNI faltante')
         else if (!existingDnis.has(dni)) errors.push('Cliente no existe en BD')
-        
+
         if (isNaN(monto) || monto <= 0) errors.push('Monto inválido')
         if (isNaN(cuotas) || cuotas <= 0) errors.push('Cuotas inválidas')
         
@@ -303,8 +332,21 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
         else if (!validModalidades.includes(modalidad)) errors.push(`Modalidad inválida: ${modalidad}`)
 
         if (monto > 0 && cuotas > 0) {
-          const montoTotal = monto * (1 + (interes / 100))
-          if ((montoTotal / cuotas) < 0.01) errors.push('Cuota demasiado baja ($0.00)')
+          const montoTotal = Math.round(monto * (1 + (interes / 100)) * 100) / 100
+          const montoAbonado = parseFloat(row.monto_abonado || row.MontoAbonado || 0)
+          
+          // Try to get total from explicit columns if they exist
+          const explicitTotal = parseFloat(row.total || row.Total || row.monto_total || row.MontoTotal || row.deuda || row.Deuda || 0)
+          const finalTotal = explicitTotal > 0 ? explicitTotal : montoTotal
+
+          if ((finalTotal / cuotas) < 0.01) errors.push('Cuota demasiado baja ($0.00)')
+          
+          // monto_abonado is principal + regular interest
+          // Change to WARNING (not blocking) if it exceeds, unless it's a crazy difference
+          if (montoAbonado > (finalTotal + 5.00)) {
+            // We use a prefix 'WARN:' to distinguish from blocking errors
+            errors.push(`WARN: Abono (${montoAbonado}) excede deuda (${finalTotal})`)
+          }
         }
       } else if (activeTab === 'clientes') {
         const dni = (row.dni || row.DNI || '').toString().trim()
@@ -312,21 +354,34 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
         if (!dni) errors.push('DNI faltante')
         else if (dni.length < 8) errors.push('DNI debe tener al menos 8 dígitos')
         if (!nombres) errors.push('Nombre faltante')
+
+        // Check for duplicates in the current file
+        const duplicateCount = data.filter(r => (r.dni || r.DNI || '').toString().trim() === dni).length
+        if (duplicateCount > 1) errors.push('DNI duplicado en el archivo')
       } else if (activeTab === 'gastos') {
         const desc = (row.descripcion || row.Descripcion || '').toString().trim()
         const monto = parseFloat(row.monto || row.Monto || 0)
         const fecha = row.fecha_registro || row.FechaRegistro || row.fecha || ''
-        
+        const categoria = (row.categoria || row.Categoria || '').toString().toLowerCase().trim()
+
         if (!desc) errors.push('Descripción faltante')
         if (isNaN(monto) || monto <= 0) errors.push('Monto inválido')
         if (!fecha) errors.push('Fecha faltante')
+
+        if (!categoria) {
+          errors.push('Categoría faltante')
+        } else if (validCategories.length > 0 && !validCategories.includes(categoria)) {
+          errors.push(`Categoría inválida: ${categoria}`)
+        }
       }
       return errors
     })
-  }, [data, activeTab])
+  }, [data, activeTab, existingDnis, validCategories])
 
-  const hasValidationErrors = useMemo(() => validationErrors.some(e => e.length > 0), [validationErrors])
-  const errorCount = useMemo(() => validationErrors.filter(e => e.length > 0).length, [validationErrors])
+  const realErrors = useMemo(() => validationErrors.map(rowErrors => rowErrors.filter(e => !e.startsWith('WARN:'))), [validationErrors])
+  const hasValidationErrors = useMemo(() => realErrors.some(e => e.length > 0), [realErrors])
+  const errorCount = useMemo(() => realErrors.filter(e => e.length > 0).length, [realErrors])
+  const warningCount = useMemo(() => validationErrors.flat().filter(e => e.startsWith('WARN:')).length, [validationErrors])
 
   // ===== UPLOAD =====
   const handleUpload = async () => {
@@ -383,6 +438,7 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
     setData([])
     setResults(null)
     setProgress(0)
+    setIsDataConfirmed(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -402,10 +458,10 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-        if (!open) {
-            onClose()
-            setTimeout(reset, 300)
-        }
+      if (!open) {
+        onClose()
+        setTimeout(reset, 300)
+      }
     }}>
       <DialogContent className="max-w-6xl bg-slate-900 border-slate-800 text-slate-100 max-h-[95vh] overflow-hidden flex flex-col p-0">
         <DialogHeader className="p-6 pb-2">
@@ -435,14 +491,14 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                 )}
                 style={activeTab === tab.id ? {
                   backgroundColor: tab.accent === 'blue' ? 'rgba(59,130,246,0.15)' :
-                                    tab.accent === 'emerald' ? 'rgba(16,185,129,0.15)' :
-                                    'rgba(245,158,11,0.15)',
+                    tab.accent === 'emerald' ? 'rgba(16,185,129,0.15)' :
+                      'rgba(245,158,11,0.15)',
                   color: tab.accent === 'blue' ? '#60a5fa' :
-                          tab.accent === 'emerald' ? '#34d399' :
-                          '#fbbf24',
+                    tab.accent === 'emerald' ? '#34d399' :
+                      '#fbbf24',
                   borderColor: tab.accent === 'blue' ? 'rgba(59,130,246,0.3)' :
-                                tab.accent === 'emerald' ? 'rgba(16,185,129,0.3)' :
-                                'rgba(245,158,11,0.3)',
+                    tab.accent === 'emerald' ? 'rgba(16,185,129,0.3)' :
+                      'rgba(245,158,11,0.3)',
                 } : {}}
               >
                 {tab.icon}
@@ -471,27 +527,27 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                   </div>
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="border-slate-700 text-slate-400 hover:text-white h-9"
-                      onClick={downloadTemplate}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-slate-700 text-slate-400 hover:text-white h-9"
+                    onClick={downloadTemplate}
                   >
                     <Download className="w-4 h-4 mr-1.5" /> Plantilla
                   </Button>
                   <label className="cursor-pointer">
-                    <Input 
-                      type="file" 
-                      className="hidden" 
-                      accept=".xlsx,.xls,.csv" 
+                    <Input
+                      type="file"
+                      className="hidden"
+                      accept=".xlsx,.xls,.csv"
                       onChange={handleFileChange}
                       ref={fileInputRef}
                     />
                     <div className={cn(
                       "h-9 px-4 flex items-center justify-center rounded-lg font-bold text-sm transition-colors text-white",
                       currentAccent === 'blue' ? 'bg-blue-600 hover:bg-blue-500' :
-                      currentAccent === 'emerald' ? 'bg-emerald-600 hover:bg-emerald-500' :
-                      'bg-amber-600 hover:bg-amber-500'
+                        currentAccent === 'emerald' ? 'bg-emerald-600 hover:bg-emerald-500' :
+                          'bg-amber-600 hover:bg-amber-500'
                     )}>
                       <FileUp className="w-4 h-4 mr-1.5" />
                       {file ? file.name : "Subir Archivo"}
@@ -562,9 +618,15 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                   "p-4 rounded-xl border",
                   loanSummary.neto > 0 ? "bg-amber-500/5 border-amber-500/20" : "bg-emerald-500/5 border-emerald-500/20"
                 )}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Info className="w-4 h-4 text-slate-400" />
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Resumen Contable del Lote</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Info className="w-4 h-4 text-slate-400" />
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Resumen Contable del Lote</p>
+                    </div>
+                    <div className="flex gap-4">
+                      <p className="text-[9px] text-slate-500"><span className="font-bold text-emerald-400/80">Monto Abonado:</span> Capital + Interés Regular</p>
+                      <p className="text-[9px] text-slate-500"><span className="font-bold text-blue-400/80">Int. Extra:</span> Adicional por demora</p>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div className="p-3 rounded-lg bg-slate-950/50 border border-slate-800">
@@ -653,8 +715,8 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
               {data.length > 0 && (
                 <div className={cn(
                   "p-4 rounded-xl border transition-all duration-300",
-                  hasValidationErrors 
-                    ? "bg-red-500/10 border-red-500/30" 
+                  hasValidationErrors
+                    ? "bg-red-500/10 border-red-500/30"
                     : "bg-emerald-500/10 border-emerald-500/30"
                 )}>
                   <div className="flex items-center gap-3">
@@ -672,15 +734,38 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                       <p className={cn("text-sm font-bold", hasValidationErrors ? "text-red-400" : "text-emerald-400")}>
                         {hasValidationErrors 
                           ? `Se detectaron ${errorCount} registros con errores de validación.` 
-                          : "Todos los datos son válidos y están listos para migrar."}
+                          : warningCount > 0 
+                            ? `Datos listos (con ${warningCount} advertencias de montos).`
+                            : "Todos los datos son válidos y están listos para migrar."}
                       </p>
                       <p className="text-[10px] opacity-70">
                         {hasValidationErrors 
-                          ? "Debe corregir los errores en su archivo y volver a cargarlo para poder continuar."
-                          : "Revise el resumen contable arriba antes de proceder con la carga final."}
+                          ? "Debe corregir los errores críticos (rojo) para poder continuar."
+                          : warningCount > 0
+                            ? "Revise las advertencias (naranja) pero puede proceder si los montos son correctos."
+                            : "Revise el resumen contable y la previsualización antes de proceder."}
                       </p>
                     </div>
                   </div>
+
+                  {!hasValidationErrors && (
+                    <div className="mt-4 pt-4 border-t border-emerald-500/20 flex items-center gap-3">
+                      <div 
+                        className="flex items-center gap-2 cursor-pointer group"
+                        onClick={() => setIsDataConfirmed(!isDataConfirmed)}
+                      >
+                        <div className={cn(
+                          "w-5 h-5 rounded border flex items-center justify-center transition-all",
+                          isDataConfirmed ? "bg-emerald-500 border-emerald-400" : "bg-slate-900 border-slate-700 group-hover:border-emerald-500/50"
+                        )}>
+                          {isDataConfirmed && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                        </div>
+                        <span className="text-xs font-bold text-slate-300 group-hover:text-white transition-colors">
+                          He verificado los datos y confirmo que la información es correcta para la migración.
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {hasValidationErrors && (
                     <div className="mt-4 space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
@@ -695,11 +780,18 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
                             <div className="flex-1">
                               <p className="text-[10px] font-bold text-slate-300">{identifier}</p>
                               <div className="flex flex-wrap gap-1 mt-1">
-                                {errors.map((err, i) => (
-                                  <Badge key={i} variant="outline" className="text-[8px] h-4 bg-red-500/20 text-red-300 border-red-500/30">
-                                    {err}
-                                  </Badge>
-                                ))}
+                                {errors.map((err, i) => {
+                                  const isWarn = err.startsWith('WARN:')
+                                  const displayErr = isWarn ? err.replace('WARN: ', '') : err
+                                  return (
+                                    <Badge key={i} variant="outline" className={cn(
+                                      "text-[8px] h-4", 
+                                      isWarn ? "bg-amber-500/20 text-amber-300 border-amber-500/30" : "bg-red-500/20 text-red-300 border-red-500/30"
+                                    )}>
+                                      {displayErr}
+                                    </Badge>
+                                  )
+                                })}
                               </div>
                             </div>
                           </div>
@@ -715,74 +807,74 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
           {/* ===== RESULTS ===== */}
           {results && (
             <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
-               <div className={cn("grid gap-3", 
-                 activeTab === 'prestamos' ? "grid-cols-2 md:grid-cols-5" : "grid-cols-3"
-               )}>
-                 <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-center">
-                    <p className="text-[10px] text-emerald-500/70 font-bold uppercase tracking-tight">Exitosos</p>
-                    <h3 className="text-2xl font-black text-emerald-400">{results.success}</h3>
-                 </div>
-                 <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-center">
-                    <p className="text-[10px] text-amber-500/70 font-bold uppercase tracking-tight">Omitidos</p>
-                    <h3 className="text-2xl font-black text-amber-400">{results.skipped || 0}</h3>
-                 </div>
-                 <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 text-center">
-                    <p className="text-[10px] text-red-500/70 font-bold uppercase tracking-tight">Errores</p>
-                    <h3 className="text-2xl font-black text-red-400">{results.errors?.length || 0}</h3>
-                 </div>
-                 {activeTab === 'prestamos' && (
-                   <>
-                     <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 text-center">
-                        <p className="text-[10px] text-red-400/70 font-bold uppercase tracking-tight">Desembolsado</p>
-                        <h3 className="text-lg font-black text-red-400">${(results.totalDesembolsado || 0).toFixed(2)}</h3>
-                     </div>
-                     <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-center">
-                        <p className="text-[10px] text-emerald-400/70 font-bold uppercase tracking-tight">Ingresado</p>
-                        <h3 className="text-lg font-black text-emerald-400">${(results.totalIngresado || 0).toFixed(2)}</h3>
-                     </div>
-                   </>
-                 )}
-                 {activeTab === 'gastos' && results.totalDescontado > 0 && (
-                   <div className="col-span-3 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-center">
-                      <p className="text-[10px] text-amber-400/70 font-bold uppercase tracking-tight">Total Descontado de {selectedCuenta?.nombre || 'Cuenta'}</p>
-                      <h3 className="text-lg font-black text-amber-400">${results.totalDescontado.toFixed(2)}</h3>
-                   </div>
-                 )}
-               </div>
+              <div className={cn("grid gap-3",
+                activeTab === 'prestamos' ? "grid-cols-2 md:grid-cols-5" : "grid-cols-3"
+              )}>
+                <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-center">
+                  <p className="text-[10px] text-emerald-500/70 font-bold uppercase tracking-tight">Exitosos</p>
+                  <h3 className="text-2xl font-black text-emerald-400">{results.success}</h3>
+                </div>
+                <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-center">
+                  <p className="text-[10px] text-amber-500/70 font-bold uppercase tracking-tight">Omitidos</p>
+                  <h3 className="text-2xl font-black text-amber-400">{results.skipped || 0}</h3>
+                </div>
+                <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 text-center">
+                  <p className="text-[10px] text-red-500/70 font-bold uppercase tracking-tight">Errores</p>
+                  <h3 className="text-2xl font-black text-red-400">{results.errors?.length || 0}</h3>
+                </div>
+                {activeTab === 'prestamos' && (
+                  <>
+                    <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 text-center">
+                      <p className="text-[10px] text-red-400/70 font-bold uppercase tracking-tight">Desembolsado</p>
+                      <h3 className="text-lg font-black text-red-400">${(results.totalDesembolsado || 0).toFixed(2)}</h3>
+                    </div>
+                    <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-center">
+                      <p className="text-[10px] text-emerald-400/70 font-bold uppercase tracking-tight">Ingresado</p>
+                      <h3 className="text-lg font-black text-emerald-400">${(results.totalIngresado || 0).toFixed(2)}</h3>
+                    </div>
+                  </>
+                )}
+                {activeTab === 'gastos' && results.totalDescontado > 0 && (
+                  <div className="col-span-3 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-center">
+                    <p className="text-[10px] text-amber-400/70 font-bold uppercase tracking-tight">Total Descontado de {selectedCuenta?.nombre || 'Cuenta'}</p>
+                    <h3 className="text-lg font-black text-amber-400">${results.totalDescontado.toFixed(2)}</h3>
+                  </div>
+                )}
+              </div>
 
-               {results.errors?.length > 0 && (
-                 <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                    <h5 className="text-xs font-bold text-slate-400 mb-2 uppercase">Detalle de Errores</h5>
-                    <div className="max-h-48 overflow-y-auto space-y-1 pr-2">
-                       {results.errors.map((err: string, i: number) => (
-                         <p key={i} className="text-[10px] text-red-400 flex items-start gap-2">
-                            <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
-                            {err}
-                         </p>
-                       ))}
-                    </div>
-                 </div>
-               )}
+              {results.errors?.length > 0 && (
+                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                  <h5 className="text-xs font-bold text-slate-400 mb-2 uppercase">Detalle de Errores</h5>
+                  <div className="max-h-48 overflow-y-auto space-y-1 pr-2">
+                    {results.errors.map((err: string, i: number) => (
+                      <p key={i} className="text-[10px] text-red-400 flex items-start gap-2">
+                        <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
+                        {err}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-               {results.skippedData?.length > 0 && (
-                 <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                    <div className="flex items-center gap-2 mb-2">
-                       <Info className="w-4 h-4 text-amber-500" />
-                       <h5 className="text-xs font-bold text-slate-400 uppercase">Registros Omitidos</h5>
-                    </div>
-                    <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
-                       {results.skippedData.map((skip: any, i: number) => (
-                         <div key={i} className="text-[10px] bg-slate-900/50 p-2 rounded border border-slate-800 flex justify-between items-start gap-4">
-                            <div>
-                               <span className="text-blue-400 font-mono font-bold mr-2">{skip.dni}</span>
-                               <span className="text-slate-200">{skip.nombres}</span>
-                            </div>
-                            <span className="text-amber-500/80 italic shrink-0">{skip.motivo}</span>
-                         </div>
-                       ))}
-                    </div>
-                 </div>
-               )}
+              {results.skippedData?.length > 0 && (
+                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Info className="w-4 h-4 text-amber-500" />
+                    <h5 className="text-xs font-bold text-slate-400 uppercase">Registros Omitidos</h5>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
+                    {results.skippedData.map((skip: any, i: number) => (
+                      <div key={i} className="text-[10px] bg-slate-900/50 p-2 rounded border border-slate-800 flex justify-between items-start gap-4">
+                        <div>
+                          <span className="text-blue-400 font-mono font-bold mr-2">{skip.dni}</span>
+                          <span className="text-slate-200">{skip.nombres}</span>
+                        </div>
+                        <span className="text-amber-500/80 italic shrink-0">{skip.motivo}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -794,162 +886,166 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/30 overflow-hidden">
                 <div className="overflow-x-auto">
-                    {/* ===== CLIENTES TABLE ===== */}
-                    {activeTab === 'clientes' && (
-                      <Table className="min-w-[1000px]">
-                        <TableHeader className="bg-slate-900/50">
-                          <TableRow className="border-slate-800 hover:bg-transparent">
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">DNI</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Nombre</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Teléfono</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Dirección</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Referencia</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Sector</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Negocio</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Estado</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {data.slice(0, 50).map((row, i) => {
-                            const errors = validationErrors[i] || []
-                            return (
-                              <TableRow key={i} className={cn("border-slate-800 hover:bg-slate-900/30", errors.length > 0 && "bg-red-500/5")}>
-                                <TableCell className="text-xs font-mono text-blue-400">{row.dni || row.DNI || '---'}</TableCell>
-                                <TableCell className="text-xs font-bold text-slate-200">{row.nombres || row.NOMBRES || row.Nombre || '---'}</TableCell>
-                                <TableCell className="text-xs text-slate-500">{row.telefono || row.Telefono || '---'}</TableCell>
-                                <TableCell className="text-xs text-slate-600 truncate max-w-[150px]">{row.direccion || row.Direccion || '---'}</TableCell>
-                                <TableCell className="text-xs text-slate-600 truncate max-w-[120px]">{row.referencia || row.Referencia || '---'}</TableCell>
-                                <TableCell className="text-xs text-purple-400 uppercase">{row.sector || row.Sector || '---'}</TableCell>
-                                <TableCell className="text-xs text-slate-500">{row.giro_negocio || row.GiroNegocio || '---'}</TableCell>
-                                <TableCell>
-                                  {errors.length > 0 ? (
-                                    <Badge variant="outline" className="text-[9px] h-5 px-2 bg-red-500/10 text-red-400 border-red-500/30">
-                                      {errors.join(', ')}
-                                    </Badge>
-                                  ) : (
-                                    <Badge variant="outline" className="text-[9px] h-5 px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                      Listo
-                                    </Badge>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            )
-                          })}
-                        </TableBody>
-                      </Table>
-                    )}
-
-                    {/* ===== PRESTAMOS TABLE ===== */}
-                    {activeTab === 'prestamos' && (
-                      <Table className="min-w-[1200px]">
-                        <TableHeader className="bg-slate-900/50">
-                          <TableRow className="border-slate-800 hover:bg-transparent">
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">DNI</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Monto</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Interés</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Cuotas</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Modalidad</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Fecha Inicio</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Estado</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Abonado</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Int. Extra</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Validación</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {data.slice(0, 50).map((row, i) => {
-                            const errors = validationErrors[i] || []
-                            const yaPagado = (row.ya_pagado || row.YaPagado || 'NO').toString().toUpperCase().trim()
-                            const esPagado = yaPagado === 'SI' || yaPagado === 'SÍ' || yaPagado === 'YES'
-                            return (
-                              <TableRow key={i} className={cn("border-slate-800 hover:bg-slate-900/30", errors.length > 0 && "bg-red-500/5")}>
-                                <TableCell className="text-xs font-mono text-blue-400">{row.dni_cliente || row.DNI || row.dni || '---'}</TableCell>
-                                <TableCell className="text-xs text-emerald-400 font-black">${parseFloat(row.monto || row.Monto || 0).toFixed(2)}</TableCell>
-                                <TableCell className="text-xs text-slate-400">{row.interes || row.Interes || '0'}%</TableCell>
-                                <TableCell className="text-xs text-slate-400 font-bold">{row.cuotas || row.Cuotas || '0'}</TableCell>
-                                <TableCell className="text-xs text-slate-400 uppercase">{row.modalidad || row.Modalidad || '---'}</TableCell>
-                                <TableCell className="text-xs text-slate-500 font-mono">{row.fecha_inicio || row.FechaInicio || '---'}</TableCell>
-                                <TableCell>
-                                  <Badge className={cn(
-                                    "text-[9px] h-5 px-2 font-black border",
-                                    esPagado 
-                                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" 
-                                      : "bg-blue-500/15 text-blue-400 border-blue-500/30"
-                                  )}>
-                                    {esPagado ? '✅ PAGADO' : '🔄 ACTIVO'}
+                  {/* ===== CLIENTES TABLE ===== */}
+                  {activeTab === 'clientes' && (
+                    <Table className="min-w-[1000px]">
+                      <TableHeader className="bg-slate-900/50">
+                        <TableRow className="border-slate-800 hover:bg-transparent">
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">DNI</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Nombre</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Teléfono</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Dirección</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Referencia</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Sector</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Negocio</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Estado</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {data.slice(0, 50).map((row, i) => {
+                          const errors = validationErrors[i] || []
+                          return (
+                            <TableRow key={i} className={cn("border-slate-800 hover:bg-slate-900/30", errors.length > 0 && "bg-red-500/5")}>
+                              <TableCell className="text-xs font-mono text-blue-400">{row.dni || row.DNI || '---'}</TableCell>
+                              <TableCell className="text-xs font-bold text-slate-200">{row.nombres || row.NOMBRES || row.Nombre || '---'}</TableCell>
+                              <TableCell className="text-xs text-slate-500">{row.telefono || row.Telefono || '---'}</TableCell>
+                              <TableCell className="text-xs text-slate-600 truncate max-w-[150px]">{row.direccion || row.Direccion || '---'}</TableCell>
+                              <TableCell className="text-xs text-slate-600 truncate max-w-[120px]">{row.referencia || row.Referencia || '---'}</TableCell>
+                              <TableCell className="text-xs text-purple-400 uppercase">{row.sector || row.Sector || '---'}</TableCell>
+                              <TableCell className="text-xs text-slate-500">{row.giro_negocio || row.GiroNegocio || '---'}</TableCell>
+                              <TableCell>
+                                {errors.length > 0 ? (
+                                  <Badge variant="outline" className="text-[9px] h-5 px-2 bg-red-500/10 text-red-400 border-red-500/30">
+                                    {errors.join(', ')}
                                   </Badge>
-                                </TableCell>
-                                <TableCell className="text-xs text-amber-400 font-bold">${parseFloat(row.monto_abonado || row.MontoAbonado || 0).toFixed(2)}</TableCell>
-                                <TableCell className="text-xs text-blue-400 font-bold">${parseFloat(row.interes_extra || row.InteresExtra || row.extra || 0).toFixed(2)}</TableCell>
-                                <TableCell>
-                                  {errors.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1">
-                                      {errors.map((err, idx) => (
-                                        <Badge key={idx} variant="outline" className="text-[8px] h-4 px-1 bg-red-500/10 text-red-400 border-red-500/30">
-                                          {err}
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <Badge variant="outline" className="text-[9px] h-5 px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                      Válido
-                                    </Badge>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            )
-                          })}
-                        </TableBody>
-                      </Table>
-                    )}
+                                ) : (
+                                  <Badge variant="outline" className="text-[9px] h-5 px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                    Listo
+                                  </Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
 
-                    {/* ===== GASTOS TABLE ===== */}
-                    {activeTab === 'gastos' && (
-                      <Table className="min-w-[800px]">
-                        <TableHeader className="bg-slate-900/50">
-                          <TableRow className="border-slate-800 hover:bg-transparent">
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Descripción</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Monto</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Categoría</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Registrado Por</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Fecha</TableHead>
-                            <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Validación</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {data.slice(0, 50).map((row, i) => {
-                            const errors = validationErrors[i] || []
-                            return (
-                              <TableRow key={i} className={cn("border-slate-800 hover:bg-slate-900/30", errors.length > 0 && "bg-red-500/5")}>
-                                <TableCell className="text-xs text-slate-200 font-medium truncate max-w-[200px]">{row.descripcion || row.Descripcion || '---'}</TableCell>
-                                <TableCell className="text-xs text-amber-400 font-black">${parseFloat(row.monto || row.Monto || 0).toFixed(2)}</TableCell>
-                                <TableCell className="text-xs text-purple-400">{row.categoria || row.Categoria || '---'}</TableCell>
-                                <TableCell className="text-xs text-slate-300">{row.registrado_por_nombre || row.registrado_por || row.RegistradoPor || '---'}</TableCell>
-                                <TableCell className="text-xs text-slate-500 font-mono">{row.fecha_registro || row.FechaRegistro || row.fecha || '---'}</TableCell>
-                                <TableCell>
-                                  {errors.length > 0 ? (
-                                    <Badge variant="outline" className="text-[9px] h-5 px-2 bg-red-500/10 text-red-400 border-red-500/30">
-                                      {errors.join(', ')}
-                                    </Badge>
-                                  ) : (
-                                    <Badge variant="outline" className="text-[9px] h-5 px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                      Válido
-                                    </Badge>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            )
-                          })}
-                        </TableBody>
-                      </Table>
-                    )}
+                  {/* ===== PRESTAMOS TABLE ===== */}
+                  {activeTab === 'prestamos' && (
+                    <Table className="min-w-[1200px]">
+                      <TableHeader className="bg-slate-900/50">
+                        <TableRow className="border-slate-800 hover:bg-transparent">
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">DNI</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Monto</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Interés</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Cuotas</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Modalidad</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Fecha Inicio</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Estado</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Abonado</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Pendiente</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Int. Extra</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Validación</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {data.slice(0, 50).map((row, i) => {
+                          const errors = validationErrors[i] || []
+                          const yaPagado = (row.ya_pagado || row.YaPagado || 'NO').toString().toUpperCase().trim()
+                          const esPagado = yaPagado === 'SI' || yaPagado === 'SÍ' || yaPagado === 'YES'
+                          return (
+                            <TableRow key={i} className={cn("border-slate-800 hover:bg-slate-900/30", errors.length > 0 && "bg-red-500/5")}>
+                              <TableCell className="text-xs font-mono text-blue-400">{row.dni_cliente || row.DNI || row.dni || '---'}</TableCell>
+                              <TableCell className="text-xs text-emerald-400 font-black">${parseFloat(row.monto || row.Monto || 0).toFixed(2)}</TableCell>
+                              <TableCell className="text-xs text-slate-400">{row.interes || row.Interes || '0'}%</TableCell>
+                              <TableCell className="text-xs text-slate-400 font-bold">{row.cuotas || row.Cuotas || '0'}</TableCell>
+                              <TableCell className="text-xs text-slate-400 uppercase">{row.modalidad || row.Modalidad || '---'}</TableCell>
+                              <TableCell className="text-xs text-slate-500 font-mono">{row.fecha_inicio || row.FechaInicio || '---'}</TableCell>
+                              <TableCell>
+                                <Badge className={cn(
+                                  "text-[9px] h-5 px-2 font-black border",
+                                  esPagado
+                                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                                    : "bg-blue-500/15 text-blue-400 border-blue-500/30"
+                                )}>
+                                  {esPagado ? '✅ PAGADO' : '🔄 ACTIVO'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-xs text-amber-400 font-bold">${parseFloat(row.monto_abonado || row.MontoAbonado || 0).toFixed(2)}</TableCell>
+                              <TableCell className="text-xs text-slate-300 font-mono">
+                                ${Math.max(0, (parseFloat(row.monto || row.Monto || 0) * (1 + (parseFloat(row.interes || row.Interes || 0) / 100))) - parseFloat(row.monto_abonado || row.MontoAbonado || 0)).toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-xs text-blue-400 font-bold">${parseFloat(row.interes_extra || row.InteresExtra || row.extra || 0).toFixed(2)}</TableCell>
+                              <TableCell>
+                                {errors.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {errors.map((err, idx) => (
+                                      <Badge key={idx} variant="outline" className="text-[8px] h-4 px-1 bg-red-500/10 text-red-400 border-red-500/30">
+                                        {err}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <Badge variant="outline" className="text-[9px] h-5 px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                    Válido
+                                  </Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
 
-                    {/* Overflow indicator */}
-                    {data.length > 10 && (
-                      <div className="text-center py-3 text-[10px] text-slate-600 font-bold italic bg-slate-900/20 border-t border-slate-800">
-                        ... y {data.length - 50} registros adicionales detectados. (Mostrando primeros 50)
-                      </div>
-                    )}
+                  {/* ===== GASTOS TABLE ===== */}
+                  {activeTab === 'gastos' && (
+                    <Table className="min-w-[800px]">
+                      <TableHeader className="bg-slate-900/50">
+                        <TableRow className="border-slate-800 hover:bg-transparent">
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Descripción</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Monto</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Categoría</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Registrado Por</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Fecha</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-500 uppercase">Validación</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {data.slice(0, 50).map((row, i) => {
+                          const errors = validationErrors[i] || []
+                          return (
+                            <TableRow key={i} className={cn("border-slate-800 hover:bg-slate-900/30", errors.length > 0 && "bg-red-500/5")}>
+                              <TableCell className="text-xs text-slate-200 font-medium truncate max-w-[200px]">{row.descripcion || row.Descripcion || '---'}</TableCell>
+                              <TableCell className="text-xs text-amber-400 font-black">${parseFloat(row.monto || row.Monto || 0).toFixed(2)}</TableCell>
+                              <TableCell className="text-xs text-purple-400">{row.categoria || row.Categoria || '---'}</TableCell>
+                              <TableCell className="text-xs text-slate-300">{row.registrado_por_nombre || row.registrado_por || row.RegistradoPor || '---'}</TableCell>
+                              <TableCell className="text-xs text-slate-500 font-mono">{row.fecha_registro || row.FechaRegistro || row.fecha || '---'}</TableCell>
+                              <TableCell>
+                                {errors.length > 0 ? (
+                                  <Badge variant="outline" className="text-[9px] h-5 px-2 bg-red-500/10 text-red-400 border-red-500/30">
+                                    {errors.join(', ')}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-[9px] h-5 px-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                    Válido
+                                  </Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+
+                  {/* Overflow indicator */}
+                  {data.length > 10 && (
+                    <div className="text-center py-3 text-[10px] text-slate-600 font-bold italic bg-slate-900/20 border-t border-slate-800">
+                      ... y {data.length - 50} registros adicionales detectados. (Mostrando primeros 50)
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -973,40 +1069,40 @@ export function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImportModalP
         </div>
 
         <DialogFooter className="border-t border-slate-800 p-6 bg-slate-950/20 gap-2">
-          <Button 
-            variant="outline" 
-            onClick={results ? reset : onClose} 
+          <Button
+            variant="outline"
+            onClick={results ? reset : onClose}
             className="border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800"
             disabled={isUploading}
           >
             {results ? "Importar Otro Lote" : "Cancelar"}
           </Button>
           {!results && (
-            <Button 
-                onClick={handleUpload} 
-                disabled={data.length === 0 || isUploading || hasValidationErrors}
-                className={cn(
-                  "text-white min-w-[250px] shadow-lg font-black uppercase tracking-widest h-12 text-xs",
-                  hasValidationErrors 
-                    ? "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700" 
-                    : (currentAccent === 'blue' ? "bg-blue-600 hover:bg-blue-500 shadow-blue-900/20" :
-                       currentAccent === 'emerald' ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20" :
-                       "bg-amber-600 hover:bg-amber-500 shadow-amber-900/20")
-                )}
+            <Button
+              onClick={handleUpload}
+              disabled={data.length === 0 || isUploading || hasValidationErrors || !isDataConfirmed}
+              className={cn(
+                "text-white min-w-[250px] shadow-lg font-black uppercase tracking-widest h-12 text-xs",
+                (hasValidationErrors || !isDataConfirmed)
+                  ? "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700"
+                  : (currentAccent === 'blue' ? "bg-blue-600 hover:bg-blue-500 shadow-blue-900/20" :
+                    currentAccent === 'emerald' ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20" :
+                      "bg-amber-600 hover:bg-amber-500 shadow-amber-900/20")
+              )}
             >
-                {isUploading ? (
-                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Procesando Migración...</>
-                ) : hasValidationErrors ? (
-                    <><AlertCircle className="w-4 h-4 mr-2" /> Corrija Errores para Subir</>
-                ) : (
-                    <><CheckCircle2 className="w-4 h-4 mr-2" /> Aprobar y Subir Migración ({data.length || 0})</>
-                )}
+              {isUploading ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Procesando Migración...</>
+              ) : hasValidationErrors ? (
+                <><AlertCircle className="w-4 h-4 mr-2" /> Corrija Errores para Subir</>
+              ) : (
+                <><CheckCircle2 className="w-4 h-4 mr-2" /> Aprobar y Subir Migración ({data.length || 0})</>
+              )}
             </Button>
           )}
           {results && (
-             <Button onClick={onClose} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold">
-                Finalizar y Cerrar
-             </Button>
+            <Button onClick={onClose} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold">
+              Finalizar y Cerrar
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>

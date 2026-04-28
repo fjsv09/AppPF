@@ -90,6 +90,15 @@ export async function POST(request: Request) {
 
         const createdLoanIds: string[] = []
         let currentBalance = parseFloat(cuentaFinanciera.saldo)
+        
+        // Colecciones para inserción masiva
+        const allSchedules: any[] = []
+        const allMovimientos: any[] = []
+        const allAudits: any[] = []
+
+        // 1.5 Precargar feriados
+        const { data: holidaysData } = await supabaseAdmin.from('feriados').select('fecha')
+        const holidaysSet = new Set(holidaysData?.map((h: any) => h.fecha) || [])
 
         // 2. Procesar cada préstamo
         for (const l of loans) {
@@ -123,26 +132,19 @@ export async function POST(request: Request) {
                     continue
                 }
 
-                // B. Generar Cronograma Real (Con domingos y feriados)
-                const { data: holidaysData } = await supabaseAdmin.from('feriados').select('fecha')
-                const holidaysSet = new Set(holidaysData?.map((h: any) => h.fecha) || [])
-
+                // B. Generar Cronograma Real
                 const schedule = []
                 let currentDate = new Date(fechaInicio + 'T12:00:00Z')
                 const totalToPay = monto * (1 + (interes / 100))
                 const quotaAmount = Math.round((totalToPay / cuotas) * 100) / 100
 
-                // Regla de día libre para cobro diario
-                if (modalidad === 'diario') {
-                    currentDate.setDate(currentDate.getDate() + 1)
-                }
+                if (modalidad === 'diario') currentDate.setDate(currentDate.getDate() + 1)
 
                 let abonoRestante = esPagado ? totalToPay : montoAbonado
                 let quotasCount = 0
 
                 while (quotasCount < cuotas) {
                     let nextDate = new Date(currentDate)
-                    
                     if (modalidad === 'diario') nextDate.setDate(nextDate.getDate() + 1)
                     else if (modalidad === 'semanal') nextDate.setDate(nextDate.getDate() + 7)
                     else if (modalidad === 'quincenal') nextDate.setDate(nextDate.getDate() + 14)
@@ -153,13 +155,10 @@ export async function POST(request: Request) {
                     let daySafety = 0
                     while (!isValidDay && daySafety < 30) {
                         daySafety++
-                        const dayOfWeek = checkDate.getDay() // 0 = Domingo
+                        const dayOfWeek = checkDate.getDay()
                         const dateStr = checkDate.toISOString().split('T')[0]
-                        if (dayOfWeek === 0 || holidaysSet.has(dateStr)) {
-                            checkDate.setDate(checkDate.getDate() + 1)
-                        } else {
-                            isValidDay = true
-                        }
+                        if (dayOfWeek === 0 || holidaysSet.has(dateStr)) checkDate.setDate(checkDate.getDate() + 1)
+                        else isValidDay = true
                     }
                     
                     let estadoCuota = 'pendiente'
@@ -190,7 +189,7 @@ export async function POST(request: Request) {
 
                 const fechaFin = schedule[schedule.length - 1].fecha_vencimiento
 
-                // C. Crear Préstamo
+                // C. Crear Préstamo (Individual para obtener ID)
                 const { data: prestamo, error: loanError } = await supabaseAdmin
                     .from('prestamos')
                     .insert({
@@ -211,21 +210,21 @@ export async function POST(request: Request) {
                 if (loanError) throw new Error(`Error creando préstamo: ${loanError.message}`)
                 createdLoanIds.push(prestamo.id)
 
-                // D. Insertar Cronograma
-                const scheduleWithId = schedule.map(s => ({ 
-                    prestamo_id: prestamo.id,
-                    numero_cuota: s.numero_cuota,
-                    monto_cuota: s.monto_cuota,
-                    fecha_vencimiento: s.fecha_vencimiento,
-                    estado: s.estado,
-                    monto_pagado: s.monto_pagado
-                }))
-                const { error: cronoError } = await supabaseAdmin.from('cronograma_cuotas').insert(scheduleWithId)
-                if (cronoError) throw new Error(`Error cronograma: ${cronoError.message}`)
+                // D. Acumular Cronograma
+                schedule.forEach(s => {
+                    allSchedules.push({
+                        prestamo_id: prestamo.id,
+                        numero_cuota: s.numero_cuota,
+                        monto_cuota: s.monto_cuota,
+                        fecha_vencimiento: s.fecha_vencimiento,
+                        estado: s.estado,
+                        monto_pagado: s.monto_pagado
+                    })
+                })
 
-                // D. Movimientos Financieros
+                // E. Acumular Movimientos Financieros
                 // 1. Egreso por desembolso
-                await supabaseAdmin.from('movimientos_financieros').insert({
+                allMovimientos.push({
                     cartera_id: cuentaFinanciera.cartera_id || GLOBAL_CARTERA_ID,
                     cuenta_origen_id: cuentaFinanciera.id,
                     monto,
@@ -237,12 +236,9 @@ export async function POST(request: Request) {
                 currentBalance -= monto
                 results.totalDesembolsado += monto
 
-                // 2. Ingresos por pagos previos
                 const regularPayments = esPagado ? totalToPay : montoAbonado
-                
-                // 2a. Cobro acumulado regular
                 if (regularPayments > 0) {
-                    await supabaseAdmin.from('movimientos_financieros').insert({
+                    allMovimientos.push({
                         cartera_id: cuentaFinanciera.cartera_id || GLOBAL_CARTERA_ID,
                         cuenta_destino_id: cuentaFinanciera.id,
                         monto: regularPayments,
@@ -255,9 +251,8 @@ export async function POST(request: Request) {
                     results.totalIngresado += regularPayments
                 }
 
-                // 2b. Interés Extra (Prórroga)
                 if (interesExtra > 0) {
-                    await supabaseAdmin.from('movimientos_financieros').insert({
+                    allMovimientos.push({
                         cartera_id: cuentaFinanciera.cartera_id || GLOBAL_CARTERA_ID,
                         cuenta_destino_id: cuentaFinanciera.id,
                         monto: interesExtra,
@@ -270,11 +265,7 @@ export async function POST(request: Request) {
                     results.totalIngresado += interesExtra
                 }
 
-                // E. Actualizar Saldo Final de la cuenta
-                await supabaseAdmin.from('cuentas_financieras').update({ saldo: currentBalance }).eq('id', cuentaFinanciera.id)
-
-                // F. Auditoría
-                await supabaseAdmin.from('auditoria').insert({
+                allAudits.push({
                     usuario_id: user.id,
                     accion: 'migracion_prestamo',
                     tabla_afectada: 'prestamos',
@@ -290,25 +281,43 @@ export async function POST(request: Request) {
             }
         }
 
-        // G. Limpieza de notificaciones y tareas generadas por triggers
-        // Al ser datos migrados, no queremos que se generen auditorías dirigidas ni tareas de evidencia automáticas.
-        if (createdLoanIds.length > 0) {
-            // 1. Borrar tareas de evidencia autogeneradas
-            await supabaseAdmin
-                .from('tareas_evidencia')
-                .delete()
-                .in('prestamo_id', createdLoanIds)
+        // F. INSERCIONES MASIVAS FINALES (Batch processing)
+        console.log(`🚀 Ejecutando inserciones masivas: ${allSchedules.length} cuotas, ${allMovimientos.length} movimientos...`)
+        
+        // Cuotas en bloques de 1000
+        for (let i = 0; i < allSchedules.length; i += 1000) {
+            await supabaseAdmin.from('cronograma_cuotas').insert(allSchedules.slice(i, i + 1000))
+        }
 
-            // 2. Borrar notificaciones de Auditoría Dirigida
+        // Movimientos en bloques de 500
+        for (let i = 0; i < allMovimientos.length; i += 500) {
+            await supabaseAdmin.from('movimientos_financieros').insert(allMovimientos.slice(i, i + 500))
+        }
+
+        // Auditoría
+        if (allAudits.length > 0) {
+            await supabaseAdmin.from('auditoria').insert(allAudits)
+        }
+
+        // G. Actualización ÚNICA de Saldo Final
+        await supabaseAdmin.from('cuentas_financieras').update({ saldo: currentBalance }).eq('id', cuentaFinanciera.id)
+
+        // H. Limpieza de efectos secundarios (triggers)
+        if (createdLoanIds.length > 0) {
+            // Borrar tareas de evidencia autogeneradas por triggers
+            for (let i = 0; i < createdLoanIds.length; i += 200) {
+                await supabaseAdmin.from('tareas_evidencia').delete().in('prestamo_id', createdLoanIds.slice(i, i + 200))
+            }
+
+            // Borrar notificaciones de Auditoría Dirigida masivas
             await supabaseAdmin
                 .from('notificaciones')
                 .delete()
                 .eq('titulo', '⚖️ Auditoría Dirigida')
-                .gt('created_at', new Date(Date.now() - 300000).toISOString()) // Creadas en los últimos 5 min
+                .gt('created_at', new Date(Date.now() - 600000).toISOString())
         }
 
         return NextResponse.json(results)
-
     } catch (error: any) {
         console.error('Critical Loan Migration Error:', error)
         return NextResponse.json({ error: error.message }, { status: 500 })

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { MapPin, Clock, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { MapPin, Clock, Loader2, AlertCircle, CheckCircle2, ChevronUp, ChevronDown, RefreshCcw } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +17,8 @@ export function StayVerification() {
     const [loading, setLoading] = useState(true)
     const [verifying, setVerifying] = useState(false)
     const [lastPosition, setLastPosition] = useState<{ lat: number, lon: number } | null>(null)
+    const [isExpanded, setIsExpanded] = useState(false)
+    const [lastPingTime, setLastPingTime] = useState<number>(0)
 
     const checkStatus = useCallback(async (isInitial = false) => {
         try {
@@ -37,10 +39,10 @@ export function StayVerification() {
                     minutos_permanencia: minsPermanencia
                 })
 
-                if (isInitial) {
-                    toast.info('Verificación de permanencia activa', {
-                        description: `Debes permanecer en la oficina durante ${restante} minutos más.`,
-                        duration: 5000
+                if (isInitial && restante > 0) {
+                    toast.info('Permanencia activa', {
+                        description: `Faltan ${restante} min. para completar tu registro.`,
+                        duration: 3000
                     })
                 }
             } else {
@@ -55,6 +57,7 @@ export function StayVerification() {
 
     const sendPing = useCallback(async (lat: number, lon: number) => {
         setVerifying(true)
+        setLastPingTime(Date.now())
         try {
             const res = await fetch('/api/asistencia/permanencia', {
                 method: 'POST',
@@ -66,13 +69,13 @@ export function StayVerification() {
 
             if (data.estado === 'cumplido') {
                 toast.success('¡Permanencia cumplida!', {
-                    description: 'Has completado el tiempo mínimo de permanencia en la oficina.',
+                    description: 'Registro de entrada finalizado exitosamente.',
                     duration: 5000
                 })
                 setStatus(null)
             } else if (data.estado === 'incumplido') {
                 toast.error('Permanencia incumplida', {
-                    description: 'Se ha detectado que saliste del rango de la oficina antes de tiempo.',
+                    description: 'Has salido del rango de la oficina.',
                     duration: 5000
                 })
                 setStatus(null)
@@ -88,6 +91,7 @@ export function StayVerification() {
             }
         } catch (error) {
             console.error('[STAY_PING_ERROR]', error)
+            toast.error('Error de red', { description: 'No se pudo verificar tu ubicación.' })
         } finally {
             setVerifying(false)
         }
@@ -105,7 +109,7 @@ export function StayVerification() {
             (error) => {
                 console.error('[GEO_ERROR]', error)
                 toast.error('Error de GPS', {
-                    description: 'No se pudo obtener tu ubicación para la verificación de permanencia.'
+                    description: 'No se pudo obtener tu ubicación.'
                 })
             },
             { enableHighAccuracy: true }
@@ -116,7 +120,7 @@ export function StayVerification() {
         checkStatus(true)
     }, [checkStatus])
 
-    // Intervalo de actualización de tiempo (cada 1 minuto)
+    // Intervalo de actualización de tiempo (cada 10 segundos para mayor fluidez)
     useEffect(() => {
         if (!status || status.estado !== 'pendiente') return
 
@@ -128,83 +132,174 @@ export function StayVerification() {
             
             if (restante !== status.restante) {
                 setStatus(prev => prev ? { ...prev, restante } : null)
-                
-                // Si llegamos a 0 por primera vez, disparar ping inmediato
-                if (restante === 0 && !verifying) {
+            }
+
+            // Si llegamos a 0, intentar ping cada 30 segundos hasta que se complete
+            if (restante === 0 && !verifying) {
+                const timeSinceLastPing = Date.now() - lastPingTime
+                if (timeSinceLastPing > 30000 || lastPingTime === 0) {
                     requestLocationAndPing()
                 }
             }
         }
 
-        const interval = setInterval(updateTimer, 60000) // 1 minuto
+        const interval = setInterval(updateTimer, 10000)
         return () => clearInterval(interval)
-    }, [status, verifying, requestLocationAndPing])
+    }, [status, verifying, lastPingTime, requestLocationAndPing])
 
-    // Intervalo de pings de seguridad (cada 5 minutos si no ha terminado)
+    // Intervalo de pings de seguridad (cada 5 minutos)
     useEffect(() => {
         if (!status || status.estado !== 'pendiente' || status.restante === 0) return
 
         const interval = setInterval(() => {
             requestLocationAndPing()
-        }, 300000) // 5 minutos
+        }, 300000)
 
         return () => clearInterval(interval)
     }, [status, requestLocationAndPing])
 
     if (loading || !status) return null
 
+    const isComplete = status.restante <= 0
+
     return (
-        <div className="fixed bottom-24 right-4 z-50 animate-in fade-in slide-in-from-right-4 duration-500">
-            <div className="backdrop-blur-md bg-slate-900/80 border border-blue-500/30 rounded-2xl p-4 shadow-2xl flex items-center gap-4 min-w-[240px]">
-                <div className="relative">
-                    <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
-                        {verifying ? (
-                            <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
-                        ) : (
-                            <MapPin className="w-5 h-5 text-blue-400 animate-pulse" />
-                        )}
+        <div className="fixed bottom-24 right-4 z-[100] flex flex-col items-end gap-3 pointer-events-none">
+            {/* Expanded Content */}
+            {isExpanded && (
+                <div className="pointer-events-auto bg-slate-900/95 backdrop-blur-xl border border-blue-500/30 rounded-3xl p-5 shadow-[0_20px_50px_rgba(0,0,0,0.5)] w-72 animate-in zoom-in-95 slide-in-from-bottom-10 fade-in duration-300 origin-bottom-right">
+                    <div className="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">
+                                Verificando Permanencia
+                            </h3>
+                            <p className="text-xs text-slate-400 leading-tight">
+                                Debes permanecer en el rango para validar tu entrada.
+                            </p>
+                        </div>
+                        <button 
+                            onClick={() => setIsExpanded(false)}
+                            className="p-1 hover:bg-slate-800 rounded-full transition-colors"
+                        >
+                            <ChevronDown className="w-5 h-5 text-slate-500" />
+                        </button>
                     </div>
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center border-2 border-slate-900">
-                        <Clock className="w-2 h-2 text-white" />
-                    </div>
-                </div>
 
-                <div className="flex-1">
-                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-0.5">
-                        Verificando Permanencia
-                    </p>
-                    <div className="flex items-center gap-2">
-                        <p className={cn(
-                            "text-sm font-bold",
-                            status.restante === 0 ? "text-emerald-400 animate-pulse" : "text-white"
-                        )}>
-                            {status.restante === 0 ? 'Verificando finalización...' : `${status.restante} minutos restantes`}
+                    <div className="bg-slate-800/50 rounded-2xl p-4 mb-4 border border-slate-700/50">
+                        <div className="flex items-center gap-4">
+                            <div className={cn(
+                                "w-12 h-12 rounded-full flex items-center justify-center border-2",
+                                isComplete ? "bg-emerald-500/10 border-emerald-500/50" : "bg-blue-500/10 border-blue-500/50"
+                            )}>
+                                {verifying ? (
+                                    <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+                                ) : isComplete ? (
+                                    <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                                ) : (
+                                    <Clock className="w-6 h-6 text-blue-400" />
+                                )}
+                            </div>
+                            <div>
+                                <p className={cn(
+                                    "text-xl font-black tabular-nums tracking-tight",
+                                    isComplete ? "text-emerald-400" : "text-white"
+                                )}>
+                                    {isComplete ? '¡Completado!' : `${status.restante} min`}
+                                </p>
+                                <p className="text-[10px] text-slate-500 uppercase font-bold">
+                                    {isComplete ? 'Verificando finalización...' : 'Restantes'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className="bg-slate-800/30 rounded-xl p-2 border border-slate-700/30">
+                            <p className="text-[8px] text-slate-500 uppercase font-black mb-1">GPS</p>
+                            <div className="flex items-center gap-1.5">
+                                <MapPin className={cn("w-3 h-3", lastPosition ? "text-emerald-400" : "text-amber-400")} />
+                                <span className="text-[10px] text-slate-300 font-medium">
+                                    {lastPosition ? 'Activo' : 'Buscando...'}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="bg-slate-800/30 rounded-xl p-2 border border-slate-700/30">
+                            <p className="text-[8px] text-slate-500 uppercase font-black mb-1">Inicio</p>
+                            <div className="flex items-center gap-1.5">
+                                <Clock className="w-3 h-3 text-slate-400" />
+                                <span className="text-[10px] text-slate-300 font-medium">
+                                    {new Date(status.inicio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={requestLocationAndPing}
+                        disabled={verifying}
+                        className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20"
+                    >
+                        {verifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCcw className="w-3.5 h-3.5" />}
+                        Verificar Ubicación Ahora
+                    </button>
+
+                    <div className="mt-4 pt-4 border-t border-slate-800">
+                        <p className="text-[9px] text-amber-500/80 leading-relaxed italic">
+                            ⚠️ Si sales del rango antes de completar el tiempo, la asistencia será anulada.
                         </p>
-                        <span className={cn(
-                            "flex h-1.5 w-1.5 rounded-full animate-ping",
-                            status.restante === 0 ? "bg-emerald-400" : "bg-blue-500"
-                        )} />
                     </div>
                 </div>
+            )}
 
-                <div className="h-8 w-px bg-slate-800" />
+            {/* Circular Trigger Button */}
+            <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="pointer-events-auto relative group"
+            >
+                {/* Ring Indicator */}
+                <div className={cn(
+                    "absolute -inset-1 rounded-full blur-md opacity-40 transition-all duration-500 group-hover:opacity-70",
+                    isComplete ? "bg-emerald-500 animate-pulse" : "bg-blue-500"
+                )} />
+                
+                <div className={cn(
+                    "relative w-14 h-14 rounded-full flex flex-col items-center justify-center shadow-2xl transition-all duration-300 border-2 active:scale-95",
+                    isExpanded 
+                        ? "bg-slate-800 border-slate-700 scale-90 opacity-0" 
+                        : isComplete
+                            ? "bg-emerald-950 border-emerald-500/50"
+                            : "bg-slate-900 border-blue-500/50"
+                )}>
+                    {verifying ? (
+                        <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+                    ) : isComplete ? (
+                        <CheckCircle2 className="w-7 h-7 text-emerald-400" />
+                    ) : (
+                        <>
+                            <span className="text-[14px] font-black text-white leading-none mb-0.5">
+                                {status.restante}
+                            </span>
+                            <span className="text-[8px] font-bold text-blue-400 uppercase tracking-tighter leading-none">
+                                min
+                            </span>
+                        </>
+                    )}
 
-                <div className="text-right">
-                    <p className="text-[8px] text-slate-500 uppercase font-bold tracking-tighter">
-                        Precisión GPS
-                    </p>
-                    <p className="text-[10px] text-slate-300 font-mono">
-                        {lastPosition ? 'Activa' : 'Pendiente'}
-                    </p>
+                    {/* Notification Badge if not expanded */}
+                    {!isExpanded && !isComplete && (
+                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-lg">
+                            <Clock className="w-2.5 h-2.5 text-white" />
+                        </div>
+                    )}
                 </div>
-            </div>
-            
-            {/* Warning under the main box */}
-            <div className="mt-2 bg-amber-500/10 border border-amber-500/20 rounded-xl p-2 max-w-[300px] shadow-lg animate-in slide-in-from-bottom-2 duration-700">
-                <p className="text-[9px] text-amber-200/60 leading-tight">
-                    ⚠️ <strong>Si sales del rango</strong>, la asistencia no será registrada y deberás marcar de nuevo.
-                </p>
-            </div>
+                
+                {/* Tooltip on hover */}
+                {!isExpanded && (
+                    <div className="absolute right-16 top-1/2 -translate-y-1/2 bg-slate-900 text-white text-[10px] px-2 py-1 rounded-lg border border-slate-800 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl">
+                        {isComplete ? 'Verificando...' : 'Permanencia en curso'}
+                    </div>
+                )}
+            </button>
         </div>
     )
 }
+

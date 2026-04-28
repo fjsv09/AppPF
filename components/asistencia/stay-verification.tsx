@@ -163,10 +163,10 @@ export function StayVerification() {
     const isComplete = status.restante <= 0
 
     return (
-        <div className="fixed bottom-24 right-4 z-[100] flex flex-col items-end gap-3 pointer-events-none">
+        <div className="fixed bottom-24 left-4 z-[100] flex flex-col items-start gap-3 pointer-events-none">
             {/* Expanded Content */}
             {isExpanded && (
-                <div className="pointer-events-auto bg-slate-900/95 backdrop-blur-xl border border-blue-500/30 rounded-3xl p-5 shadow-[0_20px_50px_rgba(0,0,0,0.5)] w-72 animate-in zoom-in-95 slide-in-from-bottom-10 fade-in duration-300 origin-bottom-right">
+                <div className="pointer-events-auto bg-slate-900/95 backdrop-blur-xl border border-blue-500/30 rounded-3xl p-5 shadow-[0_20px_50px_rgba(0,0,0,0.5)] w-72 animate-in zoom-in-95 slide-in-from-bottom-10 fade-in duration-300 origin-bottom-left">
                     <div className="flex justify-between items-start mb-4">
                         <div>
                             <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">
@@ -294,7 +294,7 @@ export function StayVerification() {
                 
                 {/* Tooltip on hover */}
                 {!isExpanded && (
-                    <div className="absolute right-16 top-1/2 -translate-y-1/2 bg-slate-900 text-white text-[10px] px-2 py-1 rounded-lg border border-slate-800 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl">
+                    <div className="absolute left-16 top-1/2 -translate-y-1/2 bg-slate-900 text-white text-[10px] px-2 py-1 rounded-lg border border-slate-800 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl">
                         {isComplete ? 'Verificando...' : 'Permanencia en curso'}
                     </div>
                 )}

@@ -332,7 +332,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             // Regla para Préstamos Migrados:
             // Si es migrado y ya no tiene saldo pendiente (efectivamente finalizado), 
             // solo permitimos la renovación si es el registro más reciente de ese cliente.
-            const isMigrado = prestamo.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+            const isMigrado = (prestamo.observacion_supervisor || '').includes('Préstamo migrado') || (prestamo.observacion_supervisor || '').includes('[MIGRACIÓN]')
             const isEffectivelyFinalized = prestamo.estado === 'finalizado' || 
                                          prestamo.estado === 'renovado' || 
                                          (prestamo.saldo_pendiente <= 0.01 && typeof prestamo.saldo_pendiente === 'number')

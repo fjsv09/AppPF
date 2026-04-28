@@ -222,7 +222,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                     <span className="text-[8px] text-emerald-500/60 font-bold uppercase tracking-widest leading-none">Activos</span>
                                     <span className="text-sm font-bold text-emerald-400 leading-none">
                                         {loans?.filter((l: any) => {
-                                            const isMigrado = l.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+                                            const isMigrado = (l.observacion_supervisor || '').includes('Préstamo migrado') || (l.observacion_supervisor || '').includes('[MIGRACIÓN]')
                                             const isEffectivelyFinalized = isMigrado && l.saldo_pendiente <= 0.01
                                             return l.estado === 'activo' && !isEffectivelyFinalized
                                         }).length || 0}
@@ -243,7 +243,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                 <span className="text-[8px] text-emerald-500/60 font-bold uppercase tracking-widest leading-none mb-1">Activos</span>
                                 <span className="text-sm font-black text-emerald-400 leading-none">
                                     {loans?.filter((l: any) => {
-                                        const isMigrado = l.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+                                        const isMigrado = (l.observacion_supervisor || '').includes('Préstamo migrado') || (l.observacion_supervisor || '').includes('[MIGRACIÓN]')
                                         const isEffectivelyFinalized = isMigrado && l.saldo_pendiente <= 0.01
                                         return l.estado === 'activo' && !isEffectivelyFinalized
                                     }).length || 0}
@@ -327,7 +327,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                  const metrics = calculateLoanMetrics(loan)
                                  const statusUI = getLoanStatusUI({ ...loan, metrics })
                                  
-                                 const isMigrado = loan.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+                                 const isMigrado = (loan.observacion_supervisor || '').includes('Préstamo migrado') || (loan.observacion_supervisor || '').includes('[MIGRACIÓN]')
                                  const isPaid = metrics.saldoPendiente <= 0.01 || ['finalizado', 'pagado', 'renovado', 'refinanciado'].includes(loan.estado);
                                  
                                  return (
@@ -559,7 +559,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                             <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Préstamos Activos</div>
                                             <div className="text-xl font-bold text-emerald-400">
                                                 {loans?.filter((l: any) => {
-                                                    const isMigrado = l.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+                                                    const isMigrado = (l.observacion_supervisor || '').includes('Préstamo migrado') || (l.observacion_supervisor || '').includes('[MIGRACIÓN]')
                                                     const isEffectivelyFinalized = isMigrado && l.saldo_pendiente <= 0.01
                                                     return l.estado === 'activo' && !isEffectivelyFinalized
                                                 }).length || 0}
@@ -688,7 +688,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                     <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Préstamos Activos</div>
                                     <div className="text-xl font-bold text-emerald-400">
                                         {loans?.filter((l: any) => {
-                                            const isMigrado = l.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+                                            const isMigrado = (l.observacion_supervisor || '').includes('Préstamo migrado') || (l.observacion_supervisor || '').includes('[MIGRACIÓN]')
                                             const isEffectivelyFinalized = isMigrado && l.saldo_pendiente <= 0.01
                                             return l.estado === 'activo' && !isEffectivelyFinalized
                                         }).length || 0}

@@ -227,7 +227,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
 
     // [BLOQUEO MIGRACIÓN] Si es un préstamo migrado ya pagado (o sin saldo), 
     // solo permitimos renovar si es el más reciente de todo su historial.
-    const isMigrado = prestamo.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+    const isMigrado = (prestamo.observacion_supervisor || '').includes('Préstamo migrado') || (prestamo.observacion_supervisor || '').includes('[MIGRACIÓN]')
     const effectivelyFinalized = prestamo.estado === 'finalizado' || (metrics.saldoPendiente <= 0.01)
 
     if (isMigrado && effectivelyFinalized && todosLosPrestamos && todosLosPrestamos.length > 0) {

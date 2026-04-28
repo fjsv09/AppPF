@@ -1829,7 +1829,7 @@ export function PrestamosTable({
 
                                                 const isVisited = !!visitaDia || cuotaDia?.visitado
 
-                                                const isMigrado = prestamo.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+                                                const isMigrado = (prestamo.observacion_supervisor || '').includes('Préstamo migrado') || (prestamo.observacion_supervisor || '').includes('[MIGRACIÓN]')
 
                                                 // High contrast status
                                                 let auditStatus = !isVisited ? 'pending' : (cobradoDia > 0 ? 'success' : 'alert')

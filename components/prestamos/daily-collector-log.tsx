@@ -322,7 +322,7 @@ export function DailyCollectorLog({
                                 return paginatedRows.map(({ date, cuota, physical }) => {
                                     const totalDay = physical.reduce((s: any, p: any) => s + Number(p.monto_pagado), 0)
                                     const qDate = startOfDay(new Date(date + 'T12:00:00')), isFuture = isAfter(qDate, today), isVirtual = !cuota
-                                    const isMigrado = prestamo.observacion_supervisor?.includes('Préstamo migrado del sistema anterior')
+                                    const isMigrado = (prestamo.observacion_supervisor || '').includes('Préstamo migrado') || (prestamo.observacion_supervisor || '').includes('[MIGRACIÓN]')
                                     const cVal = cuota ? Number(cuota.monto_cuota || 0) : 0, pVal = cuota ? Number(cuota.monto_pagado || 0) : 0
                                     const isFull = cuota ? (pVal >= (cVal - 0.01)) : false, isPart = cuota ? (pVal > 0 && !isFull) : false
                                      

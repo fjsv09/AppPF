@@ -138,7 +138,7 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
     const clients = (clientsRaw || [])?.map((client: any) => {
         // Process loans to identify primary active loan
         const activeLoans = client.prestamos?.filter((p: any) => {
-            const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado del sistema anterior')
+            const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado') || (p.observacion_supervisor || '').includes('[MIGRACIÓN]')
             
             // Calculate balance if not present or check against known payments
             let saldo = 0

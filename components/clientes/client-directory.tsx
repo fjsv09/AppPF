@@ -283,7 +283,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             if (!!c.bloqueado_renovacion) return false
             const loans = c.prestamos || []
             const mainActiveLoan = loans.find((p: any) => {
-                const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado del sistema anterior')
+                const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado') || (p.observacion_supervisor || '').includes('[MIGRACIÓN]')
                 const saldo = p.cronograma_cuotas?.reduce((acc: number, cuota: any) => acc + (cuota.monto_cuota - (cuota.monto_pagado || 0)), 0) || 0
                 const isEffectivelyFinalized = isMigrado && saldo <= 0.01
 
@@ -337,7 +337,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                 if (!!c.bloqueado_renovacion) return false
                 const loans = c.prestamos || []
                 const mainActiveLoan = loans.find((p: any) => {
-                    const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado del sistema anterior')
+                    const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado') || (p.observacion_supervisor || '').includes('[MIGRACIÓN]')
                     const saldo = p.cronograma_cuotas?.reduce((acc: number, cuota: any) => acc + (cuota.monto_cuota - (cuota.monto_pagado || 0)), 0) || 0
                     const isEffectivelyFinalized = isMigrado && saldo <= 0.01
 

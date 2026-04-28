@@ -29,8 +29,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Tipo de archivo no permitido (solo JPG, PNG, WEBP)' }, { status: 400 })
         }
 
-        if (file.size > 2 * 1024 * 1024) { // 2MB
-            return NextResponse.json({ error: 'El archivo es demasiado grande (máx 2MB)' }, { status: 400 })
+        if (file.size > 5 * 1024 * 1024) { // 5MB
+            return NextResponse.json({ error: 'El archivo es demasiado grande (máx 5MB)' }, { status: 400 })
         }
 
         // 4. Preparar subida

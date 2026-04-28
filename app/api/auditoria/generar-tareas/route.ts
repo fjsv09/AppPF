@@ -60,7 +60,7 @@ export async function POST(request: Request) {
              let priority = 0
              let detail = ''
 
-             const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado del sistema anterior')
+             const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado') || (p.observacion_supervisor || '').includes('[MIGRACIÓN]')
              if (isMigrado) continue // [AISLAMIENTO] Los migrados no generan tareas de auditoría
 
              // Manejo de la relación con el cliente (puede venir como objeto o array de 1 elemento)

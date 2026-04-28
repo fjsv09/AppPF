@@ -14,7 +14,7 @@ interface UploadImageOptions {
   clienteId: string
   tipoDocumento: 'cedula' | 'comprobante_domicilio' | 'foto_perfil' | 'otro'
   file: File
-  maxSizeKB?: number // default 2048 (2MB)
+  maxSizeKB?: number // default 5120 (5MB)
 }
 
 interface UploadResult {
@@ -31,7 +31,7 @@ interface UploadResult {
 // FUNCIÓN: Comprimir imagen antes de subir
 // =====================================================
 
-async function compressImage(file: File, maxSizeKB: number = 2048): Promise<Blob> {
+async function compressImage(file: File, maxSizeKB: number = 5120): Promise<Blob> {
   // Si es PDF, no comprimir
   if (file.type === 'application/pdf') {
     return file
@@ -68,7 +68,7 @@ function validateFileType(mimeType: string): boolean {
 // =====================================================
 
 export async function uploadImage(options: UploadImageOptions): Promise<UploadResult> {
-  const { clienteId, tipoDocumento, file, maxSizeKB = 2048 } = options
+  const { clienteId, tipoDocumento, file, maxSizeKB = 5120 } = options
 
   try {
     // 1. Validar tipo de archivo
@@ -81,10 +81,10 @@ export async function uploadImage(options: UploadImageOptions): Promise<UploadRe
 
     // 2. Validar tamaño
     const sizeMB = file.size / (1024 * 1024)
-    if (sizeMB > 2) {
+    if (sizeMB > 5) {
       return {
         success: false,
-        error: 'El archivo excede el tamaño máximo de 2MB'
+        error: 'El archivo excede el tamaño máximo de 5MB'
       }
     }
 

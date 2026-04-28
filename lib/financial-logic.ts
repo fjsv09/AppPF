@@ -775,7 +775,7 @@ export function calculateClientSituation(client: any) {
     if (p.estado !== 'activo') return false
 
     // Si es una migración, verificar saldo
-    const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado del sistema anterior')
+    const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado') || (p.observacion_supervisor || '').includes('[MIGRACIÓN]')
     if (isMigrado) {
       // Calcular saldo (Redundante pero seguro)
       let saldo = 0
@@ -1062,7 +1062,7 @@ export function getComprehensiveEvaluation(client: any, loans: any[], allPayment
   const activeLoan = (loans || []).find((l: any) => {
     if (targetLoanId) return l.id === targetLoanId;
 
-    const isMigrado = (l.observacion_supervisor || '').includes('Préstamo migrado del sistema anterior');
+    const isMigrado = (l.observacion_supervisor || '').includes('Préstamo migrado') || (l.observacion_supervisor || '').includes('[MIGRACIÓN]');
     const isEffectivelyFinalized = isMigrado && (l.saldo_pendiente || 0) <= 0.01;
     const isRejected = l.estado_verificacion === 'rechazado';
     return l.estado === 'activo' && !isEffectivelyFinalized && !isRejected;

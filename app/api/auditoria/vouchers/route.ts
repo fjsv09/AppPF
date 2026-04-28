@@ -92,7 +92,7 @@ export async function GET(request: Request) {
             const prestamo = Array.isArray(c.prestamos) ? c.prestamos[0] : c.prestamos
             const cliente = Array.isArray(prestamo?.clientes) ? prestamo.clientes[0] : prestamo?.clientes
             
-            const isMigrado = (prestamo?.observacion_supervisor || '').includes('Préstamo migrado del sistema anterior')
+            const isMigrado = (prestamo?.observacion_supervisor || '').includes('Préstamo migrado') || (prestamo?.observacion_supervisor || '').includes('[MIGRACIÓN]')
             const isExempt = cliente?.excepcion_voucher === true || isMigrado
             
             // Un préstamo es auditable si está ACTIVO, tiene DEUDA y NO es migrado

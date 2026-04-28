@@ -455,8 +455,8 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
             if (!file.type.startsWith('image/')) {
                 throw new Error('El archivo debe ser una imagen')
             }
-            if (file.size > 2 * 1024 * 1024) {
-                throw new Error('La imagen es demasiado grande (máx 2MB)')
+            if (file.size > 5 * 1024 * 1024) {
+                throw new Error('La imagen es demasiado grande (máx 5MB)')
             }
             const formData = new FormData()
             formData.append('file', file)

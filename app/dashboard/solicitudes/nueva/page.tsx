@@ -11,6 +11,7 @@ import { createClient } from '@/utils/supabase/client'
 import { BackButton } from '@/components/ui/back-button'
 import { Button } from '@/components/ui/button'
 import { Lock } from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function NuevaSolicitudPage() {
   const router = useRouter()
@@ -173,6 +174,32 @@ export default function NuevaSolicitudPage() {
     loadInitialData()
   }, [clienteId, isEditMode, solicitudId, router])
 
+  // Lógica de Persistencia (Borradores)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !isLoading && !isEditMode && !clienteId) {
+      const saved = localStorage.getItem('borrador_solicitud')
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          setWizardState(parsed.state)
+          setCompletedSteps(parsed.steps)
+          toast.success('Borrador recuperado', {
+            description: 'Se han restaurado los datos que llenaste anteriormente.'
+          })
+        } catch (e) {
+          console.error('Error al cargar borrador:', e)
+        }
+      }
+    }
+  }, [isLoading, isEditMode, clienteId])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !isEditMode && !clienteId && !isLoading) {
+      const data = { state: wizardState, steps: completedSteps }
+      localStorage.setItem('borrador_solicitud', JSON.stringify(data))
+    }
+  }, [wizardState, completedSteps, isEditMode, clienteId, isLoading])
+
   const handleProspectoNext = (data: ProspectoData) => {
     setWizardState((prev) => ({
       ...prev,
@@ -253,6 +280,10 @@ export default function NuevaSolicitudPage() {
       }
 
       // Redirigir a detalle de solicitud
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('borrador_solicitud')
+      }
+      
       const targetId = isEditMode ? solicitudId : result.id
       router.push(`/dashboard/solicitudes/${targetId}?success=true`)
       router.refresh()
@@ -274,6 +305,9 @@ export default function NuevaSolicitudPage() {
 
   const handleCancel = () => {
     if (confirm('¿Está seguro de cancelar? Se perderán los cambios no guardados.')) {
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('borrador_solicitud')
+        }
         if (isEditMode) {
             router.push(`/dashboard/solicitudes/${solicitudId}`)
         } else {

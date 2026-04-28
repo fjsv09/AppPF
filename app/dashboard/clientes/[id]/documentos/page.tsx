@@ -156,7 +156,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
           💡 Consejos para Subir Documentos
         </h4>
         <ul className="text-sm text-blue-200/80 space-y-1">
-          <li>• Máximo 2MB por archivo (JPG, PNG, WEBP, PDF)</li>
+          <li>• Máximo 5MB por archivo (JPG, PNG, WEBP, PDF)</li>
           <li>• Las imágenes se comprimen automáticamente para optimizar espacio</li>
           <li>• Los documentos se guardan de forma segura y solo son visibles para staff autorizado</li>
           <li>• El cliente solo puede ver sus propios documentos si inicia sesión</li>

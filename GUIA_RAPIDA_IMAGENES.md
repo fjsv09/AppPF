@@ -143,7 +143,7 @@ import ImageGallery from '@/components/image-gallery'
 ✅ **Compresión automática en cliente** (reduce 70-85%)  
 ✅ **Lazy loading de imágenes** (solo carga al ver)  
 ✅ **URLs firmadas temporales** (seguridad adicional)  
-✅ **Límites de tamaño estrictos** (2MB documentos, 500KB avatares)  
+✅ **Límites de tamaño estrictos** (5MB documentos, 500KB avatares)  
 ✅ **Validación de tipos MIME** (solo JPEG, PNG, WEBP, PDF)  
 ✅ **Auditoría completa** (tabla `archivos_clientes`)  
 ✅ **Soft delete** (no borra, marca como eliminado)  
@@ -166,7 +166,7 @@ SELECT rol FROM perfiles WHERE id = auth.uid();
 
 ### Error: "Archivo demasiado grande"
 
-**Causa:** Archivo excede 2MB
+**Causa:** Archivo excede 5MB
 
 **Solución:**
 - Comprimir imagen antes de subir (el componente lo hace automáticamente)
@@ -174,7 +174,7 @@ SELECT rol FROM perfiles WHERE id = auth.uid();
 
 ```sql
 SELECT file_size_limit FROM storage.buckets WHERE id = 'documentos-clientes';
--- Debe devolver: 2097152 (2MB)
+-- Debe devolver: 5242880 (5MB)
 ```
 
 ### Error: "Tipo de archivo no permitido"

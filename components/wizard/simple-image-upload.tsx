@@ -21,7 +21,7 @@ export function SimpleImageUpload({
   onChange,
   disabled = false,
   accept = 'image/jpeg,image/jpg,image/png,image/webp,application/pdf',
-  maxSizeMB = 2,
+  maxSizeMB = 5,
   folder = 'evaluaciones',
   bucket = 'documentos-evaluacion'
 }: SimpleImageUploadProps) {

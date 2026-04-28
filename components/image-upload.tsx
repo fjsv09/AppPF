@@ -21,7 +21,7 @@ export default function ImageUpload({
   clienteId,
   tipoDocumento,
   onUploadComplete,
-  maxSizeMB = 2,
+  maxSizeMB = 5,
   accept = 'image/jpeg,image/jpg,image/png,image/webp,application/pdf'
 }: ImageUploadProps) {
   const [file, setFile] = useState<File | null>(null)

@@ -77,9 +77,10 @@ export async function POST(request: Request) {
         // 3. Validación: No permitir múltiples cuadres pendientes
         const { data: pending, error: pendingError } = await supabaseAdmin
             .from('cuadres_diarios')
-            .select('id')
+            .select('id, created_at')
             .eq('asesor_id', user.id)
             .eq('estado', 'pendiente')
+            .order('created_at', { ascending: false })
             .limit(1)
 
         if (pendingError) throw pendingError
@@ -87,7 +88,24 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Ya tienes una solicitud de cuadre pendiente de aprobación.' }, { status: 400 })
         }
 
-        // 3. Ejecutar RPC para crear el cuadre en la DB
+        // [NUEVO] Prevención de duplicados por doble click o re-envío rápido (cooldown de 5 segundos)
+        const { data: lastOne } = await supabaseAdmin
+            .from('cuadres_diarios')
+            .select('created_at')
+            .eq('asesor_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        
+        if (lastOne) {
+            const lastTime = new Date(lastOne.created_at).getTime()
+            const now = Date.now()
+            if (now - lastTime < 5000) { // 5 segundos de gracia
+                return NextResponse.json({ error: 'Acabas de enviar una solicitud. Por favor espera unos segundos.' }, { status: 429 })
+            }
+        }
+
+        // 4. Ejecutar RPC para crear el cuadre en la DB
         const { data: cuadreId, error: rpcError } = await supabase.rpc('solicitar_cuadre_db', {
             p_asesor_id: user.id,
             p_monto_efectivo,
@@ -98,7 +116,7 @@ export async function POST(request: Request) {
 
         if (rpcError) throw rpcError
 
-        // 2. Notificar a los administradores (DB + Push de escritorio)
+        // 5. Notificar a los administradores (DB + Push de escritorio)
         const { data: admins } = await supabaseAdmin
             .from('perfiles')
             .select('id')
@@ -148,20 +166,15 @@ export async function POST(request: Request) {
         let bonusesToPayResult: any[] = [];
 
         // ==========================================
-        // 3. EVALUACIÓN DE METAS (CIERRE DE DÍA)
+        // 6. EVALUACIÓN DE METAS (CIERRE DE DÍA)
         // ==========================================
-        // Solamente disparamos bonos cuando el cuadre es "final" o "parcial_mañana" si aplican
         if (p_tipo_cuadre === 'final') {
             try {
                 console.info(`[GATILLO METAS] Iniciando evaluación formal de metas post-cuadre_final para ${user.id}`);
                 const { bonusesToPay, stats } = await calculateMetasForUser(supabaseAdmin, user.id, false);
                 bonusesToPayResult = bonusesToPay || [];
 
-                console.info(`[GATILLO METAS] Stats calculados:`, JSON.stringify(stats));
-                console.info(`[GATILLO METAS] Metas alcanzadas para insertar: ${bonusesToPay.length}`);
-
                 if (bonusesToPay && bonusesToPay.length > 0) {
-                    // Mapear a estructura DB validando que no estén duplicados (upsert)
                     const insertPayload = bonusesToPay.map(bono => ({
                         meta_id: bono.meta_id,
                         asesor_id: user.id,
@@ -172,22 +185,13 @@ export async function POST(request: Request) {
                     }))
 
                     const insertedBonos = [];
-                    const errors = [];
-
                     for (const bonoPayload of insertPayload) {
                         const { data, error } = await supabaseAdmin
                             .from('bonos_pagados')
                             .insert(bonoPayload)
                             .select();
                         
-                        if (error) {
-                            if (error.code === '23505') {
-                                console.info(`[GATILLO METAS] El bono ${bonoPayload.meta_id} ya existía para hoy. Saltando.`);
-                            } else {
-                                console.error(`[GATILLO METAS] Error insertando bono ${bonoPayload.meta_id}:`, error);
-                                errors.push(error);
-                            }
-                        } else if (data && data.length > 0) {
+                        if (!error && data && data.length > 0) {
                             insertedBonos.push(data[0]);
                         }
                     }
@@ -195,29 +199,16 @@ export async function POST(request: Request) {
                     if (insertedBonos.length > 0) {
                         const totalBonoSoles = insertedBonos.reduce((acc, curr) => acc + curr.monto, 0);
                         const nombresBonos = bonusesToPay.map(b => b.nombre_meta).join(', ');
-                        console.info(`[GATILLO METAS] Inserción exitosa. Total S/ ${totalBonoSoles}.`);
-
-                        // Notificación consolidada de metas para los Admin
+                        
                         if (admins && admins.length > 0) {
-                            console.info(`[GATILLO METAS] Notificando a ${admins.length} administradores.`);
                             for (const admin of admins) {
-                                try {
-                                    await createFullNotification(admin.id, {
-                                        titulo: '🏆 Cierre de Metas Alcanzado',
-                                        mensaje: `${nombreAsesor} cerró su día y alcanzó sus metas: ${nombresBonos}. Total de bono para validación: S/ ${totalBonoSoles}.`,
-                                        link: '/dashboard/admin/metas?tab=liquidaciones',
-                                        tipo: 'success'
-                                    })
-                                } catch (notifErr) {
-                                    console.error(`[GATILLO METAS] Error notificando al admin ${admin.id}:`, notifErr);
-                                }
+                                await createFullNotification(admin.id, {
+                                    titulo: '🏆 Cierre de Metas Alcanzado',
+                                    mensaje: `${nombreAsesor} cerró su día y alcanzó sus metas: ${nombresBonos}. Total de bono para validación: S/ ${totalBonoSoles}.`,
+                                    link: '/dashboard/admin/metas?tab=liquidaciones',
+                                    tipo: 'success'
+                                })
                             }
-                        }
-                    } else {
-                        if (errors.length > 0) {
-                            console.error('[GATILLO METAS] Errores durante la inserción de bonos:', errors);
-                        } else {
-                            console.info(`[GATILLO METAS] No se encontraron nuevas metas alcanzadas para procesar hoy.`);
                         }
                     }
                 }

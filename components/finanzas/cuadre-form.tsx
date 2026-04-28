@@ -63,6 +63,7 @@ interface CuadreFormProps {
 export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, isNightBlocked, debtAmount, systemConfig }: CuadreFormProps) {
   const [loading, setLoading] = useState(false)
   const [hasPending, setHasPending] = useState(false)
+  const [initialCheckDone, setInitialCheckDone] = useState(false)
   const [stats, setStats] = useState({ cobrado: 0, gastos: 0, neto: 0 })
   const [morningDone, setMorningDone] = useState(false)
   const [nightDone, setNightDone] = useState(false)
@@ -215,6 +216,8 @@ export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, 
       })
     } catch (err: any) {
       console.error("Error fetching stats:", err);
+    } finally {
+      setInitialCheckDone(true)
     }
   }, [selectedCarteraId, supabase, userId])
 
@@ -548,10 +551,11 @@ export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, 
                 return (
                   <Button
                     type="submit"
-                    disabled={loading || hasPending || isZeroDisabled}
+                    disabled={loading || !initialCheckDone || hasPending || isZeroDisabled}
                     className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold h-14 rounded-xl transition-all shadow-xl shadow-blue-500/10 disabled:opacity-50 disabled:grayscale"
                   >
                     {loading ? 'Procesando...' : 
+                     !initialCheckDone ? 'Verificando estado...' :
                      hasPending ? 'Esperando Validación' : 
                      (stats.neto <= 0 && hasMovements) ? 'Liquidar Movimientos/Gastos' :
                      isZeroDisabled ? 'Sin Movimientos por Cuadrar' : 

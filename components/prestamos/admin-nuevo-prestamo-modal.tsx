@@ -245,14 +245,27 @@ export function AdminNuevoPrestamoModal({ isOpen, onClose, cuentas, feriados }: 
             open={isOpen} 
             onOpenChange={(open) => {
                 if (!open) {
+                    // Si estamos en éxito, no permitir cerrar hasta que haya notificado
                     if (showSuccess && !wasNotified) return
+                    
                     onClose()
                     setShowSuccess(false)
                     setWasNotified(false)
                 }
             }}
         >
-            <DialogContent className="max-w-2xl bg-[#0b121d] border-slate-800 text-white p-0 overflow-hidden shadow-2xl rounded-2xl md:rounded-3xl max-h-[95vh] flex flex-col">
+            <DialogContent 
+                className={cn(
+                    "max-w-2xl bg-[#0b121d] border-slate-800 text-white p-0 overflow-hidden shadow-2xl rounded-2xl md:rounded-3xl max-h-[95vh] flex flex-col",
+                    (showSuccess && !wasNotified) && "[&>button:last-child]:hidden"
+                )}
+                onInteractOutside={(e) => {
+                    if (showSuccess && !wasNotified) e.preventDefault()
+                }}
+                onEscapeKeyDown={(e) => {
+                    if (showSuccess && !wasNotified) e.preventDefault()
+                }}
+            >
                 <div className="h-1 w-full bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 shrink-0" />
                 
                 <div className="p-4 md:p-6 overflow-y-auto custom-scrollbar flex-1">

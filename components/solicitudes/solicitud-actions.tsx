@@ -331,7 +331,18 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
                         }
                     }}
                 >
-                    <DialogContent className="bg-slate-900 border-slate-800 text-white max-w-md">
+                    <DialogContent 
+                        className={cn(
+                            "bg-slate-900 border-slate-800 text-white max-w-md",
+                            (showSuccess && !wasNotified) && "[&>button:last-child]:hidden"
+                        )}
+                        onInteractOutside={(e) => {
+                            if (showSuccess && !wasNotified) e.preventDefault()
+                        }}
+                        onEscapeKeyDown={(e) => {
+                            if (showSuccess && !wasNotified) e.preventDefault()
+                        }}
+                    >
                         <DialogHeader>
                             <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/30">
                                 <CheckCircle className="h-10 w-10 text-emerald-500" />

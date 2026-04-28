@@ -8,7 +8,7 @@ export function DashboardMain({ children }: { children: React.ReactNode }) {
 
   return (
     <main className={cn(
-      "transition-all duration-300 p-6 md:p-10 pt-[calc(2rem+env(safe-area-inset-top,0px))] pb-24 md:pb-10 w-full min-h-dvh",
+      "flex-1 overflow-y-auto overflow-x-hidden transition-all duration-300 p-6 md:p-10 pt-[calc(2.5rem+env(safe-area-inset-top,0px))] pb-24 md:pb-10 w-full h-full custom-scrollbar",
       isCollapsed ? "md:pl-24" : "md:pl-80"
     )}>
       {children}

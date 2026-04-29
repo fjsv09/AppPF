@@ -37,6 +37,23 @@ export default function NuevaSolicitudPage() {
 
   const [accessResult, setAccessResult] = useState<any>(null)
 
+  // Detecta si el wizardState tiene datos reales del usuario (no defaults vacíos)
+  const hasContent = (state: WizardState): boolean => {
+    return !!(
+      state.prospecto?.nombres ||
+      state.prospecto?.dni ||
+      state.prospecto?.telefono ||
+      state.prospecto?.direccion ||
+      state.prospecto?.referencia ||
+      state.evaluacion?.giro_negocio ||
+      state.evaluacion?.fuentes_ingresos ||
+      state.evaluacion?.motivo_prestamo ||
+      state.evaluacion?.ingresos_mensuales ||
+      state.prestamo?.monto_solicitado ||
+      state.prestamo?.cuotas
+    )
+  }
+
   // Cargar datos iniciales (Cliente o Solicitud existente)
   useEffect(() => {
     const loadInitialData = async () => {
@@ -181,13 +198,20 @@ export default function NuevaSolicitudPage() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved)
-          setWizardState(parsed.state)
-          setCompletedSteps(parsed.steps)
-          toast.success('Borrador recuperado', {
-            description: 'Se han restaurado los datos que llenaste anteriormente.'
-          })
+          // Solo restaurar si el borrador tiene contenido real del usuario.
+          // Evita mostrar "borrador recuperado" tras un envío exitoso que dejó residuo vacío.
+          if (parsed?.state && hasContent(parsed.state)) {
+            setWizardState(parsed.state)
+            setCompletedSteps(parsed.steps || [])
+            toast.success('Borrador recuperado', {
+              description: 'Se han restaurado los datos que llenaste anteriormente.'
+            })
+          } else {
+            localStorage.removeItem('borrador_solicitud')
+          }
         } catch (e) {
           console.error('Error al cargar borrador:', e)
+          localStorage.removeItem('borrador_solicitud')
         }
       }
     }
@@ -195,8 +219,15 @@ export default function NuevaSolicitudPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined' && !isEditMode && !clienteId && !isLoading) {
-      const data = { state: wizardState, steps: completedSteps }
-      localStorage.setItem('borrador_solicitud', JSON.stringify(data))
+      // Si no hay contenido (estado inicial o post-envío), limpiar borrador en vez de
+      // sobrescribirlo con datos vacíos. Esto evita que el toast "Borrador recuperado"
+      // aparezca con un formulario vacío y que datos viejos persistan tras envío.
+      if (hasContent(wizardState)) {
+        const data = { state: wizardState, steps: completedSteps }
+        localStorage.setItem('borrador_solicitud', JSON.stringify(data))
+      } else {
+        localStorage.removeItem('borrador_solicitud')
+      }
     }
   }, [wizardState, completedSteps, isEditMode, clienteId, isLoading])
 
@@ -287,11 +318,23 @@ export default function NuevaSolicitudPage() {
         throw new Error(result.error || (isEditMode ? 'Error al corregir solicitud' : 'Error al crear solicitud'))
       }
 
-      // Redirigir a detalle de solicitud
+      // Limpiar borrador y resetear estado del wizard.
+      // El reset es necesario porque Next.js puede mantener el componente cacheado
+      // (Router Cache); sin reset, al volver a "Nueva Solicitud" aparecerían los
+      // datos del envío anterior. El effect de guardado, al ver el state vacío,
+      // hará removeItem en vez de re-escribir datos viejos.
       if (typeof window !== 'undefined') {
         localStorage.removeItem('borrador_solicitud')
       }
-      
+      setWizardState({
+        currentStep: 1,
+        prospecto: {},
+        evaluacion: {},
+        prestamo: {},
+        clienteExistenteId: clienteId || undefined
+      })
+      setCompletedSteps([])
+
       const targetId = isEditMode ? solicitudId : result.id
       router.push(`/dashboard/solicitudes/${targetId}?success=true`)
       router.refresh()

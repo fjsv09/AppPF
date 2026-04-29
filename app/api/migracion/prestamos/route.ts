@@ -1,42 +1,98 @@
 import { createClient } from '../../../../utils/supabase/server'
 import { createAdminClient } from '../../../../utils/supabase/admin'
 import { NextResponse } from 'next/server'
-import { addDays, addWeeks, addMonths, format } from 'date-fns'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300 // 5 minutos para migraciones grandes
 
 const GLOBAL_CARTERA_ID = '00000000-0000-0000-0000-000000000000'
+const LOAN_BATCH = 50   // préstamos por lote (cada uno genera N cuotas, cuidar memoria)
+const SCHED_BATCH = 1000
+const MOV_BATCH = 500
 
 /**
  * POST /api/migracion/prestamos
  * Importación masiva de préstamos históricos.
- * Maneja tanto préstamos ya pagados como activos con abonos previos.
+ * Optimizado: clientes cargados en 1 query, préstamos en batch (no 1 insert por fila).
  */
 
 function normalizeDate(dateStr: any): string {
-    if (!dateStr) return new Date().toISOString().split('T')[0];
-    if (dateStr instanceof Date) return dateStr.toISOString().split('T')[0];
-    
-    const str = String(dateStr).trim();
-    
-    // Formato DD/MM/YYYY o DD-MM-YYYY
-    const dmyMatch = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (!dateStr) return new Date().toISOString().split('T')[0]
+    if (dateStr instanceof Date) return dateStr.toISOString().split('T')[0]
+
+    const str = String(dateStr).trim()
+    const dmyMatch = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
     if (dmyMatch) {
-        const [_, day, month, year] = dmyMatch;
-        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        const [_, day, month, year] = dmyMatch
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
     }
-    
-    // Si ya parece YYYY-MM-DD
-    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
-        return str.split(' ')[0];
-    }
-
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.split(' ')[0]
     try {
-        const d = new Date(str);
-        if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
-    } catch (e) {}
+        const d = new Date(str)
+        if (!isNaN(d.getTime())) return d.toISOString().split('T')[0]
+    } catch (_) {}
+    return new Date().toISOString().split('T')[0]
+}
 
-    return new Date().toISOString().split('T')[0];
+function buildSchedule(
+    fechaInicio: string,
+    modalidad: string,
+    cuotas: number,
+    totalToPay: number,
+    montoAbonado: number,
+    esPagado: boolean,
+    holidaysSet: Set<string>
+): { schedule: any[]; fechaFin: string } {
+    const schedule: any[] = []
+    const quotaAmount = Math.round((totalToPay / cuotas) * 100) / 100
+    let currentDate = new Date(fechaInicio + 'T12:00:00Z')
+    if (modalidad === 'diario') currentDate.setDate(currentDate.getDate() + 1)
+
+    let abonoRestante = esPagado ? totalToPay : montoAbonado
+
+    for (let q = 0; q < cuotas; q++) {
+        let nextDate = new Date(currentDate)
+        if (modalidad === 'diario') nextDate.setDate(nextDate.getDate() + 1)
+        else if (modalidad === 'semanal') nextDate.setDate(nextDate.getDate() + 7)
+        else if (modalidad === 'quincenal') nextDate.setDate(nextDate.getDate() + 14)
+        else if (modalidad === 'mensual') nextDate.setMonth(nextDate.getMonth() + 1)
+
+        // Saltar domingos y feriados
+        let safety = 0
+        while (safety < 30) {
+            safety++
+            const dow = nextDate.getDay()
+            const ds = nextDate.toISOString().split('T')[0]
+            if (dow === 0 || holidaysSet.has(ds)) nextDate.setDate(nextDate.getDate() + 1)
+            else break
+        }
+
+        let estadoCuota = 'pendiente'
+        let montoPagadoCuota = 0
+
+        if (esPagado) {
+            estadoCuota = 'pagado'
+            montoPagadoCuota = quotaAmount
+        } else if (abonoRestante >= quotaAmount) {
+            estadoCuota = 'pagado'
+            montoPagadoCuota = quotaAmount
+            abonoRestante -= quotaAmount
+        } else if (abonoRestante > 0) {
+            montoPagadoCuota = abonoRestante
+            abonoRestante = 0
+        }
+
+        schedule.push({
+            numero_cuota: q + 1,
+            fecha_vencimiento: nextDate.toISOString().split('T')[0],
+            monto_cuota: quotaAmount,
+            estado: estadoCuota,
+            monto_pagado: montoPagadoCuota,
+        })
+        currentDate = nextDate
+    }
+
+    return { schedule, fechaFin: schedule[schedule.length - 1].fecha_vencimiento }
 }
 
 export async function POST(request: Request) {
@@ -62,20 +118,59 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Datos incompletos: Se requiere lista de préstamos' }, { status: 400 })
         }
 
-        // 1. Obtener cuenta financiera
+        // ── Fase 1: Precargar referencias en paralelo ──────────────────────────
+        const [cuentaRes, holidaysRes] = await Promise.all([
+            cuenta_id
+                ? supabaseAdmin.from('cuentas_financieras').select('*').eq('id', cuenta_id).single()
+                : supabaseAdmin.from('cuentas_financieras').select('*').eq('cartera_id', GLOBAL_CARTERA_ID).order('nombre'),
+            supabaseAdmin.from('feriados').select('fecha'),
+        ])
+
         let cuentaFinanciera: any = null
         if (cuenta_id) {
-            const { data } = await supabaseAdmin.from('cuentas_financieras').select('*').eq('id', cuenta_id).single()
-            cuentaFinanciera = data
-        }
-
-        if (!cuentaFinanciera) {
-            const { data: cuentas } = await supabaseAdmin.from('cuentas_financieras').select('*').eq('cartera_id', GLOBAL_CARTERA_ID).order('nombre')
+            cuentaFinanciera = cuentaRes.data
+        } else {
+            const cuentas = cuentaRes.data as any[]
             cuentaFinanciera = cuentas?.find(c => c.nombre?.toLowerCase().includes('efectivo')) || cuentas?.[0]
         }
-
         if (!cuentaFinanciera) {
             return NextResponse.json({ error: 'No se encontró una cuenta financiera para procesar los movimientos' }, { status: 404 })
+        }
+
+        const holidaysSet = new Set<string>(
+            holidaysRes.data?.map((h: any) =>
+                typeof h.fecha === 'string' ? h.fecha.split('T')[0] : new Date(h.fecha).toISOString().split('T')[0]
+            ) || []
+        )
+
+        // ── Cargar TODOS los clientes de los DNIs del lote en 1 sola query ────
+        const uniqueDnis = [...new Set(
+            loans.map((l: any) => (l.dni_cliente || l.DNI || l.dni || '').toString().trim()).filter(Boolean)
+        )]
+
+        const clientesData: any[] = []
+        // Chunked para respetar límite de URL en .in()
+        for (let i = 0; i < uniqueDnis.length; i += 500) {
+            const { data } = await supabaseAdmin
+                .from('clientes')
+                .select('id, nombres, asesor_id, dni')
+                .in('dni', uniqueDnis.slice(i, i + 500))
+            if (data) clientesData.push(...data)
+        }
+        const clienteMap = new Map<string, any>(clientesData.map(c => [c.dni, c]))
+
+        // ── Fase 2: Validar y preparar todo en memoria (sin DB) ───────────────
+        type LoanPreparado = {
+            prestamoPayload: Record<string, any>
+            schedule: any[]              // sin prestamo_id aún
+            egresoBase: Record<string, any>
+            ingresoBase: Record<string, any> | null
+            interesExtraBase: Record<string, any> | null
+            auditBase: Record<string, any>
+            dni: string
+            monto: number
+            regularPayments: number
+            interesExtra: number
         }
 
         const results = {
@@ -85,235 +180,194 @@ export async function POST(request: Request) {
             skippedData: [] as any[],
             errors: [] as string[],
             totalDesembolsado: 0,
-            totalIngresado: 0
+            totalIngresado: 0,
         }
 
-        const createdLoanIds: string[] = []
-        let currentBalance = parseFloat(cuentaFinanciera.saldo)
-        
-        // Colecciones para inserción masiva
-        const allSchedules: any[] = []
-        const allMovimientos: any[] = []
-        const allAudits: any[] = []
+        const validos: LoanPreparado[] = []
+        let balanceDelta = 0
 
-        // 1.5 Precargar feriados
-        const { data: holidaysData } = await supabaseAdmin.from('feriados').select('fecha')
-        const holidaysSet = new Set(holidaysData?.map((h: any) => {
-            if (typeof h.fecha === 'string') return h.fecha.split('T')[0]
-            if (h.fecha instanceof Date) return h.fecha.toISOString().split('T')[0]
-            return String(h.fecha)
-        }) || [])
-
-        // 2. Procesar cada préstamo
         for (const l of loans) {
-            try {
-                const dni = (l.dni_cliente || l.DNI || l.dni || '').toString().trim()
-                const monto = parseFloat(l.monto || l.Monto || 0)
-                const interes = parseFloat(l.interes || l.Interes || 0)
-                const cuotas = parseInt(l.cuotas || l.Cuotas || 0)
-                const modalidad = (l.modalidad || l.Modalidad || 'diario').toLowerCase().trim()
-                const fechaInicio = normalizeDate(l.fecha_inicio || l.FechaInicio)
-                const yaPagadoStr = (l.ya_pagado || l.YaPagado || 'NO').toString().toUpperCase().trim()
-                const esPagado = yaPagadoStr === 'SI' || yaPagadoStr === 'SÍ' || yaPagadoStr === 'YES'
-                const montoAbonado = parseFloat(l.monto_abonado || l.MontoAbonado || l['Monto Abonado'] || 0)
-                const interesExtra = parseFloat(l.interes_extra || l.InteresExtra || l.extra || l['Interes Extra'] || l['Interés Extra'] || l['interes extra'] || 0)
+            const dni = (l.dni_cliente || l.DNI || l.dni || '').toString().trim()
+            const monto = parseFloat(l.monto || l.Monto || 0)
+            const interes = parseFloat(l.interes || l.Interes || 0)
+            const cuotas = parseInt(l.cuotas || l.Cuotas || 0)
+            const modalidad = (l.modalidad || l.Modalidad || 'diario').toLowerCase().trim()
+            const fechaInicio = normalizeDate(l.fecha_inicio || l.FechaInicio)
+            const yaPagadoStr = (l.ya_pagado || l.YaPagado || 'NO').toString().toUpperCase().trim()
+            const esPagado = yaPagadoStr === 'SI' || yaPagadoStr === 'SÍ' || yaPagadoStr === 'YES'
+            const montoAbonado = parseFloat(l.monto_abonado || l.MontoAbonado || l['Monto Abonado'] || 0)
+            const interesExtra = parseFloat(
+                l.interes_extra || l.InteresExtra || l.extra ||
+                l['Interes Extra'] || l['Interés Extra'] || l['interes extra'] || 0
+            )
 
-                if (!dni || monto <= 0 || cuotas <= 0) {
-                    results.errors.push(`Fila omitida: Datos inválidos para DNI "${dni}"`)
-                    continue
-                }
+            if (!dni || monto <= 0 || cuotas <= 0) {
+                results.errors.push(`Fila omitida: Datos inválidos para DNI "${dni}"`)
+                continue
+            }
 
-                // A. Buscar cliente por DNI
-                const { data: cliente } = await supabaseAdmin
-                    .from('clientes')
-                    .select('id, nombres, asesor_id')
-                    .eq('dni', dni)
-                    .maybeSingle()
+            const cliente = clienteMap.get(dni)
+            if (!cliente) {
+                results.skipped++
+                results.skippedData.push({ dni, nombres: l.nombres || 'Desconocido', motivo: 'El cliente no existe en la base de datos' })
+                continue
+            }
 
-                if (!cliente) {
-                    results.skipped++
-                    results.skippedData.push({ dni, nombres: l.nombres || 'Desconocido', motivo: 'El cliente no existe en la base de datos' })
-                    continue
-                }
+            const totalToPay = monto * (1 + interes / 100)
+            const { schedule, fechaFin } = buildSchedule(fechaInicio, modalidad, cuotas, totalToPay, montoAbonado, esPagado, holidaysSet)
+            const regularPayments = esPagado ? totalToPay : montoAbonado
 
-                // B. Generar Cronograma Real
-                const schedule = []
-                let currentDate = new Date(fechaInicio + 'T12:00:00Z')
-                const totalToPay = monto * (1 + (interes / 100))
-                const quotaAmount = Math.round((totalToPay / cuotas) * 100) / 100
-
-                if (modalidad === 'diario') currentDate.setDate(currentDate.getDate() + 1)
-
-                let abonoRestante = esPagado ? totalToPay : montoAbonado
-                let quotasCount = 0
-
-                while (quotasCount < cuotas) {
-                    let nextDate = new Date(currentDate)
-                    if (modalidad === 'diario') nextDate.setDate(nextDate.getDate() + 1)
-                    else if (modalidad === 'semanal') nextDate.setDate(nextDate.getDate() + 7)
-                    else if (modalidad === 'quincenal') nextDate.setDate(nextDate.getDate() + 14)
-                    else if (modalidad === 'mensual') nextDate.setMonth(nextDate.getMonth() + 1)
-
-                    let isValidDay = false
-                    let checkDate = new Date(nextDate)
-                    let daySafety = 0
-                    while (!isValidDay && daySafety < 30) {
-                        daySafety++
-                        const dayOfWeek = checkDate.getDay()
-                        const dateStr = checkDate.toISOString().split('T')[0]
-                        if (dayOfWeek === 0 || holidaysSet.has(dateStr)) checkDate.setDate(checkDate.getDate() + 1)
-                        else isValidDay = true
-                    }
-                    
-                    let estadoCuota = 'pendiente'
-                    let montoPagadoCuota = 0
-
-                    if (esPagado) {
-                        estadoCuota = 'pagado'
-                        montoPagadoCuota = quotaAmount
-                    } else if (abonoRestante >= quotaAmount) {
-                        estadoCuota = 'pagado'
-                        montoPagadoCuota = quotaAmount
-                        abonoRestante -= quotaAmount
-                    } else if (abonoRestante > 0) {
-                        montoPagadoCuota = abonoRestante
-                        abonoRestante = 0
-                    }
-
-                    schedule.push({
-                        numero_cuota: quotasCount + 1,
-                        fecha_vencimiento: checkDate.toISOString().split('T')[0],
-                        monto_cuota: quotaAmount,
-                        estado: estadoCuota,
-                        monto_pagado: montoPagadoCuota
-                    })
-                    quotasCount++
-                    currentDate = checkDate
-                }
-
-                const fechaFin = schedule[schedule.length - 1].fecha_vencimiento
-
-                // C. Crear Préstamo (Individual para obtener ID)
-                const { data: prestamo, error: loanError } = await supabaseAdmin
-                    .from('prestamos')
-                    .insert({
-                        cliente_id: cliente.id,
-                        monto,
-                        interes,
-                        cuotas,
-                        frecuencia: modalidad,
-                        fecha_inicio: fechaInicio,
-                        fecha_fin: fechaFin,
-                        estado: esPagado ? 'finalizado' : 'activo',
-                        created_by: user.id,
-                        observacion_supervisor: '[MIGRACIÓN] Importado del sistema anterior'
-                    })
-                    .select()
-                    .single()
-
-                if (loanError) throw new Error(`Error creando préstamo: ${loanError.message}`)
-                createdLoanIds.push(prestamo.id)
-
-                // D. Acumular Cronograma
-                schedule.forEach(s => {
-                    allSchedules.push({
-                        prestamo_id: prestamo.id,
-                        numero_cuota: s.numero_cuota,
-                        monto_cuota: s.monto_cuota,
-                        fecha_vencimiento: s.fecha_vencimiento,
-                        estado: s.estado,
-                        monto_pagado: s.monto_pagado
-                    })
-                })
-
-                // E. Acumular Movimientos Financieros
-                // 1. Egreso por desembolso
-                allMovimientos.push({
+            validos.push({
+                prestamoPayload: {
+                    cliente_id: cliente.id,
+                    monto,
+                    interes,
+                    cuotas,
+                    frecuencia: modalidad,
+                    fecha_inicio: fechaInicio,
+                    fecha_fin: fechaFin,
+                    estado: esPagado ? 'finalizado' : 'activo',
+                    created_by: user.id,
+                    observacion_supervisor: '[MIGRACIÓN] Importado del sistema anterior',
+                },
+                schedule,
+                egresoBase: {
                     cartera_id: cuentaFinanciera.cartera_id || GLOBAL_CARTERA_ID,
                     cuenta_origen_id: cuentaFinanciera.id,
                     monto,
                     tipo: 'egreso',
-                    descripcion: `[MIGRACIÓN] Desembolso préstamo #${prestamo.id.split('-')[0]} - DNI: ${dni}`,
                     registrado_por: user.id,
-                    created_at: fechaInicio + 'T10:00:00Z'
-                })
-                currentBalance -= monto
-                results.totalDesembolsado += monto
-
-                const regularPayments = esPagado ? totalToPay : montoAbonado
-                if (regularPayments > 0) {
-                    allMovimientos.push({
-                        cartera_id: cuentaFinanciera.cartera_id || GLOBAL_CARTERA_ID,
-                        cuenta_destino_id: cuentaFinanciera.id,
-                        monto: regularPayments,
-                        tipo: 'ingreso',
-                        descripcion: `[MIGRACIÓN] Cobro acumulado préstamo #${prestamo.id.split('-')[0]} - DNI: ${dni}`,
-                        registrado_por: user.id,
-                        created_at: new Date().toISOString()
-                    })
-                    currentBalance += regularPayments
-                    results.totalIngresado += regularPayments
-                }
-
-                if (interesExtra > 0) {
-                    allMovimientos.push({
-                        cartera_id: cuentaFinanciera.cartera_id || GLOBAL_CARTERA_ID,
-                        cuenta_destino_id: cuentaFinanciera.id,
-                        monto: interesExtra,
-                        tipo: 'ingreso',
-                        descripcion: `[MIGRACIÓN] Interés extra (prórroga) préstamo #${prestamo.id.split('-')[0]} - DNI: ${dni}`,
-                        registrado_por: user.id,
-                        created_at: new Date().toISOString()
-                    })
-                    currentBalance += interesExtra
-                    results.totalIngresado += interesExtra
-                }
-
-                allAudits.push({
+                    created_at: fechaInicio + 'T10:00:00Z',
+                },
+                ingresoBase: regularPayments > 0 ? {
+                    cartera_id: cuentaFinanciera.cartera_id || GLOBAL_CARTERA_ID,
+                    cuenta_destino_id: cuentaFinanciera.id,
+                    monto: regularPayments,
+                    tipo: 'ingreso',
+                    registrado_por: user.id,
+                    created_at: new Date().toISOString(),
+                } : null,
+                interesExtraBase: interesExtra > 0 ? {
+                    cartera_id: cuentaFinanciera.cartera_id || GLOBAL_CARTERA_ID,
+                    cuenta_destino_id: cuentaFinanciera.id,
+                    monto: interesExtra,
+                    tipo: 'ingreso',
+                    registrado_por: user.id,
+                    created_at: new Date().toISOString(),
+                } : null,
+                auditBase: {
                     usuario_id: user.id,
                     accion: 'migracion_prestamo',
                     tabla_afectada: 'prestamos',
-                    registro_id: prestamo.id,
-                    detalle: { dni, monto, esPagado, montoAbonado, interesExtra }
+                    detalle: { dni, monto, esPagado, montoAbonado, interesExtra },
+                },
+                dni,
+                monto,
+                regularPayments,
+                interesExtra,
+            })
+
+            // Calcular delta de saldo en memoria
+            balanceDelta -= monto
+            balanceDelta += regularPayments
+            balanceDelta += interesExtra
+            results.totalDesembolsado += monto
+            results.totalIngresado += regularPayments + interesExtra
+        }
+
+        // ── Fase 3: Batch insert préstamos → obtener IDs ──────────────────────
+        const allSchedules: any[] = []
+        const allMovimientos: any[] = []
+        const allAudits: any[] = []
+        const createdLoanIds: string[] = []
+
+        for (let i = 0; i < validos.length; i += LOAN_BATCH) {
+            const lote = validos.slice(i, i + LOAN_BATCH)
+
+            const { data: nuevosPrestamos, error: loanError } = await supabaseAdmin
+                .from('prestamos')
+                .insert(lote.map(l => l.prestamoPayload))
+                .select('id')
+
+            if (loanError) {
+                results.errors.push(`Error en lote préstamos ${i}-${i + lote.length}: ${loanError.message}`)
+                // Descontar del total esperado
+                results.totalDesembolsado -= lote.reduce((s, l) => s + l.monto, 0)
+                results.totalIngresado -= lote.reduce((s, l) => s + l.regularPayments + l.interesExtra, 0)
+                continue
+            }
+
+            // Los IDs vienen en el mismo orden que el payload enviado
+            nuevosPrestamos!.forEach((p: any, idx: number) => {
+                const loan = lote[idx]
+                const shortId = p.id.split('-')[0]
+                createdLoanIds.push(p.id)
+
+                // Cuotas: agregar prestamo_id
+                loan.schedule.forEach(s => {
+                    allSchedules.push({ prestamo_id: p.id, ...s })
                 })
 
+                // Movimientos: completar descripción con ID real
+                allMovimientos.push({
+                    ...loan.egresoBase,
+                    descripcion: `[MIGRACIÓN] Desembolso préstamo #${shortId} - DNI: ${loan.dni}`,
+                })
+                if (loan.ingresoBase) {
+                    allMovimientos.push({
+                        ...loan.ingresoBase,
+                        descripcion: `[MIGRACIÓN] Cobro acumulado préstamo #${shortId} - DNI: ${loan.dni}`,
+                    })
+                }
+                if (loan.interesExtraBase) {
+                    allMovimientos.push({
+                        ...loan.interesExtraBase,
+                        descripcion: `[MIGRACIÓN] Interés extra (prórroga) préstamo #${shortId} - DNI: ${loan.dni}`,
+                    })
+                }
+
+                allAudits.push({ ...loan.auditBase, registro_id: p.id })
                 results.success++
-
-            } catch (err: any) {
-                console.error('Loan Row Error:', err.message)
-                results.errors.push(`Error en DNI ${l.dni_cliente || 'N/A'}: ${err.message}`)
-            }
+            })
         }
 
-        // F. INSERCIONES MASIVAS FINALES (Batch processing)
-        console.log(`🚀 Ejecutando inserciones masivas: ${allSchedules.length} cuotas, ${allMovimientos.length} movimientos...`)
-        
-        // Cuotas en bloques de 1000
-        for (let i = 0; i < allSchedules.length; i += 1000) {
-            await supabaseAdmin.from('cronograma_cuotas').insert(allSchedules.slice(i, i + 1000))
+        // ── Fase 4: Batch inserts finales ──────────────────────────────────────
+        for (let i = 0; i < allSchedules.length; i += SCHED_BATCH) {
+            const { error } = await supabaseAdmin
+                .from('cronograma_cuotas')
+                .insert(allSchedules.slice(i, i + SCHED_BATCH))
+            if (error) results.errors.push(`Error cuotas lote ${i}: ${error.message}`)
         }
 
-        // Movimientos en bloques de 500
-        for (let i = 0; i < allMovimientos.length; i += 500) {
-            await supabaseAdmin.from('movimientos_financieros').insert(allMovimientos.slice(i, i + 500))
+        for (let i = 0; i < allMovimientos.length; i += MOV_BATCH) {
+            const { error } = await supabaseAdmin
+                .from('movimientos_financieros')
+                .insert(allMovimientos.slice(i, i + MOV_BATCH))
+            if (error) results.errors.push(`Error movimientos lote ${i}: ${error.message}`)
         }
 
-        // Auditoría
         if (allAudits.length > 0) {
-            await supabaseAdmin.from('auditoria').insert(allAudits)
+            for (let i = 0; i < allAudits.length; i += 500) {
+                await supabaseAdmin.from('auditoria').insert(allAudits.slice(i, i + 500))
+            }
         }
 
-        // G. Actualización ÚNICA de Saldo Final
-        await supabaseAdmin.from('cuentas_financieras').update({ saldo: currentBalance }).eq('id', cuentaFinanciera.id)
+        // Actualización única de saldo
+        const saldoFinal = parseFloat(cuentaFinanciera.saldo) + balanceDelta
+        await supabaseAdmin
+            .from('cuentas_financieras')
+            .update({ saldo: saldoFinal })
+            .eq('id', cuentaFinanciera.id)
 
-        // H. Limpieza de efectos secundarios (triggers)
+        // ── Fase 5: Limpieza de efectos secundarios de triggers ───────────────
         if (createdLoanIds.length > 0) {
-            // Borrar tareas de evidencia autogeneradas por triggers
             for (let i = 0; i < createdLoanIds.length; i += 200) {
-                await supabaseAdmin.from('tareas_evidencia').delete().in('prestamo_id', createdLoanIds.slice(i, i + 200))
+                await supabaseAdmin
+                    .from('tareas_evidencia')
+                    .delete()
+                    .in('prestamo_id', createdLoanIds.slice(i, i + 200))
             }
 
-            // Borrar notificaciones de Auditoría Dirigida masivas
             await supabaseAdmin
                 .from('notificaciones')
                 .delete()
@@ -322,6 +376,7 @@ export async function POST(request: Request) {
         }
 
         return NextResponse.json(results)
+
     } catch (error: any) {
         console.error('Critical Loan Migration Error:', error)
         return NextResponse.json({ error: error.message }, { status: 500 })

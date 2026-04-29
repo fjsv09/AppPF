@@ -8,6 +8,16 @@ import { api } from "@/services/api"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface ClientProfileActionsProps {
   cliente: any
@@ -19,6 +29,7 @@ export function ClientProfileActions({ cliente, userRole }: ClientProfileActions
   const [updatingExcepcion, setUpdatingExcepcion] = useState(false)
   const [isExempt, setIsExempt] = useState(cliente.excepcion_voucher || false)
   const [isBlocking, setIsBlocking] = useState(false)
+  const [isConfirmBlockOpen, setIsConfirmBlockOpen] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -30,9 +41,6 @@ export function ClientProfileActions({ cliente, userRole }: ClientProfileActions
   const handleToggleBlock = async () => {
     const isBlocked = !!cliente.bloqueado_renovacion
     const action = isBlocked ? 'unblock' : 'block'
-    
-    if (action === 'block' && !confirm('¿Está seguro que desea BLOQUEAR a este cliente? El cliente no podrá renovar préstamos.')) return;
-    if (action === 'unblock' && !confirm('¿Confirma que desea DESBLOQUEAR a este cliente?')) return;
     
     try {
         setIsBlocking(true)
@@ -97,13 +105,49 @@ export function ClientProfileActions({ cliente, userRole }: ClientProfileActions
                       ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700" 
                       : "bg-amber-950/30 border-amber-900/50 text-amber-400 hover:bg-amber-900/40"
               )} 
-              onClick={handleToggleBlock}
+               onClick={() => {
+                  if (cliente.bloqueado_renovacion) handleToggleBlock()
+                  else setIsConfirmBlockOpen(true)
+               }}
               disabled={isBlocking}
           >
               {cliente.bloqueado_renovacion ? <Unlock className="w-4 h-4 mr-2" /> : <Lock className="w-4 h-4 mr-2" />}
               {isBlocking ? "Procesando..." : (cliente.bloqueado_renovacion ? 'Desbloquear Renovación' : 'Bloquear Renovación')}
           </Button>
       )}
+
+      {/* Alerta de confirmación para Bloqueo */}
+      <AlertDialog open={isConfirmBlockOpen} onOpenChange={setIsConfirmBlockOpen}>
+          <AlertDialogContent className="bg-slate-900/90 backdrop-blur-xl border-slate-800/50 text-slate-100 shadow-2xl shadow-amber-500/10 max-w-md">
+              <AlertDialogHeader>
+                  <AlertDialogTitle className="text-2xl font-black text-amber-500 flex items-center gap-3">
+                      <div className="p-2 rounded-full bg-amber-500/10">
+                          <Lock className="w-6 h-6" />
+                      </div>
+                      ¿Bloquear Cliente?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="text-slate-400 text-base leading-relaxed">
+                      El cliente <strong className="text-white">{cliente.nombre_completo}</strong> será bloqueado y <strong className="text-amber-400">no podrá solicitar renovaciones</strong> hasta que un administrador lo desbloquee.
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="gap-3 mt-4">
+                  <AlertDialogCancel className="bg-slate-800 hover:bg-slate-700 border-none text-slate-300">
+                      Cancelar
+                  </AlertDialogCancel>
+                  <Button
+                      disabled={isBlocking}
+                      onClick={() => {
+                          setIsConfirmBlockOpen(false)
+                          handleToggleBlock()
+                      }}
+                      className="bg-amber-600 hover:bg-amber-500 text-white font-bold px-6"
+                  >
+                      {isBlocking ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                      Sí, Bloquear Cliente
+                  </Button>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
 
       {/* Excepcion de voucher para admin */}
       {userRole === 'admin' && (

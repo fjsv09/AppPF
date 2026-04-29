@@ -3,11 +3,14 @@ import { createAdminClient } from '../../../../utils/supabase/admin'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300 // 5 minutos para migraciones grandes
+
+const BATCH_SIZE = 100
 
 /**
  * POST /api/migracion/clientes
  * Importación masiva de clientes del sistema anterior.
- * Solo crea prospectos (solicitudes) y clientes. NO crea préstamos ni desembolsa.
+ * Optimizado: batch inserts, duplicate check en memoria, ~3 queries por lote vs 5 por fila.
  */
 export async function POST(request: Request) {
     const supabase = await createClient()
@@ -17,7 +20,6 @@ export async function POST(request: Request) {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-        // 1. Verificar rol admin
         const { data: perfil } = await supabaseAdmin
             .from('perfiles')
             .select('rol')
@@ -41,131 +43,138 @@ export async function POST(request: Request) {
             errors: [] as string[]
         }
 
-        // Precargar datos de referencia
-        const { data: sectores } = await supabaseAdmin.from('sectores').select('id, nombre')
-        const sectorMap = new Map(sectores?.map((s: any) => [s.nombre.toLowerCase().trim(), s.id]) || [])
+        // Precargar datos de referencia en paralelo (1 ronda de queries, no N)
+        const [sectoresRes, perfilesRes, existentesRes] = await Promise.all([
+            supabaseAdmin.from('sectores').select('id, nombre'),
+            supabaseAdmin.from('perfiles').select('id, nombre_completo').eq('activo', true),
+            supabaseAdmin.from('clientes').select('dni'),
+        ])
 
-        const { data: perfilesData } = await supabaseAdmin
-            .from('perfiles')
-            .select('id, nombre_completo, rol')
-            .eq('activo', true)
-        const perfilMap = new Map(perfilesData?.map((p: any) => [p.nombre_completo.toLowerCase().trim(), p.id]) || [])
+        const sectorMap = new Map(sectoresRes.data?.map((s: any) => [s.nombre.toLowerCase().trim(), s.id]) || [])
+        const perfilMap = new Map(perfilesRes.data?.map((p: any) => [p.nombre_completo.toLowerCase().trim(), p.id]) || [])
+        const existingDnis = new Set(existentesRes.data?.map((c: any) => c.dni) || [])
 
-        // 3. Procesar cada fila
+        // Validar y preparar todos los registros en memoria
+        type ClientePreparado = {
+            raw: any
+            dni: string
+            nombres: string
+            sectorId: string | null
+            asesorId: string
+        }
+        const validos: ClientePreparado[] = []
+
         for (const c of clients) {
+            const dni = (c.dni || c.DNI || '').toString().trim()
+            const nombres = (c.nombres || c.NOMBRES || c.Nombre || '').toString().trim()
+
+            if (!dni || !nombres) {
+                results.errors.push(`Fila omitida: Datos insuficientes para "${nombres || 'sin nombre'}" (DNI: ${dni || 'vacío'})`)
+                continue
+            }
+
+            if (existingDnis.has(dni)) {
+                results.skipped++
+                results.skippedData.push({ dni, nombres, motivo: 'El cliente ya existe en el sistema (DNI duplicado)' })
+                continue
+            }
+
+            // Marcar como procesado para no duplicar si viene repetido en el mismo lote
+            existingDnis.add(dni)
+
+            const sectorName = (c.sector || c.Sector || '').toString().trim()
+            const asesorName = (c.asesor_nombre || c.asesor || c.Asesor || '').toString().trim()
+
+            validos.push({
+                raw: c,
+                dni,
+                nombres,
+                sectorId: sectorName ? (sectorMap.get(sectorName.toLowerCase().trim()) || null) : null,
+                asesorId: asesorName ? (perfilMap.get(asesorName.toLowerCase().trim()) || user.id) : user.id,
+            })
+        }
+
+        // Procesar en lotes para evitar límites de payload y timeouts
+        for (let i = 0; i < validos.length; i += BATCH_SIZE) {
+            const lote = validos.slice(i, i + BATCH_SIZE)
+
             try {
-                // a. Validar campos mínimos
-                const dni = (c.dni || c.DNI || '').toString().trim()
-                const nombres = (c.nombres || c.NOMBRES || c.Nombre || '').toString().trim()
+                // 1. Insertar clientes en batch → obtener IDs
+                const clientesPayload = lote.map(c => ({
+                    dni: c.dni,
+                    nombres: c.nombres,
+                    telefono: (c.raw.telefono || c.raw.Telefono || '').toString().trim() || null,
+                    direccion: (c.raw.direccion || c.raw.Direccion || '').toString().trim() || null,
+                    referencia: (c.raw.referencia || c.raw.Referencia || '').toString().trim() || null,
+                    sector_id: c.sectorId,
+                    estado: 'activo',
+                    asesor_id: c.asesorId,
+                }))
 
-                if (!dni || !nombres) {
-                    results.errors.push(`Fila omitida: Datos insuficientes para "${nombres || 'sin nombre'}" (DNI: ${dni || 'vacío'})`)
+                const { data: nuevosClientes, error: clienteError } = await supabaseAdmin
+                    .from('clientes')
+                    .insert(clientesPayload)
+                    .select('id, dni')
+
+                if (clienteError) {
+                    results.errors.push(`Error en lote ${i}-${i + lote.length}: ${clienteError.message}`)
                     continue
                 }
 
-                // b. Verificar duplicado
-                const { data: existingClient } = await supabaseAdmin
-                    .from('clientes')
-                    .select('id')
-                    .eq('dni', dni)
-                    .maybeSingle()
+                // Mapa dni → cliente_id para vincular solicitudes
+                const dniToClienteId = new Map(nuevosClientes!.map((nc: any) => [nc.dni, nc.id]))
 
-                if (existingClient) {
-                    results.skipped++
-                    results.skippedData.push({
-                        dni,
-                        nombres,
-                        motivo: 'El cliente ya existe en el sistema (DNI duplicado)'
-                    })
-                    continue
-                }
+                // 2. Insertar solicitudes en batch (con cliente_id ya incluido)
+                const solicitudesPayload = lote.map(c => ({
+                    asesor_id: c.asesorId,
+                    admin_id: user.id,
+                    cliente_id: dniToClienteId.get(c.dni),
+                    estado_solicitud: 'aprobado',
+                    fecha_aprobacion: new Date().toISOString(),
+                    prospecto_nombres: c.nombres,
+                    prospecto_dni: c.dni,
+                    prospecto_telefono: (c.raw.telefono || c.raw.Telefono || '').toString().trim() || null,
+                    prospecto_direccion: (c.raw.direccion || c.raw.Direccion || '').toString().trim() || null,
+                    prospecto_referencia: (c.raw.referencia || c.raw.Referencia || '').toString().trim() || null,
+                    monto_solicitado: 1,
+                    interes: 0,
+                    cuotas: 1,
+                    modalidad: 'diario',
+                    fecha_inicio_propuesta: new Date().toISOString().split('T')[0],
+                    giro_negocio: (c.raw.giro_negocio || c.raw.GiroNegocio || '').toString().trim() || null,
+                    fuentes_ingresos: (c.raw.fuentes_ingresos || c.raw.FuentesIngresos || '').toString().trim() || null,
+                    ingresos_mensuales: c.raw.ingresos_mensuales ? parseFloat(c.raw.ingresos_mensuales) : 0,
+                    motivo_prestamo: 'Migración de datos - Sistema Anterior',
+                    observacion_supervisor: 'Registro migrado del sistema anterior',
+                    documentos_evaluacion: c.sectorId ? { prospecto_sector_id: c.sectorId } : null,
+                }))
 
-                // c. Mapear sector
-                const sectorName = (c.sector || c.Sector || '').toString().trim()
-                let sectorId = null
-                if (sectorName) {
-                    sectorId = sectorMap.get(sectorName.toLowerCase().trim()) || null
-                }
-
-                // d. Mapear asesor
-                const asesorName = (c.asesor_nombre || c.asesor || c.Asesor || '').toString().trim()
-                let asesorId = user.id // Default: admin actual
-                if (asesorName) {
-                    const mappedId = perfilMap.get(asesorName.toLowerCase().trim())
-                    if (mappedId) asesorId = mappedId
-                }
-
-                // E. Crear Solicitud (como registro prospecto migrado, sin datos de préstamo)
-                const { data: solicitud, error: solicitudError } = await supabaseAdmin
+                const { error: solicitudError } = await supabaseAdmin
                     .from('solicitudes')
-                    .insert({
-                        asesor_id: asesorId,
-                        admin_id: user.id,
-                        estado_solicitud: 'aprobado',
-                        fecha_aprobacion: new Date().toISOString(),
-                        // Datos del prospecto
-                        prospecto_nombres: nombres,
-                        prospecto_dni: dni,
-                        prospecto_telefono: (c.telefono || c.Telefono || '').toString().trim() || null,
-                        prospecto_direccion: (c.direccion || c.Direccion || '').toString().trim() || null,
-                        prospecto_referencia: (c.referencia || c.Referencia || '').toString().trim() || null,
-                        // Valores mínimos válidos para pasar check constraints de la BD
-                        // (No se crea préstamo, son solo placeholders)
-                        monto_solicitado: 1,
-                        interes: 0,
-                        cuotas: 1,
-                        modalidad: 'diario',
-                        fecha_inicio_propuesta: new Date().toISOString().split('T')[0],
-                        // Datos negocio
-                        giro_negocio: (c.giro_negocio || c.GiroNegocio || '').toString().trim() || null,
-                        fuentes_ingresos: (c.fuentes_ingresos || c.FuentesIngresos || '').toString().trim() || null,
-                        ingresos_mensuales: c.ingresos_mensuales ? parseFloat(c.ingresos_mensuales) : 0,
-                        motivo_prestamo: 'Migración de datos - Sistema Anterior',
-                        observacion_supervisor: 'Registro migrado del sistema anterior',
-                        documentos_evaluacion: sectorId ? { prospecto_sector_id: sectorId } : null
-                    })
-                    .select()
-                    .single()
+                    .insert(solicitudesPayload)
 
-                if (solicitudError) throw new Error(`Error creando solicitud: ${solicitudError.message}`)
+                if (solicitudError) {
+                    results.errors.push(`Error solicitudes lote ${i}: ${solicitudError.message}`)
+                }
 
-                // F. Crear Cliente
-                const { data: newClient, error: clientError } = await supabaseAdmin
-                    .from('clientes')
-                    .insert({
-                        dni,
-                        nombres,
-                        telefono: (c.telefono || c.Telefono || '').toString().trim() || null,
-                        direccion: (c.direccion || c.Direccion || '').toString().trim() || null,
-                        referencia: (c.referencia || c.Referencia || '').toString().trim() || null,
-                        sector_id: sectorId,
-                        estado: 'activo',
-                        asesor_id: asesorId
-                    })
-                    .select()
-                    .single()
-
-                if (clientError) throw new Error(`Error creando cliente: ${clientError.message}`)
-
-                // G. Vincular solicitud con cliente
-                await supabaseAdmin
-                    .from('solicitudes')
-                    .update({ cliente_id: newClient.id })
-                    .eq('id', solicitud.id)
-
-                // H. Auditoría
-                await supabaseAdmin.from('auditoria').insert({
-                    usuario_id: user.id,
-                    accion: 'migracion_cliente',
-                    tabla_afectada: 'clientes',
-                    detalle: { cliente_id: newClient.id, dni, nombres, origen: 'migracion_sistema_anterior' }
+                // 3. Auditoría en batch
+                const auditsPayload = nuevosClientes!.map((nc: any) => {
+                    const c = lote.find(l => l.dni === nc.dni)!
+                    return {
+                        usuario_id: user.id,
+                        accion: 'migracion_cliente',
+                        tabla_afectada: 'clientes',
+                        detalle: { cliente_id: nc.id, dni: nc.dni, nombres: c.nombres, origen: 'migracion_sistema_anterior' },
+                    }
                 })
 
-                results.success++
+                await supabaseAdmin.from('auditoria').insert(auditsPayload)
+
+                results.success += nuevosClientes!.length
 
             } catch (err: any) {
-                console.error('Row Import Error:', err.message)
-                results.errors.push(`Error en "${c.nombres || 'sin nombre'}": ${err.message}`)
+                console.error(`Error en lote ${i}:`, err.message)
+                results.errors.push(`Error en lote ${i}-${i + lote.length}: ${err.message}`)
             }
         }
 

@@ -156,6 +156,9 @@ export function PrestamosTable({
     const [selectedLoanForGestion, setSelectedLoanForGestion] = useState<any>(null)
     const [asignarTareaOpen, setAsignarTareaOpen] = useState(false)
     const [selectedLoanForAsignar, setSelectedLoanForAsignar] = useState<any>(null)
+    const [isConfirmGestionOpen, setIsConfirmGestionOpen] = useState(false)
+    const [isConfirmAsignarOpen, setIsConfirmAsignarOpen] = useState(false)
+    const [isConfirmEditOpen, setIsConfirmEditOpen] = useState(false)
     const [isFiltering, setIsFiltering] = useState(false)
 
     useEffect(() => {
@@ -332,7 +335,12 @@ export function PrestamosTable({
 
     const handleOpenGestion = (prestamo: any) => {
         setSelectedLoanForGestion(prestamo)
+        setIsConfirmGestionOpen(true)
+    }
+
+    const confirmOpenGestion = () => {
         setGestionOpen(true)
+        setIsConfirmGestionOpen(false)
     }
 
     const handleOpenAsignarTarea = (prestamo: any, e?: React.MouseEvent) => {
@@ -341,7 +349,12 @@ export function PrestamosTable({
             e.stopPropagation()
         }
         setSelectedLoanForAsignar(prestamo)
+        setIsConfirmAsignarOpen(true)
+    }
+
+    const confirmOpenAsignarTarea = () => {
         setAsignarTareaOpen(true)
+        setIsConfirmAsignarOpen(false)
     }
 
     const handleViewContract = async (prestamo: any) => {
@@ -1639,7 +1652,7 @@ export function PrestamosTable({
                                                                                                             return
                                                                                                         }
                                                                                                         setLoanToEdit(prestamo)
-                                                                                                        setIsEditLoanModalOpen(true)
+                                                                                                        setIsConfirmEditOpen(true)
                                                                                                     }}
                                                                                                 >
                                                                                                     <Pencil className="w-3.5 h-3.5 mr-2" />
@@ -2406,7 +2419,7 @@ export function PrestamosTable({
                                                                                                 return
                                                                                             }
                                                                                             setLoanToEdit(prestamo)
-                                                                                            setIsEditLoanModalOpen(true)
+                                                                                            setIsConfirmEditOpen(true)
                                                                                         }}
                                                                                     >
                                                                                         <Pencil className="w-3.5 h-3.5 mr-2" />
@@ -2560,31 +2573,34 @@ export function PrestamosTable({
 
             {/* Dialogo Eliminar */}
             <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                <AlertDialogContent className="bg-slate-900 border-slate-800 text-slate-100">
+                <AlertDialogContent className="bg-slate-900/90 backdrop-blur-xl border-slate-800/50 text-slate-100 shadow-2xl shadow-rose-500/10 max-w-md">
                     <AlertDialogHeader>
-                        <AlertDialogTitle className="text-rose-500 flex items-center gap-2">
-                            <ShieldAlert className="w-6 h-6" /> ¿Eliminar Préstamo?
+                        <AlertDialogTitle className="text-2xl font-black text-rose-500 flex items-center gap-3">
+                            <div className="p-2 rounded-full bg-rose-500/10">
+                                <ShieldAlert className="w-6 h-6" />
+                            </div>
+                            ¿Eliminar Préstamo?
                         </AlertDialogTitle>
-                        <AlertDialogDescription className="text-slate-400">
-                            Esta acción devolverá el capital a la cuenta seleccionada y el préstamo pasará a estado <strong>Inactivo</strong>.
+                        <AlertDialogDescription className="text-slate-400 text-base leading-relaxed">
+                            Esta acción es delicada. Se devolverá el capital a la cuenta seleccionada y el préstamo pasará a estado <strong className="text-rose-400">Inactivo</strong>.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
 
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
                             <Label className="text-xs text-slate-500 uppercase font-bold">Cuenta para devolución</Label>
-                            <Select value={selectedActionAccount} onValueChange={setSelectedActionAccount}>
-                                <SelectTrigger className="bg-slate-950 border-slate-800">
-                                    <SelectValue placeholder="Seleccionar cuenta..." />
-                                </SelectTrigger>
-                                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
-                                    {cuentas?.map((c: any) => (
-                                        <SelectItem key={c.id} value={c.id}>
-                                            {c.nombre} (S/ {parseFloat(c.saldo).toFixed(2)})
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <select
+                                className="flex h-10 w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-rose-500 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
+                                value={selectedActionAccount}
+                                onChange={(e) => setSelectedActionAccount(e.target.value)}
+                            >
+                                <option value="" disabled>Seleccionar cuenta...</option>
+                                {cuentas?.map((c: any) => (
+                                    <option key={c.id} value={c.id}>
+                                        {c.nombre} (S/ {parseFloat(c.saldo).toFixed(2)})
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                     </div>
 
@@ -2620,31 +2636,34 @@ export function PrestamosTable({
 
             {/* Dialogo Restaurar */}
             <AlertDialog open={isRestoreDialogOpen} onOpenChange={setIsRestoreDialogOpen}>
-                <AlertDialogContent className="bg-slate-900 border-slate-800 text-slate-100">
+                <AlertDialogContent className="bg-slate-900/90 backdrop-blur-xl border-slate-800/50 text-slate-100 shadow-2xl shadow-emerald-500/10 max-w-md">
                     <AlertDialogHeader>
-                        <AlertDialogTitle className="text-emerald-500 flex items-center gap-2">
-                            <RotateCcw className="w-6 h-6" /> ¿Restaurar Préstamo?
+                        <AlertDialogTitle className="text-2xl font-black text-emerald-500 flex items-center gap-3">
+                            <div className="p-2 rounded-full bg-emerald-500/10">
+                                <RotateCcw className="w-6 h-6" />
+                            </div>
+                            ¿Restaurar Préstamo?
                         </AlertDialogTitle>
-                        <AlertDialogDescription className="text-slate-400">
-                            Se volverá a descontar el capital de la cuenta.
+                        <AlertDialogDescription className="text-slate-400 text-base leading-relaxed">
+                            El préstamo volverá a estar activo y se descontará el capital de la cuenta seleccionada.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
 
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
                             <Label className="text-xs text-slate-500 uppercase font-bold">Cuenta para desembolso</Label>
-                            <Select value={selectedActionAccount} onValueChange={setSelectedActionAccount}>
-                                <SelectTrigger className="bg-slate-950 border-slate-800">
-                                    <SelectValue placeholder="Seleccionar cuenta..." />
-                                </SelectTrigger>
-                                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
-                                    {cuentas?.map((c: any) => (
-                                        <SelectItem key={c.id} value={c.id}>
-                                            {c.nombre} (S/ {parseFloat(c.saldo).toFixed(2)})
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <select
+                                className="flex h-10 w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
+                                value={selectedActionAccount}
+                                onChange={(e) => setSelectedActionAccount(e.target.value)}
+                            >
+                                <option value="" disabled>Seleccionar cuenta...</option>
+                                {cuentas?.map((c: any) => (
+                                    <option key={c.id} value={c.id}>
+                                        {c.nombre} (S/ {parseFloat(c.saldo).toFixed(2)})
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                     </div>
 
@@ -2673,6 +2692,81 @@ export function PrestamosTable({
                             className="bg-emerald-600 hover:bg-emerald-700 text-white"
                         >
                             {loadingAction ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : "Confirmar"}
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Dialogo Confirmar Gestión */}
+            <AlertDialog open={isConfirmGestionOpen} onOpenChange={setIsConfirmGestionOpen}>
+                <AlertDialogContent className="bg-slate-900/90 backdrop-blur-xl border-slate-800/50 text-slate-100 shadow-2xl shadow-blue-500/10 max-w-md">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-2xl font-black text-blue-400 flex items-center gap-3">
+                            <div className="p-2 rounded-full bg-blue-500/10">
+                                <MessageSquare className="w-6 h-6" />
+                            </div>
+                            ¿Registrar Gestión?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-400 text-base leading-relaxed">
+                            Se abrirá el formulario para registrar una visita o gestión sobre el préstamo de <strong className="text-blue-300">{selectedLoanForGestion?.clientes?.nombres}</strong>.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="gap-3 mt-4">
+                        <AlertDialogCancel className="bg-slate-800 hover:bg-slate-700 border-none text-slate-300">Cancelar</AlertDialogCancel>
+                        <Button onClick={confirmOpenGestion} className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-6">
+                            Sí, Registrar
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Dialogo Confirmar Asignación */}
+            <AlertDialog open={isConfirmAsignarOpen} onOpenChange={setIsConfirmAsignarOpen}>
+                <AlertDialogContent className="bg-slate-900/90 backdrop-blur-xl border-slate-800/50 text-slate-100 shadow-2xl shadow-amber-500/10 max-w-md">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-2xl font-black text-amber-500 flex items-center gap-3">
+                            <div className="p-2 rounded-full bg-amber-500/10">
+                                <ClipboardList className="w-6 h-6" />
+                            </div>
+                            ¿Asignar Gestión?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-400 text-base leading-relaxed">
+                            ¿Deseas asignar una tarea de gestión o visita para el cliente <strong className="text-amber-300">{selectedLoanForAsignar?.clientes?.nombres}</strong>?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="gap-3 mt-4">
+                        <AlertDialogCancel className="bg-slate-800 hover:bg-slate-700 border-none text-slate-300">Cancelar</AlertDialogCancel>
+                        <Button onClick={confirmOpenAsignarTarea} className="bg-amber-600 hover:bg-amber-500 text-white font-bold px-6">
+                            Sí, Asignar
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Dialogo Confirmar Edición */}
+            <AlertDialog open={isConfirmEditOpen} onOpenChange={setIsConfirmEditOpen}>
+                <AlertDialogContent className="bg-slate-900/90 backdrop-blur-xl border-slate-800/50 text-slate-100 shadow-2xl shadow-amber-500/10 max-w-md">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-2xl font-black text-amber-500 flex items-center gap-3">
+                            <div className="p-2 rounded-full bg-amber-500/10">
+                                <Pencil className="w-6 h-6" />
+                            </div>
+                            ¿Editar Préstamo?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-400 text-base leading-relaxed">
+                            Vas a modificar los datos generales del préstamo. Esta acción debe realizarse con precaución.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="gap-3 mt-4">
+                        <AlertDialogCancel className="bg-slate-800 hover:bg-slate-700 border-none text-slate-300">Cancelar</AlertDialogCancel>
+                        <Button 
+                            onClick={() => {
+                                setIsEditLoanModalOpen(true)
+                                setIsConfirmEditOpen(false)
+                            }} 
+                            className="bg-amber-600 hover:bg-amber-500 text-white font-bold px-6"
+                        >
+                            Sí, Editar
                         </Button>
                     </AlertDialogFooter>
                 </AlertDialogContent>

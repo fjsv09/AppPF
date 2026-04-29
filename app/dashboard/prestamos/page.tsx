@@ -70,9 +70,38 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
 
     const selectedDate = (sParams.fecha as string) || getTodayPeru()
 
-    // Fetch relations to calculate KPIs in memory - NO CACHE
-    // Step 1: Initial fetch without cronograma_cuotas
-    const { data: prestamosRaw, error } = await supabaseAdmin
+    // Pre-filtrar cliente_ids para roles no-admin (evita cargar todos los préstamos en memoria)
+    let clienteIdFilter: string[] | null = null
+    if (userRole === 'asesor' && user?.id) {
+        const { data: misClientes } = await supabaseAdmin
+            .from('clientes').select('id').eq('asesor_id', user.id)
+        clienteIdFilter = misClientes?.map((c: any) => c.id) || []
+    } else if (userRole === 'supervisor' && user?.id) {
+        const { data: misAsesores } = await supabaseAdmin
+            .from('perfiles').select('id').eq('supervisor_id', user.id)
+        const asesorIds = misAsesores?.map((a: any) => a.id) || []
+        if (asesorIds.length > 0) {
+            const { data: misClientes } = await supabaseAdmin
+                .from('clientes').select('id').in('asesor_id', asesorIds)
+            clienteIdFilter = misClientes?.map((c: any) => c.id) || []
+        }
+    } else if (filtroAsesor !== 'todos') {
+        const { data: misClientes } = await supabaseAdmin
+            .from('clientes').select('id').eq('asesor_id', filtroAsesor)
+        clienteIdFilter = misClientes?.map((c: any) => c.id) || []
+    } else if ((userRole === 'admin' || userRole === 'secretaria') && filtroSupervisor !== 'todos') {
+        const { data: subAsesores } = await supabaseAdmin
+            .from('perfiles').select('id').eq('supervisor_id', filtroSupervisor)
+        const asesorIds = subAsesores?.map((a: any) => a.id) || []
+        if (asesorIds.length > 0) {
+            const { data: misClientes } = await supabaseAdmin
+                .from('clientes').select('id').in('asesor_id', asesorIds)
+            clienteIdFilter = misClientes?.map((c: any) => c.id) || []
+        }
+    }
+
+    // Step 1: Fetch préstamos con filtros a nivel DB
+    let prestamosQuery = supabaseAdmin
         .from('prestamos')
         .select(`
             *,
@@ -102,18 +131,56 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         `)
         .order('created_at', { ascending: false })
 
+    // Filtro de sector a nivel DB
+    if (filtroSector !== 'todos') {
+        const { data: clientesSector } = await supabaseAdmin
+            .from('clientes').select('id').eq('sector_id', filtroSector)
+        const sectorClienteIds = clientesSector?.map((c: any) => c.id) || []
+        if (clienteIdFilter) {
+            clienteIdFilter = clienteIdFilter.filter(id => sectorClienteIds.includes(id))
+        } else {
+            clienteIdFilter = sectorClienteIds
+        }
+    }
+
+    if (clienteIdFilter !== null) {
+        if (clienteIdFilter.length === 0) {
+            // Sin clientes en scope → retornar vacío
+            prestamosQuery = prestamosQuery.in('cliente_id', ['00000000-0000-0000-0000-000000000000'])
+        } else {
+            // Chunked para respetar límite de URL
+            // Usamos el primer chunk; si hay más de 500 clientes, usamos la primera mitad del filtro
+            // (para scopes muy grandes, mejor sin filtro que truncado)
+            if (clienteIdFilter.length <= 500) {
+                prestamosQuery = prestamosQuery.in('cliente_id', clienteIdFilter)
+            }
+        }
+    }
+
+    // Filtro de frecuencia a nivel DB
+    if (filtroFrecuencia !== 'todos') {
+        prestamosQuery = prestamosQuery.eq('frecuencia', filtroFrecuencia)
+    }
+
+    const { data: prestamosRaw, error } = await prestamosQuery
+
     if (error) {
         console.error('Error fetching loans:', error)
         return <div className="p-8 text-center text-red-500 font-bold">Error al cargar préstamos: {error.message}</div>;
     }
 
-    // Step 2: Fetch cronograma_cuotas in chunks to avoid timeout and URL limits
-    const prestamoIds = prestamosRaw?.map(p => p.id) || []
-    const cuotasByLoan = new Map<string, any[]>()
-    const chunkSize = 300
+    // Step 2: Fetch cronograma_cuotas SOLO para préstamos que aportan KPIs activos
+    // Los finalizados/renovados/anulados no necesitan cronograma para los KPIs del día
+    const ESTADOS_ARCHIVADOS = ['finalizado', 'renovado', 'refinanciado', 'anulado', 'castigado']
+    const idsConCronograma = prestamosRaw
+        ?.filter(p => !ESTADOS_ARCHIVADOS.includes(p.estado))
+        .map(p => p.id) || []
 
-    for (let i = 0; i < prestamoIds.length; i += chunkSize) {
-        const chunk = prestamoIds.slice(i, i + chunkSize)
+    const cuotasByLoan = new Map<string, any[]>()
+    const chunkSize = 200
+
+    for (let i = 0; i < idsConCronograma.length; i += chunkSize) {
+        const chunk = idsConCronograma.slice(i, i + chunkSize)
         const { data: cuotasChunk, error: cuotasError } = await supabaseAdmin
             .from('cronograma_cuotas')
             .select(`
@@ -121,11 +188,11 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                 pagos (id, created_at, monto_pagado, metodo_pago, voucher_compartido, latitud, longitud, registrado_por, estado_verificacion)
             `)
             .in('prestamo_id', chunk)
-            
+
         if (cuotasError) {
             console.error(`Error fetching cuotas chunk ${i / chunkSize}:`, cuotasError)
         } else if (cuotasChunk) {
-            cuotasChunk.forEach(c => {
+            cuotasChunk.forEach((c: any) => {
                 const list = cuotasByLoan.get(c.prestamo_id) || []
                 list.push(c)
                 cuotasByLoan.set(c.prestamo_id, list)
@@ -133,45 +200,36 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         }
     }
 
-    // Merge cuotas back into prestamosRaw
+    // Merge cuotas — archivados quedan con [] (sin cronograma, se usan métricas aproximadas)
     prestamosRaw?.forEach(p => {
         p.cronograma_cuotas = cuotasByLoan.get(p.id) || []
     })
 
-    console.log('📉 Prestamos fetched:', prestamosRaw?.length)
+    console.log(`📉 Préstamos: ${prestamosRaw?.length} total, ${idsConCronograma.length} con cronograma`)
 
-    // Fetch Configuración Sistema BEFORE mapping
-    const { data: configSistema } = await supabaseAdmin
+    // Una sola query para toda la configuración (era 2 queries secuenciales)
+    const { data: configTodo } = await supabaseAdmin
         .from('configuracion_sistema')
         .select('clave, valor')
-        .in('clave', ['renovacion_min_pagado', 'refinanciacion_min_mora', 'umbral_cpp_cuotas', 'umbral_moroso_cuotas', 'umbral_cpp_otros', 'umbral_moroso_otros'])
-    
-    // Valor por defecto 60% si no existe
-    const configRenovacionValor = configSistema?.find(c => c.clave === 'renovacion_min_pagado')?.valor
-    const renovacionMinPagado = configRenovacionValor ? parseInt(configRenovacionValor) : 60
-    const renovacionMinPagadoDecimal = renovacionMinPagado / 100
+        .in('clave', [
+            'renovacion_min_pagado', 'refinanciacion_min_mora',
+            'umbral_cpp_cuotas', 'umbral_moroso_cuotas', 'umbral_cpp_otros', 'umbral_moroso_otros',
+            'horario_apertura', 'horario_cierre', 'horario_fin_turno_1', 'desbloqueo_hasta'
+        ])
 
-    // Valor por defecto 50% si no existe
-    const configRefinanciacionValor = configSistema?.find(c => c.clave === 'refinanciacion_min_mora')?.valor
-    const refinanciacionMinMora = configRefinanciacionValor ? parseInt(configRefinanciacionValor) : 50
+    const cfg = (k: string) => configTodo?.find(c => c.clave === k)?.valor
+    const renovacionMinPagado = cfg('renovacion_min_pagado') ? parseInt(cfg('renovacion_min_pagado')!) : 60
+    const refinanciacionMinMora = cfg('refinanciacion_min_mora') ? parseInt(cfg('refinanciacion_min_mora')!) : 50
+    const umbralCpp = parseInt(cfg('umbral_cpp_cuotas') || '4')
+    const umbralMoroso = parseInt(cfg('umbral_moroso_cuotas') || '7')
+    const umbralCppOtros = parseInt(cfg('umbral_cpp_otros') || '1')
+    const umbralMorosoOtros = parseInt(cfg('umbral_moroso_otros') || '2')
 
-    // Umbrales de mora
-    const umbralCpp = parseInt(configSistema?.find(c => c.clave === 'umbral_cpp_cuotas')?.valor || '4')
-    const umbralMoroso = parseInt(configSistema?.find(c => c.clave === 'umbral_moroso_cuotas')?.valor || '7')
-    const umbralCppOtros = parseInt(configSistema?.find(c => c.clave === 'umbral_cpp_otros')?.valor || '1')
-    const umbralMorosoOtros = parseInt(configSistema?.find(c => c.clave === 'umbral_moroso_otros')?.valor || '2')
-
-    // Fetch HORARIO
-    const { data: configHorario } = await supabaseAdmin
-        .from('configuracion_sistema')
-        .select('clave, valor')
-        .in('clave', ['horario_apertura', 'horario_cierre', 'horario_fin_turno_1', 'desbloqueo_hasta'])
-    
     const systemSchedule = {
-        horario_apertura: configHorario?.find(c => c.clave === 'horario_apertura')?.valor || '07:00',
-        horario_cierre: configHorario?.find(c => c.clave === 'horario_cierre')?.valor || '20:00',
-        horario_fin_turno_1: configHorario?.find(c => c.clave === 'horario_fin_turno_1')?.valor || '13:30',
-        desbloqueo_hasta: configHorario?.find(c => c.clave === 'desbloqueo_hasta')?.valor || ''
+        horario_apertura: cfg('horario_apertura') || '07:00',
+        horario_cierre: cfg('horario_cierre') || '20:00',
+        horario_fin_turno_1: cfg('horario_fin_turno_1') || '13:30',
+        desbloqueo_hasta: cfg('desbloqueo_hasta') || ''
     }
 
     // --- DATA PARA DESEMBOLSO (Admin & Supervisor) ---
@@ -182,13 +240,21 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             .select('id, nombre, saldo, cartera_id, usuarios_autorizados')
             .order('nombre')
         
-        // Filtrar solo cuentas compartidas y de la cartera global
-        // La cartera global tiene el ID '00000000-0000-0000-0000-000000000000'
-        cuentasAdmin = (qAdmin || []).filter((c: any) => 
-            c.cartera_id === '00000000-0000-0000-0000-000000000000' || 
-            (c.usuarios_autorizados && c.usuarios_autorizados.length > 0)
-        )
+        if (userRole === 'admin') {
+            // El admin solo quiere ver cuentas globales/propias, ocultando las de los asesores
+            cuentasAdmin = (qAdmin || []).filter((c: any) => 
+                !c.nombre.startsWith('Cobranzas - Cartera ')
+            )
+        } else {
+            // Supervisores/Secretarias: Filtrar solo cuentas compartidas y de la cartera global
+            cuentasAdmin = (qAdmin || []).filter((c: any) => 
+                c.cartera_id === '00000000-0000-0000-0000-000000000000' || 
+                (c.usuarios_autorizados && c.usuarios_autorizados.length > 0)
+            )
+        }
+
     }
+
 
     // Fetch Feriados
     const { data: feriadosRaw } = await supabaseAdmin
@@ -216,42 +282,14 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         .map((r: any) => r.prestamo_nuevo_id as string)
         .filter(Boolean)
 
-    // Filter and Process Data in Memory (Robustness)
+    // Filtros de role/asesor/sector/frecuencia ya aplicados a nivel DB arriba.
+    // Solo se necesita filtro residual para el caso de admin con scope amplio sin filtro de cliente.
     let filteredList = prestamosRaw || []
 
-    // 1. Role Filtering
-    if (userRole === 'asesor') {
-        filteredList = filteredList.filter(p => p.clientes?.asesor_id === user?.id)
-    } else if (userRole === 'supervisor') {
-         const { data: asesores } = await supabaseAdmin
-            .from('perfiles')
-            .select('id')
-            .eq('supervisor_id', user?.id)
-         const asesorIds = asesores?.map(a => a.id) || []
-         filteredList = filteredList.filter(p => asesorIds.includes(p.clientes?.asesor_id))
-    }
-
-    // 2. Advisor Selection Filter (Reactivity for KPIs)
-    if (filtroAsesor !== 'todos') {
-        filteredList = filteredList.filter(p => p.clientes?.asesor_id === filtroAsesor)
-    } else if ((userRole === 'admin' || userRole === 'secretaria') && filtroSupervisor !== 'todos') {
-        // If Admin selects a Supervisor but not an Advisor, filter by all Advisors under that Supervisor
-        const { data: profiles } = await supabaseAdmin
-            .from('perfiles')
-            .select('id')
-            .eq('supervisor_id', filtroSupervisor)
-        const advisorIds = profiles?.map(p => p.id) || []
-        filteredList = filteredList.filter(p => advisorIds.includes(p.clientes?.asesor_id))
-    }
-
-    // 3. Sector Filter
-    if (filtroSector !== 'todos') {
-        filteredList = filteredList.filter(p => p.clientes?.sector_id === filtroSector)
-    }
-
-    // 4. Frequency Filter
-    if (filtroFrecuencia !== 'todos') {
-        filteredList = filteredList.filter(p => p.frecuencia?.toLowerCase() === filtroFrecuencia.toLowerCase())
+    // Filtro residual en memoria solo si clienteIdFilter > 500 (no se pudo aplicar en DB)
+    if (clienteIdFilter !== null && clienteIdFilter.length > 500) {
+        const filterSet = new Set(clienteIdFilter)
+        filteredList = filteredList.filter(p => filterSet.has(p.cliente_id))
     }
 
     // 1.5. Calculate loan Management Map for Renewal Logic 
@@ -293,15 +331,29 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     // 2. KPI Calculation & Mapping
     const prestamos = filteredList.map(p => {
         const referenceDate = selectedDate
-        const metrics = calculateLoanMetrics(p, referenceDate, { 
-            renovacionMinPagado, 
-            umbralCpp, 
+        const metrics = calculateLoanMetrics(p, referenceDate, {
+            renovacionMinPagado,
+            umbralCpp,
             umbralMoroso,
             umbralCppOtros,
             umbralMorosoOtros
         })
-        
+
         const totalPagar = p.monto * (1 + (p.interes / 100))
+
+        // Para préstamos archivados sin cronograma: métricas aproximadas
+        // Esto evita que total_pagado_acumulado = 0 y arruine los KPIs de renovación/recuperación
+        const sinCronograma = ESTADOS_ARCHIVADOS.includes(p.estado) && (!p.cronograma_cuotas || p.cronograma_cuotas.length === 0)
+        if (sinCronograma) {
+            metrics.totalPagadoAcumulado = totalPagar  // Asumimos pagado completo
+            metrics.saldoPendiente = 0
+            metrics.cuotasAtrasadas = 0
+            metrics.deudaExigibleHoy = 0
+            metrics.cuotaDiaHoy = 0
+            metrics.cuotaDiaProgramada = 0
+            metrics.cobradoHoy = 0
+            metrics.cobradoRutaHoy = 0
+        }
         
 
 

@@ -4,8 +4,19 @@ import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { Loader2, Calculator, Lock } from 'lucide-react'
+import { Loader2, Calculator, Lock, AlertTriangle, ShieldCheck, RefreshCw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { cn } from '@/lib/utils'
 
 interface LoanActionsProps {
     prestamoId: string
@@ -19,43 +30,84 @@ export function LoanActions({ prestamoId, hasSchedule, isLocked, force }: LoanAc
     const router = useRouter()
     const supabase = createClient()
 
+    const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+    const [pendingAction, setPendingAction] = useState<{
+        fn: () => Promise<void>,
+        title: string,
+        description: string,
+        icon: any,
+        confirmText: string,
+        variant: 'default' | 'destructive' | 'success'
+    } | null>(null)
+
+    const executePending = async () => {
+        if (pendingAction) {
+            await pendingAction.fn()
+            setIsConfirmOpen(false)
+            setPendingAction(null)
+        }
+    }
+
     const handleGenerateSchedule = async () => {
-        setLoading(true)
-        try {
-            const response = await fetch(`/api/prestamos/${prestamoId}/generar-cronograma`, {
-                method: 'POST'
+        const action = async () => {
+            setLoading(true)
+            try {
+                const response = await fetch(`/api/prestamos/${prestamoId}/generar-cronograma`, {
+                    method: 'POST'
+                })
+
+                const result = await response.json()
+                if (!response.ok) throw new Error(result.error || 'Error al generar cronograma')
+
+                toast.success('Cronograma Generado', { description: 'Revisa las cuotas abajo.' })
+                router.refresh()
+            } catch (err: any) {
+                toast.error('Error al generar cronograma', { description: err.message })
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        if (hasSchedule || force) {
+            setPendingAction({
+                fn: action,
+                title: '¿Regenerar Cronograma?',
+                description: 'Esta acción sobrescribirá las cuotas actuales y se perderán los cambios manuales. ¿Deseas continuar?',
+                icon: <RefreshCw className="w-6 h-6 text-blue-500" />,
+                confirmText: 'Sí, Regenerar',
+                variant: 'default'
             })
-
-            const result = await response.json()
-            if (!response.ok) throw new Error(result.error || 'Error al generar cronograma')
-
-            toast.success('Cronograma Generado', { description: 'Revisa las cuotas abajo.' })
-            router.refresh()
-        } catch (err: any) {
-            toast.error('Error al generar cronograma', { description: err.message })
-        } finally {
-            setLoading(false)
+            setIsConfirmOpen(true)
+        } else {
+            await action()
         }
     }
 
     const handleLockSchedule = async () => {
-        if (!confirm('¿Estás seguro de iniciar el préstamo? Esto bloqueará el cronograma permanentemente.')) return
+        const action = async () => {
+            setLoading(true)
+            try {
+                const { error } = await supabase.from('prestamos').update({ bloqueo_cronograma: true }).eq('id', prestamoId)
+                if (error) throw error
 
-        setLoading(true)
-        try {
-            // Logic to lock. Can be a simple update via RLS (if admin) or RPC.
-            // We can use RPC or update.
-            const { error } = await supabase.from('prestamos').update({ bloqueo_cronograma: true }).eq('id', prestamoId)
-
-            if (error) throw error
-
-            toast.success('Préstamo Iniciado', { description: 'El cronograma ha sido bloqueado.' })
-            router.refresh()
-        } catch (err: any) {
-            toast.error('Error al bloquear', { description: err.message })
-        } finally {
-            setLoading(false)
+                toast.success('Préstamo Iniciado', { description: 'El cronograma ha sido bloqueado.' })
+                router.refresh()
+            } catch (err: any) {
+                toast.error('Error al bloquear', { description: err.message })
+            } finally {
+                setLoading(false)
+            }
         }
+
+        setPendingAction({
+            fn: action,
+            title: '¿Iniciar Préstamo?',
+            description: 'Al iniciar el préstamo, el cronograma quedará bloqueado permanentemente y no podrá ser modificado. ¿Confirmas el inicio?',
+            icon: <ShieldCheck className="w-6 h-6 text-emerald-500" />,
+            confirmText: 'Confirmar Inicio',
+            variant: 'success'
+        })
+        setIsConfirmOpen(true)
     }
 
     if (force) {
@@ -101,6 +153,38 @@ export function LoanActions({ prestamoId, hasSchedule, isLocked, force }: LoanAc
                     Iniciar Préstamo
                 </Button>
             )}
+
+            <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+                <AlertDialogContent className="bg-slate-900/90 backdrop-blur-xl border-slate-800/50 text-slate-100 shadow-2xl shadow-indigo-500/10">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-3 text-xl font-bold">
+                            {pendingAction?.icon}
+                            {pendingAction?.title}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-400 text-base py-2">
+                            {pendingAction?.description}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="gap-3 mt-4">
+                        <AlertDialogCancel className="bg-slate-800 hover:bg-slate-700 border-none text-slate-300">
+                            Cancelar
+                        </AlertDialogCancel>
+                        <Button
+                            disabled={loading}
+                            onClick={executePending}
+                            className={cn(
+                                "font-bold px-6",
+                                pendingAction?.variant === 'destructive' ? "bg-rose-600 hover:bg-rose-500" :
+                                pendingAction?.variant === 'success' ? "bg-emerald-600 hover:bg-emerald-500" :
+                                "bg-blue-600 hover:bg-blue-500"
+                            )}
+                        >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                            {pendingAction?.confirmText}
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

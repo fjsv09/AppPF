@@ -23,6 +23,16 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 type Props = {
     prestamo: any
@@ -59,6 +69,7 @@ export function CronogramaClient({
     const [loading, setLoading] = useState(false)
     const [isEditModalOpen, setIsEditModalOpen] = useState(false)
     const [selectedQuota, setSelectedQuota] = useState<any>(null)
+    const [isConfirmLockOpen, setIsConfirmLockOpen] = useState(false)
 
 
     // --- LOGICA DE HORARIO ---
@@ -281,7 +292,6 @@ export function CronogramaClient({
     }
 
     const handleLock = async () => {
-        if (!confirm('¿Seguro que desea bloquear el cronograma? Una vez bloqueado no se podrá regenerar.')) return;
         setLoading(true)
         try {
             await api.prestamos.bloquearCronograma(prestamo.id)
@@ -341,7 +351,7 @@ export function CronogramaClient({
                             Regenerar
                         </Button>
                         {cronograma.length > 0 && (
-                            <Button onClick={handleLock} disabled={loading} className="flex-1 sm:flex-none bg-yellow-600 hover:bg-yellow-700 text-white border-none shadow-lg shadow-yellow-900/20">
+                            <Button onClick={() => setIsConfirmLockOpen(true)} disabled={loading} className="flex-1 sm:flex-none bg-yellow-600 hover:bg-yellow-700 text-white border-none shadow-lg shadow-yellow-900/20">
                                 <CheckCircle className="mr-2 h-4 w-4" />
                                 Confirmar y Bloquear
                             </Button>
@@ -349,6 +359,35 @@ export function CronogramaClient({
                     </div>
                 </div>
             )}
+
+            <AlertDialog open={isConfirmLockOpen} onOpenChange={setIsConfirmLockOpen}>
+                <AlertDialogContent className="bg-slate-900/90 backdrop-blur-xl border-slate-800/50 text-slate-100 shadow-2xl shadow-yellow-500/10 max-w-md">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-2xl font-black text-yellow-500 flex items-center gap-3">
+                            <div className="p-2 rounded-full bg-yellow-500/10">
+                                <Lock className="w-6 h-6" />
+                            </div>
+                            ¿Confirmar Cronograma?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-400 text-base leading-relaxed">
+                            Una vez bloqueado, el cronograma quedará oficializado y <strong className="text-yellow-400">no podrá ser regenerado</strong> sin permisos administrativos.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="gap-3 mt-4">
+                        <AlertDialogCancel className="bg-slate-800 hover:bg-slate-700 border-none text-slate-300">
+                            Cancelar
+                        </AlertDialogCancel>
+                        <Button
+                            disabled={loading}
+                            onClick={handleLock}
+                            className="bg-yellow-600 hover:bg-yellow-500 text-white font-bold px-6"
+                        >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                            Sí, Confirmar y Bloquear
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Admin Tool: Force Regenerate */}
             {userRol === 'admin' && prestamo.bloqueo_cronograma && (

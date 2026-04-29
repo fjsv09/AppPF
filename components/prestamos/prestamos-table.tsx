@@ -1419,7 +1419,7 @@ export function PrestamosTable({
                                                                         <span className="text-[8px] text-blue-500/70 uppercase font-bold tracking-wider mb-0.5">Asesor</span>
                                                                         <span className="text-blue-300 text-[11px] flex items-center gap-1 truncate w-full">
                                                                             <Users className="w-2.5 h-2.5 text-blue-400 shrink-0" />
-                                                                            <span className="truncate">{prestamo.asesor_nombre?.split(' ')[0] || '-'}</span>
+                                                                            <span className="truncate">{prestamo.asesor_nombre || '-'}</span>
                                                                         </span>
                                                                     </div>
                                                                 )}
@@ -1864,7 +1864,7 @@ export function PrestamosTable({
                                                             <div className="col-span-2">
                                                                 <div className="flex flex-col">
                                                                     <span className="text-[10px] font-black text-blue-400 uppercase tracking-tighter truncate">
-                                                                        {prestamo.asesor_nombre?.split(' ')[0] || 'SIN ASESOR'}
+                                                                        {prestamo.asesor_nombre || 'SIN ASESOR'}
                                                                     </span>
                                                                     <span className="text-sm font-bold text-white truncate">{prestamo.clientes?.nombres}</span>
                                                                 </div>

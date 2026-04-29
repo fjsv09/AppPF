@@ -22,7 +22,7 @@ export default function ImageUpload({
   tipoDocumento,
   onUploadComplete,
   maxSizeMB = 5,
-  accept = 'image/jpeg,image/jpg,image/png,image/webp,application/pdf'
+  accept = 'image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif,application/pdf'
 }: ImageUploadProps) {
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)

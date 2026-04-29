@@ -326,15 +326,7 @@ export function RenovacionesActions({ solicitud, userRole, userId, cuentasAdmin 
                                     Notificar por WhatsApp
                                 </Button>
 
-                                {prestamoNuevoId && (
-                                    <Button 
-                                        onClick={() => router.push(`/dashboard/prestamos/${prestamoNuevoId}`)}
-                                        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold h-10 rounded-xl flex items-center justify-center gap-2"
-                                    >
-                                        <DollarSign className="w-4 h-4" />
-                                        Ir al Nuevo Préstamo
-                                    </Button>
-                                )}
+
                             </div>
                         </div>
                     )}

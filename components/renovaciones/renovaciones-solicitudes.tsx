@@ -11,16 +11,17 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ScoreIndicator } from '@/components/ui/score-indicator'
-import { 
-    CheckCircle2, XCircle, Clock, AlertTriangle, Eye, 
+import {
+    CheckCircle2, XCircle, Clock, AlertTriangle, Eye,
     MessageSquare, Loader2, RefreshCw, User, CalendarDays,
     DollarSign, ChevronRight, Calculator,
-    Search, X, Filter, MapPin, Activity
+    Search, X, Filter, MapPin, Activity, Files
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn, getFrequencyBadgeStyles } from '@/lib/utils'
-import { formatMoney } from '@/utils/format'
+import { formatMoney, formatDate, formatTime, formatDateTime } from '@/utils/format'
 import { PaginationControlled } from '@/components/ui/pagination-controlled'
+import { DocumentButtonAsync } from '@/components/prestamos/document-button-async'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useEffect, useTransition } from 'react'
 
@@ -59,33 +60,33 @@ interface RenovacionesSolicitudesProps {
 }
 
 const estadoConfig: Record<string, { label: string; icon: any; color: string; bg: string }> = {
-    'pendiente_supervision': { 
-        label: 'Pendiente Supervisión', 
-        icon: Clock, 
+    'pendiente_supervision': {
+        label: 'Pendiente Supervisión',
+        icon: Clock,
         color: 'text-amber-400',
         bg: 'bg-amber-500/20 border-amber-500/30'
     },
-    'en_correccion': { 
-        label: 'En Corrección', 
-        icon: MessageSquare, 
+    'en_correccion': {
+        label: 'En Corrección',
+        icon: MessageSquare,
         color: 'text-orange-400',
         bg: 'bg-orange-500/20 border-orange-500/30'
     },
-    'pre_aprobado': { 
-        label: 'Pre-Aprobado', 
-        icon: CheckCircle2, 
+    'pre_aprobado': {
+        label: 'Pre-Aprobado',
+        icon: CheckCircle2,
         color: 'text-blue-400',
         bg: 'bg-blue-500/20 border-blue-500/30'
     },
-    'aprobado': { 
-        label: 'Aprobado', 
-        icon: CheckCircle2, 
+    'aprobado': {
+        label: 'Aprobado',
+        icon: CheckCircle2,
         color: 'text-emerald-400',
         bg: 'bg-emerald-500/20 border-emerald-500/30'
     },
-    'rechazado': { 
-        label: 'Rechazado', 
-        icon: XCircle, 
+    'rechazado': {
+        label: 'Rechazado',
+        icon: XCircle,
         color: 'text-red-400',
         bg: 'bg-red-500/20 border-red-500/30'
     }
@@ -155,12 +156,12 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
 
     const handleAction = async () => {
         if (!actionDialog.type || !actionDialog.solicitud) return
-        
+
         setLoading(true)
         try {
             const endpoint = `/api/renovaciones/${actionDialog.solicitud.id}/${actionDialog.type}`
             const body: any = {}
-            
+
             if (actionDialog.type === 'observar') {
                 body.observacion = inputText
             } else if (actionDialog.type === 'rechazar') {
@@ -179,18 +180,18 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
             })
 
             const result = await response.json()
-            
+
             if (!response.ok) {
                 throw new Error(result.error || 'Error procesando acción')
             }
 
             toast.success(
                 actionDialog.type === 'preprobar' ? 'Solicitud pre-aprobada' :
-                actionDialog.type === 'observar' ? 'Observación enviada' :
-                actionDialog.type === 'aprobar' ? 'Renovación aprobada' :
-                'Solicitud rechazada'
+                    actionDialog.type === 'observar' ? 'Observación enviada' :
+                        actionDialog.type === 'aprobar' ? 'Renovación aprobada' :
+                            'Solicitud rechazada'
             )
-            
+
             setActionDialog({ type: null, solicitud: null })
             setInputText('')
             router.refresh()
@@ -212,7 +213,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
             <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-6 shadow-lg shadow-black/20 w-full">
                 <div className="relative w-full md:flex-1 md:max-w-none min-w-[180px]">
                     {isPending ? (
-                         <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500 animate-spin" />
+                        <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500 animate-spin" />
                     ) : (
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     )}
@@ -223,15 +224,15 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                         className="h-10 pl-9 pr-8 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:bg-slate-900 transition-colors w-full"
                     />
                     {searchTerm && (
-                         <Button 
-                             variant="ghost" 
-                             size="icon" 
-                             onClick={() => setSearchTerm('')}
-                             className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-slate-500 hover:text-white hover:bg-slate-800 rounded-full"
-                             title="Restablecer búsqueda"
-                         >
-                             <X className="h-3.5 w-3.5" />
-                         </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setSearchTerm('')}
+                            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-slate-500 hover:text-white hover:bg-slate-800 rounded-full"
+                            title="Restablecer búsqueda"
+                        >
+                            <X className="h-3.5 w-3.5" />
+                        </Button>
                     )}
                 </div>
 
@@ -263,7 +264,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                                 <SelectItem value="fecha_aprobacion" className="cursor-pointer">Fecha Aprobación</SelectItem>
                             </SelectContent>
                         </Select>
-                        
+
                         <div className="w-px bg-slate-800 my-1 mx-1 shrink-0" />
 
                         <div className="flex items-center shrink-0">
@@ -299,13 +300,13 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                         No hay solicitudes de renovación
                     </h3>
                     <p className="text-slate-500 text-sm">
-                        {userRole === 'asesor' 
+                        {userRole === 'asesor'
                             ? 'Las solicitudes que crees aparecerán aquí'
                             : 'Las solicitudes pendientes de revisión aparecerán aquí'}
                     </p>
                     {(currentSearch !== '' || currentStatus !== 'todos') && (
-                        <Button 
-                            variant="outline" 
+                        <Button
+                            variant="outline"
                             className="mt-4 text-slate-400 border-slate-700 hover:text-white"
                             onClick={() => {
                                 setSearchTerm('')
@@ -328,258 +329,111 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                             </div>
                         )}
                         {solicitudes.map((sol) => {
-                    const estado = estadoConfig[sol.estado_solicitud] || estadoConfig['pendiente_supervision']
-                    
-                    return (
-                        <div
-                            key={sol.id}
-                            className={cn(
-                                "group block bg-slate-900 border border-slate-800/60 rounded-xl relative overflow-hidden transition-all duration-200 shadow-sm hover:shadow-md hover:border-slate-700",
-                                sol.estado_solicitud === 'aprobado' ? "border-l-[4px] border-l-emerald-500" :
-                                sol.estado_solicitud === 'rechazado' ? "border-l-[4px] border-l-red-500" :
-                                sol.estado_solicitud === 'en_correccion' ? "border-l-[4px] border-l-orange-500" :
-                                "border-l-[4px] border-l-amber-500"
-                            )}
-                        >
-                            <div className="flex flex-col py-3 px-4 gap-3 relative bg-gradient-to-br from-slate-900/50 to-slate-900/10 hover:bg-slate-800/20 transition-colors">
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <div className="shrink-0">
-                                            <div className="w-10 h-10 rounded-full border border-slate-700 bg-slate-800 text-slate-300 flex items-center justify-center shadow-sm">
-                                                <span className="font-bold text-sm">{sol.cliente?.nombres?.charAt(0)}</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col min-w-0">
-                                            <h3 className="text-slate-100 font-bold text-base leading-tight truncate pr-1">
-                                                {sol.cliente?.nombres}
-                                            </h3>
-                                            <div className="flex items-center gap-1.5 text-xs mt-0.5">
-                                                <span className="font-mono text-slate-500">{sol.cliente?.dni}</span>
-                                                <span className="text-slate-600">•</span>
-                                                <span className={cn(
-                                                    "font-mono font-medium text-[10px] px-1.5 py-0.5 rounded-md border",
-                                                    sol.score_al_solicitar >= 80 ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/10" :
-                                                    sol.score_al_solicitar >= 60 ? "text-blue-400 border-blue-500/20 bg-blue-500/10" :
-                                                    sol.score_al_solicitar >= 40 ? "text-amber-400 border-amber-500/20 bg-amber-500/10" :
-                                                    "text-red-400 border-red-500/20 bg-red-500/10"
-                                                )}>
-                                                    Score: {sol.score_al_solicitar}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="shrink-0 flex flex-col items-end gap-1">
-                                        <Badge className={cn('text-[10px] py-0 h-5 border px-1.5', estado.bg, estado.color)}>
-                                            {estado.label}
-                                        </Badge>
-                                        <span className="text-[9px] text-slate-500 font-mono" suppressHydrationWarning>
-                                            {new Date(sol.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' })}
-                                        </span>
-                                        {sol.requiere_excepcion && (
-                                            <Badge className="bg-amber-500/10 border-amber-500/20 text-amber-500 text-[9px] py-0 h-4">
-                                                <AlertTriangle className="h-2.5 w-2.5 mr-1" /> Exc
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </div>
+                            const estado = estadoConfig[sol.estado_solicitud] || estadoConfig['pendiente_supervision']
 
-                                <div className="grid grid-cols-3 mt-1.5 px-1 items-end">
-                                    <div className="flex flex-col text-left">
-                                        <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Monto</span>
-                                        <span className="font-mono text-emerald-400 font-bold text-sm whitespace-nowrap">
-                                            <span className="text-emerald-500 mr-0.5 -mt-0.5 font-bold">S/ </span>
-                                            {sol.monto_solicitado.toLocaleString('en-US')}
-                                        </span>
-                                    </div>
-                                    <div className="flex flex-col text-center items-center">
-                                        <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Plan</span>
-                                        <div className="flex items-center justify-center gap-1.5">
-                                            <CalendarDays className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                                            <span className="text-slate-400">{sol.cuotas}</span>
-                                            <Badge 
-                                                variant="outline" 
-                                                className={cn(
-                                                    "text-[8px] h-3.5 px-1 border-0 font-bold uppercase",
-                                                    getFrequencyBadgeStyles(sol.modalidad)
-                                                )}
-                                            >
-                                                {sol.modalidad.substring(0,3)}.
-                                            </Badge>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col text-right items-end min-w-0">
-                                        <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5 text-right w-full">Asesor</span>
-                                        <span className="text-xs text-slate-300 flex items-center justify-end gap-1 truncate w-full">
-                                            <User className="h-3 w-3 text-blue-400 shrink-0" />
-                                            <span className="truncate">{sol.asesor?.nombre_completo}</span>
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {sol.observacion_supervisor && sol.estado_solicitud === 'en_correccion' && (
-                                    <div className="mt-1 text-[10px] bg-orange-900/20 border border-orange-700/30 rounded p-1.5 text-orange-300">
-                                        <strong>Obs:</strong> {sol.observacion_supervisor}
-                                    </div>
-                                )}
-                                {sol.motivo_rechazo && (
-                                    <div className="mt-1 text-[10px] bg-red-900/20 border border-red-700/30 rounded p-1.5 text-red-300">
-                                        <strong>Rechazo:</strong> {sol.motivo_rechazo}
-                                    </div>
-                                )}
-
-                                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-800/40">
-                                    <Button size="sm" variant="outline" className="flex-1 bg-slate-900 border-slate-700 text-slate-300 h-8 text-[11px] hover:text-white" onClick={() => router.push(`/dashboard/renovaciones/${sol.id}`)}>
-                                        <Eye className="w-3.5 h-3.5 mr-1" /> Ver Caso
-                                    </Button>
-                                    {sol.estado_solicitud === 'aprobado' && (
-                                        <Button 
-                                            size="sm" 
-                                            variant="outline" 
-                                            className="flex-1 bg-emerald-900/20 border-emerald-500/30 text-emerald-400 h-8 text-[11px] hover:bg-emerald-500/20"
-                                            onClick={(e) => {
-                                                e.preventDefault()
-                                                const phone = (sol.cliente?.telefono)?.replace(/\D/g, '') || ''
-                                                const monto = sol.monto_solicitado.toLocaleString('en-US')
-                                                const message = encodeURIComponent(`Hola ${sol.cliente?.nombres}, le saludamos de ProFinanzas. Le informamos que su renovación por un monto de S/ ${monto} ha sido APROBADA. ¡Felicidades!`)
-                                                window.open(`https://wa.me/51${phone}?text=${message}`, '_blank')
-                                            }}
-                                        >
-                                            <svg className="w-3 h-3 mr-1 fill-current" viewBox="0 0 24 24">
-                                                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.246 2.248 3.484 5.232 3.484 8.412-.003 6.557-5.338 11.892-11.893 11.892-1.997-.001-3.951-.5-5.688-1.448l-6.309 1.656zm6.29-4.143c1.565.928 3.178 1.416 4.856 1.417 5.341 0 9.69-4.348 9.693-9.691.002-2.59-1.01-5.025-2.847-6.865-1.838-1.837-4.271-2.847-6.863-2.848-5.341 0-9.69 4.349-9.692 9.691-.001 1.831.515 3.614 1.491 5.162l-.994 3.63 3.712-.974zm11.367-7.46c-.066-.11-.244-.176-.511-.309-.267-.133-1.583-.781-1.827-.87-.245-.089-.423-.133-.6.133-.177.266-.689.87-.845 1.047-.156.177-.311.199-.578.066-.267-.133-1.127-.416-2.146-1.326-.793-.707-1.329-1.58-1.485-1.847-.156-.266-.016-.411.117-.544.12-.119.267-.31.4-.466.133-.155.177-.266.267-.443.089-.178.044-.333-.022-.466-.067-.133-.6-1.446-.822-1.979-.217-.518-.434-.447-.6-.456-.153-.008-.328-.01-.502-.01-.174 0-.457.065-.696.327-.24.262-.915.894-.915 2.178 0 1.284.934 2.525 1.065 2.702.131.177 1.836 2.805 4.448 3.931.621.267 1.106.427 1.484.547.623.198 1.19.17 1.637.104.498-.074 1.583-.647 1.805-1.27.222-.623.222-1.157.156-1.27z" />
-                                            </svg>
-                                            Notificar
-                                        </Button>
+                            return (
+                                <div
+                                    key={sol.id}
+                                    className={cn(
+                                        "group block bg-slate-900 border border-slate-800/60 rounded-xl relative overflow-hidden transition-all duration-200 shadow-sm hover:shadow-md hover:border-slate-700",
+                                        sol.estado_solicitud === 'aprobado' ? "border-l-[4px] border-l-emerald-500" :
+                                            sol.estado_solicitud === 'rechazado' ? "border-l-[4px] border-l-red-500" :
+                                                sol.estado_solicitud === 'en_correccion' ? "border-l-[4px] border-l-orange-500" :
+                                                    "border-l-[4px] border-l-amber-500"
                                     )}
-                                    {userRole === 'supervisor' && sol.estado_solicitud === 'pendiente_supervision' && (
-                                        <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-500 text-white h-8 text-[11px]" onClick={() => openAction('preprobar', sol)}>
-                                            Pre-aprobar
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )
-                })}
-            </div>
-
-            {/* -------------------- HIGHER RES TABLE VIEW -------------------- */}
-            <div className={cn("hidden md:block bg-slate-950/40 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden relative", isPending && "opacity-50")}>
-                {isPending && (
-                    <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/5 backdrop-blur-[1px]">
-                         <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
-                    </div>
-                )}
-                <div className="overflow-x-auto custom-scrollbar pb-2">
-                    <div className="min-w-[1200px]">
-                        {/* Desktop Header */}
-                        <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-400">
-                            <div className="col-span-3">Cliente</div>
-                            <div className="col-span-2 text-right">Solicitado</div>
-                            <div className="col-span-2 text-center">Fecha</div>
-                            <div className="col-span-2 text-left pl-4">Asesor</div>
-                            <div className="col-span-1 text-center">Estado</div>
-                            <div className="col-span-2 text-right">Acciones</div>
-                        </div>
-
-                        {/* Content */}
-                        <div className="divide-y divide-slate-800/50 text-sm">
-                            {solicitudes.map((sol) => {
-                                const estado = estadoConfig[sol.estado_solicitud] || estadoConfig['pendiente_supervision']
-                                const IconEstado = estado.icon
-
-                                return (
-                                    <div 
-                                        key={sol.id} 
-                                        style={{
-                                            borderLeftWidth: '6px',
-                                            borderLeftStyle: 'solid',
-                                            borderLeftColor: sol.estado_solicitud === 'aprobado' ? '#10b981' :
-                                                sol.estado_solicitud === 'rechazado' ? '#ef4444' :
-                                                sol.estado_solicitud === 'en_correccion' ? '#f97316' : '#fbbf24'
-                                        }}
-                                        className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-800/40 transition-all items-center group relative pl-[calc(1.5rem-6px)]"
-                                    >
-                                        {/* Cliente */}
-                                        <div className="col-span-3 flex items-center gap-3 min-w-0">
-                                            <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 shadow-lg transition-transform group-hover:scale-105">
-                                                <span className="font-bold text-slate-300 text-xs">{sol.cliente?.nombres?.charAt(0)}</span>
-                                            </div>
-                                            <div className="min-w-0 flex flex-col justify-center">
-                                                <div className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors truncate leading-tight">{sol.cliente?.nombres}</div>
-                                                <div className="flex items-center gap-2 mt-0.5">
-                                                    <span className="text-[10px] text-slate-500 font-mono bg-slate-950/50 px-1.5 py-0.5 rounded border border-slate-800/50 truncate">
-                                                        {sol.cliente?.dni}
-                                                    </span>
-
+                                >
+                                    <div className="flex flex-col py-3 px-4 gap-3 relative bg-gradient-to-br from-slate-900/50 to-slate-900/10 hover:bg-slate-800/20 transition-colors">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="shrink-0">
+                                                    <div className="w-10 h-10 rounded-full border border-slate-700 bg-slate-800 text-slate-300 flex items-center justify-center shadow-sm">
+                                                        <span className="font-bold text-sm">{sol.cliente?.nombres?.charAt(0)}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col min-w-0">
+                                                    <h3 className="text-slate-100 font-bold text-base leading-tight truncate pr-1">
+                                                        {sol.cliente?.nombres}
+                                                    </h3>
+                                                    <div className="flex items-center gap-1.5 text-xs mt-0.5">
+                                                        <span className="font-mono text-slate-500">{sol.cliente?.dni}</span>
+                                                        <span className="text-slate-600">•</span>
+                                                        <span className={cn(
+                                                            "font-mono font-medium text-[10px] px-1.5 py-0.5 rounded-md border",
+                                                            sol.score_al_solicitar >= 80 ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/10" :
+                                                                sol.score_al_solicitar >= 60 ? "text-blue-400 border-blue-500/20 bg-blue-500/10" :
+                                                                    sol.score_al_solicitar >= 40 ? "text-amber-400 border-amber-500/20 bg-amber-500/10" :
+                                                                        "text-red-400 border-red-500/20 bg-red-500/10"
+                                                        )}>
+                                                            Score: {sol.score_al_solicitar}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-
-                                        {/* Solicitado */}
-                                        <div className="col-span-2 text-right flex flex-col items-end justify-center min-w-0">
-                                            <div className="text-sm font-mono font-bold text-slate-300">S/ {sol.monto_solicitado.toLocaleString('en-US')}</div>
-                                            <div className="text-[10px] text-slate-400 mt-0.5 flex items-center justify-end gap-1 leading-tight">
-                                                <span>{sol.cuotas}</span>
-                                                <Badge 
-                                                    variant="outline" 
-                                                    className={cn(
-                                                        "text-[8px] h-3.5 px-1 border-0 font-bold uppercase",
-                                                        getFrequencyBadgeStyles(sol.modalidad)
-                                                    )}
-                                                >
-                                                    {sol.modalidad}
-                                                </Badge>
-                                                <span>al {sol.interes}%</span>
-                                            </div>
-                                        </div>
-
-                                        {/* Fecha */}
-                                        <div className="col-span-2 flex flex-col items-center justify-center text-center">
-                                            <span className="text-xs font-medium text-slate-300">
-                                                {new Date(sol.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' })}
-                                            </span>
-                                            <span className="text-[10px] text-slate-500 font-mono" suppressHydrationWarning>
-                                                {new Date(sol.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' })}
-                                            </span>
-                                        </div>
-
-                                        {/* Asesor */}
-                                        <div className="col-span-2 text-left pl-4 flex items-center gap-2 min-w-0">
-                                            <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                                            <span className="text-sm text-slate-300 truncate">{sol.asesor?.nombre_completo}</span>
-                                        </div>
-
-                                        {/* Estado */}
-                                        <div className="col-span-1 flex justify-center items-center min-w-0">
-                                            <div className="flex flex-col gap-1 items-center justify-center">
-                                                <Badge className={cn('text-[10px] py-0 h-5 border px-2 flex items-center gap-1 w-max', estado.bg, estado.color)}>
+                                            <div className="shrink-0 flex flex-col items-end gap-1">
+                                                <Badge className={cn('text-[10px] py-0 h-5 border px-1.5', estado.bg, estado.color)}>
                                                     {estado.label}
                                                 </Badge>
+                                                <span className="text-[9px] text-slate-500 font-mono" suppressHydrationWarning>
+                                                    {formatDateTime(sol.created_at)}
+                                                </span>
                                                 {sol.requiere_excepcion && (
-                                                    <Badge className="bg-amber-500/10 border-amber-500/20 text-amber-400 text-[9px] py-0 h-4 flex items-center w-max">
+                                                    <Badge className="bg-amber-500/10 border-amber-500/20 text-amber-500 text-[9px] py-0 h-4">
                                                         <AlertTriangle className="h-2.5 w-2.5 mr-1" /> Exc
                                                     </Badge>
                                                 )}
                                             </div>
                                         </div>
 
-                                        {/* Acciones */}
-                                        <div className="col-span-2 flex items-center justify-end gap-1.5">
-                                            {userRole === 'supervisor' && sol.estado_solicitud === 'pendiente_supervision' && (
-                                                <>
-                                                    <Button size="sm" variant="outline" className="h-8 w-8 p-0 border-orange-600/50 text-orange-400 hover:bg-orange-900/40" onClick={() => openAction('observar', sol)} title="Enviar Observaciones">
-                                                        <MessageSquare className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button size="sm" className="h-8 w-8 p-0 bg-blue-600/20 text-blue-400 border border-blue-600/30 hover:bg-blue-600/40" onClick={() => openAction('preprobar', sol)} title="Pre-aprobar">
-                                                        <CheckCircle2 className="h-4 w-4" />
-                                                    </Button>
-                                                </>
-                                            )}
+                                        <div className="grid grid-cols-3 mt-1.5 px-1 items-end">
+                                            <div className="flex flex-col text-left">
+                                                <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Monto</span>
+                                                <span className="font-mono text-emerald-400 font-bold text-sm whitespace-nowrap">
+                                                    <span className="text-emerald-500 mr-0.5 -mt-0.5 font-bold">S/ </span>
+                                                    {sol.monto_solicitado.toLocaleString('en-US')}
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-col text-center items-center">
+                                                <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Plan</span>
+                                                <div className="flex items-center justify-center gap-1.5">
+                                                    <CalendarDays className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                                                    <span className="text-slate-400">{sol.cuotas}</span>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={cn(
+                                                            "text-[8px] h-3.5 px-1 border-0 font-bold uppercase",
+                                                            getFrequencyBadgeStyles(sol.modalidad)
+                                                        )}
+                                                    >
+                                                        {sol.modalidad.substring(0, 3)}.
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col text-right items-end min-w-0">
+                                                <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5 text-right w-full">Asesor</span>
+                                                <span className="text-xs text-slate-300 flex items-center justify-end gap-1 truncate w-full">
+                                                    <User className="h-3 w-3 text-blue-400 shrink-0" />
+                                                    <span className="truncate">{sol.asesor?.nombre_completo}</span>
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {sol.observacion_supervisor && sol.estado_solicitud === 'en_correccion' && (
+                                            <div className="mt-1 text-[10px] bg-orange-900/20 border border-orange-700/30 rounded p-1.5 text-orange-300">
+                                                <strong>Obs:</strong> {sol.observacion_supervisor}
+                                            </div>
+                                        )}
+                                        {sol.motivo_rechazo && (
+                                            <div className="mt-1 text-[10px] bg-red-900/20 border border-red-700/30 rounded p-1.5 text-red-300">
+                                                <strong>Rechazo:</strong> {sol.motivo_rechazo}
+                                            </div>
+                                        )}
+
+                                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-800/40">
                                             {sol.estado_solicitud === 'aprobado' && (
-                                                <Button 
-                                                    size="sm" 
-                                                    variant="ghost" 
-                                                    className="h-8 w-8 p-0 rounded-lg text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 hover:text-emerald-300 transition-all"
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="flex-[0.8] bg-emerald-900/20 border-emerald-500/30 text-emerald-400 h-8 text-[11px] hover:bg-emerald-500/20 px-0"
                                                     onClick={(e) => {
                                                         e.preventDefault()
                                                         const phone = (sol.cliente?.telefono)?.replace(/\D/g, '') || ''
@@ -588,149 +442,311 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                                                         window.open(`https://wa.me/51${phone}?text=${message}`, '_blank')
                                                     }}
                                                 >
-                                                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                                                    <svg className="w-3 h-3 mr-1 fill-current" viewBox="0 0 24 24">
                                                         <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.246 2.248 3.484 5.232 3.484 8.412-.003 6.557-5.338 11.892-11.893 11.892-1.997-.001-3.951-.5-5.688-1.448l-6.309 1.656zm6.29-4.143c1.565.928 3.178 1.416 4.856 1.417 5.341 0 9.69-4.348 9.693-9.691.002-2.59-1.01-5.025-2.847-6.865-1.838-1.837-4.271-2.847-6.863-2.848-5.341 0-9.69 4.349-9.692 9.691-.001 1.831.515 3.614 1.491 5.162l-.994 3.63 3.712-.974zm11.367-7.46c-.066-.11-.244-.176-.511-.309-.267-.133-1.583-.781-1.827-.87-.245-.089-.423-.133-.6.133-.177.266-.689.87-.845 1.047-.156.177-.311.199-.578.066-.267-.133-1.127-.416-2.146-1.326-.793-.707-1.329-1.58-1.485-1.847-.156-.266-.016-.411.117-.544.12-.119.267-.31.4-.466.133-.155.177-.266.267-.443.089-.178.044-.333-.022-.466-.067-.133-.6-1.446-.822-1.979-.217-.518-.434-.447-.6-.456-.153-.008-.328-.01-.502-.01-.174 0-.457.065-.696.327-.24.262-.915.894-.915 2.178 0 1.284.934 2.525 1.065 2.702.131.177 1.836 2.805 4.448 3.931.621.267 1.106.427 1.484.547.623.198 1.19.17 1.637.104.498-.074 1.583-.647 1.805-1.27.222-.623.222-1.157.156-1.27z" />
                                                     </svg>
+                                                    Notificar
                                                 </Button>
                                             )}
-                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all" onClick={() => router.push(`/dashboard/renovaciones/${sol.id}`)} title="Ver Detalle">
-                                                <Eye className="w-4 h-4" />
+                                            {sol.estado_solicitud === 'aprobado' && (
+                                                <DocumentButtonAsync
+                                                    solicitudId={sol.id}
+                                                    type="renovacion"
+                                                    className="flex-[0.8] bg-blue-900/20 border-blue-500/30 text-blue-400 h-8 text-[11px] hover:bg-blue-500/20 px-0"
+                                                />
+                                            )}
+                                            <Button size="sm" variant="outline" className="flex-1 bg-slate-900 border-slate-700 text-slate-300 h-8 text-[11px] hover:text-white px-0" onClick={() => router.push(`/dashboard/renovaciones/${sol.id}`)}>
+                                                <Eye className="w-3.5 h-3.5 mr-1" /> {sol.estado_solicitud === 'aprobado' ? 'Detalles' : 'Ver Caso'}
                                             </Button>
+                                            {userRole === 'supervisor' && sol.estado_solicitud === 'pendiente_supervision' && (
+                                                <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-500 text-white h-8 text-[11px]" onClick={() => openAction('preprobar', sol)}>
+                                                    Pre-aprobar
+                                                </Button>
+                                            )}
                                         </div>
-                                        
-                                        {sol.observacion_supervisor && sol.estado_solicitud === 'en_correccion' && (
-                                            <div className="col-span-12 mt-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 flex gap-2 items-start opacity-90">
-                                                <AlertTriangle className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />
-                                                <div>
-                                                    <p className="text-[10px] text-orange-400 font-bold uppercase tracking-wider mb-0.5">Observación del Supervisor</p>
-                                                    <p className="text-xs text-orange-200">{sol.observacion_supervisor}</p>
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
-                                )
-                            })}
-                        </div>
+                                </div>
+                            )
+                        })}
                     </div>
-                </div>
-            </div>
 
-            {/* Diálogo de acción */}
-            <Dialog 
-                open={actionDialog.type !== null} 
-                onOpenChange={(open) => !open && setActionDialog({ type: null, solicitud: null })}
-            >
-                <DialogContent className="bg-slate-900 border-slate-800 text-white">
-                    <DialogHeader>
-                        <DialogTitle>
-                            {actionDialog.type === 'preprobar' && 'Pre-aprobar Solicitud'}
-                            {actionDialog.type === 'observar' && 'Enviar Observaciones'}
-                            {actionDialog.type === 'aprobar' && 'Aprobar Renovación'}
-                            {actionDialog.type === 'rechazar' && 'Rechazar Solicitud'}
-                        </DialogTitle>
-                        <DialogDescription className="text-slate-400">
-                            {actionDialog.solicitud?.cliente?.nombres} - S/ {formatMoney(actionDialog.solicitud?.monto_solicitado)}
-                        </DialogDescription>
-                    </DialogHeader>
+                    {/* -------------------- HIGHER RES TABLE VIEW -------------------- */}
+                    <div className={cn("hidden md:block bg-slate-950/40 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden relative", isPending && "opacity-50")}>
+                        {isPending && (
+                            <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/5 backdrop-blur-[1px]">
+                                <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
+                            </div>
+                        )}
+                        <div className="overflow-x-auto custom-scrollbar pb-2">
+                            <div className="min-w-[1200px]">
+                                {/* Desktop Header */}
+                                <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-400">
+                                    <div className="col-span-3">Cliente</div>
+                                    <div className="col-span-2 text-right">Solicitado</div>
+                                    <div className="col-span-2 text-center">Fecha</div>
+                                    <div className="col-span-2 text-left pl-4">Asesor</div>
+                                    <div className="col-span-1 text-center">Estado</div>
+                                    <div className="col-span-2 text-right">Acciones</div>
+                                </div>
 
-                    {actionDialog.solicitud?.requiere_excepcion && actionDialog.type === 'preprobar' && (
-                        <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-3 flex items-start gap-3">
-                            <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-                            <div>
-                                <p className="text-amber-400 font-medium text-sm">Esta solicitud requiere excepción</p>
-                                <p className="text-slate-400 text-xs mt-0.5">
-                                    Tipo: {actionDialog.solicitud.tipo_excepcion}. Al pre-aprobar, estarás autorizando la excepción.
-                                </p>
+                                {/* Content */}
+                                <div className="divide-y divide-slate-800/50 text-sm">
+                                    {solicitudes.map((sol) => {
+                                        const estado = estadoConfig[sol.estado_solicitud] || estadoConfig['pendiente_supervision']
+                                        const IconEstado = estado.icon
+
+                                        return (
+                                            <div
+                                                key={sol.id}
+                                                style={{
+                                                    borderLeftWidth: '6px',
+                                                    borderLeftStyle: 'solid',
+                                                    borderLeftColor: sol.estado_solicitud === 'aprobado' ? '#10b981' :
+                                                        sol.estado_solicitud === 'rechazado' ? '#ef4444' :
+                                                            sol.estado_solicitud === 'en_correccion' ? '#f97316' : '#fbbf24'
+                                                }}
+                                                className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-800/40 transition-all items-center group relative pl-[calc(1.5rem-6px)]"
+                                            >
+                                                {/* Cliente */}
+                                                <div className="col-span-3 flex items-center gap-3 min-w-0">
+                                                    <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 shadow-lg transition-transform group-hover:scale-105">
+                                                        <span className="font-bold text-slate-300 text-xs">{sol.cliente?.nombres?.charAt(0)}</span>
+                                                    </div>
+                                                    <div className="min-w-0 flex flex-col justify-center">
+                                                        <div className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors truncate leading-tight">{sol.cliente?.nombres}</div>
+                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                            <span className="text-[10px] text-slate-500 font-mono bg-slate-950/50 px-1.5 py-0.5 rounded border border-slate-800/50 truncate">
+                                                                {sol.cliente?.dni}
+                                                            </span>
+
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Solicitado */}
+                                                <div className="col-span-2 text-right flex flex-col items-end justify-center min-w-0">
+                                                    <div className="text-sm font-mono font-bold text-slate-300">S/ {sol.monto_solicitado.toLocaleString('en-US')}</div>
+                                                    <div className="text-[10px] text-slate-400 mt-0.5 flex items-center justify-end gap-1 leading-tight">
+                                                        <span>{sol.cuotas}</span>
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={cn(
+                                                                "text-[8px] h-3.5 px-1 border-0 font-bold uppercase",
+                                                                getFrequencyBadgeStyles(sol.modalidad)
+                                                            )}
+                                                        >
+                                                            {sol.modalidad}
+                                                        </Badge>
+                                                        <span>al {sol.interes}%</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Fecha */}
+                                                <div className="col-span-2 flex flex-col items-center justify-center text-center">
+                                                    <span className="text-xs font-medium text-slate-300">
+                                                        {formatDate(sol.created_at)}
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-500 font-mono" suppressHydrationWarning>
+                                                        {formatTime(sol.created_at)}
+                                                    </span>
+                                                </div>
+
+                                                {/* Asesor */}
+                                                <div className="col-span-2 text-left pl-4 flex items-center gap-2 min-w-0">
+                                                    <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                                                    <span className="text-sm text-slate-300 truncate">{sol.asesor?.nombre_completo}</span>
+                                                </div>
+
+                                                {/* Estado */}
+                                                <div className="col-span-1 flex justify-center items-center min-w-0">
+                                                    <div className="flex flex-col gap-1 items-center justify-center">
+                                                        <Badge className={cn('text-[10px] py-0 h-5 border px-2 flex items-center gap-1 w-max', estado.bg, estado.color)}>
+                                                            {estado.label}
+                                                        </Badge>
+                                                        {sol.requiere_excepcion && (
+                                                            <Badge className="bg-amber-500/10 border-amber-500/20 text-amber-400 text-[9px] py-0 h-4 flex items-center w-max">
+                                                                <AlertTriangle className="h-2.5 w-2.5 mr-1" /> Exc
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Acciones */}
+                                                <div className="col-span-2 flex items-center justify-end gap-1.5">
+                                                    {userRole === 'supervisor' && sol.estado_solicitud === 'pendiente_supervision' && (
+                                                        <>
+                                                            <Button size="sm" variant="outline" className="h-8 w-8 p-0 border-orange-600/50 text-orange-400 hover:bg-orange-900/40" onClick={() => openAction('observar', sol)} title="Enviar Observaciones">
+                                                                <MessageSquare className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button size="sm" className="h-8 w-8 p-0 bg-blue-600/20 text-blue-400 border border-blue-600/30 hover:bg-blue-600/40" onClick={() => openAction('preprobar', sol)} title="Pre-aprobar">
+                                                                <CheckCircle2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                    {sol.estado_solicitud === 'aprobado' && (
+                                                        <>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="h-8 w-8 p-0 rounded-lg text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 hover:text-emerald-300 transition-all"
+                                                            onClick={(e) => {
+                                                                e.preventDefault()
+                                                                const phone = (sol.cliente?.telefono)?.replace(/\D/g, '') || ''
+                                                                const monto = sol.monto_solicitado.toLocaleString('en-US')
+                                                                const message = encodeURIComponent(`Hola ${sol.cliente?.nombres}, le saludamos de ProFinanzas. Le informamos que su renovación por un monto de S/ ${monto} ha sido APROBADA. ¡Felicidades!`)
+                                                                window.open(`https://wa.me/51${phone}?text=${message}`, '_blank')
+                                                            }}
+                                                        >
+                                                            <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                                                                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.246 2.248 3.484 5.232 3.484 8.412-.003 6.557-5.338 11.892-11.893 11.892-1.997-.001-3.951-.5-5.688-1.448l-6.309 1.656zm6.29-4.143c1.565.928 3.178 1.416 4.856 1.417 5.341 0 9.69-4.348 9.693-9.691.002-2.59-1.01-5.025-2.847-6.865-1.838-1.837-4.271-2.847-6.863-2.848-5.341 0-9.69 4.349-9.692 9.691-.001 1.831.515 3.614 1.491 5.162l-.994 3.63 3.712-.974zm11.367-7.46c-.066-.11-.244-.176-.511-.309-.267-.133-1.583-.781-1.827-.87-.245-.089-.423-.133-.6.133-.177.266-.689.87-.845 1.047-.156.177-.311.199-.578.066-.267-.133-1.127-.416-2.146-1.326-.793-.707-1.329-1.58-1.485-1.847-.156-.266-.016-.411.117-.544.12-.119.267-.31.4-.466.133-.155.177-.266.267-.443.089-.178.044-.333-.022-.466-.067-.133-.6-1.446-.822-1.979-.217-.518-.434-.447-.6-.456-.153-.008-.328-.01-.502-.01-.174 0-.457.065-.696.327-.24.262-.915.894-.915 2.178 0 1.284.934 2.525 1.065 2.702.131.177 1.836 2.805 4.448 3.931.621.267 1.106.427 1.484.547.623.198 1.19.17 1.637.104.498-.074 1.583-.647 1.805-1.27.222-.623.222-1.157.156-1.27z" />
+                                                            </svg>
+                                                        </Button>
+                                                        <DocumentButtonAsync
+                                                            solicitudId={sol.id}
+                                                            type="renovacion"
+                                                            iconOnly
+                                                            className="h-8 w-8 p-0 rounded-lg text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300 transition-all"
+                                                        />
+                                                    </>
+                                                    )}
+                                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all" onClick={() => router.push(`/dashboard/renovaciones/${sol.id}`)} title="Ver Detalle">
+                                                        <Eye className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+
+                                                {sol.observacion_supervisor && sol.estado_solicitud === 'en_correccion' && (
+                                                    <div className="col-span-12 mt-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 flex gap-2 items-start opacity-90">
+                                                        <AlertTriangle className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />
+                                                        <div>
+                                                            <p className="text-[10px] text-orange-400 font-bold uppercase tracking-wider mb-0.5">Observación del Supervisor</p>
+                                                            <p className="text-xs text-orange-200">{sol.observacion_supervisor}</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
                             </div>
                         </div>
-                    )}
+                    </div>
 
-                    {(actionDialog.type === 'observar' || actionDialog.type === 'rechazar') && (
-                        <div className="grid gap-2">
-                            <Label>
-                                {actionDialog.type === 'observar' ? 'Observaciones' : 'Motivo de rechazo'}
-                            </Label>
-                            <Textarea
-                                value={inputText}
-                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputText(e.target.value)}
-                                placeholder={
-                                    actionDialog.type === 'observar' 
-                                        ? 'Describe las correcciones necesarias...'
-                                        : 'Explica el motivo del rechazo...'
-                                }
-                                className="bg-slate-950 border-slate-800 min-h-[100px]"
-                            />
-                        </div>
-                    )}
-
-                    {actionDialog.type === 'preprobar' && (
-                        <div className="grid gap-2">
-                            <Label>Observaciones (opcional)</Label>
-                            <Textarea
-                                value={inputText}
-                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputText(e.target.value)}
-                                placeholder="Agregar comentarios para el admin..."
-                                className="bg-slate-950 border-slate-800 min-h-[80px]"
-                            />
-                        </div>
-                    )}
-
-                    {actionDialog.type === 'aprobar' && (
-                        <div className="text-center py-4">
-                            <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto mb-3" />
-                            <p className="text-slate-300">
-                                ¿Confirmas aprobar esta renovación?
-                            </p>
-                            <p className="text-slate-500 text-sm mt-1">
-                                Se creará el nuevo préstamo y se cerrará el anterior.
-                            </p>
-                        </div>
-                    )}
-
-                    <DialogFooter>
-                        <Button 
-                            variant="outline" 
-                            onClick={() => setActionDialog({ type: null, solicitud: null })}
-                            disabled={loading}
-                        >
-                            Cancelar
-                        </Button>
-                        <Button 
-                            onClick={handleAction}
-                            disabled={loading || ((actionDialog.type === 'observar' || actionDialog.type === 'rechazar') && !inputText.trim())}
-                            className={cn(
-                                actionDialog.type === 'rechazar' ? 'bg-red-600 hover:bg-red-500' :
-                                actionDialog.type === 'aprobar' ? 'bg-emerald-600 hover:bg-emerald-500' :
-                                'bg-blue-600 hover:bg-blue-500'
-                            )}
-                        >
-                            {loading ? (
-                                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Procesando...</>
-                            ) : (
-                                <>
-                                    {actionDialog.type === 'preprobar' && 'Pre-aprobar'}
+                    {/* Diálogo de acción */}
+                    <Dialog
+                        open={actionDialog.type !== null}
+                        onOpenChange={(open) => !open && setActionDialog({ type: null, solicitud: null })}
+                    >
+                        <DialogContent className="bg-slate-900 border-slate-800 text-white">
+                            <DialogHeader>
+                                <DialogTitle>
+                                    {actionDialog.type === 'preprobar' && 'Pre-aprobar Solicitud'}
                                     {actionDialog.type === 'observar' && 'Enviar Observaciones'}
-                                    {actionDialog.type === 'aprobar' && 'Aprobar'}
-                                    {actionDialog.type === 'rechazar' && 'Rechazar'}
-                                </>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                                    {actionDialog.type === 'aprobar' && 'Aprobar Renovación'}
+                                    {actionDialog.type === 'rechazar' && 'Rechazar Solicitud'}
+                                </DialogTitle>
+                                <DialogDescription className="text-slate-400">
+                                    {actionDialog.solicitud?.cliente?.nombres} - S/ {formatMoney(actionDialog.solicitud?.monto_solicitado)}
+                                </DialogDescription>
+                            </DialogHeader>
 
-            {/* Pagination Controls */}
-            {!loading && solicitudes.length > 0 && (
-                <div className="mt-6">
-                    <PaginationControlled 
-                        currentPage={currentPage}
-                        totalPages={Math.ceil(totalRecords / pageSize)}
-                        onPageChange={handlePageChange}
-                        totalRecords={totalRecords}
-                        pageSize={pageSize}
-                    />
-                </div>
-            )}
+                            {actionDialog.solicitud?.requiere_excepcion && actionDialog.type === 'preprobar' && (
+                                <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-3 flex items-start gap-3">
+                                    <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="text-amber-400 font-medium text-sm">Esta solicitud requiere excepción</p>
+                                        <p className="text-slate-400 text-xs mt-0.5">
+                                            Tipo: {actionDialog.solicitud.tipo_excepcion}. Al pre-aprobar, estarás autorizando la excepción.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {(actionDialog.type === 'observar' || actionDialog.type === 'rechazar') && (
+                                <div className="grid gap-2">
+                                    <Label>
+                                        {actionDialog.type === 'observar' ? 'Observaciones' : 'Motivo de rechazo'}
+                                    </Label>
+                                    <Textarea
+                                        value={inputText}
+                                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputText(e.target.value)}
+                                        placeholder={
+                                            actionDialog.type === 'observar'
+                                                ? 'Describe las correcciones necesarias...'
+                                                : 'Explica el motivo del rechazo...'
+                                        }
+                                        className="bg-slate-950 border-slate-800 min-h-[100px]"
+                                    />
+                                </div>
+                            )}
+
+                            {actionDialog.type === 'preprobar' && (
+                                <div className="grid gap-2">
+                                    <Label>Observaciones (opcional)</Label>
+                                    <Textarea
+                                        value={inputText}
+                                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputText(e.target.value)}
+                                        placeholder="Agregar comentarios para el admin..."
+                                        className="bg-slate-950 border-slate-800 min-h-[80px]"
+                                    />
+                                </div>
+                            )}
+
+                            {actionDialog.type === 'aprobar' && (
+                                <div className="text-center py-4">
+                                    <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto mb-3" />
+                                    <p className="text-slate-300">
+                                        ¿Confirmas aprobar esta renovación?
+                                    </p>
+                                    <p className="text-slate-500 text-sm mt-1">
+                                        Se creará el nuevo préstamo y se cerrará el anterior.
+                                    </p>
+                                </div>
+                            )}
+
+                            <DialogFooter>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setActionDialog({ type: null, solicitud: null })}
+                                    disabled={loading}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    onClick={handleAction}
+                                    disabled={loading || ((actionDialog.type === 'observar' || actionDialog.type === 'rechazar') && !inputText.trim())}
+                                    className={cn(
+                                        actionDialog.type === 'rechazar' ? 'bg-red-600 hover:bg-red-500' :
+                                            actionDialog.type === 'aprobar' ? 'bg-emerald-600 hover:bg-emerald-500' :
+                                                'bg-blue-600 hover:bg-blue-500'
+                                    )}
+                                >
+                                    {loading ? (
+                                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Procesando...</>
+                                    ) : (
+                                        <>
+                                            {actionDialog.type === 'preprobar' && 'Pre-aprobar'}
+                                            {actionDialog.type === 'observar' && 'Enviar Observaciones'}
+                                            {actionDialog.type === 'aprobar' && 'Aprobar'}
+                                            {actionDialog.type === 'rechazar' && 'Rechazar'}
+                                        </>
+                                    )}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    {/* Pagination Controls */}
+                    {!loading && solicitudes.length > 0 && (
+                        <div className="mt-6">
+                            <PaginationControlled
+                                currentPage={currentPage}
+                                totalPages={Math.ceil(totalRecords / pageSize)}
+                                onPageChange={handlePageChange}
+                                totalRecords={totalRecords}
+                                pageSize={pageSize}
+                            />
+                        </div>
+                    )}
                 </>
             )}
         </div>

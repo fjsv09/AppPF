@@ -12,13 +12,14 @@ import { ScoreIndicator, BehaviorSummary, ScoreBreakdown, ScoreLimitRules, Reput
 import { 
     User, DollarSign, Calendar, AlertTriangle, 
     CheckCircle2, XCircle, Clock, MessageSquare,
-    Activity
+    Activity, Files
 } from 'lucide-react'
 import { calculateRenovationAdjustment } from '@/lib/financial-logic'
 import { BackButton } from '@/components/ui/back-button'
 import { RenovacionesActions } from '@/components/renovaciones/renovaciones-actions'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { cn } from '@/lib/utils'
+import { ContratoGenerator } from '@/components/prestamos/contrato-generator'
 
 export const dynamic = 'force-dynamic'
 
@@ -153,6 +154,9 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
 
     // Datos adicionales si está aprobada
     let datosRenovacion = null
+    let prestamoNuevoAsociado = null
+    let cronogramaAsociado: any[] = []
+
     if (solicitud.estado_solicitud === 'aprobado' && solicitud.prestamo_nuevo_id) {
         const { data: ren } = await supabaseAdmin
             .from('renovaciones')
@@ -160,6 +164,27 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
             .eq('prestamo_nuevo_id', solicitud.prestamo_nuevo_id)
             .single()
         datosRenovacion = ren
+
+        const { data: prestamo } = await supabaseAdmin
+            .from('prestamos')
+            .select(`
+                *,
+                clientes:cliente_id(id, nombres, dni, telefono, direccion)
+            `)
+            .eq('id', solicitud.prestamo_nuevo_id)
+            .maybeSingle()
+        
+        prestamoNuevoAsociado = prestamo
+
+        if (prestamo) {
+            const { data: cronograma } = await supabaseAdmin
+                .from('cronograma_cuotas')
+                .select('*')
+                .eq('prestamo_id', prestamo.id)
+                .order('numero_cuota', { ascending: true })
+            
+            cronogramaAsociado = cronograma || []
+        }
     }
 
     const estado = estadoConfig[solicitud.estado_solicitud] || estadoConfig['pendiente_supervision']
@@ -239,14 +264,19 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                             fotoPerfil={solicitud.cliente?.foto_perfil}
                             className="bg-slate-800/50 border-slate-700"
                         />
-                        {solicitud.prestamo_nuevo_id && (
-                            <Link 
-                                href={`/dashboard/prestamos/${solicitud.prestamo_nuevo_id}`}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all"
-                            >
-                                <DollarSign className="w-4 h-4" />
-                                Ir al Préstamo
-                            </Link>
+                        {prestamoNuevoAsociado && (
+                            <div className="ml-auto flex items-center gap-2">
+                                <ContratoGenerator 
+                                    prestamo={prestamoNuevoAsociado} 
+                                    cronograma={cronogramaAsociado}
+                                    trigger={
+                                        <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all">
+                                            <Files className="w-4 h-4" />
+                                            Ver Documentos
+                                        </button>
+                                    }
+                                />
+                            </div>
                         )}
                     </div>
                 </div>

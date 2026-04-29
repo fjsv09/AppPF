@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { User, DollarSign, Calendar, Hash, RefreshCw, FileText, CheckCircle, Clock, AlertCircle, XCircle, MapPin, Eye, MessageSquare } from 'lucide-react'
+import { User, DollarSign, Calendar, Hash, RefreshCw, FileText, CheckCircle, Clock, AlertCircle, XCircle, MapPin, Eye, MessageSquare, Files } from 'lucide-react'
 
 import { SolicitudActions } from '@/components/solicitudes/solicitud-actions'
 import { SolicitudRealtime } from '@/components/solicitudes/solicitud-realtime'
@@ -14,6 +14,7 @@ import { ImageLightbox } from '@/components/ui/image-lightbox'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { BackButton } from '@/components/ui/back-button'
+import { ContratoGenerator } from '@/components/prestamos/contrato-generator'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,16 +82,30 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
         cuentasAdmin = cuentas || []
     }
 
-    // [NUEVO] Si está aprobada, buscar el préstamo asociado
+    // [NUEVO] Si está aprobada, buscar el préstamo asociado y su cronograma
     let prestamoAsociado = null
+    let cronogramaAsociado: any[] = []
     if (solicitud.estado_solicitud === 'aprobado') {
         const { data: prestamo } = await supabaseAdmin
             .from('prestamos')
-            .select('id')
+            .select(`
+                *,
+                clientes:cliente_id(id, nombres, dni, telefono, direccion)
+            `)
             .eq('solicitud_id', id)
             .maybeSingle()
         
         prestamoAsociado = prestamo
+
+        if (prestamo) {
+            const { data: cronograma } = await supabaseAdmin
+                .from('cronograma_cuotas')
+                .select('*')
+                .eq('prestamo_id', prestamo.id)
+                .order('numero_cuota', { ascending: true })
+            
+            cronogramaAsociado = cronograma || []
+        }
     }
 
     // Calcular total estimado
@@ -152,13 +167,18 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
                 </div>
                 
                 {prestamoAsociado && (
-                    <Link 
-                        href={`/dashboard/prestamos/${prestamoAsociado.id}`}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all ml-auto"
-                    >
-                        <DollarSign className="w-4 h-4" />
-                        Ir al Préstamo Aprobado
-                    </Link>
+                    <div className="ml-auto flex items-center gap-2">
+                        <ContratoGenerator 
+                            prestamo={prestamoAsociado} 
+                            cronograma={cronogramaAsociado}
+                            trigger={
+                                <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all">
+                                    <Files className="w-4 h-4" />
+                                    Ver Documentos
+                                </button>
+                            }
+                        />
+                    </div>
                 )}
             </div>
 

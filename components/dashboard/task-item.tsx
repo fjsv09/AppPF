@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Camera, Clock, ClipboardList } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatDate } from '@/utils/format'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface TaskItemProps {
@@ -121,7 +122,7 @@ export function TaskItem({ tarea, variant, userId, userRole, onSelect, onAction 
                     </Badge>
                     <div className="text-[9px] font-bold text-slate-500 flex items-center gap-1 uppercase tracking-tighter" suppressHydrationWarning>
                         <Clock className="w-3 h-3" />
-                        {new Date(tarea.created_at).toLocaleDateString()}
+                        {formatDate(tarea.created_at)}
                     </div>
                 </div>
                 <CardTitle className="text-sm md:text-base font-black text-white mt-3 truncate uppercase tracking-tight">

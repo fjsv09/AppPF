@@ -364,15 +364,6 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
                                 Notificar por WhatsApp
                             </Button>
                             
-                            {prestamoId && (
-                                <Button 
-                                    onClick={() => router.push(`/dashboard/prestamos/${prestamoId}`)}
-                                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold h-10 rounded-xl flex items-center justify-center gap-2 mb-2"
-                                >
-                                    <DollarSign className="w-4 h-4" />
-                                    Ir al Préstamo Aprobado
-                                </Button>
-                            )}
 
                             <Button 
                                 onClick={closeAndRefresh}

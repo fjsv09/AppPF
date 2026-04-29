@@ -11,6 +11,7 @@ import {
 import { Users, History, AlertTriangle, Activity, UserCheck, Zap, Lock, Banknote } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { formatDate } from '@/utils/format'
 
 interface DrilldownDrawerProps {
     isOpen: boolean
@@ -135,7 +136,7 @@ export function DrilldownDrawer({ isOpen, onOpenChange, type, asesorId, supervis
                                 <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                                     {item.monto && <div>Monto: <span className="text-slate-300">S/ {item.monto}</span></div>}
                                     {item.atraso !== undefined && <div>Atrasos: <span className="text-orange-400">{item.atraso} cuotas</span></div>}
-                                    {item.fecha && <div>Fecha: <span className="text-slate-300">{new Date(item.fecha).toLocaleDateString()}</span></div>}
+                                    {item.fecha && <div>Fecha: <span className="text-slate-300">{formatDate(item.fecha)}</span></div>}
                                     {item.telefono && <div>Tel: <span className="text-blue-400">{item.telefono}</span></div>}
                                     {item.estadoMora && <div>Estado: <span className={item.estadoMora === 'CRÍTICO' ? 'text-red-500' : 'text-orange-400'}>{item.estadoMora}</span></div>}
                                 </div>

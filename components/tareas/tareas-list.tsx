@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { formatMoney } from '@/utils/format'
+import { formatMoney, formatDate, formatTime, formatDateTime } from '@/utils/format'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
 import { UploadEvidenceButton } from '@/components/dashboard/upload-evidence-button'
 import { CompleteAuditModal } from '@/components/auditoria/complete-audit-modal'
@@ -40,8 +40,8 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
 
             return matchesSearch && matchesStatus && matchesTipo && matchesAsesor
         })?.sort((a, b) => {
-            let dateA = new Date(a.created_at).getTime()
-            let dateB = new Date(b.created_at).getTime()
+            let dateA = new Date(a.completada_en || a.created_at).getTime()
+            let dateB = new Date(b.completada_en || b.created_at).getTime()
 
             return sortOrder === 'desc' ? dateB - dateA : dateA - dateB
         }) || []
@@ -116,7 +116,7 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
 
                     <div className="flex gap-1 shrink-0 bg-slate-950/30 p-1 rounded-lg border border-slate-800/50 w-auto">
                         <div className="flex items-center px-2 text-xs text-slate-500 whitespace-nowrap">
-                            <span className="hidden sm:inline">Ordenar: Fecha Creación</span>
+                            <span className="hidden sm:inline">Ordenar: Fecha Edición</span>
                             <span className="sm:hidden">Fecha</span>
                         </div>
                         
@@ -222,13 +222,19 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                             )}
 
                                             <div className="flex items-center justify-between gap-2 mt-1.5 pt-2.5 border-t border-slate-800/40">
-                                                 <div className="flex items-center gap-2">
-                                                     <Link 
-                                                        href={`/dashboard/prestamos/${tarea.prestamo_id}?tab=historial`} 
+                                                 <div className="flex items-center gap-2 flex-wrap">
+                                                     <Link
+                                                        href={`/dashboard/prestamos/${tarea.prestamo_id}?tab=historial`}
                                                         className="flex items-center gap-1.5 text-[12px] text-blue-400 hover:text-blue-300 font-medium transition-colors"
                                                      >
                                                         <ExternalLink className="w-3.5 h-3.5" /> Ir al Préstamo
                                                      </Link>
+                                                     {tarea.completada_en && (
+                                                         <span className="flex items-center gap-1 text-[10px] text-slate-500" suppressHydrationWarning>
+                                                             <Calendar className="w-3 h-3 text-slate-600" />
+                                                             {formatDateTime(tarea.completada_en)}
+                                                         </span>
+                                                     )}
                                                      {tarea.estado === 'completada' && (userRol === 'admin' || userRol === 'supervisor') && (
                                                          <RejectEvidenceButton tareaId={tarea.id} />
                                                      )}
@@ -295,8 +301,9 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                 <div className="col-span-3">Cliente</div>
                                 <div className="col-span-1 text-right">Monto</div>
                                 <div className="col-span-2 text-center">Tipo</div>
-                                <div className="col-span-2 text-left pl-4">Asesor</div>
+                                <div className="col-span-1 text-left pl-2">Asesor</div>
                                 <div className="col-span-2 text-center">Estado</div>
+                                <div className="col-span-1 text-center">F. Edición</div>
                                 <div className="col-span-1 text-center">Evidencia</div>
                                 <div className="col-span-1 text-right">Acciones</div>
                             </div>
@@ -329,7 +336,7 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                                         </span>
                                                         <span className="text-[10px] text-slate-400 flex items-center gap-1" suppressHydrationWarning>
                                                             <Calendar className="w-3 h-3 text-slate-500" />
-                                                            {new Date(tarea.created_at).toLocaleDateString()}
+                                                            {formatDate(tarea.created_at)}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -351,9 +358,9 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                                 </Badge>
                                             </div>
 
-                                            <div className="col-span-2 text-left pl-4 flex items-center gap-2 min-w-0">
-                                                <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                                                <span className="text-sm text-slate-300 truncate">{tarea.asesor?.nombre_completo}</span>
+                                            <div className="col-span-1 text-left pl-2 flex items-center gap-1.5 min-w-0">
+                                                <User className="w-3 h-3 text-blue-400 shrink-0" />
+                                                <span className="text-xs text-slate-300 truncate">{tarea.asesor?.nombre_completo}</span>
                                             </div>
 
                                             <div className="col-span-2 flex justify-center items-center min-w-0">
@@ -369,6 +376,22 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                                         <AlertTriangle className="w-3 h-3 mr-1" /> 
                                                         {tarea.notas ? 'Rechazada' : 'Pendiente'}
                                                     </Badge>
+                                                )}
+                                            </div>
+
+                                            {/* F. Edición */}
+                                            <div className="col-span-1 flex flex-col items-center justify-center gap-0.5" suppressHydrationWarning>
+                                                {tarea.completada_en ? (
+                                                    <>
+                                                        <span className="text-[10px] text-slate-300 font-mono">
+                                                            {formatDate(tarea.completada_en)}
+                                                        </span>
+                                                        <span className="text-[9px] text-slate-500 font-mono">
+                                                            {formatTime(tarea.completada_en)}
+                                                        </span>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-[10px] text-slate-600">—</span>
                                                 )}
                                             </div>
 

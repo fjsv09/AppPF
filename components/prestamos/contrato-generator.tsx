@@ -78,8 +78,8 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
         th { background-color: #f0f0f0; font-weight: bold; }
         svg { width: 40px; height: 40px; }
         @media print {
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .page-break { border: none; box-shadow: none; margin: 0; width: auto; min-height: auto; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; width: 794px !important; }
+            .page-break { border: none; box-shadow: none; margin: 0; width: 794px !important; min-height: 1123px !important; }
         }
     `;
 
@@ -87,7 +87,7 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
     const getDocumentHTML = () => {
         const content = contentRef.current
         if (!content) return ''
-        return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>ProFinanzas - Documento</title><style>${getDocumentCSS()}</style></head><body>${content.innerHTML}</body></html>`
+        return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=794"><title>ProFinanzas - Documento</title><style>${getDocumentCSS()}</style></head><body>${content.innerHTML}</body></html>`
     }
 
     const handlePrint = () => {
@@ -159,11 +159,26 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
             const file = new File([pdfBlob], fileName, { type: 'application/pdf' })
 
             if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({
-                    files: [file], title,
-                    text: `Hola ${prestamo.clientes?.nombres}, aquí tienes tu ${docTitle.toLowerCase()} oficial de ProFinanzas en PDF.`
-                })
-                toast.success("PDF Enviado", { id: "share-pdf" })
+                try {
+                    await navigator.share({
+                        files: [file], title,
+                        text: `Hola ${prestamo.clientes?.nombres}, aquí tienes tu ${docTitle.toLowerCase()} oficial de ProFinanzas en PDF.`
+                    })
+                    toast.success("PDF Enviado", { id: "share-pdf" })
+                } catch (shareErr: any) {
+                    if (shareErr.name === 'NotAllowedError' || shareErr.message?.includes('user gesture')) {
+                        // Fallback to download because share failed due to gesture timeout
+                        const link = document.createElement('a')
+                        link.href = URL.createObjectURL(pdfBlob)
+                        link.download = fileName
+                        link.click()
+                        toast.success("PDF Descargado", { id: "share-pdf" })
+                    } else if (shareErr.name !== 'AbortError') {
+                        throw shareErr
+                    } else {
+                        toast.dismiss("share-pdf")
+                    }
+                }
             } else {
                 const link = document.createElement('a')
                 link.href = URL.createObjectURL(pdfBlob)
@@ -171,10 +186,10 @@ export function ContratoGenerator({ prestamo, cronograma, open: controlledOpen, 
                 link.click()
                 toast.success("PDF Descargado", { id: "share-pdf" })
             }
-        } catch (err) {
-            if ((err as Error).name !== 'AbortError') {
+        } catch (err: any) {
+            if (err.name !== 'AbortError') {
                 console.error("Error generating/sharing PDF:", err)
-                toast.error("Error al generar PDF", { description: (err as Error).message, id: "share-pdf" })
+                toast.error("Error al generar PDF", { description: err.message || "Error desconocido", id: "share-pdf" })
             } else {
                 toast.dismiss("share-pdf")
             }

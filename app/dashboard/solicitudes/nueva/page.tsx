@@ -209,6 +209,13 @@ export default function NuevaSolicitudPage() {
     setCompletedSteps((prev) => Array.from(new Set([...prev, 1])))
   }
 
+  const handleStepDataChange = (step: 'prospecto' | 'evaluacion' | 'prestamo', data: any) => {
+    setWizardState((prev) => ({
+      ...prev,
+      [step]: { ...prev[step], ...data }
+    }))
+  }
+
   const handleEvaluacionNext = (data: EvaluacionData) => {
     setWizardState((prev) => ({
       ...prev,
@@ -394,9 +401,9 @@ export default function NuevaSolicitudPage() {
             <StepProspecto
               initialData={wizardState.prospecto}
               onNext={handleProspectoNext}
+              onChange={(data) => handleStepDataChange('prospecto', data)}
               clienteExistente={!!wizardState.clienteExistenteId}
               sectores={sectores}
-              // En modo edición mantenemos el valor original de "clienteExistente" que viene de la BD
             />
           )}
 
@@ -404,6 +411,7 @@ export default function NuevaSolicitudPage() {
             <StepEvaluacion
               initialData={wizardState.evaluacion}
               onNext={handleEvaluacionNext}
+              onChange={(data) => handleStepDataChange('evaluacion', data)}
               onBack={handleBack}
             />
           )}
@@ -412,6 +420,7 @@ export default function NuevaSolicitudPage() {
             <StepPrestamo
               initialData={wizardState.prestamo}
               onNext={handleSubmit}
+              onChange={(data) => handleStepDataChange('prestamo', data)}
               onBack={handleBack}
               isSubmitting={isSubmitting}
               systemSchedule={systemSchedule}

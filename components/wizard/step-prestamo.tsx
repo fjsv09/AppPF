@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -29,6 +30,7 @@ interface StepPrestamoProps {
     desbloqueo_hasta: string
   }
   clienteLimit?: number
+  onChange?: (data: Partial<PrestamoData>) => void
 }
 
 const CUOTAS_ESTANDAR = {
@@ -38,7 +40,7 @@ const CUOTAS_ESTANDAR = {
   mensual: 1
 }
 
-export function StepPrestamo({ initialData, onNext, onBack, isSubmitting = false, systemSchedule, clienteLimit }: StepPrestamoProps) {
+export function StepPrestamo({ initialData, onNext, onBack, isSubmitting = false, systemSchedule, clienteLimit, onChange }: StepPrestamoProps) {
 
   const {
     register,
@@ -56,10 +58,12 @@ export function StepPrestamo({ initialData, onNext, onBack, isSubmitting = false
     }
   })
 
-  const monto = watch('monto_solicitado') || 0
-  const interesBase = watch('interes_base') || 0
-  const cuotas = watch('cuotas') || 1
-  const modalidad = watch('modalidad')
+  const watchAll = watch()
+
+  const monto = watchAll.monto_solicitado || 0
+  const interesBase = watchAll.interes_base || 0
+  const cuotas = watchAll.cuotas || 1
+  const modalidad = watchAll.modalidad
 
   // Calcular interés proporcional usando useMemo
   const calcularInteres = useMemo(() => {
@@ -76,6 +80,16 @@ export function StepPrestamo({ initialData, onNext, onBack, isSubmitting = false
       cuotasEstandar
     }
   }, [modalidad, cuotas, interesBase])
+
+  // Notificar cambios al padre en tiempo real
+  useEffect(() => {
+    if (onChange) {
+        onChange({
+            ...watchAll,
+            interes: calcularInteres.interes // Enviamos el interés calculado
+        })
+    }
+  }, [watchAll, onChange, calcularInteres.interes])
 
   // Calcular totales
   const totalPagar = monto * (1 + calcularInteres.interes / 100)

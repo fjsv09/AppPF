@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -24,6 +24,7 @@ const evaluacionSchema = z.object({
 interface StepEvaluacionProps {
   initialData?: Partial<EvaluacionData>
   onNext: (data: EvaluacionData) => void
+  onChange?: (data: Partial<EvaluacionData>) => void
   onBack: () => void
 }
 
@@ -38,7 +39,7 @@ const DOCUMENTOS_REQUERIDOS = [
   { key: 'dni_posterior', label: 'DNI Posterior' }
 ]
 
-export function StepEvaluacion({ initialData, onNext, onBack }: StepEvaluacionProps) {
+export function StepEvaluacion({ initialData, onNext, onChange, onBack }: StepEvaluacionProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [documentos, setDocumentos] = useState<Record<string, string>>(initialData?.documentos || {})
   const [gpsCoords, setGpsCoords] = useState(initialData?.gps_coordenadas || '')
@@ -46,6 +47,7 @@ export function StepEvaluacion({ initialData, onNext, onBack }: StepEvaluacionPr
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors }
   } = useForm({
     resolver: zodResolver(evaluacionSchema),
@@ -57,6 +59,19 @@ export function StepEvaluacion({ initialData, onNext, onBack }: StepEvaluacionPr
       gps_coordenadas: initialData?.gps_coordenadas || ''
     }
   })
+
+  const watchedValues = watch()
+
+  // Notificar cambios al padre en tiempo real
+  useEffect(() => {
+    if (onChange) {
+      onChange({
+        ...watchedValues,
+        gps_coordenadas: gpsCoords,
+        documentos
+      })
+    }
+  }, [watchedValues, gpsCoords, documentos, onChange])
 
   const handleDocumentoUpload = (key: string, fileData: string) => {
     setDocumentos((prev) => ({ ...prev, [key]: fileData }))

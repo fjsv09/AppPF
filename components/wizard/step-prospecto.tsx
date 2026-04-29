@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -26,16 +26,18 @@ interface Sector {
 interface StepProspectoProps {
   initialData?: Partial<ProspectoData>
   onNext: (data: ProspectoData) => void
+  onChange?: (data: Partial<ProspectoData>) => void
   clienteExistente?: boolean
   sectores?: Sector[]
 }
 
-export function StepProspecto({ initialData, onNext, clienteExistente, sectores = [] }: StepProspectoProps) {
+export function StepProspecto({ initialData, onNext, onChange, clienteExistente, sectores = [] }: StepProspectoProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors }
   } = useForm({
     resolver: zodResolver(prospectoSchema),
@@ -48,6 +50,15 @@ export function StepProspecto({ initialData, onNext, clienteExistente, sectores 
       sector_id: initialData?.sector_id || ''
     }
   })
+
+  const watchedValues = watch()
+
+  // Notificar cambios al padre en tiempo real
+  useEffect(() => {
+    if (onChange) {
+      onChange(watchedValues)
+    }
+  }, [watchedValues, onChange])
 
   const onSubmit = async (data: any) => {
     setIsSubmitting(true)

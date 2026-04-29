@@ -232,7 +232,7 @@ export async function PATCH(request: Request) {
                             titulo: '🛡️ Edición de Supervisor',
                             mensaje: `${supervisorName} modificó los datos de ${docTitle}: ${changes.join(', ')}`,
                             link: `/dashboard/clientes/${id}`,
-                            tipo: 'alerta'
+                            tipo: 'warning'
                         })
                     }
                 }

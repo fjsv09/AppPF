@@ -257,7 +257,7 @@ export async function POST(request: Request) {
             import('@/utils/notifications').then(mod => {
                 mod.notificarPagoCliente(result.pago_id)
                 if (['Yape', 'Plin', 'Transferencia'].includes(metodo_pago)) {
-                    mod.notificarATodos(['admin', 'secretaria'], 'Nuevo Pago Digital', `S/ ${monto} por validar.`, 'alerta')
+                    mod.notificarATodos(['admin', 'secretaria'], 'Nuevo Pago Digital', `S/ ${monto} por validar.`, 'warning')
                 }
             }).catch(e => console.error('Notify Error:', e))
         }

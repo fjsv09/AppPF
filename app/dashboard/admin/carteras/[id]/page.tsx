@@ -60,7 +60,7 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
   // OPTIMIZATION: Start independent queries in parallel
   const [perfilRes, carterasRes, asesoresRes] = await Promise.all([
     adminClient.from('perfiles').select('rol').eq('id', user.id).single(),
-    supabase.from('carteras').select('*, perfiles(id, nombre_completo)').eq('id', id).maybeSingle(),
+    supabase.from('carteras').select('*, perfiles(id, nombre_completo, rol)').eq('id', id).maybeSingle(),
     adminClient.from('perfiles').select('id, nombre_completo').eq('activo', true).order('nombre_completo')
   ])
 
@@ -299,7 +299,7 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
                   <PiggyBank className="w-4 h-4 text-blue-400" />
                   <h2 className="text-sm font-black text-white tracking-tight leading-none uppercase">Cuentas</h2>
                </div>
-               <CarteraAccountsManageModal carteraId={id} accounts={accounts} />
+               <CarteraAccountsManageModal carteraId={id} accounts={accounts} isGlobal={id === '00000000-0000-0000-0000-000000000000' || !cartera.asesor_id || (cartera as any).perfiles?.rol === 'admin'} />
             </div>
             <div className="flex items-center gap-3 text-[9px] font-bold text-slate-600">
                <span className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" /> BANCO</span>

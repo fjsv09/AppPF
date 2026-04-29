@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Settings2, Plus, Save, Edit2, X, Landmark, Banknote, Trash2, AlertTriangle, Users, Check } from 'lucide-react'
+import { Settings2, Plus, Edit2, Landmark, Banknote, Trash2, AlertTriangle, Users, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -30,9 +30,10 @@ interface Usuario {
 interface ManageAccountsModalProps {
     carteraId: string
     accounts: Cuenta[]
+    isGlobal?: boolean
 }
 
-export function CarteraAccountsManageModal({ carteraId, accounts }: ManageAccountsModalProps) {
+export function CarteraAccountsManageModal({ carteraId, accounts, isGlobal = false }: ManageAccountsModalProps) {
     const router = useRouter()
     const supabase = createClient()
     const [open, setOpen] = useState(false)
@@ -455,14 +456,14 @@ export function CarteraAccountsManageModal({ carteraId, accounts }: ManageAccoun
                             </div>
                         </div>
                     ) : (
-                        accounts.length >= 1 && carteraId !== '00000000-0000-0000-0000-000000000000' ? (
+                        accounts.length >= 1 && !isGlobal ? (
                             <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center gap-2">
                                 <AlertTriangle className="w-3 h-3 text-amber-500" />
                                 <p className="text-[9px] font-bold text-amber-500/80 uppercase tracking-tight">Las carteras de asesores están limitadas a una sola cuenta.</p>
                             </div>
                         ) : (
-                            <Button 
-                                variant="outline" 
+                            <Button
+                                variant="outline"
                                 className="w-full h-10 border-dashed border-slate-700 hover:border-indigo-500/50 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
                                 onClick={() => setIsAddingNew(true)}
                             >

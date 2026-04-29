@@ -179,7 +179,7 @@ export async function POST(request: Request) {
                 await createFullNotification(pago.registrado_por, {
                     titulo: '🚨 PAGO RECHAZADO',
                     mensaje: `Se rechazó el voucher de S/${montoRevertir} para ${pago.cronograma_cuotas?.prestamos?.clientes?.nombres}. Motivo: ${motivo}`,
-                    tipo: 'alerta',
+                    tipo: 'warning',
                     link: '/dashboard/tareas'
                 })
             }

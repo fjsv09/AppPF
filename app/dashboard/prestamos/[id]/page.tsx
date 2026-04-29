@@ -357,7 +357,9 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                         <div className="flex flex-row items-center gap-3 lg:gap-4 w-full lg:w-auto">
                             <div className="flex items-center gap-2 w-full lg:w-auto">
                                 <div className="flex-1 lg:flex-none lg:w-auto">
+                                {(userRole === 'admin' || userRole === 'supervisor') && (
                                     <ContratoGenerator prestamo={prestamo} cronograma={cronograma || []} defaultOpen={isContractTab} />
+                                )}
                                 </div>
 
                                 <div className="flex-1 lg:flex-none lg:w-auto">

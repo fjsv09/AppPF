@@ -364,7 +364,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                 )}
 
                                                 <div className="flex items-center gap-2 mt-2">
-                                                    {solicitud.estado_solicitud === 'aprobado' && (
+                                                    {solicitud.estado_solicitud === 'aprobado' && perfil?.rol === 'admin' && (
                                                         <Button 
                                                             size="sm" 
                                                             variant="outline" 
@@ -384,7 +384,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                             Notificar
                                                         </Button>
                                                     )}
-                                                    {solicitud.estado_solicitud === 'aprobado' && (
+                                                    {solicitud.estado_solicitud === 'aprobado' && (perfil?.rol === 'admin' || perfil?.rol === 'supervisor') && (
                                                         <DocumentButtonAsync 
                                                             solicitudId={solicitud.id} 
                                                             type="solicitud" 
@@ -461,7 +461,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
 
                                             {/* Acciones */}
                                             <div className="col-span-1 flex justify-end items-center gap-2 text-right">
-                                                {solicitud.estado_solicitud === 'aprobado' && (
+                                                {solicitud.estado_solicitud === 'aprobado' && perfil?.rol === 'admin' && (
                                                     <Button 
                                                         size="sm" 
                                                         variant="ghost" 
@@ -480,7 +480,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                         </svg>
                                                     </Button>
                                                 )}
-                                                {solicitud.estado_solicitud === 'aprobado' && (
+                                                {solicitud.estado_solicitud === 'aprobado' && (perfil?.rol === 'admin' || perfil?.rol === 'supervisor') && (
                                                     <DocumentButtonAsync 
                                                         solicitudId={solicitud.id} 
                                                         type="solicitud" 

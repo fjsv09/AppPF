@@ -166,7 +166,7 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
                     </div>
                 </div>
                 
-                {prestamoAsociado && (
+                {prestamoAsociado && (perfil?.rol === 'admin' || perfil?.rol === 'supervisor') && (
                     <div className="ml-auto flex items-center gap-2">
                         <ContratoGenerator 
                             prestamo={prestamoAsociado} 

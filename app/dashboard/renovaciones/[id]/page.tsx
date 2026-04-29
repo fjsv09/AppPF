@@ -264,7 +264,7 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                             fotoPerfil={solicitud.cliente?.foto_perfil}
                             className="bg-slate-800/50 border-slate-700"
                         />
-                        {prestamoNuevoAsociado && (
+                        {prestamoNuevoAsociado && (perfil.rol === 'admin' || perfil.rol === 'supervisor') && (
                             <div className="ml-auto flex items-center gap-2">
                                 <ContratoGenerator 
                                     prestamo={prestamoNuevoAsociado} 

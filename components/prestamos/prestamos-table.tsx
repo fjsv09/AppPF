@@ -1212,13 +1212,15 @@ export function PrestamosTable({
                                                                             <Eye className="w-4 h-4 mr-2 text-slate-500" />
                                                                             Ver Detalle
                                                                         </DropdownMenuItem>
-                                                                        <DropdownMenuItem
-                                                                            className="hover:bg-slate-800 cursor-pointer text-xs py-2.5 rounded-lg"
-                                                                            onClick={() => handleViewContract(prestamo)}
-                                                                        >
-                                                                            <Files className="w-4 h-4 mr-2 text-blue-400" />
-                                                                            Ver Documentos
-                                                                        </DropdownMenuItem>
+                                                                        {(userRol === 'admin' || userRol === 'supervisor') && (
+                                                                            <DropdownMenuItem
+                                                                                className="hover:bg-slate-800 cursor-pointer text-xs py-2.5 rounded-lg"
+                                                                                onClick={() => handleViewContract(prestamo)}
+                                                                            >
+                                                                                <Files className="w-4 h-4 mr-2 text-blue-400" />
+                                                                                Ver Documentos
+                                                                            </DropdownMenuItem>
+                                                                        )}
                                                                     </DropdownMenuContent>
                                                                 </DropdownMenu>
                                                             </div>
@@ -1698,16 +1700,18 @@ export function PrestamosTable({
                                                                                     <Eye className="w-3.5 h-3.5 mr-2 text-slate-500" />
                                                                                     Ver Detalle
                                                                                 </DropdownMenuItem>
-                                                                                <DropdownMenuItem
-                                                                                    className="hover:bg-slate-800 cursor-pointer text-xs"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation()
-                                                                                        handleViewContract(prestamo)
-                                                                                    }}
-                                                                                >
-                                                                                    <Files className="w-3.5 h-3.5 mr-2 text-blue-400" />
-                                                                                    {isLoadingContract && selectedContractLoan?.id === prestamo.id ? 'Cargando...' : 'Ver Documentos'}
-                                                                                </DropdownMenuItem>
+                                                                                {(userRol === 'admin' || userRol === 'supervisor') && (
+                                                                                    <DropdownMenuItem
+                                                                                        className="hover:bg-slate-800 cursor-pointer text-xs"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation()
+                                                                                            handleViewContract(prestamo)
+                                                                                        }}
+                                                                                    >
+                                                                                        <Files className="w-3.5 h-3.5 mr-2 text-blue-400" />
+                                                                                        {isLoadingContract && selectedContractLoan?.id === prestamo.id ? 'Cargando...' : 'Ver Documentos'}
+                                                                                    </DropdownMenuItem>
+                                                                                )}
                                                                             </DropdownMenuContent>
                                                                         </DropdownMenu>
                                                                     </div>
@@ -2006,13 +2010,18 @@ export function PrestamosTable({
                                                                                 Ver Detalle
                                                                             </DropdownMenuItem>
 
-                                                                            <DropdownMenuItem
-                                                                                className="hover:bg-slate-800 cursor-pointer text-xs"
-                                                                                onClick={() => handleViewContract(prestamo)}
-                                                                            >
-                                                                                <Files className="w-3.5 h-3.5 mr-2 text-blue-400" />
-                                                                                {isLoadingContract && selectedContractLoan?.id === prestamo.id ? 'Cargando...' : 'Ver Documentos'}
-                                                                            </DropdownMenuItem>
+                                                                            {(userRol === 'admin' || userRol === 'supervisor') && (
+                                                                                <DropdownMenuItem
+                                                                                    className="hover:bg-slate-800 cursor-pointer text-xs"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation()
+                                                                                        handleViewContract(prestamo)
+                                                                                    }}
+                                                                                >
+                                                                                    <Files className="w-3.5 h-3.5 mr-2 text-blue-400" />
+                                                                                    {isLoadingContract && selectedContractLoan?.id === prestamo.id ? 'Cargando...' : 'Ver Documentos'}
+                                                                                </DropdownMenuItem>
+                                                                            )}
                                                                         </DropdownMenuContent>
                                                                     </DropdownMenu>
                                                                 </div>
@@ -2473,16 +2482,18 @@ export function PrestamosTable({
                                                                         <Eye className="w-3.5 h-3.5 mr-2 text-slate-500" />
                                                                         Ver Detalle
                                                                     </DropdownMenuItem>
-                                                                    <DropdownMenuItem
-                                                                        className="hover:bg-slate-800 cursor-pointer text-xs"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation()
-                                                                            handleViewContract(prestamo)
-                                                                        }}
-                                                                    >
-                                                                        <Files className="w-3.5 h-3.5 mr-2 text-blue-400" />
-                                                                        {isLoadingContract && selectedContractLoan?.id === prestamo.id ? 'Cargando...' : 'Ver Documentos'}
-                                                                    </DropdownMenuItem>
+                                                                    {(userRol === 'admin' || userRol === 'supervisor') && (
+                                                                        <DropdownMenuItem
+                                                                            className="hover:bg-slate-800 cursor-pointer text-xs"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                handleViewContract(prestamo)
+                                                                            }}
+                                                                        >
+                                                                            <Files className="w-3.5 h-3.5 mr-2 text-blue-400" />
+                                                                            {isLoadingContract && selectedContractLoan?.id === prestamo.id ? 'Cargando...' : 'Ver Documentos'}
+                                                                        </DropdownMenuItem>
+                                                                    )}
                                                                 </DropdownMenuContent>
                                                             </DropdownMenu>
                                                         </div>

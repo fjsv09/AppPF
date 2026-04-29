@@ -71,16 +71,22 @@ export async function GET(request: Request) {
 
         const { data: prestamosRaw } = await supabaseAdmin.from('prestamos')
             .select('*, clientes!inner(id, nombres, asesor_id, bloqueado_renovacion)')
-            .in('cliente_id', clienteIds)
+            .in('clientes.asesor_id', allAdvisorsIds)
             .in('estado', ['activo', 'legal', 'vencido', 'moroso', 'cpp', 'finalizado', 'completado'])
 
         const loanIds = prestamosRaw?.map(p => p.id) || []
-        const { data: allCuotasRaw } = await supabaseAdmin.from('cronograma_cuotas')
-            .select('*, pagos(*)')
-            .in('prestamo_id', loanIds)
+        let allCuotasRaw: any[] = []
+        
+        for (let i = 0; i < loanIds.length; i += 150) {
+            const chunk = loanIds.slice(i, i + 150)
+            const { data: cuotasChunk } = await supabaseAdmin.from('cronograma_cuotas')
+                .select('*, pagos(*)')
+                .in('prestamo_id', chunk)
+            if (cuotasChunk) allCuotasRaw.push(...cuotasChunk)
+        }
 
         prestamosRaw?.forEach(p => {
-            p.cronograma_cuotas = allCuotasRaw?.filter(c => c.prestamo_id === p.id) || []
+            p.cronograma_cuotas = allCuotasRaw.filter(c => c.prestamo_id === p.id)
         })
 
         // 4. Configuración
@@ -281,8 +287,8 @@ export async function GET(request: Request) {
         // Refinanciamientos del Mes (Filtered by loan status change and advisor)
         const { count: refinanciamientosMes } = await supabaseAdmin
             .from('prestamos')
-            .select('*', { count: 'exact', head: true })
-            .in('cliente_id', targetClienteIds)
+            .select('id, clientes!inner(asesor_id)', { count: 'exact', head: true })
+            .in('clientes.asesor_id', targetAsesorIds)
             .eq('estado', 'refinanciado')
             .gte('updated_at', firstOfMonth)
 

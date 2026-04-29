@@ -151,7 +151,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             // Chunked para respetar límite de URL
             // Usamos el primer chunk; si hay más de 500 clientes, usamos la primera mitad del filtro
             // (para scopes muy grandes, mejor sin filtro que truncado)
-            if (clienteIdFilter.length <= 500) {
+            if (clienteIdFilter.length <= 150) {
                 prestamosQuery = prestamosQuery.in('cliente_id', clienteIdFilter)
             }
         }
@@ -286,8 +286,8 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     // Solo se necesita filtro residual para el caso de admin con scope amplio sin filtro de cliente.
     let filteredList = prestamosRaw || []
 
-    // Filtro residual en memoria solo si clienteIdFilter > 500 (no se pudo aplicar en DB)
-    if (clienteIdFilter !== null && clienteIdFilter.length > 500) {
+    // Filtro residual en memoria solo si clienteIdFilter > 150 (no se pudo aplicar en DB)
+    if (clienteIdFilter !== null && clienteIdFilter.length > 150) {
         const filterSet = new Set(clienteIdFilter)
         filteredList = filteredList.filter(p => filterSet.has(p.cliente_id))
     }

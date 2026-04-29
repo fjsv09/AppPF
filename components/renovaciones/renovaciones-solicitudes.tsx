@@ -429,7 +429,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                                         )}
 
                                         <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-800/40">
-                                            {sol.estado_solicitud === 'aprobado' && (
+                                            {sol.estado_solicitud === 'aprobado' && userRole === 'admin' && (
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
@@ -448,7 +448,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                                                     Notificar
                                                 </Button>
                                             )}
-                                            {sol.estado_solicitud === 'aprobado' && (
+                                            {sol.estado_solicitud === 'aprobado' && (userRole === 'admin' || userRole === 'supervisor') && (
                                                 <DocumentButtonAsync
                                                     solicitudId={sol.id}
                                                     type="renovacion"
@@ -583,8 +583,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                                                             </Button>
                                                         </>
                                                     )}
-                                                    {sol.estado_solicitud === 'aprobado' && (
-                                                        <>
+                                                    {sol.estado_solicitud === 'aprobado' && userRole === 'admin' && (
                                                         <Button
                                                             size="sm"
                                                             variant="ghost"
@@ -601,13 +600,14 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                                                                 <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.246 2.248 3.484 5.232 3.484 8.412-.003 6.557-5.338 11.892-11.893 11.892-1.997-.001-3.951-.5-5.688-1.448l-6.309 1.656zm6.29-4.143c1.565.928 3.178 1.416 4.856 1.417 5.341 0 9.69-4.348 9.693-9.691.002-2.59-1.01-5.025-2.847-6.865-1.838-1.837-4.271-2.847-6.863-2.848-5.341 0-9.69 4.349-9.692 9.691-.001 1.831.515 3.614 1.491 5.162l-.994 3.63 3.712-.974zm11.367-7.46c-.066-.11-.244-.176-.511-.309-.267-.133-1.583-.781-1.827-.87-.245-.089-.423-.133-.6.133-.177.266-.689.87-.845 1.047-.156.177-.311.199-.578.066-.267-.133-1.127-.416-2.146-1.326-.793-.707-1.329-1.58-1.485-1.847-.156-.266-.016-.411.117-.544.12-.119.267-.31.4-.466.133-.155.177-.266.267-.443.089-.178.044-.333-.022-.466-.067-.133-.6-1.446-.822-1.979-.217-.518-.434-.447-.6-.456-.153-.008-.328-.01-.502-.01-.174 0-.457.065-.696.327-.24.262-.915.894-.915 2.178 0 1.284.934 2.525 1.065 2.702.131.177 1.836 2.805 4.448 3.931.621.267 1.106.427 1.484.547.623.198 1.19.17 1.637.104.498-.074 1.583-.647 1.805-1.27.222-.623.222-1.157.156-1.27z" />
                                                             </svg>
                                                         </Button>
+                                                    )}
+                                                    {sol.estado_solicitud === 'aprobado' && (userRole === 'admin' || userRole === 'supervisor') && (
                                                         <DocumentButtonAsync
                                                             solicitudId={sol.id}
                                                             type="renovacion"
                                                             iconOnly
                                                             className="h-8 w-8 p-0 rounded-lg text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300 transition-all"
                                                         />
-                                                    </>
                                                     )}
                                                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all" onClick={() => router.push(`/dashboard/renovaciones/${sol.id}`)} title="Ver Detalle">
                                                         <Eye className="w-4 h-4" />

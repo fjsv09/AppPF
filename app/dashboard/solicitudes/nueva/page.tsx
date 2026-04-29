@@ -37,6 +37,12 @@ export default function NuevaSolicitudPage() {
 
   const [accessResult, setAccessResult] = useState<any>(null)
 
+  // Contador para forzar remount de los Step* tras envío exitoso.
+  // Necesario porque cada Step usa useForm con defaultValues, que solo se aplican
+  // al montar — sin remount, los inputs mantienen los valores del envío anterior
+  // aunque el wizardState del padre ya esté reseteado.
+  const [formInstance, setFormInstance] = useState(0)
+
   // Detecta si el wizardState tiene datos reales del usuario (no defaults vacíos)
   const hasContent = (state: WizardState): boolean => {
     return !!(
@@ -334,6 +340,9 @@ export default function NuevaSolicitudPage() {
         clienteExistenteId: clienteId || undefined
       })
       setCompletedSteps([])
+      // Forzar remount de los Step* — sin esto, los useForm internos mantienen
+      // los valores del envío anterior aunque el wizardState ya esté limpio.
+      setFormInstance((n) => n + 1)
 
       const targetId = isEditMode ? solicitudId : result.id
       router.push(`/dashboard/solicitudes/${targetId}?success=true`)
@@ -442,6 +451,7 @@ export default function NuevaSolicitudPage() {
         <div className="mt-8">
           {wizardState.currentStep === 1 && (
             <StepProspecto
+              key={`prospecto-${formInstance}`}
               initialData={wizardState.prospecto}
               onNext={handleProspectoNext}
               onChange={(data) => handleStepDataChange('prospecto', data)}
@@ -452,6 +462,7 @@ export default function NuevaSolicitudPage() {
 
           {wizardState.currentStep === 2 && (
             <StepEvaluacion
+              key={`evaluacion-${formInstance}`}
               initialData={wizardState.evaluacion}
               onNext={handleEvaluacionNext}
               onChange={(data) => handleStepDataChange('evaluacion', data)}
@@ -461,6 +472,7 @@ export default function NuevaSolicitudPage() {
 
           {wizardState.currentStep === 3 && (
             <StepPrestamo
+              key={`prestamo-${formInstance}`}
               initialData={wizardState.prestamo}
               onNext={handleSubmit}
               onChange={(data) => handleStepDataChange('prestamo', data)}

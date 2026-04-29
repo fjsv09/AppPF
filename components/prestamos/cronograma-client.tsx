@@ -10,8 +10,9 @@ import { toast } from 'sonner'
 import { Loader2, Lock, CheckCircle, RefreshCw } from 'lucide-react'
 import { toBlob } from 'html-to-image'
 import { EditQuotaModal } from './edit-quota-modal'
-import { Pencil } from 'lucide-react'
+import { Pencil, AlertTriangle, Wand2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { LoanActions } from './loan-actions'
 
 
 import {
@@ -349,7 +350,23 @@ export function CronogramaClient({
                 </div>
             )}
 
-
+            {/* Admin Tool: Force Regenerate */}
+            {userRol === 'admin' && prestamo.bloqueo_cronograma && (
+                <div className="bg-blue-500/5 border border-blue-500/20 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4 mb-2 group hover:bg-blue-500/10 transition-all duration-300">
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                            <Wand2 className="w-5 h-5 text-blue-400" />
+                        </div>
+                        <div>
+                            <p className="text-blue-300 font-bold text-sm">Herramientas Administrativas</p>
+                            <p className="text-slate-400 text-[11px]">Sincroniza el cronograma con la nueva fecha de inicio y reglas de feriados.</p>
+                        </div>
+                    </div>
+                    <div className="w-full sm:w-auto">
+                        <LoanActions prestamoId={prestamo.id} force={true} />
+                    </div>
+                </div>
+            )}
 
             {/* Quota Table */}
             <div className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden">

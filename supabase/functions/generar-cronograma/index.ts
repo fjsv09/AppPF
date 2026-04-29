@@ -97,7 +97,11 @@ Deno.serve(async (req) => {
             .from('feriados')
             .select('fecha')
         
-        const feriadosSet = new Set(feriadosRaw?.map((f: any) => f.fecha) || [])
+        const feriadosSet = new Set(feriadosRaw?.map((f: any) => {
+            if (typeof f.fecha === 'string') return f.fecha.split('T')[0]
+            if (f.fecha instanceof Date) return f.fecha.toISOString().split('T')[0]
+            return String(f.fecha)
+        }) || [])
         console.log('Feriados loaded:', feriadosSet.size)
 
         // 4. Data Preparation

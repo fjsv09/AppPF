@@ -194,7 +194,11 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     const { data: feriadosRaw } = await supabaseAdmin
         .from('feriados')
         .select('fecha')
-    const feriados = (feriadosRaw || []).map(f => f.fecha)
+    const feriados = (feriadosRaw || []).map(f => {
+        if (typeof f.fecha === 'string') return f.fecha.split('T')[0]
+        if (f.fecha instanceof Date) return f.fecha.toISOString().split('T')[0]
+        return String(f.fecha)
+    })
 
     // Obtener IDs de préstamos con solicitudes de renovación pendientes
     const { data: solicitudesPendientes } = await supabaseAdmin

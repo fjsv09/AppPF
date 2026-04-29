@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { checkSystemAccess } from '@/utils/systemRestrictions'
 import { createFullNotification } from '@/services/notification-service'
+import { generarCronogramaNode } from '@/lib/financial-logic'
 
 export const dynamic = 'force-dynamic'
 
@@ -249,10 +250,10 @@ export async function POST(request: Request) {
                 await Promise.all(updatePromises)
             }
 
-            // 6. Generar cronograma nuevo
-            const { error: cronogramaError } = await supabaseAdmin.rpc('generar_cronograma_db', {
-                p_prestamo_id: resultado.prestamo_nuevo_id
-            })
+            // 6. Generar cronograma nuevo (Centralizado en Node)
+            const { error: cronogramaError } = await generarCronogramaNode(supabaseAdmin, resultado.prestamo_nuevo_id)
+                .then(() => ({ error: null }))
+                .catch(err => ({ error: err }));
             if (cronogramaError) throw new Error(`Error generando cronograma: ${cronogramaError.message}`);
 
             // 7. Auditoría y Tareas

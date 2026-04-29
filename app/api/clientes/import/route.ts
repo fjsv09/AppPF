@@ -1,6 +1,7 @@
 import { createClient } from '../../../../utils/supabase/server'
 import { createAdminClient } from '../../../../utils/supabase/admin'
 import { NextResponse } from 'next/server'
+import { generarCronogramaNode } from '@/lib/financial-logic'
 
 export const dynamic = 'force-dynamic'
 
@@ -170,10 +171,10 @@ export async function POST(request: Request) {
 
                 if (prestamoError) throw new Error(`Error creando préstamo: ${prestamoError.message}`)
 
-                // G. Generar Cronograma (RPC)
-                const { error: cronogramaError } = await supabaseAdmin.rpc('generar_cronograma_db', {
-                    p_prestamo_id: prestamo.id
-                })
+                // G. Generar Cronograma (Centralizado en Node)
+                const { error: cronogramaError } = await generarCronogramaNode(supabaseAdmin, prestamo.id)
+                    .then(() => ({ error: null }))
+                    .catch(err => ({ error: err }));
                 if (cronogramaError) throw new Error(`Error generando cronograma: ${cronogramaError.message}`)
 
                 // H. Desembolso Financiero (Saldo y Movimiento)

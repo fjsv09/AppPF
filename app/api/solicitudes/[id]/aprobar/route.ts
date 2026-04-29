@@ -3,6 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createFullNotification } from '@/services/notification-service'
+import { generarCronogramaNode } from '@/lib/financial-logic'
 
 export const dynamic = 'force-dynamic'
 
@@ -193,10 +194,10 @@ export async function PATCH(
                 })
         }
 
-        // ===== GENERAR CRONOGRAMA =====
-        const { error: cronogramaError } = await supabaseAdmin.rpc('generar_cronograma_db', {
-            p_prestamo_id: prestamo.id
-        })
+        // ===== GENERAR CRONOGRAMA (Centralizado en Node) =====
+        const { error: cronogramaError } = await generarCronogramaNode(supabaseAdmin, prestamo.id)
+            .then(() => ({ error: null }))
+            .catch(err => ({ error: err }));
 
         if (cronogramaError) {
             console.error('Error generating cronograma:', cronogramaError)

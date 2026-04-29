@@ -1364,3 +1364,104 @@ export async function getClientReputationAction(supabase: any, clienteId: string
   return getComprehensiveEvaluation(client, allLoans || [], [], undefined, systemConfig, todayOverride);
 }
 
+/**
+ * GENERACION DE CRONOGRAMA CENTRALIZADA (NODE.JS)
+ * Reemplaza la logica de base de datos para garantizar consistencia con feriados y domingos.
+ */
+export async function generarCronogramaNode(supabase: any, prestamoId: string) {
+    // 1. Obtener datos del préstamo
+    const { data: prestamo, error: pError } = await supabase
+        .from('prestamos')
+        .select('*')
+        .eq('id', prestamoId)
+        .single();
+
+    if (pError || !prestamo) throw new Error('Préstamo no encontrado para generación de cronograma');
+
+    // 0. Seguridad: No regenerar si hay cuotas pagadas (total o parcialmente)
+    const { data: cuotasPagadas } = await supabase
+        .from('cronograma_cuotas')
+        .select('id')
+        .eq('prestamo_id', prestamoId)
+        .gt('monto_pagado', 0)
+        .limit(1);
+
+    if (cuotasPagadas && cuotasPagadas.length > 0) {
+        throw new Error('No se puede sincronizar el cronograma porque ya existen cuotas con pagos registrados.');
+    }
+
+    // 2. Obtener feriados
+    const { data: holidaysData } = await supabase.from('feriados').select('fecha');
+    const holidaysSet = new Set(holidaysData?.map((h: any) => {
+        if (typeof h.fecha === 'string') return h.fecha.split('T')[0];
+        return String(h.fecha).split('T')[0];
+    }) || []);
+
+    // 3. Preparar variables
+    const nCuotas = prestamo.cuotas;
+    const nFrecuencia = (prestamo.frecuencia || 'diario').toLowerCase();
+    const fInicioStr = prestamo.fecha_inicio;
+    
+    // Parse UTC Date safely
+    const [y, m, d] = fInicioStr.split('-').map(Number);
+    const fInicio = new Date(Date.UTC(y, m - 1, d));
+
+    const totalToPay = prestamo.monto * (1 + (prestamo.interes / 100));
+    const quotaAmount = Math.round((totalToPay / nCuotas) * 100) / 100;
+    
+    const schedule = [];
+    let currentDate = new Date(fInicio);
+    
+    // Regla de día libre para cobro diario (+1 día de gracia antes de empezar a contar)
+    if (nFrecuencia === 'diario') {
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+    }
+
+    for (let i = 1; i <= nCuotas; i++) {
+        let nextDate = new Date(currentDate);
+        
+        if (nFrecuencia === 'diario') nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+        else if (nFrecuencia === 'semanal') nextDate.setUTCDate(nextDate.getUTCDate() + 7);
+        else if (nFrecuencia === 'quincenal') nextDate.setUTCDate(nextDate.getUTCDate() + 14);
+        else if (nFrecuencia === 'mensual') nextDate.setUTCMonth(nextDate.getUTCMonth() + 1);
+
+        // Validar domingos y feriados
+        let isValidDay = false;
+        let checkDate = new Date(nextDate);
+        let daySafety = 0;
+        while (!isValidDay && daySafety < 30) {
+            daySafety++;
+            const dayOfWeek = checkDate.getUTCDay();
+            const dateStr = checkDate.toISOString().split('T')[0]; // formatUTCDate inline
+            if (dayOfWeek === 0 || holidaysSet.has(dateStr)) {
+                checkDate.setUTCDate(checkDate.getUTCDate() + 1);
+            } else {
+                isValidDay = true;
+            }
+        }
+        
+        const dateStrFinal = checkDate.toISOString().split('T')[0];
+        schedule.push({
+            prestamo_id: prestamoId,
+            numero_cuota: i,
+            monto_cuota: i === nCuotas ? parseFloat((totalToPay - (quotaAmount * (nCuotas - 1))).toFixed(2)) : quotaAmount,
+            fecha_vencimiento: dateStrFinal,
+            estado: 'pendiente'
+        });
+        currentDate = checkDate;
+    }
+
+    // 4. Operaciones en DB
+    // a. Limpiar cronograma antiguo
+    await supabase.from('cronograma_cuotas').delete().eq('prestamo_id', prestamoId);
+
+    // b. Insertar nuevo cronograma
+    const { error: insError } = await supabase.from('cronograma_cuotas').insert(schedule);
+    if (insError) throw insError;
+
+    // c. Actualizar fecha_fin del préstamo
+    const finalEndDate = schedule[schedule.length - 1].fecha_vencimiento;
+    await supabase.from('prestamos').update({ fecha_fin: finalEndDate }).eq('id', prestamoId);
+
+    return { success: true, fecha_fin: finalEndDate };
+}

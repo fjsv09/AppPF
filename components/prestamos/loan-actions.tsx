@@ -9,11 +9,12 @@ import { useRouter } from 'next/navigation'
 
 interface LoanActionsProps {
     prestamoId: string
-    hasSchedule: boolean
-    isLocked: boolean
+    hasSchedule?: boolean
+    isLocked?: boolean
+    force?: boolean
 }
 
-export function LoanActions({ prestamoId, hasSchedule, isLocked }: LoanActionsProps) {
+export function LoanActions({ prestamoId, hasSchedule, isLocked, force }: LoanActionsProps) {
     const [loading, setLoading] = useState(false)
     const router = useRouter()
     const supabase = createClient()
@@ -21,12 +22,12 @@ export function LoanActions({ prestamoId, hasSchedule, isLocked }: LoanActionsPr
     const handleGenerateSchedule = async () => {
         setLoading(true)
         try {
-            // Call RPC (Database Function) directly to avoid deployment issues
-            const { data, error } = await supabase.rpc('generar_cronograma_db', {
-                p_prestamo_id: prestamoId
+            const response = await fetch(`/api/prestamos/${prestamoId}/generar-cronograma`, {
+                method: 'POST'
             })
 
-            if (error) throw error
+            const result = await response.json()
+            if (!response.ok) throw new Error(result.error || 'Error al generar cronograma')
 
             toast.success('Cronograma Generado', { description: 'Revisa las cuotas abajo.' })
             router.refresh()
@@ -55,6 +56,19 @@ export function LoanActions({ prestamoId, hasSchedule, isLocked }: LoanActionsPr
         } finally {
             setLoading(false)
         }
+    }
+
+    if (force) {
+        return (
+            <Button 
+                onClick={handleGenerateSchedule} 
+                disabled={loading} 
+                className="bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-900/20"
+            >
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Calculator className="mr-2 h-4 w-4" />}
+                Sincronizar Cronograma
+            </Button>
+        )
     }
 
     if (isLocked) {

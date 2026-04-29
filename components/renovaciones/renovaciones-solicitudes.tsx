@@ -411,7 +411,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                                         <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5 text-right w-full">Asesor</span>
                                         <span className="text-xs text-slate-300 flex items-center justify-end gap-1 truncate w-full">
                                             <User className="h-3 w-3 text-blue-400 shrink-0" />
-                                            <span className="truncate">{sol.asesor?.nombre_completo.split(' ')[0]}</span>
+                                            <span className="truncate">{sol.asesor?.nombre_completo}</span>
                                         </span>
                                     </div>
                                 </div>

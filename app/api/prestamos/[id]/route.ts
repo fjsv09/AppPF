@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
+import { generarCronogramaNode } from '@/lib/financial-logic'
 import { NextResponse } from 'next/server'
 import { addDays } from 'date-fns'
 import { revalidatePath } from 'next/cache'
@@ -148,7 +149,7 @@ export async function PUT(
         }
         const nuevaFechaFin = formatUTCDate(fFin)
 
-        // 6. Actualizar préstamo
+        // 6. Actualizar préstamo (Se actualizará de nuevo al final con la fecha_fin real)
         const { error: updateError } = await supabaseAdmin
             .from('prestamos')
             .update({
@@ -157,65 +158,13 @@ export async function PUT(
                 fecha_inicio: fecha_inicio || prestamoActual.fecha_inicio,
                 frecuencia: nFrecuencia,
                 cuotas: nCuotas,
-                fecha_fin: nuevaFechaFin,
             })
             .eq('id', id)
 
-
         if (updateError) throw updateError
 
-        // 7. Eliminar cronograma antiguo y regenerar MANUALMENTE
-        // Esto garantiza que el cronograma siempre aparezca en ediciones administrativas
-        await supabaseAdmin.from('cronograma_cuotas').delete().eq('prestamo_id', id)
-
-        // Lógica de Generación Manual (Sincronizada con reglas de negocio)
-        const totalPagar = nuevoMonto * (1 + (parseFloat(interes || prestamoActual.interes) / 100))
-        const montoCuota = parseFloat((totalPagar / nCuotas).toFixed(2))
-        
-        const cuotasNuevas = []
-        let fechaTemp = new Date(fInicio)
-
-        for (let i = 1; i <= nCuotas; i++) {
-            // Avanzar fecha según modalidad
-            if (nFrecuencia === 'diario') {
-                fechaTemp.setUTCDate(fechaTemp.getUTCDate() + 1)
-                // Omitir domingos (Business Rule: Sistema PF no cobra domingos en diario)
-                while (fechaTemp.getUTCDay() === 0) {
-                    fechaTemp.setUTCDate(fechaTemp.getUTCDate() + 1)
-                }
-            } else if (nFrecuencia === 'semanal') {
-                fechaTemp.setUTCDate(fechaTemp.getUTCDate() + 7)
-            } else if (nFrecuencia === 'quincenal') {
-                fechaTemp.setUTCDate(fechaTemp.getUTCDate() + 15)
-            } else if (nFrecuencia === 'mensual') {
-                fechaTemp.setUTCMonth(fechaTemp.getUTCMonth() + 1)
-            }
-
-            cuotasNuevas.push({
-                prestamo_id: id,
-                numero_cuota: i,
-                monto_cuota: i === nCuotas ? parseFloat((totalPagar - (montoCuota * (nCuotas - 1))).toFixed(2)) : montoCuota,
-                monto_pagado: 0,
-                fecha_vencimiento: formatUTCDate(new Date(fechaTemp)),
-                estado: 'pendiente'
-            })
-        }
-
-        const { error: insertError } = await supabaseAdmin
-            .from('cronograma_cuotas')
-            .insert(cuotasNuevas)
-
-        if (insertError) throw insertError
-
-        // Recalcular fecha_fin real basada en la última cuota (por si hubo saltos de domingos)
-        const ultimaCuota = cuotasNuevas[cuotasNuevas.length - 1]
-        if (ultimaCuota) {
-            await supabaseAdmin
-                .from('prestamos')
-                .update({ fecha_fin: ultimaCuota.fecha_vencimiento })
-                .eq('id', id)
-        }
-
+        // 7. Regenerar cronograma MANUALMENTE (Centralizado en Node)
+        await generarCronogramaNode(supabaseAdmin, id)
 
         // 8. Registrar en historial para que aparezca en la pestaña Historial
         await supabaseAdmin.rpc('registrar_cambio_estado', {

@@ -194,7 +194,11 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
     const { data: feriadosData } = await supabaseAdmin
         .from('feriados')
         .select('fecha')
-    const feriadosSet = new Set(feriadosData?.map(f => f.fecha) || [])
+    const feriadosSet = new Set(feriadosData?.map(f => {
+        if (typeof f.fecha === 'string') return f.fecha.split('T')[0]
+        if (f.fecha instanceof Date) return f.fecha.toISOString().split('T')[0]
+        return String(f.fecha)
+    }) || [])
 
     const { 
         calcularFechasProyectadas,

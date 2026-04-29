@@ -3,6 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createFullNotification } from '@/services/notification-service'
+import { generarCronogramaNode } from '@/lib/financial-logic'
 
 export const dynamic = 'force-dynamic'
 
@@ -168,10 +169,10 @@ export async function PATCH(
                 if (pagosError) throw new Error(`Error generando recibo: ${pagosError.message}`);
             }
 
-            // 4. Generar cronograma para el nuevo préstamo
-            const { error: cronogramaError } = await supabaseAdmin.rpc('generar_cronograma_db', {
-                p_prestamo_id: resultado.prestamo_nuevo_id
-            })
+            // 4. Generar cronograma para el nuevo préstamo (Centralizado en Node)
+            const { error: cronogramaError } = await generarCronogramaNode(supabaseAdmin, resultado.prestamo_nuevo_id)
+                .then(() => ({ error: null }))
+                .catch(err => ({ error: err }));
             if (cronogramaError) throw new Error(`Error generando cronograma: ${cronogramaError.message}`);
 
             // 5. Notificar al asesor

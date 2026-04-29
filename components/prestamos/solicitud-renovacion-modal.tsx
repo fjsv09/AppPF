@@ -158,7 +158,11 @@ export function SolicitudRenovacionModal({
     const fetchFeriados = async () => {
         try {
             const { data } = await supabase.from('feriados').select('fecha')
-            setFeriados(new Set(data?.map(f => f.fecha) || []))
+            setFeriados(new Set(data?.map(f => {
+                if (typeof f.fecha === 'string') return f.fecha.split('T')[0]
+                if (f.fecha instanceof Date) return f.fecha.toISOString().split('T')[0]
+                return String(f.fecha)
+            }) || []))
         } catch (e) {
             console.error('Error fetching feriados:', e)
         }

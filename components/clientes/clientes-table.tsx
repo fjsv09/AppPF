@@ -366,7 +366,7 @@ export function ClientesTable({ clientes, perfiles = [], userRol = 'asesor', use
                                         {asesorName && (
                                             <p className="text-[9px] text-purple-400 md:hidden uppercase mt-0.5 truncate">
                                                 <Users className="w-2 h-2 inline mr-1" />
-                                                {asesorName.split(' ')[0]}
+                                                {asesorName}
                                             </p>
                                         )}
                                     </div>
@@ -416,7 +416,7 @@ export function ClientesTable({ clientes, perfiles = [], userRol = 'asesor', use
                                     </Badge>
                                     {asesorName && (
                                          <span className="text-[10px] text-purple-400 uppercase tracking-tighter">
-                                            {asesorName.split(' ')[0]} {asesorName.split(' ')[1]?.charAt(0)}.
+                                            {asesorName}
                                          </span>
                                     )}
                                 </div>

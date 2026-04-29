@@ -331,7 +331,7 @@ export function AdminKPIs() {
                                             <p className="text-[10px] md:text-[11px] font-bold text-white truncate uppercase">{sol.cliente.nombres}</p>
                                             <div className="flex items-center gap-2 mt-0.5">
                                                 <p className="text-[9px] text-slate-500 font-bold">S/ {formatMoney(sol.monto_solicitado)}</p>
-                                                <span className="text-[7px] text-slate-600 font-black uppercase truncate">@ {sol.asesor.nombre_completo.split(' ')[0]}</span>
+                                                <span className="text-[7px] text-slate-600 font-black uppercase truncate">@ {sol.asesor.nombre_completo}</span>
                                             </div>
                                         </div>
                                         <Link href={`/dashboard/solicitudes/${sol.id}`} className="shrink-0">
@@ -358,7 +358,7 @@ export function AdminKPIs() {
                                             <p className="text-[10px] md:text-[11px] font-bold text-white group-hover:text-purple-400 transition-colors truncate uppercase">{ren.cliente.nombres}</p>
                                             <div className="flex items-center gap-2 mt-0.5">
                                                 <p className="text-[9px] text-slate-500 font-bold">S/ {formatMoney(ren.monto_nuevo)}</p>
-                                                <span className="text-[7px] text-slate-600 font-black uppercase truncate">@ {ren.asesor.nombre_completo.split(' ')[0]}</span>
+                                                <span className="text-[7px] text-slate-600 font-black uppercase truncate">@ {ren.asesor.nombre_completo}</span>
                                             </div>
                                         </div>
                                         <Link href={`/dashboard/renovaciones/${ren.id}`} className="shrink-0">

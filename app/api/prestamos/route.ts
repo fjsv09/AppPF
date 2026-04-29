@@ -104,17 +104,21 @@ export async function POST(request: Request) {
 
     // 6. Generar Cronograma en memoria para validación y cálculo de fecha fin
     const { data: holidaysData } = await supabaseAdmin.from('feriados').select('fecha')
-    const holidaysSet = new Set(holidaysData?.map((h: any) => h.fecha) || [])
+    const holidaysSet = new Set(holidaysData?.map((h: any) => {
+        if (typeof h.fecha === 'string') return h.fecha.split('T')[0]
+        if (h.fecha instanceof Date) return h.fecha.toISOString().split('T')[0]
+        return String(h.fecha)
+    }) || [])
 
     const schedule = []
     let currentDate = parseUTCDate(fecha_inicio)
-    const totalToPay = principal * (1 + (rate / 100))
-    const quotaAmount = Math.round((totalToPay / numCuotas) * 100) / 100
 
     // Regla de día libre para cobro diario
     if (freqNormal === 'diario') {
-         currentDate.setUTCDate(currentDate.getUTCDate() + 1)
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1)
     }
+    const totalToPay = principal * (1 + (rate / 100))
+    const quotaAmount = Math.round((totalToPay / numCuotas) * 100) / 100
 
     let quotasCount = 0
     let safetyCounter = 0

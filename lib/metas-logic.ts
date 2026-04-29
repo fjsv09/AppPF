@@ -59,7 +59,11 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
 
     // 3. Feriados
     const { data: fers } = await supabaseAdmin.from('feriados').select('fecha')
-    const feriadosSet = new Set<string>((fers || []).map((f: any) => f.fecha))
+    const feriadosSet = new Set<string>((fers || []).map((f: any) => {
+        if (typeof f.fecha === 'string') return f.fecha.split('T')[0]
+        if (f.fecha instanceof Date) return f.fecha.toISOString().split('T')[0]
+        return String(f.fecha)
+    }))
 
     // 4. Cálculos Financieros
     const asesorIds = [userId] // Limitado al asesor actual que cierra

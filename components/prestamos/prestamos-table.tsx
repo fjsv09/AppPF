@@ -1076,7 +1076,7 @@ export function PrestamosTable({
                                                                 <div className="flex items-center gap-1.5 opacity-70">
                                                                     <div className="h-1 w-1 rounded-full bg-blue-500" />
                                                                     <span className="text-[9px] font-bold text-blue-400 uppercase tracking-tight truncate">
-                                                                        Asesor: {prestamo.asesor_nombre?.split(' ')[0] || '---'}
+                                                                        Asesor: {prestamo.asesor_nombre || '---'}
                                                                     </span>
                                                                     {prestamo.atrasadas > 0 && (
                                                                         <span className="text-[9px] font-black text-rose-400 bg-rose-500/10 px-1 rounded">

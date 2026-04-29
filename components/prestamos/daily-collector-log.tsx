@@ -360,7 +360,7 @@ export function DailyCollectorLog({
                                             </td>
                                             <td className="px-3 py-4">
                                                 <div className="flex flex-col gap-2 font-bold text-slate-400">
-                                                    {physical.map((p: any) => <div key={p.id} className="truncate max-w-[60px]"><User className="w-2 h-2 inline mr-0.5" />{p.perfiles?.nombre_completo?.split(' ')[0]}</div>)}
+                                                    {physical.map((p: any) => <div key={p.id} className="truncate max-w-[120px]"><User className="w-2 h-2 inline mr-0.5" />{p.perfiles?.nombre_completo}</div>)}
                                                     {physical.length === 0 && <span className="text-slate-800">---</span>}
                                                 </div>
                                             </td>

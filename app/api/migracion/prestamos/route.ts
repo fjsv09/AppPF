@@ -98,7 +98,11 @@ export async function POST(request: Request) {
 
         // 1.5 Precargar feriados
         const { data: holidaysData } = await supabaseAdmin.from('feriados').select('fecha')
-        const holidaysSet = new Set(holidaysData?.map((h: any) => h.fecha) || [])
+        const holidaysSet = new Set(holidaysData?.map((h: any) => {
+            if (typeof h.fecha === 'string') return h.fecha.split('T')[0]
+            if (h.fecha instanceof Date) return h.fecha.toISOString().split('T')[0]
+            return String(h.fecha)
+        }) || [])
 
         // 2. Procesar cada préstamo
         for (const l of loans) {

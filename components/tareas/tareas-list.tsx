@@ -208,7 +208,7 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                                     <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-1 w-full leading-none">Asesor</span>
                                                     <span className="text-sm text-slate-300 flex items-center justify-end gap-1.5 truncate w-full leading-none">
                                                         <User className="h-3 w-3 text-blue-400 shrink-0" />
-                                                        <span className="truncate">{tarea.asesor?.nombre_completo.split(' ')[0]}</span>
+                                                        <span className="truncate">{tarea.asesor?.nombre_completo}</span>
                                                     </span>
                                                 </div>
                                             </div>
@@ -353,7 +353,7 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
 
                                             <div className="col-span-2 text-left pl-4 flex items-center gap-2 min-w-0">
                                                 <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                                                <span className="text-sm text-slate-300 truncate">{tarea.asesor?.nombre_completo.split(' ')[0]}</span>
+                                                <span className="text-sm text-slate-300 truncate">{tarea.asesor?.nombre_completo}</span>
                                             </div>
 
                                             <div className="col-span-2 flex justify-center items-center min-w-0">

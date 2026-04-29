@@ -80,7 +80,7 @@ export default async function DashboardPage() {
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-blue-950/30 border border-white/5 shadow-xl p-4 md:p-6 mb-4">
                 <div className="relative z-10">
                     <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight mb-0.5">
-                        Hola, <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">{perfil?.nombre_completo?.split(' ')[0] || 'Usuario'}</span>
+                        Hola, <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">{perfil?.nombre_completo || 'Usuario'}</span>
                     </h1>
                     <p className="text-slate-400 text-xs md:text-base">
                         {isAdmin || isSecretaria ? 'Panel administrativo real-time.' : 'Gestión de cartera hoy.'}

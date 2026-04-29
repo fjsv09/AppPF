@@ -71,7 +71,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     const selectedDate = (sParams.fecha as string) || getTodayPeru()
 
     // Fetch relations to calculate KPIs in memory - NO CACHE
-    // Force fresh data after the update
+    // Step 1: Initial fetch without cronograma_cuotas
     const { data: prestamosRaw, error } = await supabaseAdmin
         .from('prestamos')
         .select(`
@@ -81,10 +81,6 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                 sectores (id, nombre),
                 solicitudes (gps_coordenadas, created_at),
                 asesor:asesor_id(nombre_completo)
-            ),
-            cronograma_cuotas (
-                *,
-                pagos (id, created_at, monto_pagado, metodo_pago, voucher_compartido, latitud, longitud, registrado_por, estado_verificacion)
             ),
             gestiones (
                 id,
@@ -111,8 +107,38 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         return <div className="p-8 text-center text-red-500 font-bold">Error al cargar préstamos: {error.message}</div>;
     }
 
+    // Step 2: Fetch cronograma_cuotas in chunks to avoid timeout and URL limits
+    const prestamoIds = prestamosRaw?.map(p => p.id) || []
+    const cuotasByLoan = new Map<string, any[]>()
+    const chunkSize = 300
+
+    for (let i = 0; i < prestamoIds.length; i += chunkSize) {
+        const chunk = prestamoIds.slice(i, i + chunkSize)
+        const { data: cuotasChunk, error: cuotasError } = await supabaseAdmin
+            .from('cronograma_cuotas')
+            .select(`
+                *,
+                pagos (id, created_at, monto_pagado, metodo_pago, voucher_compartido, latitud, longitud, registrado_por, estado_verificacion)
+            `)
+            .in('prestamo_id', chunk)
+            
+        if (cuotasError) {
+            console.error(`Error fetching cuotas chunk ${i / chunkSize}:`, cuotasError)
+        } else if (cuotasChunk) {
+            cuotasChunk.forEach(c => {
+                const list = cuotasByLoan.get(c.prestamo_id) || []
+                list.push(c)
+                cuotasByLoan.set(c.prestamo_id, list)
+            })
+        }
+    }
+
+    // Merge cuotas back into prestamosRaw
+    prestamosRaw?.forEach(p => {
+        p.cronograma_cuotas = cuotasByLoan.get(p.id) || []
+    })
+
     console.log('📉 Prestamos fetched:', prestamosRaw?.length)
-    prestamosRaw?.forEach(p => console.log(`ID: ${p.id.slice(0,4)}... | Estado: ${p.estado} | Mora: ${p.estado_mora}`))
 
     // Fetch Configuración Sistema BEFORE mapping
     const { data: configSistema } = await supabaseAdmin

@@ -42,6 +42,7 @@ export function CarteraAccountsManageModal({ carteraId, accounts }: ManageAccoun
     const [usuarios, setUsuarios] = useState<Usuario[]>([])
     const [isLoadingUsuarios, setIsLoadingUsuarios] = useState(false)
     const [userRole, setUserRole] = useState<string | null>(null)
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
     useEffect(() => {
         const fetchUserData = async () => {
@@ -52,6 +53,7 @@ export function CarteraAccountsManageModal({ carteraId, accounts }: ManageAccoun
                 if (user) {
                     const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single()
                     setUserRole(perfil?.rol || null)
+                    setCurrentUserId(user.id)
                 }
 
                 // Fetch users list (only if admin, but we fetch it anyway for the list)
@@ -266,7 +268,9 @@ export function CarteraAccountsManageModal({ carteraId, accounts }: ManageAccoun
                                                                     }}
                                                                 >
                                                                     <div className="flex flex-col">
-                                                                        <span className="text-[10px] font-bold text-white uppercase leading-none">{u.nombre_completo}</span>
+                                                                        <span className="text-[10px] font-bold text-white uppercase leading-none">
+                                                                            {u.nombre_completo} {u.id === currentUserId && <span className="text-indigo-400 normal-case ml-1">(Tú)</span>}
+                                                                        </span>
                                                                         <span className="text-[7px] font-medium text-slate-500 uppercase mt-1">{u.rol}</span>
                                                                     </div>
                                                                     {editForm.usuarios_autorizados.includes(u.id) && (
@@ -389,6 +393,57 @@ export function CarteraAccountsManageModal({ carteraId, accounts }: ManageAccoun
                                         </Select>
                                     </div>
                                 </div>
+
+                                {/* SECCIÓN DE RESPONSABLES (Solo ADMIN) */}
+                                {userRole === 'admin' && (
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Users className="w-3 h-3 text-indigo-400" />
+                                            <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Responsables de la Cuenta</label>
+                                        </div>
+                                        <div className="bg-slate-950 border border-slate-800 rounded-lg p-2 max-h-32 overflow-y-auto custom-scrollbar">
+                                            {isLoadingUsuarios ? (
+                                                <div className="flex justify-center py-4">
+                                                    <div className="w-4 h-4 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
+                                                </div>
+                                            ) : usuarios.length === 0 ? (
+                                                <p className="text-[8px] text-slate-600 uppercase text-center py-2">No hay usuarios disponibles</p>
+                                            ) : (
+                                                <div className="grid grid-cols-1 gap-1">
+                                                    {usuarios.map(u => (
+                                                        <div 
+                                                            key={u.id} 
+                                                            className={cn(
+                                                                "flex items-center justify-between p-1.5 rounded-md transition-colors cursor-pointer",
+                                                                newForm.usuarios_autorizados.includes(u.id) ? "bg-indigo-500/10 border border-indigo-500/20" : "hover:bg-slate-900 border border-transparent"
+                                                            )}
+                                                            onClick={() => {
+                                                                const current = newForm.usuarios_autorizados
+                                                                if (current.includes(u.id)) {
+                                                                    setNewForm(prev => ({ ...prev, usuarios_autorizados: current.filter(id => id !== u.id) }))
+                                                                } else {
+                                                                    setNewForm(prev => ({ ...prev, usuarios_autorizados: [...current, u.id] }))
+                                                                }
+                                                            }}
+                                                        >
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[10px] font-bold text-white uppercase leading-none">
+                                                                    {u.nombre_completo} {u.id === currentUserId && <span className="text-indigo-400 normal-case ml-1">(Tú)</span>}
+                                                                </span>
+                                                                <span className="text-[7px] font-medium text-slate-500 uppercase mt-1">{u.rol}</span>
+                                                            </div>
+                                                            {newForm.usuarios_autorizados.includes(u.id) && (
+                                                                <Check className="w-3 h-3 text-indigo-400" />
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <p className="text-[8px] text-slate-500 italic px-1">Selecciona quiénes podrán gestionar esta cuenta.</p>
+                                    </div>
+                                )}
+
                                 <div className="flex justify-end gap-2 pt-2">
                                     <Button size="sm" variant="ghost" onClick={() => setIsAddingNew(false)} disabled={isSubmitting} className="h-8 text-[10px] font-bold text-slate-400 hover:text-white uppercase tracking-widest">
                                         Cancelar

@@ -12,15 +12,12 @@ export async function GET() {
         const supabase = createAdminClient() 
 
         
-        // 2. Obtener perfiles excluyendo al usuario actual
+        // 2. Obtener perfiles
         let query = supabase
             .from('perfiles')
             .select('id, nombre_completo, rol')
             .order('nombre_completo')
-            
-        if (user) {
-            query = query.neq('id', user.id)
-        }
+
         
         const { data: usuarios, error } = await query
         

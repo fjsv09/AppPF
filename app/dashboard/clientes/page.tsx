@@ -45,7 +45,7 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
         console.error('Error in actualizar_estados_mora:', e)
     }
 
-    // Build base query based on role
+    // Build base query based on role (Step 1: Fetch Clients and Loans basic info)
     let clientsQuery = supabaseAdmin
         .from('clientes')
         .select(`
@@ -59,16 +59,8 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
                 fecha_inicio,
                 estado_mora,
                 es_paralelo,
-                cronograma_cuotas (
-                    monto_cuota,
-                    monto_pagado,
-                    fecha_vencimiento,
-                    estado,
-                    pagos (
-                        created_at,
-                        monto_pagado
-                    )
-                )
+                observacion_supervisor,
+                created_at
             ),
             solicitudes (
                 gps_coordenadas,
@@ -112,21 +104,70 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
         </div>
     }
 
-    // NEW: Robust fetch of reassignments (DEBUG: Fetching all to be sure)
+    // Step 2: Robust fetch of cuotas and payments ONLY for active loans
+    const activeLoanIds = (clientsRaw || []).flatMap(c => 
+        (c.prestamos || [])
+            .filter((p: any) => p.estado === 'activo')
+            .map((p: any) => p.id)
+    )
+
+    let cuotasByLoan = new Map<string, any[]>()
+    if (activeLoanIds.length > 0) {
+        // Fetch in chunks if more than 1000 to be extra safe with Supabase limits, 
+        // but 265 (found in test) is fine for a single .in()
+        const { data: cuotasRaw, error: cuotasError } = await supabaseAdmin
+            .from('cronograma_cuotas')
+            .select(`
+                prestamo_id,
+                monto_cuota,
+                monto_pagado,
+                fecha_vencimiento,
+                estado,
+                pagos (
+                    created_at,
+                    monto_pagado,
+                    estado_verificacion
+                )
+            `)
+            .in('prestamo_id', activeLoanIds)
+        
+        if (cuotasError) {
+            console.error('Error cargando cuotas:', cuotasError)
+        } else {
+            cuotasRaw?.forEach(c => {
+                const list = cuotasByLoan.get(c.prestamo_id) || []
+                list.push(c)
+                cuotasByLoan.set(c.prestamo_id, list)
+            })
+        }
+    }
+
+    // Merge cuotas back into clientsRaw
+    clientsRaw.forEach(c => {
+        c.prestamos?.forEach((p: any) => {
+            p.cronograma_cuotas = cuotasByLoan.get(p.id) || []
+        })
+    })
+
+    // NEW: Robust fetch of reassignments (Optimized to only fetch for current clients)
     const clientIdsParsed = (clientsRaw || []).map(c => c.id)
     let reassignedClientIds = new Set<string>()
-    const { data: reassignments, error: reassignError } = await supabaseAdmin
+    const { data: reassignments } = await supabaseAdmin
         .from('historial_reasignaciones_clientes')
-        .select('*')
+        .select('cliente_id')
+        .in('cliente_id', clientIdsParsed)
     
     if (reassignments) {
         reassignments.forEach(r => reassignedClientIds.add(r.cliente_id))
     }
 
     // Obtener IDs de préstamos que son producto de una refinanciación directa
+    const allLoanIds = (clientsRaw || []).flatMap(c => (c.prestamos || []).map((p: any) => p.id))
     const { data: renovacionesRefinanciamiento } = await supabaseAdmin
         .from('renovaciones')
         .select('prestamo_nuevo_id, prestamo_original:prestamo_original_id(estado)')
+        .in('prestamo_nuevo_id', allLoanIds)
+
     const prestamoIdsProductoRefinanciamiento = (renovacionesRefinanciamiento || [])
         .filter((r: any) => (r.prestamo_original as any)?.estado === 'refinanciado')
         .map((r: any) => r.prestamo_nuevo_id as string)

@@ -226,6 +226,7 @@ export default function NuevaSolicitudPage() {
   }
 
   const handleSubmit = async (data: PrestamoData) => {
+    if (isSubmitting) return;
     setIsSubmitting(true)
 
     try {
@@ -298,7 +299,6 @@ export default function NuevaSolicitudPage() {
     } catch (error: any) {
       console.error('Error procesando solicitud:', error)
       alert(error.message || 'Error al procesar la solicitud. Por favor intente nuevamente.')
-    } finally {
       setIsSubmitting(false)
     }
   }

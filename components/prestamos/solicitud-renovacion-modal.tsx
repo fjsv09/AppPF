@@ -349,13 +349,30 @@ export function SolicitudRenovacionModal({
     const handleOpenChange = (isOpen: boolean) => {
         if (!isOpen && showSuccess && !wasNotified) return
         setOpen(isOpen)
+        
         if (!isOpen) {
             // Resetear estado al cerrar para que vuelva a verificar al abrir
-            // Esto corrige el bug de que no se actualiza si el usuario paga una cuota y vuelve a intentar
             setElegibilidad(null)
             setError(null)
             setShowSuccess(false)
             setWasNotified(false)
+            // [LIMPIEZA] Resetear simulación para evitar que datos de una sesión previa persistan
+            setSimulacion({
+                monto: currentMonto,
+                interes: getBaseInterest(), 
+                cuotas: currentCuotas,
+                modalidad: currentModalidad,
+                fecha_inicio: todayStr
+            })
+        } else {
+            // [NUEVO] Al abrir, asegurar que la simulación refleje los props actuales (por si el componente se reutilizó)
+            setSimulacion({
+                monto: currentMonto,
+                interes: getBaseInterest(), 
+                cuotas: currentCuotas,
+                modalidad: currentModalidad,
+                fecha_inicio: todayStr
+            })
         }
     }
 

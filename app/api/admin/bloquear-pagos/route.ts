@@ -1,37 +1,16 @@
-import { createClient } from '@/utils/supabase/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { createAdminClient, requireAdmin } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
-    const supabase = await createClient()
+    const guard = await requireAdmin()
+    if ('error' in guard) return guard.error
+    const { user } = guard
 
     try {
-        const {
-            data: { user },
-        } = await supabase.auth.getUser()
-
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const supabaseAdmin = createAdminClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!
-        )
-
-        // Verificar que el usuario es admin
-        const { data: perfil } = await supabaseAdmin
-            .from('perfiles')
-            .select('rol')
-            .eq('id', user.id)
-            .single()
-
-        if (perfil?.rol !== 'admin') {
-            return NextResponse.json({ error: 'Solo administradores pueden bloquear pagos.' }, { status: 403 })
-        }
+        const supabaseAdmin = createAdminClient()
 
         const body = await request.json()
         const { asesor_id, bloqueado } = body

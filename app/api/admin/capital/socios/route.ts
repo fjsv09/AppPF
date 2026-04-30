@@ -1,20 +1,15 @@
-import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createAdminClient, requireAdmin } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { createFullNotification } from '@/services/notification-service'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  const guard = await requireAdmin()
+  if ('error' in guard) return guard.error
+
   try {
-    const supabase = await createClient()
     const adminClient = createAdminClient()
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-
-    const { data: perfil } = await adminClient.from('perfiles').select('rol').eq('id', user.id).single()
-    if (perfil?.rol !== 'admin') return NextResponse.json({ error: 'Prohibido' }, { status: 403 })
 
     const { data: socios, error } = await adminClient
       .from('socios')
@@ -30,16 +25,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const guard = await requireAdmin()
+  if ('error' in guard) return guard.error
+  const { user } = guard
+
   try {
-    const supabase = await createClient()
     const adminClient = createAdminClient()
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-
-    const { data: perfil } = await adminClient.from('perfiles').select('rol, nombre_completo').eq('id', user.id).single()
-    if (perfil?.rol !== 'admin') return NextResponse.json({ error: 'Prohibido' }, { status: 403 })
-
+    const { data: perfilFull } = await adminClient.from('perfiles').select('nombre_completo').eq('id', user.id).single()
     const body = await request.json()
     const { nombre, capital_aportado, porcentaje_participacion, cuenta_id } = body
 
@@ -95,7 +87,7 @@ export async function POST(request: Request) {
     const notificationPromises = admins?.map(admin => 
         createFullNotification(admin.id, {
             titulo: 'Nuevo Socio Registrado',
-            mensaje: `${perfil?.nombre_completo} registró a ${nombre} con un ${porcentaje_participacion}% de participación.`,
+            mensaje: `${perfilFull?.nombre_completo || 'Admin'} registró a ${nombre} con un ${porcentaje_participacion}% de participación.`,
             link: '/dashboard/admin/capital',
             tipo: 'info'
         })

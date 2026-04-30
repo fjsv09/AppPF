@@ -1,45 +1,46 @@
-import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createAdminClient, requireAdmin } from '@/utils/supabase/admin'
+import { detectImageType } from '@/utils/supabase/image-validation'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
+    const guard = await requireAdmin()
+    if ('error' in guard) return guard.error
+
     try {
-        const supabase = await createClient()
-        const { data: { user } } = await supabase.auth.getUser()
-
-        if (!user) {
-            return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-        }
-
-        // Verificar que sea admin
-        const { data: perfil } = await supabase
-            .from('perfiles')
-            .select('rol')
-            .eq('id', user.id)
-            .single()
-
-        if (perfil?.rol !== 'admin') {
-            return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
-        }
-
         const formData = await request.formData()
         const file = formData.get('file') as File
         if (!file) {
             return NextResponse.json({ error: 'Archivo requerido' }, { status: 400 })
         }
 
-        // 2. Subir el nuevo logo con un nombre fijo en la raíz del bucket con el CLIENTE ADMIN
-        const supabaseAdmin = createAdminClient()
-        const filePath = `logo_sistema.png`
+        if (file.size > 5 * 1024 * 1024) {
+            return NextResponse.json({ error: 'El archivo es demasiado grande (máx 5MB)' }, { status: 400 })
+        }
 
-        // El admin client se salta las políticas de RLS
-        const { data, error: uploadError } = await supabaseAdmin.storage
+        // Validar magic bytes (no confiar en el Content-Type del cliente)
+        const arrayBuffer = await file.arrayBuffer()
+        const buffer = Buffer.from(arrayBuffer)
+        const detectedType = detectImageType(buffer)
+        if (!detectedType) {
+            return NextResponse.json({ error: 'Tipo de archivo no permitido (solo JPG, PNG, WEBP)' }, { status: 400 })
+        }
+
+        const extByType: Record<string, string> = {
+            'image/jpeg': 'jpg',
+            'image/png': 'png',
+            'image/webp': 'webp'
+        }
+        const filePath = `logo_sistema.${extByType[detectedType]}`
+
+        const supabaseAdmin = createAdminClient()
+        const { error: uploadError } = await supabaseAdmin.storage
             .from('avatares')
-            .upload(filePath, file, {
+            .upload(filePath, buffer, {
                 cacheControl: '0',
-                upsert: true
+                upsert: true,
+                contentType: detectedType
             })
 
         if (uploadError) {
@@ -51,9 +52,9 @@ export async function POST(request: Request) {
             .from('avatares')
             .getPublicUrl(filePath)
 
-        return NextResponse.json({ 
-            success: true, 
-            publicUrl: `${publicUrl}?t=${Date.now()}` 
+        return NextResponse.json({
+            success: true,
+            publicUrl: `${publicUrl}?t=${Date.now()}`
         })
     } catch (error: any) {
         console.error('Error in /api/configuracion/upload-logo:', error)

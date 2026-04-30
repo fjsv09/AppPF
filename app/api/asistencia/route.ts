@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
+import { createFullNotification } from '@/services/notification-service'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -446,6 +447,20 @@ export async function POST(request: Request) {
         })
 
         let readableEvent = eventTarget === 'entrada' ? 'Entrada' : (eventTarget === 'fin_turno_1' ? 'Turno Tarde' : 'Cierre Final')
+
+        // Notificar al usuario que su asistencia fue registrada
+        const mensajeNotif = eventTarget === 'entrada'
+            ? `Iniciaste verificación de permanencia a las ${horaActual}. Permanece en la oficina 15 min.`
+            : (minutosTardanzaActual > 0
+                ? `${readableEvent} registrado con ${minutosTardanzaActual} min de tardanza. Descuento: S/ ${descuentoTardanzaActual.toFixed(2)}`
+                : `${readableEvent} registrado puntual a las ${horaActual}.`)
+
+        createFullNotification(user.id, {
+            titulo: `✅ Asistencia - ${readableEvent}`,
+            mensaje: mensajeNotif,
+            link: '/dashboard/asistencia',
+            tipo: minutosTardanzaActual > 0 ? 'advertencia' : 'info'
+        }).catch(err => console.error('[ASISTENCIA NOTIF]', err))
 
         return NextResponse.json({
             success: true,

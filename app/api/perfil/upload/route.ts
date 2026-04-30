@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
+import { detectImageType } from '@/utils/supabase/image-validation'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -23,30 +24,35 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'No se proporcionó ningún archivo' }, { status: 400 })
         }
 
-        // 3. Validaciones básicas
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
-        if (!allowedTypes.includes(file.type)) {
-            return NextResponse.json({ error: 'Tipo de archivo no permitido (solo JPG, PNG, WEBP)' }, { status: 400 })
-        }
-
         if (file.size > 5 * 1024 * 1024) { // 5MB
             return NextResponse.json({ error: 'El archivo es demasiado grande (máx 5MB)' }, { status: 400 })
         }
 
-        // 4. Preparar subida
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${user.id}_${Date.now()}.${fileExt}`
-        const filePath = `${fileName}`
-
-        // Convertir File a Buffer para la subida
+        // Convertir File a Buffer para validar magic bytes ANTES de confiar en file.type
         const arrayBuffer = await file.arrayBuffer()
         const buffer = Buffer.from(arrayBuffer)
 
-        // 5. Subir usando Admin Client para bypass RLS
+        // Detectar tipo real por magic bytes (no confiar en Content-Type del cliente)
+        const detectedType = detectImageType(buffer)
+        if (!detectedType) {
+            return NextResponse.json({ error: 'Tipo de archivo no permitido (solo JPG, PNG, WEBP)' }, { status: 400 })
+        }
+
+        // Forzar la extensión derivada del tipo detectado (no del nombre del cliente)
+        const extByType: Record<string, string> = {
+            'image/jpeg': 'jpg',
+            'image/png': 'png',
+            'image/webp': 'webp'
+        }
+        const fileExt = extByType[detectedType]
+        const fileName = `${user.id}_${Date.now()}.${fileExt}`
+        const filePath = fileName
+
+        // Subir con el contentType validado (no el del cliente)
         const { error: uploadError } = await adminClient.storage
             .from('perfiles')
             .upload(filePath, buffer, {
-                contentType: file.type,
+                contentType: detectedType,
                 upsert: true
             })
 

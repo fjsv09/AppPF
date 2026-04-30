@@ -1,21 +1,15 @@
-import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createAdminClient, requireAdmin } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { createFullNotification } from '@/services/notification-service'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  const guard = await requireAdmin()
+  if ('error' in guard) return guard.error
+
   try {
-    const supabase = await createClient()
     const adminClient = createAdminClient()
-
-    // 1. Verificar Rol Admin
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-
-    const { data: perfil } = await adminClient.from('perfiles').select('rol').eq('id', user.id).single()
-    if (perfil?.rol !== 'admin') return NextResponse.json({ error: 'Prohibido' }, { status: 403 })
 
     // 2. Fetch Inversionistas
     const { data: inversionistas, error } = await adminClient
@@ -32,17 +26,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const guard = await requireAdmin()
+  if ('error' in guard) return guard.error
+  const { user } = guard
+
   try {
-    const supabase = await createClient()
     const adminClient = createAdminClient()
-
-    // 1. Verificar Rol Admin
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-
-    const { data: perfil } = await adminClient.from('perfiles').select('rol, nombre_completo').eq('id', user.id).single()
-    if (perfil?.rol !== 'admin') return NextResponse.json({ error: 'Prohibido' }, { status: 403 })
-
+    const { data: perfilFull } = await adminClient.from('perfiles').select('nombre_completo').eq('id', user.id).single()
     const body = await request.json()
     const { nombre, capital_inicial, fecha_inicio, duracion_meses, frecuencia_pago, tasa_interes_mensual, cuenta_id } = body
 
@@ -107,7 +97,7 @@ export async function POST(request: Request) {
     const notificationPromises = admins?.map(admin => 
         createFullNotification(admin.id, {
             titulo: 'Nuevo Inversionista',
-            mensaje: `${perfil?.nombre_completo} registró a ${nombre} con un capital de S/ ${capital_inicial}.`,
+            mensaje: `${perfilFull?.nombre_completo || 'Admin'} registró a ${nombre} con un capital de S/ ${capital_inicial}.`,
             link: '/dashboard/admin/capital',
             tipo: 'info'
         })

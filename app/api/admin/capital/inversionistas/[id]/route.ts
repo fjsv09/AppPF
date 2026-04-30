@@ -1,5 +1,4 @@
-import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createAdminClient, requireAdmin } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { createFullNotification } from '@/services/notification-service'
 
@@ -9,18 +8,14 @@ export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const guard = await requireAdmin()
+  if ('error' in guard) return guard.error
+  const { user } = guard
+
   try {
-    const supabase = await createClient()
     const adminClient = createAdminClient()
     const id = params.id
-
-    // 1. Verificar Rol Admin
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-
-    const { data: perfil } = await adminClient.from('perfiles').select('rol, nombre_completo').eq('id', user.id).single()
-    if (perfil?.rol !== 'admin') return NextResponse.json({ error: 'Prohibido' }, { status: 403 })
-
+    const { data: perfilFull } = await adminClient.from('perfiles').select('nombre_completo').eq('id', user.id).single()
     const body = await request.json()
     const { nombre, duracion_meses, frecuencia_pago, tasa_interes_mensual, fecha_inicio, estado } = body
 
@@ -50,7 +45,7 @@ export async function PATCH(
     const notificationPromises = admins?.map(admin => 
         createFullNotification(admin.id, {
             titulo: 'Inversionista Actualizado',
-            mensaje: `${perfil?.nombre_completo} actualizó los datos de ${oldData.nombre}.`,
+            mensaje: `${perfilFull?.nombre_completo || 'Admin'} actualizó los datos de ${oldData.nombre}.`,
             link: '/dashboard/admin/capital',
             tipo: 'info'
         })
@@ -68,16 +63,12 @@ export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const guard = await requireAdmin()
+  if ('error' in guard) return guard.error
+
   try {
-    const supabase = await createClient()
     const adminClient = createAdminClient()
     const id = params.id
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-
-    const { data: perfil } = await adminClient.from('perfiles').select('rol').eq('id', user.id).single()
-    if (perfil?.rol !== 'admin') return NextResponse.json({ error: 'Prohibido' }, { status: 403 })
 
     // Verificar si tiene transacciones antes de borrar (opcional, pero seguro)
     const { count } = await adminClient.from('transacciones_capital').select('*', { count: 'exact', head: true }).eq('entidad_id', id)

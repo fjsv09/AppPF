@@ -39,6 +39,10 @@
   ],
   "exclude": [
     "node_modules",
-    "supabase"
+    "supabase",
+    "scripts",
+    "scratch",
+    "scratch_dir",
+    "migrations"
   ]
 }

@@ -28,7 +28,11 @@ export async function GET(request: Request) {
       .order('nombres', { ascending: true })
 
     if (query) {
-      dbQuery = dbQuery.or(`nombres.ilike.%${query}%,dni.ilike.%${query}%`)
+      // Sanitizar: solo letras, números, espacios y vocales acentuadas (evita inyección de filtro PostgREST)
+      const safeQuery = query.replace(/[^a-zA-Z0-9 áéíóúÁÉÍÓÚñÑ]/g, '').slice(0, 100)
+      if (safeQuery) {
+        dbQuery = dbQuery.or(`nombres.ilike.%${safeQuery}%,dni.ilike.%${safeQuery}%`)
+      }
     }
 
     const { data: clientes, error } = await dbQuery.limit(20)

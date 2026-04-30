@@ -1,21 +1,17 @@
-import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createAdminClient, requireAdmin } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { createFullNotification } from '@/services/notification-service'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
+  const guard = await requireAdmin()
+  if ('error' in guard) return guard.error
+  const { user, perfil } = guard
+
   try {
-    const supabase = await createClient()
     const adminClient = createAdminClient()
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-
-    const { data: perfil } = await adminClient.from('perfiles').select('rol, nombre_completo').eq('id', user.id).single()
-    if (perfil?.rol !== 'admin') return NextResponse.json({ error: 'Prohibido' }, { status: 403 })
-
+    const { data: perfilFull } = await adminClient.from('perfiles').select('nombre_completo').eq('id', user.id).single()
     const body = await request.json()
     const { entidad_id, entidad_tipo, tipo, monto, cuenta_id, descripcion } = body
 
@@ -100,7 +96,7 @@ export async function POST(request: Request) {
     const notificationPromises = admins?.map(admin => 
         createFullNotification(admin.id, {
             titulo: 'Nuevo Movimiento de Capital',
-            mensaje: `${perfil?.nombre_completo} registró: ${tipo.replace('_', ' ')} por S/ ${montoFloat} para ${nombreEntidad}.`,
+            mensaje: `${perfilFull?.nombre_completo || 'Admin'} registró: ${tipo.replace('_', ' ')} por S/ ${montoFloat} para ${nombreEntidad}.`,
             link: '/dashboard/admin/capital',
             tipo: esEgreso ? 'warning' : 'success'
         })

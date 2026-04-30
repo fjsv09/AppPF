@@ -15,14 +15,15 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json()
-        const { 
-            nombre_completo, 
-            dni, 
-            fecha_ingreso, 
-            fecha_nacimiento, 
-            direccion, 
+        const {
+            nombre_completo,
+            dni,
+            fecha_ingreso,
+            fecha_nacimiento,
+            direccion,
             avatar_url,
-            password
+            password,
+            current_password
         } = body
 
         // 1. Obtener perfil actual
@@ -71,12 +72,44 @@ export async function POST(request: NextRequest) {
 
         if (updateError) throw updateError
 
-        // 5. Actualizar password si se proporcionó
+        // 5. Actualizar password si se proporcionó (requiere re-autenticación con password actual)
         if (password) {
+            if (typeof password !== 'string' || password.length < 8) {
+                return NextResponse.json({ error: 'La contraseña debe tener al menos 8 caracteres' }, { status: 400 })
+            }
+            if (!current_password || typeof current_password !== 'string') {
+                return NextResponse.json({ error: 'Debes proporcionar tu contraseña actual' }, { status: 400 })
+            }
+            if (!user.email) {
+                return NextResponse.json({ error: 'No se puede verificar la cuenta' }, { status: 400 })
+            }
+
+            // Verificar el password actual con un cliente fresco para no afectar la sesión actual
+            const { createClient: createPlainClient } = await import('@supabase/supabase-js')
+            const verifyClient = createPlainClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+            )
+            const { error: signInError } = await verifyClient.auth.signInWithPassword({
+                email: user.email,
+                password: current_password
+            })
+            if (signInError) {
+                return NextResponse.json({ error: 'Contraseña actual incorrecta' }, { status: 403 })
+            }
+
             const { error: passwordError } = await adminClient.auth.admin.updateUserById(user.id, {
                 password: password
             })
             if (passwordError) throw passwordError
+
+            await adminClient.from('auditoria').insert({
+                tabla: 'auth.users',
+                accion: 'password_change',
+                registro_id: user.id,
+                usuario_id: user.id,
+                detalles: { source: 'perfil/update' }
+            })
         }
 
         return NextResponse.json({ success: true })

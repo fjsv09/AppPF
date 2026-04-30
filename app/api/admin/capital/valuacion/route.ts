@@ -1,5 +1,4 @@
-import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createAdminClient, requireAdmin } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { addMonths, isBefore, addDays, startOfDay, format } from 'date-fns'
 import { createFullNotification } from '@/services/notification-service'
@@ -7,16 +6,11 @@ import { createFullNotification } from '@/services/notification-service'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  const guard = await requireAdmin()
+  if ('error' in guard) return guard.error
+
   try {
-    const supabase = await createClient()
     const adminClient = createAdminClient()
-
-    // 1. Verificar Rol Admin
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-
-    const { data: perfil } = await adminClient.from('perfiles').select('rol').eq('id', user.id).single()
-    if (perfil?.rol !== 'admin') return NextResponse.json({ error: 'Prohibido' }, { status: 403 })
 
     // 2. Calcular Capital en Calle (con interés)
     const { data: cuotasPendientes } = await adminClient

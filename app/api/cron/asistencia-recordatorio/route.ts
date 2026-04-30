@@ -4,11 +4,33 @@ import webpush from 'web-push'
 
 export const dynamic = 'force-dynamic'
 
+function timeToMinutes(timeStr: string): number {
+    const [h, m] = timeStr.split(':').map(Number)
+    return h * 60 + m
+}
+
+function isWithinWindow(currentTime: string, targetTime: string, windowMinutes: number = 10): boolean {
+    const current = timeToMinutes(currentTime)
+    const target = timeToMinutes(targetTime)
+    return Math.abs(current - target) <= windowMinutes
+}
+
 /**
  * GET /api/cron/asistencia-recordatorio
  * Este endpoint debe ser llamado periódicamente (ej. cada minuto o cada 5 minutos)
  */
 export async function GET(request: Request) {
+    // Validar secreto de cron — el middleware excluye /api/cron, esta es la única protección
+    const cronSecret = process.env.CRON_SECRET
+    if (!cronSecret) {
+        console.error('[CRON ERROR] CRON_SECRET no configurado')
+        return NextResponse.json({ error: 'Servicio no disponible' }, { status: 503 })
+    }
+    const authHeader = request.headers.get('authorization')
+    if (authHeader !== `Bearer ${cronSecret}`) {
+        return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
     const supabaseAdmin = createAdminClient()
 
     try {
@@ -66,34 +88,25 @@ export async function GET(request: Request) {
         const hTurnoTarde = config?.horario_fin_turno_1 || '13:30'
         const hCierre = config?.horario_cierre || '19:00'
 
-        // 5. Determinar si estamos exactamente en uno de los 3 horarios
-        // Usamos un pequeño margen de 2 minutos para evitar perder la ejecución si el cron no es exacto
+        // 5. Determinar si estamos dentro de la ventana de alguno de los 3 horarios
+        // Ventana de ±10 minutos alrededor de cada horario configurado
         let eventLabel = ''
         let eventField = ''
 
-        if (currentHHmm === hApertura) {
+        if (isWithinWindow(currentHHmm, hApertura, 10)) {
             eventLabel = 'Entrada'
             eventField = 'hora_entrada'
-        } else if (currentHHmm === hTurnoTarde) {
+        } else if (isWithinWindow(currentHHmm, hTurnoTarde, 10)) {
             eventLabel = 'Turno Tarde'
             eventField = 'hora_turno_tarde'
-        } else if (currentHHmm === hCierre) {
+        } else if (isWithinWindow(currentHHmm, hCierre, 10)) {
             eventLabel = 'Cierre Final'
             eventField = 'hora_cierre'
         }
 
-        // Debug: permitimos forzar vía query param para pruebas
-        const { searchParams } = new URL(request.url)
-        const forceEvent = searchParams.get('force')
-        if (forceEvent) {
-            if (forceEvent === 'entrada') { eventLabel = 'Entrada'; eventField = 'hora_entrada' }
-            if (forceEvent === 'tarde') { eventLabel = 'Turno Tarde'; eventField = 'hora_turno_tarde' }
-            if (forceEvent === 'cierre') { eventLabel = 'Cierre Final'; eventField = 'hora_cierre' }
-        }
-
         if (!eventLabel) {
-            return NextResponse.json({ 
-                message: 'No es hora de recordatorio exacta.',
+            return NextResponse.json({
+                message: 'No hay recordatorios pendientes en esta ventana horaria.',
                 current: currentHHmm,
                 schedules: { hApertura, hTurnoTarde, hCierre }
             })

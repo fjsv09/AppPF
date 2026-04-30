@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useTransition } from 'react'
-import { FileText, Clock, CheckCircle, XCircle, AlertCircle, Eye, Users, Calendar, DollarSign, Search, X, Filter, ArrowUp, ArrowDown, MapPin, Activity, Loader2 } from 'lucide-react'
+import { FileText, Clock, CheckCircle, XCircle, AlertCircle, Eye, Users, Calendar, DollarSign, Search, X, Filter, ArrowUp, ArrowDown, MapPin, Activity, Loader2, Wallet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -385,11 +385,18 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                         </Button>
                                                     )}
                                                     {solicitud.estado_solicitud === 'aprobado' && (perfil?.rol === 'admin' || perfil?.rol === 'supervisor') && (
-                                                        <DocumentButtonAsync 
-                                                            solicitudId={solicitud.id} 
-                                                            type="solicitud" 
+                                                        <DocumentButtonAsync
+                                                            solicitudId={solicitud.id}
+                                                            type="solicitud"
                                                             className="flex-[0.8] bg-blue-900/20 border-blue-500/30 text-blue-400 h-8 text-[11px] hover:bg-blue-500/20 px-0"
                                                         />
+                                                    )}
+                                                    {solicitud.estado_solicitud === 'aprobado' && solicitud.prestamo_id && (
+                                                        <Link href={`/dashboard/prestamos/${solicitud.prestamo_id}`} className="flex-[0.9]">
+                                                            <Button size="sm" variant="outline" className="w-full bg-purple-900/20 border-purple-500/30 text-purple-300 h-8 text-[11px] hover:bg-purple-500/20 px-0">
+                                                                <Wallet className="w-3 h-3 mr-1" /> Ir al Préstamo
+                                                            </Button>
+                                                        </Link>
                                                     )}
                                                     <Link href={`/dashboard/solicitudes/${solicitud.id}`} className="flex-1">
                                                         <Button size="sm" variant="outline" className="w-full bg-slate-900 border-slate-700 text-slate-300 h-8 text-[11px] hover:text-white px-0">
@@ -465,7 +472,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                     <Button 
                                                         size="sm" 
                                                         variant="ghost" 
-                                                        className="h-8 w-8 p-0 rounded-lg text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 hover:text-emerald-300 transition-all"
+                                                        className="h-8 w-8 p-0 rounded-lg text-emerald-400 bg-slate-800/40 border border-slate-700/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all"
                                                         onClick={(e) => {
                                                             e.preventDefault()
                                                             const phone = (solicitud.cliente?.telefono || solicitud.prospecto_telefono)?.replace(/\D/g, '') || ''
@@ -481,12 +488,19 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                     </Button>
                                                 )}
                                                 {solicitud.estado_solicitud === 'aprobado' && (perfil?.rol === 'admin' || perfil?.rol === 'supervisor') && (
-                                                    <DocumentButtonAsync 
-                                                        solicitudId={solicitud.id} 
-                                                        type="solicitud" 
-                                                        iconOnly 
-                                                        className="h-8 w-8 p-0 rounded-lg text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300 transition-all"
+                                                    <DocumentButtonAsync
+                                                        solicitudId={solicitud.id}
+                                                        type="solicitud"
+                                                        iconOnly
+                                                        className="h-8 w-8 p-0 rounded-lg text-blue-400 bg-slate-800/40 border border-slate-700/50 hover:bg-blue-500/10 hover:text-blue-300 transition-all"
                                                     />
+                                                )}
+                                                {solicitud.estado_solicitud === 'aprobado' && solicitud.prestamo_id && (
+                                                    <Link href={`/dashboard/prestamos/${solicitud.prestamo_id}`} title="Ir al Préstamo">
+                                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-purple-300 bg-slate-800/40 border border-slate-700/50 hover:bg-purple-500/10 hover:text-purple-200 transition-all">
+                                                            <Wallet className="w-4 h-4" />
+                                                        </Button>
+                                                    </Link>
                                                 )}
                                                 <Link href={`/dashboard/solicitudes/${solicitud.id}`}>
                                                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-white transition-all">

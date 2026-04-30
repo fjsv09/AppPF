@@ -62,7 +62,29 @@ export default async function SolicitudesPage() {
         query = query.in('asesor_id', asesorIds)
     }
 
-    const { data: solicitudes } = await query
+    const { data: solicitudesRaw } = await query
+
+    // Map solicitud_id -> prestamo_id for approved solicitudes (to enable "Ver Préstamo" action)
+    const solicitudIdsAprobadas = (solicitudesRaw || [])
+        .filter((s: any) => s.estado_solicitud === 'aprobado')
+        .map((s: any) => s.id)
+
+    let prestamoBySolicitud: Record<string, string> = {}
+    if (solicitudIdsAprobadas.length > 0) {
+        const { data: prestamosRel } = await supabaseAdmin
+            .from('prestamos')
+            .select('id, solicitud_id')
+            .in('solicitud_id', solicitudIdsAprobadas)
+        prestamoBySolicitud = (prestamosRel || []).reduce((acc: Record<string, string>, p: any) => {
+            if (p.solicitud_id) acc[p.solicitud_id] = p.id
+            return acc
+        }, {})
+    }
+
+    const solicitudes = (solicitudesRaw || []).map((s: any) => ({
+        ...s,
+        prestamo_id: prestamoBySolicitud[s.id] || null
+    }))
 
     // Fetch schedule config
     const { data: scheduleConfigs } = await supabaseAdmin

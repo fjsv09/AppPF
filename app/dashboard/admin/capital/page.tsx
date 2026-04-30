@@ -24,7 +24,19 @@ export default async function CapitalPage() {
   // Initial data fetch
   const { data: inversionistas } = await adminClient.from('inversionistas').select('*').order('created_at', { ascending: false })
   const { data: socios } = await adminClient.from('socios').select('*').order('nombre', { ascending: true })
-  const { data: accounts } = await adminClient.from('cuentas_financieras').select('id, nombre, saldo, carteras(nombre)')
+  // Fetch admin-owned cartera IDs (carteras where owner is admin or has no advisor)
+  const { data: adminCarteras } = await adminClient
+    .from('carteras')
+    .select('id, asesor_id, perfiles(rol)')
+
+  const adminCarteraIds = (adminCarteras || [])
+    .filter((c: any) => !c.asesor_id || c.perfiles?.rol === 'admin')
+    .map((c: any) => c.id)
+
+  const { data: accounts } = await adminClient
+    .from('cuentas_financieras')
+    .select('id, nombre, saldo, carteras(nombre)')
+    .in('cartera_id', adminCarteraIds)
   const { data: transacciones } = await adminClient
     .from('transacciones_capital')
     .select(`

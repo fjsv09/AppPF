@@ -39,6 +39,9 @@ export async function GET() {
 
     if (inversionistas) {
         for (const inv of inversionistas) {
+            // Skip 0% interest loans - they have no interest payment obligations
+            if (parseFloat(inv.tasa_interes_mensual) === 0 || inv.frecuencia_pago === 'no_aplica') continue
+
             // Buscar último pago de interés
             const { data: lastTx } = await adminClient
                 .from('transacciones_capital')

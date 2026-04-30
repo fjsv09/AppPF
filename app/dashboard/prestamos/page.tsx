@@ -282,12 +282,16 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         .map((r: any) => r.prestamo_nuevo_id as string)
         .filter(Boolean)
 
-    // Obtener IDs de préstamos con tareas de evidencia pendientes (asesor no ha subido la evidencia)
+    // Obtener IDs de préstamos con tareas de evidencia pendientes (asesor no ha subido la evidencia
+    // del préstamo). Excluimos auditorías dirigidas/auditorías para que el chip solo refleje la
+    // evidencia del préstamo en sí.
     const { data: tareasEvidenciaPendientes } = await supabaseAdmin
         .from('tareas_evidencia')
-        .select('prestamo_id')
+        .select('prestamo_id, evidencia_url, tipo')
         .eq('estado', 'pendiente')
+        .is('evidencia_url', null)
         .not('prestamo_id', 'is', null)
+        .not('tipo', 'in', '(auditoria_dirigida,auditoria)')
     const prestamoIdsConEvidenciaPendiente = Array.from(
         new Set((tareasEvidenciaPendientes || []).map((t: any) => t.prestamo_id).filter(Boolean))
     )

@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     const { data: cuenta } = await adminClient.from('cuentas_financieras').select('saldo, cartera_id, nombre').eq('id', cuenta_id).single()
     if (!cuenta) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 })
 
-    const esEgreso = ['pago_interes', 'devolucion_capital', 'retiro_utilidad'].includes(tipo)
+    const esEgreso = ['pago_interes', 'devolucion_capital', 'retiro_utilidad', 'retiro_capital'].includes(tipo)
     const montoFloat = parseFloat(monto)
 
     if (esEgreso && parseFloat(cuenta.saldo) < montoFloat) {
@@ -87,6 +87,8 @@ export async function POST(request: Request) {
         if (socio) {
             if (tipo === 'inyeccion') {
                 await adminClient.from('socios').update({ capital_aportado: parseFloat(socio.capital_aportado) + montoFloat }).eq('id', entidad_id)
+            } else if (tipo === 'retiro_capital') {
+                await adminClient.from('socios').update({ capital_aportado: Math.max(0, parseFloat(socio.capital_aportado) - montoFloat) }).eq('id', entidad_id)
             }
         }
     }

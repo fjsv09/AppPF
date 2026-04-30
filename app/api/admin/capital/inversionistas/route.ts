@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { nombre, capital_inicial, fecha_inicio, duracion_meses, frecuencia_pago, tasa_interes_mensual, cuenta_id } = body
 
-    if (!nombre || !capital_inicial || !fecha_inicio || !duracion_meses || !frecuencia_pago || !tasa_interes_mensual) {
+    if (!nombre || !capital_inicial || !fecha_inicio || !frecuencia_pago || tasa_interes_mensual === undefined || tasa_interes_mensual === null || tasa_interes_mensual === '') {
       return NextResponse.json({ error: 'Faltan campos obligatorios' }, { status: 400 })
     }
 

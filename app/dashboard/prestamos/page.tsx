@@ -282,6 +282,16 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         .map((r: any) => r.prestamo_nuevo_id as string)
         .filter(Boolean)
 
+    // Obtener IDs de préstamos con tareas de evidencia pendientes (asesor no ha subido la evidencia)
+    const { data: tareasEvidenciaPendientes } = await supabaseAdmin
+        .from('tareas_evidencia')
+        .select('prestamo_id')
+        .eq('estado', 'pendiente')
+        .not('prestamo_id', 'is', null)
+    const prestamoIdsConEvidenciaPendiente = Array.from(
+        new Set((tareasEvidenciaPendientes || []).map((t: any) => t.prestamo_id).filter(Boolean))
+    )
+
     // Filtros de role/asesor/sector/frecuencia ya aplicados a nivel DB arriba.
     // Solo se necesita filtro residual para el caso de admin con scope amplio sin filtro de cliente.
     let filteredList = prestamosRaw || []
@@ -808,6 +818,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                         userRol={userRole}
                         userId={user?.id}
                         prestamoIdsConSolicitudPendiente={prestamoIdsConSolicitudPendiente}
+                        prestamoIdsConEvidenciaPendiente={prestamoIdsConEvidenciaPendiente}
                         renovacionMinPagado={renovacionMinPagado}
                         refinanciacionMinMora={refinanciacionMinMora}
                         prestamoIdsProductoRefinanciamiento={prestamoIdsProductoRefinanciamiento}

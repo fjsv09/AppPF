@@ -90,10 +90,22 @@ export async function GET(request: Request) {
 
         // 5. Determinar si estamos dentro de la ventana de alguno de los 3 horarios
         // Ventana de ±10 minutos alrededor de cada horario configurado
+        const { searchParams } = new URL(request.url)
+        const forceEvent = searchParams.get('force')
+
         let eventLabel = ''
         let eventField = ''
 
-        if (isWithinWindow(currentHHmm, hApertura, 10)) {
+        if (forceEvent === 'entrada') {
+            eventLabel = 'Entrada'
+            eventField = 'hora_entrada'
+        } else if (forceEvent === 'tarde') {
+            eventLabel = 'Turno Tarde'
+            eventField = 'hora_turno_tarde'
+        } else if (forceEvent === 'cierre') {
+            eventLabel = 'Cierre Final'
+            eventField = 'hora_cierre'
+        } else if (isWithinWindow(currentHHmm, hApertura, 10)) {
             eventLabel = 'Entrada'
             eventField = 'hora_entrada'
         } else if (isWithinWindow(currentHHmm, hTurnoTarde, 10)) {

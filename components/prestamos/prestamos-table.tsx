@@ -63,6 +63,7 @@ interface PrestamosTableProps {
     userRol?: 'admin' | 'supervisor' | 'asesor' | string
     userId?: string
     prestamoIdsConSolicitudPendiente?: string[]
+    prestamoIdsConEvidenciaPendiente?: string[]
     renovacionMinPagado?: number
     refinanciacionMinMora?: number
     /** IDs de préstamos que son producto de una refinanciación directa */
@@ -101,6 +102,7 @@ export function PrestamosTable({
     userRol = 'asesor',
     userId = '',
     prestamoIdsConSolicitudPendiente = [],
+    prestamoIdsConEvidenciaPendiente = [],
     renovacionMinPagado = 60,
     refinanciacionMinMora = 50,
     prestamoIdsProductoRefinanciamiento = [],
@@ -1344,6 +1346,22 @@ export function PrestamosTable({
                                                                             Refinanciado
                                                                         </div>
                                                                     )}
+                                                                    {/* Chip: Evidencia Pendiente */}
+                                                                    {prestamoIdsConEvidenciaPendiente.includes(prestamo.id) && (
+                                                                        <div
+                                                                            className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded-md w-fit mt-0.5 cursor-help"
+                                                                            title="El asesor aún no ha subido la evidencia requerida para este préstamo."
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                toast.info("Evidencia Pendiente", {
+                                                                                    description: "El asesor aún no ha subido la evidencia requerida para este préstamo."
+                                                                                });
+                                                                            }}
+                                                                        >
+                                                                            <ClipboardList className="w-2.5 h-2.5 shrink-0" />
+                                                                            Evidencia pendiente
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -2120,10 +2138,41 @@ export function PrestamosTable({
                                                                     )}
                                                                 </div>
                                                                 {(userRol === 'admin' || userRol === 'supervisor') && (
-                                                                    <div className="flex items-center gap-1 mt-0.5 opacity-80 group-hover:opacity-100 transition-opacity">
-                                                                        <Users className="w-2.5 h-2.5 text-blue-400/80" />
+                                                                    <div className="flex items-center gap-1.5 mt-0.5 opacity-80 group-hover:opacity-100 transition-opacity">
+                                                                        <Users className="w-2.5 h-2.5 text-blue-400/80 shrink-0" />
                                                                         <span className="text-[9px] text-blue-300 font-medium truncate">{prestamo.asesor_nombre || 'N/A'}</span>
+                                                                        {prestamoIdsConEvidenciaPendiente.includes(prestamo.id) && (
+                                                                            <span
+                                                                                className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded-md shrink-0 cursor-help"
+                                                                                title="El asesor tiene una tarea de evidencia pendiente para este préstamo."
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    toast.info("Evidencia Pendiente", {
+                                                                                        description: "El asesor aún no ha subido la evidencia requerida para este préstamo."
+                                                                                    });
+                                                                                }}
+                                                                            >
+                                                                                <ClipboardList className="w-2.5 h-2.5 shrink-0" />
+                                                                                Evid. pend.
+                                                                            </span>
+                                                                        )}
                                                                     </div>
+                                                                )}
+                                                                {/* Para asesor: chip de evidencia bajo el nombre (no ven asesor_nombre) */}
+                                                                {userRol === 'asesor' && prestamoIdsConEvidenciaPendiente.includes(prestamo.id) && (
+                                                                    <span
+                                                                        className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded-md w-fit mt-1 cursor-help"
+                                                                        title="Tienes una tarea de evidencia pendiente para este préstamo."
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            toast.info("Evidencia Pendiente", {
+                                                                                description: "Aún no has subido la evidencia requerida para este préstamo."
+                                                                            });
+                                                                        }}
+                                                                    >
+                                                                        <ClipboardList className="w-2.5 h-2.5 shrink-0" />
+                                                                        Evid. pend.
+                                                                    </span>
                                                                 )}
                                                             </div>
                                                         </div>

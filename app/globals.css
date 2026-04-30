@@ -138,8 +138,8 @@
 /* ── Premium Gradient Background — DARK THEME ── */
 html, body {
   height: 100%;
-  overflow: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: none;
 }
 
 body {
@@ -149,22 +149,18 @@ body {
     radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%),
     radial-gradient(at 50% 0%, hsla(225,39%,30%,0.3) 0, transparent 50%),
     radial-gradient(at 100% 0%, hsla(339,49%,30%,0.3) 0, transparent 50%);
+  background-attachment: fixed;
   min-height: 100vh;
   min-height: 100dvh;
 }
 
-/* ── Fix iOS PWA: Force GPU layer for fixed mobile nav ── */
+/* ── iOS PWA: Anchor mobile nav to viewport bottom ── */
 @supports (-webkit-touch-callout: none) {
   .mobile-bottom-nav {
     position: fixed !important;
     bottom: 0 !important;
     left: 0 !important;
     right: 0 !important;
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
 

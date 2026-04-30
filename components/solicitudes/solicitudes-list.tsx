@@ -233,9 +233,10 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                 )}
 
                 <div className={cn(
-                    "md:bg-slate-900/50 md:border md:border-slate-800 md:rounded-2xl md:overflow-hidden bg-transparent border-0 space-y-4 md:space-y-0 transition-all duration-300",
+                    "md:bg-slate-900/50 md:border md:border-slate-800 md:rounded-2xl md:overflow-x-auto bg-transparent border-0 space-y-4 md:space-y-0 transition-all duration-300",
                     isPending ? "opacity-40 blur-[1px] pointer-events-none" : "opacity-100 placeholder-blur-0"
                 )}>
+                <div className="md:min-w-[1100px]">
                 {filteredSolicitudes.length === 0 ? (
                     <div className="text-center py-16 rounded-2xl border border-dashed border-slate-800 bg-slate-900/40">
                         <FileText className="w-16 h-16 mx-auto text-slate-600 mb-4" />
@@ -273,11 +274,11 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                             style={{ gridTemplateColumns: 'repeat(12, minmax(0, 1fr))' }}
                         >
                             <div className="col-span-3">Cliente</div>
-                            <div className="col-span-2 text-right">Monto</div>
+                            <div className="col-span-1 text-right">Monto</div>
                             <div className="col-span-2 text-center">Última Edición</div>
                             <div className="col-span-2 text-left pl-4">Asesor</div>
                             <div className="col-span-2 text-center">Estado</div>
-                            <div className="col-span-1 text-right">Acción</div>
+                            <div className="col-span-2 text-right pr-2">Acción</div>
                         </div>
 
                         {/* Content */}
@@ -363,12 +364,12 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                     </div>
                                                 )}
 
-                                                <div className="flex items-center gap-2 mt-2">
+                                                <div className="flex flex-wrap items-center gap-2 mt-2">
                                                     {solicitud.estado_solicitud === 'aprobado' && perfil?.rol === 'admin' && (
-                                                        <Button 
-                                                            size="sm" 
-                                                            variant="outline" 
-                                                            className="flex-[0.8] bg-emerald-900/20 border-emerald-500/30 text-emerald-400 h-8 text-[11px] hover:bg-emerald-500/20 px-0"
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="flex-1 min-w-[80px] bg-emerald-900/20 border-emerald-500/30 text-emerald-400 h-8 text-[11px] hover:bg-emerald-500/20 px-2"
                                                             onClick={(e) => {
                                                                 e.preventDefault()
                                                                 const phone = (solicitud.cliente?.telefono || solicitud.prospecto_telefono)?.replace(/\D/g, '') || ''
@@ -388,18 +389,18 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                         <DocumentButtonAsync
                                                             solicitudId={solicitud.id}
                                                             type="solicitud"
-                                                            className="flex-[0.8] bg-blue-900/20 border-blue-500/30 text-blue-400 h-8 text-[11px] hover:bg-blue-500/20 px-0"
+                                                            className="flex-1 min-w-[80px] bg-blue-900/20 border-blue-500/30 text-blue-400 h-8 text-[11px] hover:bg-blue-500/20 px-2"
                                                         />
                                                     )}
                                                     {solicitud.estado_solicitud === 'aprobado' && solicitud.prestamo_id && (
-                                                        <Link href={`/dashboard/prestamos/${solicitud.prestamo_id}`} className="flex-[0.9]">
-                                                            <Button size="sm" variant="outline" className="w-full bg-purple-900/20 border-purple-500/30 text-purple-300 h-8 text-[11px] hover:bg-purple-500/20 px-0">
+                                                        <Link href={`/dashboard/prestamos/${solicitud.prestamo_id}`} className="flex-1 min-w-[110px]">
+                                                            <Button size="sm" variant="outline" className="w-full bg-purple-900/20 border-purple-500/30 text-purple-300 h-8 text-[11px] hover:bg-purple-500/20 px-2">
                                                                 <Wallet className="w-3 h-3 mr-1" /> Ir al Préstamo
                                                             </Button>
                                                         </Link>
                                                     )}
-                                                    <Link href={`/dashboard/solicitudes/${solicitud.id}`} className="flex-1">
-                                                        <Button size="sm" variant="outline" className="w-full bg-slate-900 border-slate-700 text-slate-300 h-8 text-[11px] hover:text-white px-0">
+                                                    <Link href={`/dashboard/solicitudes/${solicitud.id}`} className="flex-1 min-w-[90px]">
+                                                        <Button size="sm" variant="outline" className="w-full bg-slate-900 border-slate-700 text-slate-300 h-8 text-[11px] hover:text-white px-2">
                                                             <Eye className="w-3 h-3 mr-1" /> {solicitud.estado_solicitud === 'aprobado' ? 'Detalles' : 'Ver Detalles'}
                                                         </Button>
                                                     </Link>
@@ -437,7 +438,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                             </div>
 
                                             {/* Monto */}
-                                            <div className="col-span-2 text-right flex flex-col items-end justify-center min-w-0">
+                                            <div className="col-span-1 text-right flex flex-col items-end justify-center min-w-0">
                                                 <div className="text-sm font-mono font-bold text-emerald-400">S/ {solicitud.monto_solicitado.toLocaleString('en-US')}</div>
                                                 <div className="text-[10px] text-slate-400 mt-0.5">{solicitud.cuotas} {solicitud.modalidad}</div>
                                             </div>
@@ -467,7 +468,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                             </div>
 
                                             {/* Acciones */}
-                                            <div className="col-span-1 flex justify-end items-center gap-2 text-right">
+                                            <div className="col-span-2 flex justify-end items-center gap-2 text-right">
                                                 {solicitud.estado_solicitud === 'aprobado' && perfil?.rol === 'admin' && (
                                                     <Button 
                                                         size="sm" 
@@ -525,6 +526,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                         </div>
                     </>
                 )}
+                </div>
                 </div>
 
                 {/* Pagination */}

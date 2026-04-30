@@ -1052,7 +1052,7 @@ function NewInversionistaModal({ isOpen, onClose, accounts, onSuccess }: any) {
 
                     {tipoRegistro === 'prestamo' && (
                         <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-500/20 text-xs text-emerald-400/80">
-                            <strong>Préstamo a 0% de interés.</strong> Se registrará como pasivo. No se generarán alertas de pago de intereses. Para devolver capital, usa la operación "Devolución de Capital" desde el listado.
+                            <strong>Préstamo a 0% de interés.</strong> Se registrará como pasivo. No se generarán alertas de pago de intereses. Para devolver capital, usa la operación &quot;Devolución de Capital&quot; desde el listado.
                         </div>
                     )}
 

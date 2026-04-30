@@ -142,6 +142,9 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     const [confirmBlockOpen, setConfirmBlockOpen] = useState(false)
     const [pendingBlockClient, setPendingBlockClient] = useState<any>(null)
 
+    // Quick View Drawer State (local — evita refetch del RSC al abrir/cerrar)
+    const [quickViewClientId, setQuickViewClientId] = useState<string | null>(null)
+
     const handleOpenGestion = (cliente: any, e?: React.MouseEvent) => {
         if (e) {
             e.preventDefault()
@@ -606,9 +609,9 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                 <div className="overflow-x-auto">
                     <div className="w-full md:min-w-[1200px]">
                 {/* Desktop Header */}
-                <div 
+                <div
                     className="hidden md:grid gap-4 px-6 py-3 bg-slate-950/50 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500 items-center"
-                    style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}
+                    style={{ gridTemplateColumns: 'repeat(18, minmax(0, 1fr))' }}
                 >
                     {(userRol === 'admin') && (
                         <div className="col-span-1 flex justify-center">
@@ -618,10 +621,11 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                         </div>
                     )}
                     <div className={cn(
-                        userRol === 'admin' ? "col-span-3" : 
+                        userRol === 'admin' ? "col-span-3" :
                         userRol === 'supervisor' ? "col-span-4" : "col-span-5"
                     )}>Cliente</div>
                     <div className="col-span-2 text-left">Sector</div>
+                    <div className="col-span-2 text-left">Dirección</div>
                     {(userRol === 'admin' || userRol === 'supervisor') && (
                         <div className="col-span-2 text-left">{activeFilter === 'reasignados' ? 'Procedencia' : 'Asesor'}</div>
                     )}
@@ -719,6 +723,12 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                         </div>
                                     </div>
                                 </div>
+                                {cliente.direccion && (
+                                    <div className="flex items-start gap-1.5 mb-2 px-1">
+                                        <MapPin className="w-3 h-3 text-slate-500 shrink-0 mt-0.5" />
+                                        <span className="text-[11px] text-slate-400 leading-snug break-words" title={cliente.direccion}>{cliente.direccion}</span>
+                                    </div>
+                                )}
                                 <div className="flex gap-2 mt-3 pt-3 border-t border-slate-800/50">
                                     <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 hover:text-white px-0" onClick={() => window.open(`tel:${cliente.telefono}`)}>
                                         <Phone className="w-4 h-4 text-slate-500" />
@@ -787,7 +797,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                     <Edit className="w-4 h-4 mr-2" /> Editar Datos
                                                 </DropdownMenuItem>
                                             )}
-                                            <DropdownMenuItem onClick={() => updateParams({ client: cliente.id })} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
+                                            <DropdownMenuItem onClick={() => setQuickViewClientId(cliente.id)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
                                                 <Eye className="w-4 h-4 mr-2" /> Ver Detalle Rápido
                                             </DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => router.push(`/dashboard/clientes/${cliente.id}`)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
@@ -799,13 +809,13 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                             </div>
 
                             {/* Desktop Row View (>= md) */}
-                            <div 
+                            <div
                                 className={cn(
                                     "hidden md:grid gap-4 px-6 py-4 items-center hover:bg-slate-800/30 transition-colors border-l-4",
                                     cliente.stats.totalDebt > 0 ? "border-l-amber-500" : "border-l-slate-700",
                                     isSelected && "bg-blue-900/10 border-l-blue-500"
                                 )}
-                                style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}
+                                style={{ gridTemplateColumns: 'repeat(18, minmax(0, 1fr))' }}
                             >
                                 {(userRol === 'admin') && (
                                     <div className="col-span-1 flex justify-center">
@@ -851,6 +861,17 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                         </span>
                                     ) : (
                                         <span className="text-[10px] text-slate-500 italic">No asignado</span>
+                                    )}
+                                </div>
+
+                                <div className="col-span-2 min-w-0 flex items-center gap-1.5">
+                                    {cliente.direccion ? (
+                                        <>
+                                            <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
+                                            <span className="text-[11px] text-slate-400 truncate" title={cliente.direccion}>{cliente.direccion}</span>
+                                        </>
+                                    ) : (
+                                        <span className="text-[10px] text-slate-600 italic">Sin dirección</span>
                                     )}
                                 </div>
 
@@ -974,7 +995,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                     <Edit className="w-4 h-4 mr-2" /> Editar Datos
                                                 </DropdownMenuItem>
                                             )}
-                                            <DropdownMenuItem onClick={() => updateParams({ client: cliente.id })} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
+                                            <DropdownMenuItem onClick={() => setQuickViewClientId(cliente.id)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
                                                 <Eye className="w-4 h-4 mr-2" /> Ver Detalle Rápido
                                             </DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => router.push(`/dashboard/clientes/${cliente.id}`)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
@@ -1066,10 +1087,10 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             </Dialog>
             
             {/* Client Detail Drawer */}
-            <ClientDetailDrawer 
-                cliente={clientes.find(c => c.id === searchParams.get('client'))} 
-                isOpen={!!searchParams.get('client')} 
-                onClose={() => updateParams({ client: null })}
+            <ClientDetailDrawer
+                cliente={clientes.find(c => c.id === quickViewClientId)}
+                isOpen={!!quickViewClientId}
+                onClose={() => setQuickViewClientId(null)}
                 userRol={userRol}
             />
 

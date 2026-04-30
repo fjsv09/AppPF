@@ -461,14 +461,14 @@ function ValidacionPagosContent() {
     }
 
     return (
-        <div className="page-container max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="page-container max-w-7xl mx-auto px-3 sm:px-6">
             <div className="page-header border-b-0 pb-2">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 sm:gap-4">
                     <BackButton />
-                    <div>
-                        <h1 className="page-title flex items-center gap-3">
-                            Validación de Pagos
-                            <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px] font-black h-5 uppercase tracking-tighter">
+                    <div className="min-w-0 flex-1">
+                        <h1 className="page-title flex flex-wrap items-center gap-2 sm:gap-3">
+                            <span className="truncate">Validación de Pagos</span>
+                            <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px] font-black h-5 uppercase tracking-tighter shrink-0">
                                 {pagosPendientes.length} Pendientes
                             </Badge>
                         </h1>
@@ -483,22 +483,22 @@ function ValidacionPagosContent() {
                 params.set('tab', val)
                 router.replace(`?${params.toString()}`, { scroll: false })
             }}>
-                <div className="flex items-center justify-between mb-6 bg-slate-900/30 p-1.5 rounded-2xl border border-slate-800/50 backdrop-blur-sm sticky top-0 z-40">
-                    <TabsList className="bg-transparent gap-1">
-                        <TabsTrigger value="pendientes" className="rounded-xl px-4 h-9 data-[state=active]:bg-indigo-600 data-[state=active]:text-white font-black uppercase text-[10px] tracking-widest transition-all">
-                            <LayoutGrid className="w-3.5 h-3.5 mr-2" />
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4 sm:mb-6 bg-slate-900/30 p-1.5 rounded-2xl border border-slate-800/50 backdrop-blur-sm sticky top-0 z-40">
+                    <TabsList className="bg-transparent gap-1 w-full sm:w-auto justify-start">
+                        <TabsTrigger value="pendientes" className="flex-1 sm:flex-none rounded-xl px-3 sm:px-4 h-9 data-[state=active]:bg-indigo-600 data-[state=active]:text-white font-black uppercase text-[10px] tracking-widest transition-all">
+                            <LayoutGrid className="w-3.5 h-3.5 mr-1.5 sm:mr-2" />
                             Pendientes
                         </TabsTrigger>
-                        <TabsTrigger value="historial" className="rounded-xl px-4 h-9 data-[state=active]:bg-slate-700 data-[state=active]:text-white font-black uppercase text-[10px] tracking-widest transition-all">
-                            <History className="w-3.5 h-3.5 mr-2" />
+                        <TabsTrigger value="historial" className="flex-1 sm:flex-none rounded-xl px-3 sm:px-4 h-9 data-[state=active]:bg-slate-700 data-[state=active]:text-white font-black uppercase text-[10px] tracking-widest transition-all">
+                            <History className="w-3.5 h-3.5 mr-1.5 sm:mr-2" />
                             Historial
                         </TabsTrigger>
                     </TabsList>
-                    <div className="px-3 flex items-center gap-3">
+                    <div className="px-1.5 sm:px-3 flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                         {userRole !== 'asesor' && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-1 sm:flex-none">
                                 <Select value={selectedAsesor} onValueChange={setSelectedAsesor}>
-                                    <SelectTrigger className="h-8 bg-slate-800/50 border-slate-700/50 rounded-lg font-bold uppercase text-[9px] w-[150px] text-slate-300">
+                                    <SelectTrigger className="h-8 bg-slate-800/50 border-slate-700/50 rounded-lg font-bold uppercase text-[9px] w-full sm:w-[150px] text-slate-300">
                                         <SelectValue placeholder="Asesor..." />
                                     </SelectTrigger>
                                     <SelectContent className="bg-slate-900 border-slate-800 text-white rounded-xl">
@@ -512,9 +512,9 @@ function ValidacionPagosContent() {
                                 </Select>
                             </div>
                         )}
-                        <div className="flex items-center gap-2 text-slate-500">
+                        <div className="hidden sm:flex items-center gap-2 text-slate-500">
                             <ListFilter className="w-4 h-4" />
-                            <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Recientes Primero</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest">Recientes Primero</span>
                         </div>
                     </div>
                 </div>

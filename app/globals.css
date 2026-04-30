@@ -164,6 +164,13 @@ body {
   }
 }
 
+/* ── Sonner toasts: above mobile nav + iOS safe area ── */
+@media (max-width: 767px) {
+  [data-sonner-toaster][data-y-position='bottom'] {
+    --offset-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
 /* ── Animations ── */
 @keyframes bounce-subtle {
   0%, 100% { transform: translateY(-10%); animation-timing-function: cubic-bezier(0.8, 0, 1, 1); }
@@ -345,4 +352,154 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* ============================================================
+   ☀️ WIZARD LIGHT MODE — alta legibilidad bajo luz solar
+   ============================================================
+   Aplicado solo dentro de .wizard-light. Sobrescribe los
+   colores oscuros hardcodeados en los Step components con
+   un esquema blanco/alto contraste para uso en campo.
+   ============================================================ */
+.wizard-light {
+  background: #f8fafc;
+  border-radius: 1rem;
+  padding: 1rem;
+}
+
+/* Texto */
+.wizard-light h1,
+.wizard-light h2,
+.wizard-light h3,
+.wizard-light .text-white {
+  color: #0f172a !important;
+}
+.wizard-light .text-slate-200,
+.wizard-light .text-slate-300,
+.wizard-light .text-slate-400 {
+  color: #334155 !important;
+}
+.wizard-light .text-slate-500 {
+  color: #475569 !important;
+}
+
+/* Tarjetas / paneles */
+.wizard-light .bg-slate-900\/50,
+.wizard-light .bg-slate-900,
+.wizard-light .bg-slate-950\/50,
+.wizard-light .bg-slate-950 {
+  background-color: #ffffff !important;
+  backdrop-filter: none !important;
+}
+
+/* Bordes */
+.wizard-light .border-slate-700,
+.wizard-light .border-slate-800 {
+  border-color: #cbd5e1 !important;
+}
+.wizard-light .border-purple-500\/20,
+.wizard-light .border-blue-500\/20,
+.wizard-light .border-emerald-500\/20 {
+  border-color: #cbd5e1 !important;
+}
+
+/* Inputs / textarea / select */
+.wizard-light input,
+.wizard-light textarea,
+.wizard-light select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #94a3b8 !important;
+}
+.wizard-light input::placeholder,
+.wizard-light textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* Iconos dentro de inputs (lucide) — más oscuros para contraste */
+.wizard-light .text-slate-500.absolute,
+.wizard-light .text-blue-500.absolute,
+.wizard-light .text-emerald-500.absolute {
+  color: #1e293b !important;
+}
+
+/* Avisos / banners suaves */
+.wizard-light .bg-blue-500\/10 {
+  background-color: #dbeafe !important;
+}
+.wizard-light .bg-yellow-500\/10 {
+  background-color: #fef3c7 !important;
+}
+.wizard-light .text-blue-400 {
+  color: #1d4ed8 !important;
+}
+.wizard-light .text-yellow-400 {
+  color: #b45309 !important;
+}
+.wizard-light .text-purple-400 {
+  color: #7e22ce !important;
+}
+.wizard-light .text-red-400 {
+  color: #b91c1c !important;
+}
+.wizard-light .text-emerald-400 {
+  color: #047857 !important;
+}
+
+/* Badge wizard v2.0 */
+.wizard-light .bg-purple-500\/20 {
+  background-color: #ede9fe !important;
+}
+.wizard-light .border-purple-500\/30 {
+  border-color: #c4b5fd !important;
+}
+
+/* Botón "Limpiar Formulario" / outline rojo */
+.wizard-light .border-red-500\/30 {
+  border-color: #fca5a5 !important;
+}
+.wizard-light .bg-red-500\/10:hover,
+.wizard-light .hover\:bg-red-500\/10:hover {
+  background-color: #fee2e2 !important;
+}
+
+/* Botones secundarios (Anterior) */
+.wizard-light button.bg-slate-950\/50 {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+.wizard-light button.bg-slate-950\/50:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* Drop zones de documentos */
+.wizard-light [class*="border-dashed"] {
+  border-color: #94a3b8 !important;
+  background-color: #f8fafc !important;
+}
+
+/* Stepper círculos no completados */
+.wizard-light .bg-slate-800 {
+  background-color: #e2e8f0 !important;
+}
+
+/* Componente GPS — usa bg-white/5 + text-white que se vuelven invisibles */
+.wizard-light .bg-white\/5 {
+  background-color: #f1f5f9 !important;
+}
+.wizard-light .border-white\/10 {
+  border-color: #94a3b8 !important;
+}
+.wizard-light .hover\:bg-white\/10:hover {
+  background-color: #e2e8f0 !important;
+}
+.wizard-light .text-white,
+.wizard-light .text-white\/90,
+.wizard-light .text-white\/70,
+.wizard-light .text-white\/50,
+.wizard-light .text-white\/40 {
+  color: #0f172a !important;
+}
+.wizard-light .placeholder\:text-white\/40::placeholder {
+  color: #64748b !important;
 }

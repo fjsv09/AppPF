@@ -11,7 +11,7 @@ import { createClient } from '@/utils/supabase/client'
 import { BackButton } from '@/components/ui/back-button'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Lock, RotateCcw } from 'lucide-react'
+import { Lock, RotateCcw, Sun, Moon, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function NuevaSolicitudPage() {
@@ -43,6 +43,22 @@ export default function NuevaSolicitudPage() {
   // useEffect de persistencia escriba el estado vacío y destruya el borrador
   // antes de que la restauración tenga oportunidad de leerlo.
   const hasHydratedRef = useRef(false)
+
+  // Modo claro para uso en campo bajo luz solar. Persistido en localStorage.
+  const [lightMode, setLightMode] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setLightMode(localStorage.getItem('wizard_light_mode') === '1')
+  }, [])
+  const toggleLightMode = useCallback(() => {
+    setLightMode(prev => {
+      const next = !prev
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('wizard_light_mode', next ? '1' : '0')
+      }
+      return next
+    })
+  }, [])
 
   // Contador para forzar remount de los Step* tras envío exitoso.
   // Necesario porque cada Step usa useForm con defaultValues, que solo se aplican
@@ -87,50 +103,70 @@ export default function NuevaSolicitudPage() {
       const supabase = createClient()
 
       try {
-        // 0. VERIFICAR ACCESO AL SISTEMA (Centralizado)
+        // 0. AUTH + PERFIL — necesarios antes de seguir
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) {
           router.push('/login')
           return
         }
 
-        // Obtener rol del perfil
         const { data: perfil } = await supabase
           .from('perfiles')
           .select('rol')
           .eq('id', user.id)
           .single()
-        
+
         const userRole = perfil?.rol || 'asesor'
 
-        // Verificar acceso
+        // 1. CARGAS PARALELAS — todo lo que no depende entre sí va junto.
+        // checkSystemAccess, sectores, config de horario, y datos de
+        // edición/cliente arrancan al mismo tiempo en lugar de en serie.
         const { checkSystemAccess } = await import('@/utils/systemRestrictions')
-        const access = await checkSystemAccess(supabase, user.id, userRole, 'solicitud')
-        setAccessResult(access)
 
+        const accessPromise = checkSystemAccess(supabase, user.id, userRole, 'solicitud')
+
+        const sectoresPromise = fetch('/api/sectores')
+          .then(res => res.ok ? res.json() : [])
+          .catch(err => { console.error('Error en fetch sectores:', err); return [] })
+
+        const schedulePromise = supabase
+          .from('configuracion_sistema')
+          .select('clave, valor')
+          .in('clave', ['horario_apertura', 'horario_cierre', 'desbloqueo_hasta'])
+
+        const solicitudPromise = isEditMode
+          ? supabase
+              .from('solicitudes')
+              .select('*, clientes(limite_prestamo)')
+              .eq('id', solicitudId)
+              .single()
+          : Promise.resolve({ data: null, error: null })
+
+        const clientePromise = (!isEditMode && clienteId)
+          ? supabase
+              .from('clientes')
+              .select('*, sectores(nombre)')
+              .eq('id', clienteId)
+              .single()
+          : Promise.resolve({ data: null, error: null })
+
+        const [access, sectoresData, scheduleRes, solicitudRes, clienteRes] = await Promise.all([
+          accessPromise,
+          sectoresPromise,
+          schedulePromise,
+          solicitudPromise,
+          clientePromise
+        ])
+
+        setAccessResult(access)
         if (!access.allowed && userRole !== 'admin') {
           setIsLoading(false)
           return
         }
 
-        // 1. Cargar sectores activos vía API
-        try {
-            const sectoresRes = await fetch('/api/sectores')
-            const sectoresData = await sectoresRes.json()
-            if (sectoresRes.ok) {
-                setSectores(sectoresData)
-            }
-        } catch (err) {
-            console.error('Error en fetch sectores:', err)
-        }
+        if (Array.isArray(sectoresData)) setSectores(sectoresData)
 
-        // Cargar configuración de horario
-        const { data: scheduleConfigs } = await supabase
-          .from('configuracion_sistema')
-          .select('clave, valor')
-          .in('clave', ['horario_apertura', 'horario_cierre', 'desbloqueo_hasta'])
-        
-        const schedule = (scheduleConfigs || []).reduce((acc: any, curr) => {
+        const schedule = (scheduleRes.data || []).reduce((acc: any, curr) => {
           acc[curr.clave] = curr.valor
           return acc
         }, { horario_apertura: '07:00', horario_cierre: '20:00', desbloqueo_hasta: '1970-01-01' })
@@ -138,14 +174,8 @@ export default function NuevaSolicitudPage() {
 
         // CASO 1: Modo Edición de Solicitud
         if (isEditMode) {
-          const { data: solicitud, error } = await supabase
-            .from('solicitudes')
-            .select('*, clientes(limite_prestamo)')
-            .eq('id', solicitudId)
-            .single()
-
-          if (error) throw error
-
+          if (solicitudRes.error) throw solicitudRes.error
+          const solicitud = solicitudRes.data
           if (solicitud) {
             setWizardState({
               currentStep: 1,
@@ -177,16 +207,11 @@ export default function NuevaSolicitudPage() {
             })
             setCompletedSteps([1, 2, 3])
           }
-        } 
+        }
         // CASO 2: Nueva Solicitud para Cliente Existente
         else if (clienteId) {
-          const { data: cliente, error } = await supabase
-            .from('clientes')
-            .select('*, sectores(nombre)')
-            .eq('id', clienteId)
-            .single()
-
-          if (error) throw error
+          if (clienteRes.error) throw clienteRes.error
+          const cliente = clienteRes.data
           if (cliente) {
             setWizardState({
               currentStep: 1,
@@ -441,17 +466,6 @@ export default function NuevaSolicitudPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-white text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-slate-400 font-medium">Verificando acceso al sistema...</p>
-        </div>
-      </div>
-    )
-  }
-
   // PANTALLA DE BLOQUEO (Si no se permite acceso)
   if (accessResult && !accessResult.allowed) {
     return (
@@ -489,7 +503,7 @@ export default function NuevaSolicitudPage() {
   }
 
   return (
-    <div className="page-container max-w-4xl mx-auto py-8 px-4">
+    <div className={`page-container max-w-4xl mx-auto py-8 px-4 ${lightMode ? 'wizard-light' : ''}`}>
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
@@ -506,58 +520,96 @@ export default function NuevaSolicitudPage() {
             </p>
           </div>
           
-          {!isEditMode && hasContent(wizardState) && (
-            <Button 
-              variant="outline" 
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
               size="sm"
-              onClick={handleReset}
-              disabled={isSubmitting}
-              className="border-red-500/30 text-red-400 hover:bg-red-500/10 h-10 rounded-xl px-4 gap-2 transition-all active:scale-95 disabled:opacity-50"
+              onClick={toggleLightMode}
+              className={`h-10 rounded-xl px-4 gap-2 transition-all active:scale-95 ${
+                lightMode
+                  ? 'border-amber-400 bg-amber-100 text-amber-900 hover:bg-amber-200'
+                  : 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+              }`}
+              title={lightMode ? 'Cambiar a modo oscuro' : 'Cambiar a modo sol (campo)'}
             >
-              <RotateCcw className="w-4 h-4" />
-              Limpiar Formulario
+              {lightMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+              {lightMode ? 'Modo Oscuro' : 'Modo Sol'}
             </Button>
-          )}
+
+            {!isEditMode && hasContent(wizardState) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleReset}
+                disabled={isSubmitting}
+                className="border-red-500/30 text-red-400 hover:bg-red-500/10 h-10 rounded-xl px-4 gap-2 transition-all active:scale-95 disabled:opacity-50"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Limpiar Formulario
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* Stepper */}
-        <Stepper steps={WIZARD_STEPS} currentStep={wizardState.currentStep} completedSteps={completedSteps} />
-
-        {/* Step Content */}
-        <div className="mt-8">
-          {wizardState.currentStep === 1 && (
-            <StepProspecto
-              key={`prospecto-${formInstance}`}
-              initialData={wizardState.prospecto}
-              onNext={handleProspectoNext}
-              onChange={handleProspectoChange}
-              clienteExistente={!!wizardState.clienteExistenteId}
-              sectores={sectores}
-            />
+        {/* Wizard content — difuminado mientras carga, bloqueando interacción */}
+        <div className="relative">
+          {isLoading && (
+            <div className="absolute inset-0 z-10 flex items-start justify-center pt-32 pointer-events-none">
+              <div className="flex items-center gap-3 px-5 py-3 bg-slate-900/90 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-md">
+                <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
+                <span className="text-sm font-medium text-white">
+                  Verificando acceso al sistema...
+                </span>
+              </div>
+            </div>
           )}
 
-          {wizardState.currentStep === 2 && (
-            <StepEvaluacion
-              key={`evaluacion-${formInstance}`}
-              initialData={wizardState.evaluacion}
-              onNext={handleEvaluacionNext}
-              onChange={handleEvaluacionChange}
-              onBack={handleBack}
-            />
-          )}
+          <div
+            className={`transition-all duration-300 ${
+              isLoading ? 'blur-sm opacity-60 pointer-events-none select-none' : ''
+            }`}
+            aria-busy={isLoading}
+          >
+          {/* Stepper */}
+          <Stepper steps={WIZARD_STEPS} currentStep={wizardState.currentStep} completedSteps={completedSteps} />
 
-          {wizardState.currentStep === 3 && (
-            <StepPrestamo
-              key={`prestamo-${formInstance}`}
-              initialData={wizardState.prestamo}
-              onNext={handleSubmit}
-              onChange={handlePrestamoChange}
-              onBack={handleBack}
-              isSubmitting={isSubmitting}
-              systemSchedule={systemSchedule}
-              clienteLimit={wizardState.clienteLimit}
-            />
-          )}
+          {/* Step Content */}
+          <div className="mt-8">
+            {wizardState.currentStep === 1 && (
+              <StepProspecto
+                key={`prospecto-${formInstance}`}
+                initialData={wizardState.prospecto}
+                onNext={handleProspectoNext}
+                onChange={handleProspectoChange}
+                clienteExistente={!!wizardState.clienteExistenteId}
+                sectores={sectores}
+              />
+            )}
+
+            {wizardState.currentStep === 2 && (
+              <StepEvaluacion
+                key={`evaluacion-${formInstance}`}
+                initialData={wizardState.evaluacion}
+                onNext={handleEvaluacionNext}
+                onChange={handleEvaluacionChange}
+                onBack={handleBack}
+              />
+            )}
+
+            {wizardState.currentStep === 3 && (
+              <StepPrestamo
+                key={`prestamo-${formInstance}`}
+                initialData={wizardState.prestamo}
+                onNext={handleSubmit}
+                onChange={handlePrestamoChange}
+                onBack={handleBack}
+                isSubmitting={isSubmitting}
+                systemSchedule={systemSchedule}
+                clienteLimit={wizardState.clienteLimit}
+              />
+            )}
+          </div>
+        </div>
         </div>
       </div>
   )

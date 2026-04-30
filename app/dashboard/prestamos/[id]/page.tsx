@@ -326,28 +326,25 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                 )}
 
                 <div className="relative z-10 p-4 md:p-6 text-white">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 md:gap-4 mb-6 md:mb-8">
-                        <div className="flex items-center gap-2.5 w-full lg:w-auto">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 md:gap-4 mb-6 md:mb-8">
+                        <div className="flex items-center gap-2 w-full lg:w-auto">
                             <BackButton />
-                            <ClientMiniCard 
+                            <ClientMiniCard
                                 clienteId={prestamo.cliente_id}
                                 nombres={prestamo.clientes?.nombres}
                                 fotoPerfil={prestamo.clientes?.foto_perfil}
-                                className="h-10 md:h-11 shadow-sm bg-white/10 border-white/20"
+                                className="h-10 md:h-11 shadow-sm bg-white/10 border-white/20 flex-1 lg:flex-none min-w-0"
                             />
                             {esParalelo && (
-                                <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 font-bold ml-2 shadow-sm uppercase tracking-wider text-[10px] md:text-xs">PARALELO</Badge>
+                                <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 font-bold shadow-sm uppercase tracking-wider text-[10px] md:text-xs shrink-0">PARALELO</Badge>
                             )}
-                        </div>
-
-                        <div className="lg:hidden w-full flex justify-end">
-                            <div className="flex items-center gap-2 md:gap-3 bg-white/5 h-10 px-3 rounded-xl border border-white/10 backdrop-blur-md hover:bg-white/10 hover:border-blue-500/30 transition-all cursor-pointer group w-fit min-w-[140px]">
-                                <div className="h-7 w-7 shrink-0 rounded-full bg-slate-800 flex items-center justify-center shadow-lg border border-white/10 group-hover:scale-105 transition-transform overflow-hidden relative">
+                            <div className="lg:hidden flex items-center gap-2 bg-white/5 h-10 px-2.5 rounded-xl border border-white/10 backdrop-blur-md shrink-0">
+                                <div className="h-7 w-7 shrink-0 rounded-full bg-slate-800 flex items-center justify-center shadow-lg border border-white/10 overflow-hidden relative">
                                     <Users className="w-3.5 h-3.5 text-blue-400" />
                                 </div>
-                                <div className="flex flex-col justify-center min-w-0">
-                                    <span className="text-[8px] md:text-[9px] text-blue-200/50 font-black uppercase tracking-[0.15em] leading-none mb-0.5">Asesor</span>
-                                    <span className="font-bold text-xs text-white/90 leading-tight truncate group-hover:text-blue-300 transition-colors">
+                                <div className="flex flex-col justify-center min-w-0 max-w-[90px]">
+                                    <span className="text-[8px] text-blue-200/50 font-black uppercase tracking-[0.15em] leading-none mb-0.5">Asesor</span>
+                                    <span className="font-bold text-[11px] text-white/90 leading-tight truncate">
                                         {prestamo.clientes?.asesor?.nombre_completo || 'No asignado'}
                                     </span>
                                 </div>

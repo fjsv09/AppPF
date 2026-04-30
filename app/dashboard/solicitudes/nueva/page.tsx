@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Stepper } from '@/components/wizard/stepper'
 import { StepProspecto } from '@/components/wizard/step-prospecto'
@@ -38,6 +38,11 @@ export default function NuevaSolicitudPage() {
   const [systemSchedule, setSystemSchedule] = useState<any>(null)
 
   const [accessResult, setAccessResult] = useState<any>(null)
+
+  // Marca que la hidratación desde localStorage ya corrió. Evita que el
+  // useEffect de persistencia escriba el estado vacío y destruya el borrador
+  // antes de que la restauración tenga oportunidad de leerlo.
+  const hasHydratedRef = useRef(false)
 
   // Contador para forzar remount de los Step* tras envío exitoso.
   // Necesario porque cada Step usa useForm con defaultValues, que solo se aplican
@@ -241,7 +246,9 @@ export default function NuevaSolicitudPage() {
           if (savedContext === currentContext && parsed?.state && hasContent(parsed.state)) {
             setWizardState(parsed.state)
             if (parsed.steps) setCompletedSteps(parsed.steps)
-            
+            // Remontar los Step* para que useForm tome los defaultValues restaurados
+            setFormInstance(prev => prev + 1)
+
             toast.success('Borrador recuperado', {
               description: 'Se han restaurado los datos anteriores.',
               action: {
@@ -261,16 +268,19 @@ export default function NuevaSolicitudPage() {
           console.error('Error al restaurar borrador:', e)
         }
       }
+      // La hidratación corrió (con o sin borrador). Recién ahora autorizamos
+      // al efecto de persistencia a escribir en localStorage.
+      hasHydratedRef.current = true
     }
   }, [isLoading, isEditMode, clienteId])
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && !isEditMode && !isLoading) {
+    if (typeof window !== 'undefined' && !isEditMode && !isLoading && hasHydratedRef.current) {
       const currentContext = clienteId || 'new_prospect'
-      
+
       if (hasContent(wizardState)) {
-        const data = { 
-          state: wizardState, 
+        const data = {
+          state: wizardState,
           steps: completedSteps,
           context: currentContext, // Guardamos el contexto para validación
           timestamp: new Date().getTime()
@@ -292,12 +302,16 @@ export default function NuevaSolicitudPage() {
     setCompletedSteps((prev) => Array.from(new Set([...prev, 1])))
   }
 
-  const handleStepDataChange = (step: 'prospecto' | 'evaluacion' | 'prestamo', data: any) => {
+  const handleStepDataChange = useCallback((step: 'prospecto' | 'evaluacion' | 'prestamo', data: any) => {
     setWizardState((prev) => ({
       ...prev,
       [step]: { ...prev[step], ...data }
     }))
-  }
+  }, [])
+
+  const handleProspectoChange = useCallback((data: any) => handleStepDataChange('prospecto', data), [handleStepDataChange])
+  const handleEvaluacionChange = useCallback((data: any) => handleStepDataChange('evaluacion', data), [handleStepDataChange])
+  const handlePrestamoChange = useCallback((data: any) => handleStepDataChange('prestamo', data), [handleStepDataChange])
 
   const handleEvaluacionNext = (data: EvaluacionData) => {
     setWizardState((prev) => ({
@@ -516,7 +530,7 @@ export default function NuevaSolicitudPage() {
               key={`prospecto-${formInstance}`}
               initialData={wizardState.prospecto}
               onNext={handleProspectoNext}
-              onChange={(data) => handleStepDataChange('prospecto', data)}
+              onChange={handleProspectoChange}
               clienteExistente={!!wizardState.clienteExistenteId}
               sectores={sectores}
             />
@@ -527,7 +541,7 @@ export default function NuevaSolicitudPage() {
               key={`evaluacion-${formInstance}`}
               initialData={wizardState.evaluacion}
               onNext={handleEvaluacionNext}
-              onChange={(data) => handleStepDataChange('evaluacion', data)}
+              onChange={handleEvaluacionChange}
               onBack={handleBack}
             />
           )}
@@ -537,7 +551,7 @@ export default function NuevaSolicitudPage() {
               key={`prestamo-${formInstance}`}
               initialData={wizardState.prestamo}
               onNext={handleSubmit}
-              onChange={(data) => handleStepDataChange('prestamo', data)}
+              onChange={handlePrestamoChange}
               onBack={handleBack}
               isSubmitting={isSubmitting}
               systemSchedule={systemSchedule}

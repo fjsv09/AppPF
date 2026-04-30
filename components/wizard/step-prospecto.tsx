@@ -38,7 +38,7 @@ export function StepProspecto({ initialData, onNext, onChange, clienteExistente,
     register,
     handleSubmit,
     watch,
-    formState: { errors }
+    formState: { errors, isDirty }
   } = useForm({
     resolver: zodResolver(prospectoSchema),
     defaultValues: {
@@ -53,12 +53,16 @@ export function StepProspecto({ initialData, onNext, onChange, clienteExistente,
 
   const watchedValues = watch()
 
-  // Notificar cambios al padre en tiempo real
+  // Notificar cambios al padre solo tras interacción del usuario.
+  // Why: en el mount, watchedValues = defaultValues. Si onChange dispara aquí,
+  // sobreescribe wizardState con los defaults (vacíos si no hay initialData),
+  // lo que borra el borrador restaurado desde localStorage.
   useEffect(() => {
+    if (!isDirty) return
     if (onChange) {
       onChange(watchedValues)
     }
-  }, [watchedValues, onChange])
+  }, [watchedValues, onChange, isDirty])
 
   const onSubmit = async (data: any) => {
     setIsSubmitting(true)

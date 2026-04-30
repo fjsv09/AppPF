@@ -157,7 +157,7 @@ export async function PATCH(
                 cuotas: solicitud.cuotas,
                 estado: 'activo',
                 estado_mora: 'ok',
-                bloqueo_cronograma: false,
+                bloqueo_cronograma: true,
                 created_by: solicitud.asesor_id
             })
             .select()

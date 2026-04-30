@@ -46,7 +46,7 @@ export function StepPrestamo({ initialData, onNext, onBack, isSubmitting = false
     register,
     handleSubmit,
     watch,
-    formState: { errors }
+    formState: { errors, isDirty }
   } = useForm({
     resolver: zodResolver(prestamoSchema),
     defaultValues: {
@@ -81,15 +81,19 @@ export function StepPrestamo({ initialData, onNext, onBack, isSubmitting = false
     }
   }, [modalidad, cuotas, interesBase])
 
-  // Notificar cambios al padre en tiempo real
+  // Notificar cambios al padre solo tras interacción del usuario.
+  // Why: en el mount, watchAll = defaultValues. Si onChange dispara aquí,
+  // sobreescribe wizardState con los defaults, lo que puede borrar
+  // el borrador restaurado desde localStorage.
   useEffect(() => {
+    if (!isDirty) return
     if (onChange) {
         onChange({
             ...watchAll,
             interes: calcularInteres.interes // Enviamos el interés calculado
         })
     }
-  }, [watchAll, onChange, calcularInteres.interes])
+  }, [watchAll, onChange, calcularInteres.interes, isDirty])
 
   // Calcular totales
   const totalPagar = monto * (1 + calcularInteres.interes / 100)

@@ -256,6 +256,12 @@ export async function POST(request: Request) {
                 .catch(err => ({ error: err }));
             if (cronogramaError) throw new Error(`Error generando cronograma: ${cronogramaError.message}`);
 
+            // 6.b Bloquear cronograma: refinanciamiento directo admin oficializa el préstamo
+            await supabaseAdmin
+                .from('prestamos')
+                .update({ bloqueo_cronograma: true })
+                .eq('id', resultado.prestamo_nuevo_id);
+
             // 7. Auditoría y Tareas
             await supabaseAdmin.from('auditoria').insert({
                 usuario_id: user.id,

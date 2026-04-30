@@ -48,7 +48,7 @@ export function StepEvaluacion({ initialData, onNext, onChange, onBack }: StepEv
     register,
     handleSubmit,
     watch,
-    formState: { errors }
+    formState: { errors, isDirty }
   } = useForm({
     resolver: zodResolver(evaluacionSchema),
     defaultValues: {
@@ -61,9 +61,25 @@ export function StepEvaluacion({ initialData, onNext, onChange, onBack }: StepEv
   })
 
   const watchedValues = watch()
+  const [userTouched, setUserTouched] = useState(false)
 
-  // Notificar cambios al padre en tiempo real
+  // Marca interacción cuando cambia GPS o documentos (no controlados por RHF)
   useEffect(() => {
+    if (gpsCoords !== (initialData?.gps_coordenadas || '')) setUserTouched(true)
+  }, [gpsCoords, initialData?.gps_coordenadas])
+
+  useEffect(() => {
+    if (Object.keys(documentos).length !== Object.keys(initialData?.documentos || {}).length) {
+      setUserTouched(true)
+    }
+  }, [documentos, initialData?.documentos])
+
+  // Notificar cambios al padre solo tras interacción del usuario.
+  // Why: en el mount, watchedValues = defaultValues. Si onChange dispara aquí,
+  // sobreescribe wizardState con los defaults (vacíos si no hay initialData),
+  // lo que borra el borrador restaurado desde localStorage.
+  useEffect(() => {
+    if (!isDirty && !userTouched) return
     if (onChange) {
       onChange({
         ...watchedValues,
@@ -71,7 +87,7 @@ export function StepEvaluacion({ initialData, onNext, onChange, onBack }: StepEv
         documentos
       })
     }
-  }, [watchedValues, gpsCoords, documentos, onChange])
+  }, [watchedValues, gpsCoords, documentos, onChange, isDirty, userTouched])
 
   const handleDocumentoUpload = (key: string, fileData: string) => {
     setDocumentos((prev) => ({ ...prev, [key]: fileData }))

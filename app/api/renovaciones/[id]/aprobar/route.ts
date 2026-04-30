@@ -175,6 +175,12 @@ export async function PATCH(
                 .catch(err => ({ error: err }));
             if (cronogramaError) throw new Error(`Error generando cronograma: ${cronogramaError.message}`);
 
+            // 4.b Bloquear cronograma: la aprobación admin oficializa el préstamo
+            await supabaseAdmin
+                .from('prestamos')
+                .update({ bloqueo_cronograma: true })
+                .eq('id', resultado.prestamo_nuevo_id);
+
             // 5. Notificar al asesor
             const clienteNombres = (solicitud.cliente as any)?.nombres || 'Cliente'
             await createFullNotification(solicitud.asesor_id, {

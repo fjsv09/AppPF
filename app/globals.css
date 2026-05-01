@@ -164,10 +164,10 @@ body {
   }
 }
 
-/* ── Sonner toasts: above mobile nav + iOS safe area ── */
+/* ── Sonner toasts: below iOS notch/Dynamic Island ── */
 @media (max-width: 767px) {
-  [data-sonner-toaster][data-y-position='bottom'] {
-    --offset-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+  [data-sonner-toaster][data-y-position='top'] {
+    --offset-top: calc(16px + env(safe-area-inset-top, 0px)) !important;
   }
 }
 

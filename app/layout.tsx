@@ -86,7 +86,7 @@ export default function RootLayout({
             {children}
           </NotificationProvider>
         </ProgressProvider>
-        <Toaster position="bottom-center" richColors theme="dark" offset="80px" />
+        <Toaster position="top-center" richColors theme="dark" />
       </body>
     </html>
   );

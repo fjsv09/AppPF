@@ -787,7 +787,7 @@ export function calculateClientSituation(client: any) {
         // Aquí no tenemos total_pagado_acumulado fácilmente, así que confiamos en el cronograma
         // o dejamos que pase como activo. Por suerte en las vistas de lista SÍ traemos cronograma.
       }
-      if (saldo <= 0.01) return false
+      if ((p.cronograma_cuotas?.length ?? 0) > 0 && saldo <= 0.01) return false
     }
 
     return true

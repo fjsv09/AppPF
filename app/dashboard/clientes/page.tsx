@@ -187,7 +187,7 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
                 saldo = p.cronograma_cuotas.reduce((acc: number, c: any) => acc + (c.monto_cuota - (c.monto_pagado || 0)), 0)
             }
 
-            const isEffectivelyFinalized = isMigrado && saldo <= 0.01
+            const isEffectivelyFinalized = isMigrado && (p.cronograma_cuotas?.length ?? 0) > 0 && saldo <= 0.01
             return p.estado === 'activo' && !isEffectivelyFinalized
         }) || []
         

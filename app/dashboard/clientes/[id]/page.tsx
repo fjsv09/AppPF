@@ -223,7 +223,8 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                     <span className="text-sm font-bold text-emerald-400 leading-none">
                                         {loans?.filter((l: any) => {
                                             const isMigrado = (l.observacion_supervisor || '').includes('Préstamo migrado') || (l.observacion_supervisor || '').includes('[MIGRACIÓN]')
-                                            const isEffectivelyFinalized = isMigrado && l.saldo_pendiente <= 0.01
+                                            const _saldo = l.cronograma_cuotas?.reduce((acc: number, c: any) => acc + (c.monto_cuota - (c.monto_pagado || 0)), 0) ?? 0
+                                            const isEffectivelyFinalized = isMigrado && (l.cronograma_cuotas?.length ?? 0) > 0 && _saldo <= 0.01
                                             return l.estado === 'activo' && !isEffectivelyFinalized
                                         }).length || 0}
                                     </span>
@@ -244,7 +245,8 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                 <span className="text-sm font-black text-emerald-400 leading-none">
                                     {loans?.filter((l: any) => {
                                         const isMigrado = (l.observacion_supervisor || '').includes('Préstamo migrado') || (l.observacion_supervisor || '').includes('[MIGRACIÓN]')
-                                        const isEffectivelyFinalized = isMigrado && l.saldo_pendiente <= 0.01
+                                        const _saldo = l.cronograma_cuotas?.reduce((acc: number, c: any) => acc + (c.monto_cuota - (c.monto_pagado || 0)), 0) ?? 0
+                                        const isEffectivelyFinalized = isMigrado && (l.cronograma_cuotas?.length ?? 0) > 0 && _saldo <= 0.01
                                         return l.estado === 'activo' && !isEffectivelyFinalized
                                     }).length || 0}
                                 </span>
@@ -560,7 +562,8 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                             <div className="text-xl font-bold text-emerald-400">
                                                 {loans?.filter((l: any) => {
                                                     const isMigrado = (l.observacion_supervisor || '').includes('Préstamo migrado') || (l.observacion_supervisor || '').includes('[MIGRACIÓN]')
-                                                    const isEffectivelyFinalized = isMigrado && l.saldo_pendiente <= 0.01
+                                                    const _saldo = l.cronograma_cuotas?.reduce((acc: number, c: any) => acc + (c.monto_cuota - (c.monto_pagado || 0)), 0) ?? 0
+                                                    const isEffectivelyFinalized = isMigrado && (l.cronograma_cuotas?.length ?? 0) > 0 && _saldo <= 0.01
                                                     return l.estado === 'activo' && !isEffectivelyFinalized
                                                 }).length || 0}
                                             </div>
@@ -689,7 +692,8 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                     <div className="text-xl font-bold text-emerald-400">
                                         {loans?.filter((l: any) => {
                                             const isMigrado = (l.observacion_supervisor || '').includes('Préstamo migrado') || (l.observacion_supervisor || '').includes('[MIGRACIÓN]')
-                                            const isEffectivelyFinalized = isMigrado && l.saldo_pendiente <= 0.01
+                                            const _saldo = l.cronograma_cuotas?.reduce((acc: number, c: any) => acc + (c.monto_cuota - (c.monto_pagado || 0)), 0) ?? 0
+                                            const isEffectivelyFinalized = isMigrado && (l.cronograma_cuotas?.length ?? 0) > 0 && _saldo <= 0.01
                                             return l.estado === 'activo' && !isEffectivelyFinalized
                                         }).length || 0}
                                     </div>

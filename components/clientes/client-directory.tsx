@@ -145,6 +145,14 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     // Quick View Drawer State (local — evita refetch del RSC al abrir/cerrar)
     const [quickViewClientId, setQuickViewClientId] = useState<string | null>(null)
 
+    // Navigation loading state
+    const [navigatingToId, setNavigatingToId] = useState<string | null>(null)
+
+    const handleGoToProfile = (clienteId: string) => {
+        setNavigatingToId(clienteId)
+        startTransition(() => router.push(`/dashboard/clientes/${clienteId}`))
+    }
+
     const handleOpenGestion = (cliente: any, e?: React.MouseEvent) => {
         if (e) {
             e.preventDefault()
@@ -800,8 +808,8 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                             <DropdownMenuItem onClick={() => setQuickViewClientId(cliente.id)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
                                                 <Eye className="w-4 h-4 mr-2" /> Ver Detalle Rápido
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => router.push(`/dashboard/clientes/${cliente.id}`)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
-                                                <Users className="w-4 h-4 mr-2" /> Ir a Perfil Completo
+                                            <DropdownMenuItem onClick={() => handleGoToProfile(cliente.id)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
+                                                {navigatingToId === cliente.id ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Users className="w-4 h-4 mr-2" />} Ir a Perfil Completo
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
@@ -811,12 +819,18 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                             {/* Desktop Row View (>= md) */}
                             <div
                                 className={cn(
-                                    "hidden md:grid gap-4 px-6 py-4 items-center hover:bg-slate-800/30 transition-colors border-l-4",
+                                    "hidden md:grid gap-4 px-6 py-4 items-center hover:bg-slate-800/30 transition-colors border-l-4 relative",
                                     cliente.stats.totalDebt > 0 ? "border-l-amber-500" : "border-l-slate-700",
-                                    isSelected && "bg-blue-900/10 border-l-blue-500"
+                                    isSelected && "bg-blue-900/10 border-l-blue-500",
+                                    navigatingToId === cliente.id && "opacity-60 pointer-events-none"
                                 )}
                                 style={{ gridTemplateColumns: 'repeat(18, minmax(0, 1fr))' }}
                             >
+                                {navigatingToId === cliente.id && (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-slate-900/40 z-10">
+                                        <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+                                    </div>
+                                )}
                                 {(userRol === 'admin') && (
                                     <div className="col-span-1 flex justify-center">
                                         <button onClick={() => toggleSelectClient(cliente.id)} className="p-1 text-slate-500 hover:text-white transition-colors">
@@ -998,8 +1012,8 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                             <DropdownMenuItem onClick={() => setQuickViewClientId(cliente.id)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
                                                 <Eye className="w-4 h-4 mr-2" /> Ver Detalle Rápido
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => router.push(`/dashboard/clientes/${cliente.id}`)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
-                                                <Users className="w-4 h-4 mr-2" /> Ir a Perfil Completo
+                                            <DropdownMenuItem onClick={() => handleGoToProfile(cliente.id)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
+                                                {navigatingToId === cliente.id ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Users className="w-4 h-4 mr-2" />} Ir a Perfil Completo
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>

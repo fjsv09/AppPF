@@ -109,7 +109,7 @@ export function ExpenseManagerClient({
                   </div>
                   <div>
                       <p className="kpi-label">Gastado Hoy</p>
-                      <h3 className="kpi-value">S/ {(stats.gastadoHoy || 0).toLocaleString()}</h3>
+                      <h3 className="kpi-value">S/ {(stats.gastadoHoy || 0).toLocaleString('es-PE')}</h3>
                   </div>
               </div>
 
@@ -120,7 +120,7 @@ export function ExpenseManagerClient({
                       </div>
                       <div>
                           <p className="kpi-label">Total en Búsqueda</p>
-                          <h3 className="kpi-value">S/ {(stats.totalEnBusqueda || 0).toLocaleString()}</h3>
+                          <h3 className="kpi-value">S/ {(stats.totalEnBusqueda || 0).toLocaleString('es-PE')}</h3>
                       </div>
                   </div>
               )}

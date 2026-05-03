@@ -2,10 +2,10 @@
 
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { Receipt, Calendar, Tag, CreditCard, User, History, Camera, ExternalLink, Pencil, Loader2 } from 'lucide-react'
+import { Receipt, Calendar, Tag, CreditCard, User, History, Camera, ExternalLink, Pencil, Loader2, Trash2 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { PaginationControlled } from '@/components/ui/pagination-controlled'
-import { useState, useMemo, useTransition, useEffect, type ReactNode } from 'react'
+import { useState, useMemo, useTransition, useEffect, useCallback, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import {
   Table,
@@ -33,7 +33,31 @@ interface ExpenseListProps {
 
 export function ExpenseList({ expenses, onEdit, userRole, isPending, advisors = [] }: ExpenseListProps) {
   const [currentPage, setCurrentPage] = useState(1)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const ITEMS_PER_PAGE = 10
+
+  const handleDelete = useCallback(async (expense: any) => {
+    const esMigracion = expense.descripcion?.startsWith('[MIGRACIÓN]') || expense.descripcion?.startsWith('[MIGRACION]')
+    const confirmMsg = esMigracion
+      ? `¿Eliminar el registro de migración "${expense.descripcion}"?\n\nEsto devolverá S/ ${parseFloat(expense.monto).toFixed(2)} a la cuenta "${expense.cuentas_financieras?.nombre || 'afectada'}".`
+      : `¿Eliminar el gasto "${expense.descripcion}"?\n\nEsto devolverá S/ ${parseFloat(expense.monto).toFixed(2)} a la cuenta "${expense.cuentas_financieras?.nombre || 'afectada'}".`
+    if (!window.confirm(confirmMsg)) return
+
+    setDeletingId(expense.id)
+    try {
+      const res = await fetch(`/api/gastos/${expense.id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(`Error: ${data.error}`)
+      } else {
+        window.location.reload()
+      }
+    } catch (e) {
+      alert('Error de red al eliminar el gasto.')
+    } finally {
+      setDeletingId(null)
+    }
+  }, [])
 
   const totalPages = Math.ceil(expenses.length / ITEMS_PER_PAGE)
   
@@ -126,11 +150,23 @@ export function ExpenseList({ expenses, onEdit, userRole, isPending, advisors = 
                         </Dialog>
                     )}
                     {userRole === 'admin' && (
-                      <button 
+                      <button
                         onClick={() => onEdit?.(expense)}
                         className="h-7 w-7 flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-lg transition-all border border-amber-500/10"
                       >
                         <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {userRole === 'admin' && (
+                      <button
+                        onClick={() => handleDelete(expense)}
+                        disabled={deletingId === expense.id}
+                        className="h-7 w-7 flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-all border border-red-500/10 disabled:opacity-50"
+                      >
+                        {deletingId === expense.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <Trash2 className="w-3.5 h-3.5" />
+                        }
                       </button>
                     )}
                   </div>
@@ -249,13 +285,26 @@ export function ExpenseList({ expenses, onEdit, userRole, isPending, advisors = 
                   </TableCell>
                   <TableCell className="py-2 text-center">
                     {userRole === 'admin' && (
-                      <button 
-                        onClick={() => onEdit?.(expense)}
-                        className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-md transition-all border border-amber-500/10 group"
-                        title="Editar gasto"
-                      >
-                        <Pencil className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => onEdit?.(expense)}
+                          className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-md transition-all border border-amber-500/10 group"
+                          title="Editar gasto"
+                        >
+                          <Pencil className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(expense)}
+                          disabled={deletingId === expense.id}
+                          className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-md transition-all border border-red-500/10 disabled:opacity-50"
+                          title="Eliminar gasto y restaurar saldo"
+                        >
+                          {deletingId === expense.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Trash2 className="w-3.5 h-3.5" />
+                          }
+                        </button>
+                      </div>
                     )}
                   </TableCell>
                 </TableRow>

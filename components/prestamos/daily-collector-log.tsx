@@ -100,12 +100,13 @@ export function DailyCollectorLog({
         const sortedQuotas = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota);
         const rawPagos = (pagos || []).filter((p: any) => p.estado_verificacion !== 'rechazado');
         
-        // [SINCRONIZACIÓN] Trust transactions over cronograma sum
-        const hasPhysicalPagos = rawPagos.length > 0;
+        // Saldo de Sistema (excedente de migración): diferencia entre lo acreditado
+        // en el cronograma y la suma de pagos físicos. Persiste aun cuando hay pagos
+        // posteriores, porque representa un crédito legado anterior a cualquier pago.
         const totalPagadoEnPagos = rawPagos.reduce((s: number, p: any) => s + (parseFloat(p.monto_pagado) || 0), 0);
         const totalPagadoEnCronograma = (cronograma || []).reduce((s: number, c: any) => s + (parseFloat(c.monto_pagado) || 0), 0);
 
-        let systemMoney = hasPhysicalPagos ? 0 : Math.max(0, totalPagadoEnCronograma - totalPagadoEnPagos);
+        let systemMoney = Math.max(0, totalPagadoEnCronograma - totalPagadoEnPagos);
 
         const sortedPagos = [...rawPagos].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         

@@ -206,6 +206,9 @@ export default function NuevaSolicitudPage() {
               }
             })
             setCompletedSteps([1, 2, 3])
+            // Remontar Step* para que useForm tome los defaultValues con los datos cargados.
+            // Sin esto los inputs quedan vacíos (useForm solo lee defaultValues en mount).
+            setFormInstance(prev => prev + 1)
           }
         }
         // CASO 2: Nueva Solicitud para Cliente Existente
@@ -228,6 +231,7 @@ export default function NuevaSolicitudPage() {
               prestamo: {},   // Limpieza explícita
               clienteExistenteId: clienteId
             })
+            setFormInstance(prev => prev + 1)
           }
         }
       } catch (error: any) {

@@ -56,10 +56,18 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
         const paymentIndex = sortedPayments.findIndex(p => p.id === currentId)
         const paymentsAtThatTime = paymentIndex >= 0 ? sortedPayments.slice(0, paymentIndex + 1) : [payment]
         const totalPaidAtThatTime = paymentsAtThatTime.reduce((acc, p) => acc + Number(p.monto_pagado || p.pago_monto || 0), 0)
-        
+
         const cronogramaOrdenado = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota)
         const remainingNeeded = {} as any
         cronogramaOrdenado.forEach(q => { remainingNeeded[q.id] = Number(q.monto_cuota) })
+
+        // Saldo de Sistema (excedente anterior por migración): diferencia entre lo
+        // acreditado en el cronograma y la suma total de pagos físicos no rechazados.
+        // Se calcula sobre TODOS los pagos (no solo los previos a este voucher) porque
+        // representa un crédito legado que precede a cualquier pago físico.
+        const totalPagadoEnCronograma = cronogramaOrdenado.reduce((s, c) => s + (Number(c.monto_pagado) || 0), 0)
+        const totalPagadoEnPagosAll = sortedPayments.reduce((s, p) => s + (Number(p.monto_pagado || p.pago_monto) || 0), 0)
+        let systemMoney = Math.max(0, totalPagadoEnCronograma - totalPagadoEnPagosAll)
 
         const formatDateISO = (d: any) => {
             try {
@@ -72,6 +80,16 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
             rem: Number(p.monto_pagado || p.pago_monto || 0),
             date: formatDateISO(p.created_at)
         }))
+
+        // FASE 1: Saldo de Sistema (prioridad histórica 0)
+        if (systemMoney > 0.01) {
+            cronogramaOrdenado.forEach(q => {
+                if (systemMoney <= 0.01 || remainingNeeded[q.id] <= 0.01) return
+                const take = Math.min(systemMoney, remainingNeeded[q.id])
+                remainingNeeded[q.id] -= take
+                systemMoney -= take
+            })
+        }
 
         // FASE 2: Prioridad Día (Mismo día del pago cubre su cuota primero)
         pool.forEach(p => {

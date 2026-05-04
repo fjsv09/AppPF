@@ -178,7 +178,7 @@ export default function ClientesMapa({ clientes }: ClientesMapaProps) {
                         icon={item.icon}
                     >
                         <Popup className="custom-popup">
-                            <div className="p-1 min-w-[220px]">
+                            <div className="p-1 min-w-[180px] sm:min-w-[220px] max-w-[calc(100vw-60px)] sm:max-w-[320px]">
                                 <div className="font-bold text-sm mb-2 flex flex-col">
                                     <span className="truncate flex items-center gap-2 text-slate-800">
                                         <User className="w-3.5 h-3.5 opacity-70" />
@@ -245,10 +245,13 @@ export default function ClientesMapa({ clientes }: ClientesMapaProps) {
             <style>{`
                 .leaflet-popup-content-wrapper {
                     background-color: white;
-                    color: #1e293b; 
+                    color: #1e293b;
                     border-radius: 12px;
                     border: 1px solid #e2e8f0;
                     box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+                    max-width: calc(100vw - 60px);
+                    max-height: calc(100vh - 120px);
+                    overflow-y: auto;
                 }
                 .leaflet-popup-tip {
                     background-color: white;
@@ -256,8 +259,17 @@ export default function ClientesMapa({ clientes }: ClientesMapaProps) {
                 .leaflet-popup-content p {
                     margin: 0;
                 }
+                .leaflet-popup-content {
+                    max-width: 100%;
+                    width: 100%;
+                }
                 .leaflet-container {
-                    background-color: #0f172a !important; 
+                    background-color: #0f172a !important;
+                }
+                @media (max-width: 640px) {
+                    .leaflet-popup-content-wrapper {
+                        max-width: calc(100vw - 40px);
+                    }
                 }
             `}</style>
         </div>

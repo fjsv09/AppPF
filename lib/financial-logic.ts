@@ -170,13 +170,13 @@ export function calculateLoanMetrics(
       estadoCalculado: loan?.estado === 'finalizado' ? 'finalizado' : 'sin_deuda',
       valorCuotaPromedio: valorCuotaPromedioNA,
       saldoCuotaParcial: 0,
-      totalCuotas: cronograma.length,
+      totalCuotas: cronograma.length || loan.numero_cuotas || loan.cuotas || (valorCuotaPromedioNA > 0 ? Math.round(totalPagar / valorCuotaPromedioNA) : 0),
       cuotasPagadas: cronograma.length > 0
         ? cronograma.filter((c: any) =>
             c.estado === 'pagado' ||
             (Number(c.monto_pagado || 0) >= Number(c.monto_cuota || 0) - 0.01 && Number(c.monto_cuota || 0) > 0)
           ).length
-        : 0,
+        : (valorCuotaPromedioNA > 0 ? Math.floor(totalPagadoAcumulado / valorCuotaPromedioNA) : 0),
       metaTotalHoyYAtrasados: 0,
       cobradoTotalHoyYAtrasados: 0,
       loanScore: calculateLoanScore(loan, pagos, today, config)

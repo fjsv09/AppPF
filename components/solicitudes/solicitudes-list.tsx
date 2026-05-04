@@ -372,11 +372,12 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                             className="flex-1 min-w-[80px] bg-emerald-900/20 border-emerald-500/30 text-emerald-400 h-8 text-[11px] hover:bg-emerald-500/20 px-2"
                                                             onClick={(e) => {
                                                                 e.preventDefault()
-                                                                const phone = (solicitud.cliente?.telefono || solicitud.prospecto_telefono)?.replace(/\D/g, '') || ''
+                                                                const rawPhone = (solicitud.cliente?.telefono || solicitud.prospecto_telefono || '').replace(/\D/g, '')
+                                                                const phone = rawPhone.startsWith('51') ? rawPhone : `51${rawPhone}`
                                                                 const monto = solicitud.monto_solicitado.toLocaleString('en-US')
                                                                 const clienteNombre = solicitud.cliente?.nombres || solicitud.prospecto_nombres
                                                                 const message = encodeURIComponent(`Hola ${clienteNombre}, le saludamos de ProFinanzas. Le informamos que su solicitud de préstamo por un monto de S/ ${monto} ha sido APROBADA y desembolsada. ¡Felicidades!`)
-                                                                window.open(`https://wa.me/51${phone}?text=${message}`, '_blank')
+                                                                window.open(`https://wa.me/${phone}?text=${message}`, '_blank')
                                                             }}
                                                         >
                                                             <svg className="w-3 h-3 mr-1 fill-current" viewBox="0 0 24 24">
@@ -476,11 +477,12 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                                         className="h-8 w-8 p-0 rounded-lg text-emerald-400 bg-slate-800/40 border border-slate-700/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all"
                                                         onClick={(e) => {
                                                             e.preventDefault()
-                                                            const phone = (solicitud.cliente?.telefono || solicitud.prospecto_telefono)?.replace(/\D/g, '') || ''
+                                                            const rawPhone = (solicitud.cliente?.telefono || solicitud.prospecto_telefono || '').replace(/\D/g, '')
+                                                            const phone = rawPhone.startsWith('51') ? rawPhone : `51${rawPhone}`
                                                             const monto = solicitud.monto_solicitado.toLocaleString('en-US')
                                                             const clienteNombre = solicitud.cliente?.nombres || solicitud.prospecto_nombres
                                                             const message = encodeURIComponent(`Hola ${clienteNombre}, le saludamos de ProFinanzas. Le informamos que su solicitud de préstamo por un monto de S/ ${monto} ha sido APROBADA y desembolsada. ¡Felicidades!`)
-                                                            window.open(`https://wa.me/51${phone}?text=${message}`, '_blank')
+                                                            window.open(`https://wa.me/${phone}?text=${message}`, '_blank')
                                                         }}
                                                     >
                                                         <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">

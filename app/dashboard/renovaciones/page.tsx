@@ -65,7 +65,7 @@ export default async function RenovacionesPage(props: { searchParams: Promise<{ 
         .from('solicitudes_renovacion')
         .select(`
             *,
-            cliente:cliente_id!inner(id, nombres, dni),
+            cliente:cliente_id!inner(id, nombres, dni, telefono),
             prestamo:prestamo_id(id, monto, estado, estado_mora, frecuencia),
             asesor:asesor_id(id, nombre_completo),
             supervisor:supervisor_id(id, nombre_completo)

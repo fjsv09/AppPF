@@ -436,7 +436,10 @@ export function VisitasList({ visitas, userId, userRol, team = [] }: VisitasList
                                         className="w-full bg-emerald-600 hover:bg-emerald-500 text-white h-11 gap-2 text-sm font-semibold"
                                     >
                                         <a 
-                                            href={`https://wa.me/${visitaActiva.prestamo.cliente.telefono.replace(/\D/g, '')}`} 
+                                            href={`https://wa.me/${(() => {
+                                                const rawPhone = (visitaActiva?.prestamo?.cliente?.telefono || '').replace(/\D/g, '')
+                                                return rawPhone.startsWith('51') ? rawPhone : `51${rawPhone}`
+                                            })()}`} 
                                             target="_blank" 
                                             rel="noopener noreferrer"
                                         >

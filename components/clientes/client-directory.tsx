@@ -741,7 +741,11 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                     <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 hover:text-white px-0" onClick={() => window.open(`tel:${cliente.telefono}`)}>
                                         <Phone className="w-4 h-4 text-slate-500" />
                                     </Button>
-                                    <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 hover:text-white px-0" onClick={() => window.open(`https://wa.me/${cliente.telefono}`, '_blank')}>
+                                    <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 hover:text-white px-0" onClick={() => {
+                                        const rawPhone = (cliente.telefono || '').replace(/\D/g, '')
+                                        const phone = rawPhone.startsWith('51') ? rawPhone : `51${rawPhone}`
+                                        window.open(`https://wa.me/${phone}`, '_blank')
+                                    }}>
                                         <MessageCircle className="w-4 h-4 text-slate-500" />
                                     </Button>
                                     <Button size="sm" variant="outline" className="flex-1 bg-slate-900/40 border-slate-800 text-slate-400 h-8 hover:text-white px-0" onClick={() => handleOpenGestion(cliente)}>
@@ -952,7 +956,11 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                 </div>
 
                                 <div className="col-span-2 flex justify-end gap-1.5 text-right">
-                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all" onClick={() => window.open(`https://wa.me/${cliente.telefono}`, '_blank')}>
+                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all" onClick={() => {
+                                        const rawPhone = (cliente.telefono || '').replace(/\D/g, '')
+                                        const phone = rawPhone.startsWith('51') ? rawPhone : `51${rawPhone}`
+                                        window.open(`https://wa.me/${phone}`, '_blank')
+                                    }}>
                                         <MessageCircle className="w-4 h-4" />
                                     </Button>
                                     <Button 

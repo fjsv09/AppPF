@@ -31,9 +31,10 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
     const currentSearch = searchParams.get('q') || ''
     const currentAsesor = searchParams.get('asesor') || 'all'
     const currentSupervisor = searchParams.get('supervisor') || 'all'
-    const currentFecha = searchParams.get('fecha') || ''
-    const currentFechaInicio = searchParams.get('fecha_inicio') || ''
-    const currentFechaFin = searchParams.get('fecha_fin') || ''
+    const today = new Date().toISOString().split('T')[0]
+    const currentFecha = searchParams.get('fecha') || today
+    const currentFechaInicio = searchParams.get('fecha_inicio') || today
+    const currentFechaFin = searchParams.get('fecha_fin') || today
     const currentTurno = searchParams.get('turno') || 'all'
     const currentMetodo = searchParams.get('metodo') || 'all'
     const currentPagoPor = searchParams.get('pago_por') || 'all'
@@ -200,7 +201,12 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
             </div>
 
             <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
-                
+                {isPending && (
+                    <div className="absolute inset-0 bg-slate-900/20 rounded-xl flex items-center justify-center z-40 pointer-events-none">
+                        <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />
+                    </div>
+                )}
+
                 <div className="relative w-full md:flex-1 md:max-w-none min-w-[180px]">
                     {isPending ? (
                         <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500 animate-spin z-10" />
@@ -294,8 +300,8 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
                     )}
 
                     {(userRol === 'admin' || userRol === 'supervisor') && asesores.length > 0 && (
-                        <Select value={currentAsesor} onValueChange={(val) => handleFilterChange('asesor', val)}>
-                            <SelectTrigger className="h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3">
+                        <Select value={currentAsesor} onValueChange={(val) => handleFilterChange('asesor', val)} disabled={isPending}>
+                            <SelectTrigger className="h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 disabled:opacity-50 disabled:cursor-not-allowed">
                                 <div className="flex items-center gap-2 truncate">
                                     <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                                     <SelectValue placeholder="Asesor" />
@@ -310,8 +316,23 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
                         </Select>
                     )}
 
-                    <Select value={currentTurno} onValueChange={(val) => handleFilterChange('turno', val)}>
-                        <SelectTrigger className="h-10 w-[140px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 shrink-0">
+                    <Select value={currentPagoPor} onValueChange={(val) => handleFilterChange('pago_por', val)} disabled={isPending}>
+                        <SelectTrigger className="h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <div className="flex items-center gap-2 truncate">
+                                <Briefcase className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                <SelectValue placeholder="Pagado Por" />
+                            </div>
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-700">
+                            <SelectItem value="all">Todos - Pagado Por</SelectItem>
+                            {pagoPorOptions.map(p => (
+                                <SelectItem key={p.id} value={p.id}>{p.nombre_completo}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    <Select value={currentTurno} onValueChange={(val) => handleFilterChange('turno', val)} disabled={isPending}>
+                        <SelectTrigger className="h-10 w-[140px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
                             <div className="flex items-center gap-2 truncate">
                                 <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                                 <SelectValue placeholder="Turno" />
@@ -324,8 +345,8 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
                         </SelectContent>
                     </Select>
 
-                    <Select value={currentMetodo} onValueChange={(val) => handleFilterChange('metodo', val)}>
-                        <SelectTrigger className="h-10 w-[160px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 shrink-0">
+                    <Select value={currentMetodo} onValueChange={(val) => handleFilterChange('metodo', val)} disabled={isPending}>
+                        <SelectTrigger className="h-10 w-[160px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
                             <div className="flex items-center gap-2 truncate">
                                 <CreditCard className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                                 <SelectValue placeholder="Método" />
@@ -340,25 +361,15 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
                             <SelectItem value="Otros">Otros</SelectItem>
                         </SelectContent>
                     </Select>
-
-                    <Select value={currentPagoPor} onValueChange={(val) => handleFilterChange('pago_por', val)}>
-                        <SelectTrigger className="h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3">
-                            <div className="flex items-center gap-2 truncate">
-                                <Briefcase className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                                <SelectValue placeholder="Cobrado Por" />
-                            </div>
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-900 border-slate-700">
-                            <SelectItem value="all">Cualquier Usuario</SelectItem>
-                            {pagoPorOptions.map(p => (
-                                <SelectItem key={p.id} value={p.id}>{p.nombre_completo}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
                 </div>
             </div>
 
-            <div className="bg-slate-900/50 border border-slate-800/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
+            <div className="relative bg-slate-900/50 border border-slate-800/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
+                {isPending && (
+                    <div className="absolute inset-0 bg-slate-900/40 rounded-2xl flex items-center justify-center z-40">
+                        <Loader2 className="h-6 w-6 text-blue-400 animate-spin" />
+                    </div>
+                )}
                 <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-slate-950/50 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500 items-center">
                     <div className="col-span-5 md:col-span-6">Detalle del Pago / Fecha</div>
                     <div className="col-span-3 text-right">Monto</div>

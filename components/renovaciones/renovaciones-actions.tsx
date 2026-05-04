@@ -92,11 +92,12 @@ export function RenovacionesActions({ solicitud, userRole, userId, cuentasAdmin 
     }
 
     const handleSendWhatsApp = () => {
-        const phone = solicitud.cliente?.telefono?.replace(/\D/g, '') || ''
+        const rawPhone = (solicitud.cliente?.telefono || '').replace(/\D/g, '')
+        const phone = rawPhone.startsWith('51') ? rawPhone : `51${rawPhone}`
         const monto = formatMoney(solicitud.monto_solicitado)
         const message = encodeURIComponent(`Hola ${solicitud.cliente?.nombres}, le saludamos de ProFinanzas. Le informamos que su renovación por un monto de S/ ${monto} ha sido APROBADA. ¡Felicidades!`)
         
-        window.open(`https://wa.me/51${phone}?text=${message}`, '_blank')
+        window.open(`https://wa.me/${phone}?text=${message}`, '_blank')
         setWasNotified(true)
     }
 

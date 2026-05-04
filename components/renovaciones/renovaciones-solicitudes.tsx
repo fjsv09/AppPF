@@ -436,10 +436,11 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                                                     className="flex-[0.8] bg-emerald-900/20 border-emerald-500/30 text-emerald-400 h-8 text-[11px] hover:bg-emerald-500/20 px-0"
                                                     onClick={(e) => {
                                                         e.preventDefault()
-                                                        const phone = (sol.cliente?.telefono)?.replace(/\D/g, '') || ''
+                                                         const rawPhone = (sol.cliente?.telefono || '').replace(/\D/g, '')
+                                                         const phone = rawPhone.startsWith('51') ? rawPhone : `51${rawPhone}`
                                                         const monto = sol.monto_solicitado.toLocaleString('en-US')
                                                         const message = encodeURIComponent(`Hola ${sol.cliente?.nombres}, le saludamos de ProFinanzas. Le informamos que su renovación por un monto de S/ ${monto} ha sido APROBADA. ¡Felicidades!`)
-                                                        window.open(`https://wa.me/51${phone}?text=${message}`, '_blank')
+                                                        window.open(`https://wa.me/${phone}?text=${message}`, '_blank')
                                                     }}
                                                 >
                                                     <svg className="w-3 h-3 mr-1 fill-current" viewBox="0 0 24 24">
@@ -590,10 +591,11 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                                                             className="h-8 w-8 p-0 rounded-lg text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 hover:text-emerald-300 transition-all"
                                                             onClick={(e) => {
                                                                 e.preventDefault()
-                                                                const phone = (sol.cliente?.telefono)?.replace(/\D/g, '') || ''
+                                                                const rawPhone = (sol.cliente?.telefono || '').replace(/\D/g, '')
+                                                         const phone = rawPhone.startsWith('51') ? rawPhone : `51${rawPhone}`
                                                                 const monto = sol.monto_solicitado.toLocaleString('en-US')
                                                                 const message = encodeURIComponent(`Hola ${sol.cliente?.nombres}, le saludamos de ProFinanzas. Le informamos que su renovación por un monto de S/ ${monto} ha sido APROBADA. ¡Felicidades!`)
-                                                                window.open(`https://wa.me/51${phone}?text=${message}`, '_blank')
+                                                                window.open(`https://wa.me/${phone}?text=${message}`, '_blank')
                                                             }}
                                                         >
                                                             <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">

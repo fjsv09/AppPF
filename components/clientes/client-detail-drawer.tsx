@@ -129,7 +129,11 @@ export function ClientDetailDrawer({ cliente, isOpen, onClose, userRol = "asesor
            
            {/* Quick Actions */}
            <div className="grid grid-cols-2 gap-3 mb-3">
-              <Button className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20" onClick={() => window.open(`https://wa.me/${cliente.telefono}`, '_blank')}>
+              <Button className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20" onClick={() => {
+                  const rawPhone = (cliente.telefono || '').replace(/\D/g, '')
+                  const phone = rawPhone.startsWith('51') ? rawPhone : `51${rawPhone}`
+                  window.open(`https://wa.me/${phone}`, '_blank')
+               }}>
                  <MessageCircle className="w-4 h-4 mr-2" /> WhatsApp
               </Button>
               <Button variant="outline" className="bg-slate-800 border-slate-700 text-slate-200 hover:text-white hover:bg-slate-700" onClick={() => window.open(`tel:${cliente.telefono}`)}>

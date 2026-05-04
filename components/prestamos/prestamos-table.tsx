@@ -1234,7 +1234,9 @@ export function PrestamosTable({
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         if (prestamo.clientes?.telefono) {
-                                                                            window.open(`https://wa.me/51${prestamo.clientes.telefono}?text=Hola ${prestamo.clientes.nombres}...`, '_blank')
+                                                                            const rawPhone = (prestamo.clientes.telefono || '').replace(/\D/g, '')
+                                                                            const phone = rawPhone.startsWith('51') ? rawPhone : `51${rawPhone}`
+                                                                            window.open(`https://wa.me/${phone}?text=Hola ${prestamo.clientes.nombres}...`, '_blank')
                                                                         }
                                                                     }}
                                                                     disabled={!prestamo.clientes?.telefono}
@@ -1566,7 +1568,9 @@ export function PrestamosTable({
                                                                                     e.preventDefault()
                                                                                     e.stopPropagation()
                                                                                     if (prestamo.clientes?.telefono) {
-                                                                                        window.open(`https://wa.me/51${prestamo.clientes.telefono}?text=Hola ${prestamo.clientes.nombres}...`, '_blank')
+                                                                                        const rawPhone = (prestamo.clientes.telefono || '').replace(/\D/g, '')
+                                                                                        const phone = rawPhone.startsWith('51') ? rawPhone : `51${rawPhone}`
+                                                                                        window.open(`https://wa.me/${phone}?text=Hola ${prestamo.clientes.nombres}...`, '_blank')
                                                                                     }
                                                                                 }}
                                                                                 disabled={!prestamo.clientes?.telefono}
@@ -2046,10 +2050,11 @@ export function PrestamosTable({
                                                                         size="icon"
                                                                         className="h-8 w-8 rounded-lg text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all font-bold"
                                                                         onClick={(e) => {
-                                                                            e.preventDefault();
                                                                             e.stopPropagation();
                                                                             if (prestamo.clientes?.telefono) {
-                                                                                window.open(`https://wa.me/51${prestamo.clientes.telefono}?text=Hola ${prestamo.clientes.nombres}...`, '_blank')
+                                                                                const rawPhone = (prestamo.clientes.telefono || '').replace(/\D/g, '')
+                                                                                const phone = rawPhone.startsWith('51') ? rawPhone : `51${rawPhone}`
+                                                                                window.open(`https://wa.me/${phone}?text=Hola ${prestamo.clientes.nombres}...`, '_blank')
                                                                             }
                                                                         }}
                                                                         disabled={!prestamo.clientes?.telefono}
@@ -2385,12 +2390,14 @@ export function PrestamosTable({
                                                                     size="sm"
                                                                     className="h-8 w-8 p-0 shrink-0 rounded-lg text-slate-400 bg-slate-800/40 border border-slate-700/50 hover:text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-700/50 transition-all font-bold"
                                                                     onClick={(e) => {
-                                                                        e.preventDefault()
-                                                                        e.stopPropagation()
-                                                                        if (prestamo.clientes?.telefono) {
-                                                                            window.open(`https://wa.me/51${prestamo.clientes.telefono}?text=Hola ${prestamo.clientes.nombres}...`, '_blank')
-                                                                        }
-                                                                    }}
+                                                                         e.preventDefault()
+                                                                         e.stopPropagation()
+                                                                         if (prestamo.clientes?.telefono) {
+                                                                             const rawPhone = (prestamo.clientes.telefono || '').replace(/\D/g, '')
+                                                                             const phone = rawPhone.startsWith('51') ? rawPhone : `51${rawPhone}`
+                                                                             window.open(`https://wa.me/${phone}?text=Hola ${prestamo.clientes.nombres}...`, '_blank')
+                                                                         }
+                                                                     }}
                                                                     disabled={!prestamo.clientes?.telefono}
                                                                     title="WhatsApp"
                                                                 >

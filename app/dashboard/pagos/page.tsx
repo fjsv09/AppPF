@@ -90,28 +90,27 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         pagosQuery = pagosQuery.eq('es_autopago_renovacion', false)
     }
 
+    const NO_MATCH_UUID = '00000000-0000-0000-0000-000000000000'
+
     if (userRol === 'asesor') {
         // Asesor: Ve todos los pagos de préstamos de sus clientes (incluyendo los hechos por admin/supervisor)
         pagosQuery = pagosQuery.eq('cronograma_cuotas.prestamos.clientes.asesor_id', userId)
     } else if (userRol === 'supervisor') {
-        // Supervisor: Ve lo que él mismo registró + lo que registraron sus asesores
+        // Supervisor: Solo ve pagos de clientes a cargo de asesores de su equipo
         const teamAsesorIds = perfiles?.filter(p => p.supervisor_id === userId).map(p => p.id) || []
-        const relevantRegistradores = [userId, ...teamAsesorIds]
-        
-        if (asesorFilter && relevantRegistradores.includes(asesorFilter)) {
-            pagosQuery = pagosQuery.eq('registrado_por', asesorFilter)
+
+        if (asesorFilter && teamAsesorIds.includes(asesorFilter)) {
+            pagosQuery = pagosQuery.eq('cronograma_cuotas.prestamos.clientes.asesor_id', asesorFilter)
         } else {
-            pagosQuery = pagosQuery.in('registrado_por', relevantRegistradores)
+            pagosQuery = pagosQuery.in('cronograma_cuotas.prestamos.clientes.asesor_id', teamAsesorIds.length > 0 ? teamAsesorIds : [NO_MATCH_UUID])
         }
     } else if (userRol === 'admin') {
         if (supervisorFilter) {
             const supervisorTeamIds = perfiles?.filter(p => p.supervisor_id === supervisorFilter).map(p => p.id) || []
-            // Admin filtering by supervisor: show payments by supervisor + their team
-            const relevantForSupervisor = [supervisorFilter, ...supervisorTeamIds]
-            pagosQuery = pagosQuery.in('registrado_por', relevantForSupervisor)
+            pagosQuery = pagosQuery.in('cronograma_cuotas.prestamos.clientes.asesor_id', supervisorTeamIds.length > 0 ? supervisorTeamIds : [NO_MATCH_UUID])
         }
         if (asesorFilter) {
-            pagosQuery = pagosQuery.eq('registrado_por', asesorFilter)
+            pagosQuery = pagosQuery.eq('cronograma_cuotas.prestamos.clientes.asesor_id', asesorFilter)
         }
     }
 
@@ -183,22 +182,27 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
     })
 
     // Assign turns to payments
+    const calculateTurno = (fechaPago: string, advisorId: string) => {
+        const cutoff = cutoffMap[advisorId]
+        let turno = 'Turno 1' // Default: START in Turno 1 (AM)
+
+        if (cutoff) {
+            // Once a cutoff (Cierre Mañana) exists, payments AFTER it are Turno 2 (PM)
+            if (new Date(fechaPago) > new Date(cutoff)) {
+                turno = 'Turno 2'
+            }
+        }
+
+        return turno
+    }
+
     const pagosWithTurns = pagos?.map(p => {
         // Para determinar el turno, necesitamos el asesor_id del préstamo (no el registrado_por)
         // ya que el pago pudo ser hecho por admin/supervisor
         const clienteAsesorId = (p as any).cronograma_cuotas?.prestamos?.clientes?.asesor_id
         const advisorId = clienteAsesorId || p.registrado_por
-        const cutoff = cutoffMap[advisorId]
-        
-        let turno = 'Turno 1' // Default: START in Turno 1 (AM)
-        
-        if (cutoff) {
-            // Once a cutoff (Cierre Mañana) exists, payments AFTER it are Turno 2 (PM)
-            if (new Date(p.fecha_pago) > new Date(cutoff)) {
-                turno = 'Turno 2'
-            }
-        }
-        
+        const turno = calculateTurno(p.fecha_pago, advisorId)
+
         return { ...p, turno_calculado: turno }
     }) || []
 
@@ -227,20 +231,19 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
             statsQuery = statsQuery.eq('cronograma_cuotas.prestamos.clientes.asesor_id', userId)
         } else if (userRol === 'supervisor') {
             const teamAsesorIds = perfiles?.filter(p => p.supervisor_id === userId).map(p => p.id) || []
-            const relevantRegistradores = [userId, ...teamAsesorIds]
-            statsQuery = statsQuery.in('registrado_por', relevantRegistradores)
-        }
-        if (asesorFilter) {
-            statsQuery = statsQuery.eq('registrado_por', asesorFilter)
+            if (asesorFilter && teamAsesorIds.includes(asesorFilter)) {
+                statsQuery = statsQuery.eq('cronograma_cuotas.prestamos.clientes.asesor_id', asesorFilter)
+            } else {
+                statsQuery = statsQuery.in('cronograma_cuotas.prestamos.clientes.asesor_id', teamAsesorIds.length > 0 ? teamAsesorIds : [NO_MATCH_UUID])
+            }
         }
     } else {
         if (supervisorFilter) {
             const supervisorTeamIds = perfiles?.filter(p => p.supervisor_id === supervisorFilter).map(p => p.id) || []
-            const relevantForSupervisor = [supervisorFilter, ...supervisorTeamIds]
-            statsQuery = statsQuery.in('registrado_por', relevantForSupervisor)
+            statsQuery = statsQuery.in('cronograma_cuotas.prestamos.clientes.asesor_id', supervisorTeamIds.length > 0 ? supervisorTeamIds : [NO_MATCH_UUID])
         }
         if (asesorFilter) {
-            statsQuery = statsQuery.eq('registrado_por', asesorFilter)
+            statsQuery = statsQuery.eq('cronograma_cuotas.prestamos.clientes.asesor_id', asesorFilter)
         }
     }
 
@@ -290,10 +293,8 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         // Use client asesor_id for cutoff lookup when available
         const clienteAsesorId = (s as any).cronograma_cuotas?.prestamos?.clientes?.asesor_id
         const advisorId = clienteAsesorId || s.registrado_por
-        const cutoff = cutoffMap[advisorId]
-        let turno = 'Turno 2'
-        if (cutoff && new Date(s.fecha_pago) <= new Date(cutoff)) turno = 'Turno 1'
-        return turno === (turnoFilter === '1' ? 'Turno 1' : 'Turno 2')
+        const turno = calculateTurno(s.fecha_pago, advisorId)
+        return turno === turnoFilter
     }) || []
 
     const totalFiltrado = filteredStats.reduce((acc: number, curr: any) => {
@@ -320,8 +321,8 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
     }).reduce((acc: number, curr: any) => acc + (parseFloat(curr.interes_cobrado?.toString() || '0')), 0) || 0
 
     // Filter main list by turn if selected
-    const finalPagos = turnoFilter 
-        ? pagosWithTurns.filter(p => p.turno_calculado === (turnoFilter === '1' ? 'Turno 1' : 'Turno 2'))
+    const finalPagos = turnoFilter && turnoFilter !== 'all'
+        ? pagosWithTurns.filter(p => p.turno_calculado === turnoFilter)
         : pagosWithTurns
 
     const hasFilters = Boolean(

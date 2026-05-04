@@ -4,7 +4,6 @@ import { useState, useMemo, useEffect, useTransition, Fragment } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { PaginationControlled } from '@/components/ui/pagination-controlled'
 
 const RutaMapa = dynamic(() => import('./ruta-mapa'), {
     ssr: false,
@@ -89,7 +88,7 @@ type FilterTab = 'ruta_hoy' | 'cobranza' | 'morosos' | 'notificar' | 'semana' | 
 type SortBy = 'fecha_inicio' | 'frecuencia'
 type SortOrder = 'asc' | 'desc'
 
-const ITEMS_PER_PAGE = 10
+const ITEMS_PER_LOAD = 20
 
 
 export function PrestamosTable({
@@ -162,6 +161,7 @@ export function PrestamosTable({
     const [isConfirmAsignarOpen, setIsConfirmAsignarOpen] = useState(false)
     const [isConfirmEditOpen, setIsConfirmEditOpen] = useState(false)
     const [isFiltering, setIsFiltering] = useState(false)
+    const [itemsToShow, setItemsToShow] = useState(ITEMS_PER_LOAD)
 
     useEffect(() => {
         if (typeof window !== 'undefined' && navigator.geolocation) {
@@ -221,7 +221,6 @@ export function PrestamosTable({
     const filtroAsesor = searchParams.get('asesor') || 'todos'
     const filtroSector = searchParams.get('sector') || 'todos'
     const filtroFrecuencia = searchParams.get('frecuencia') || 'todos'
-    const currentPage = Number(searchParams.get('page')) || 1
 
     // --- PROTECCIÓN DE RUTA (VISITAS CONTROL) ---
     useEffect(() => {
@@ -313,12 +312,14 @@ export function PrestamosTable({
             const params = new URLSearchParams(searchParams.toString())
             if (localSearch) params.set('search', localSearch)
             else params.delete('search')
-            params.delete('page')
             router.replace(`${pathname}?${params.toString()}`, { scroll: false })
         }, 400)
         return () => clearTimeout(handler)
     }, [localSearch, searchParams, pathname, router])
 
+    useEffect(() => {
+        setItemsToShow(ITEMS_PER_LOAD)
+    }, [activeFilter, searchQuery, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia])
 
     const handleQuickPay = (prestamo: any, e?: React.MouseEvent) => {
         if (e) {
@@ -718,32 +719,6 @@ export function PrestamosTable({
         return filtered
     }, [processedPrestamos, activeFilter, localSearch, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia, userRol, perfiles, sortBy, sortOrder])
 
-    // 2.5 Pagination
-    const totalPages = Math.max(1, Math.ceil(filteredPrestamos.length / ITEMS_PER_PAGE))
-    const safePage = Math.min(Math.max(1, currentPage), totalPages)
-    const paginatedPrestamos = useMemo(() => {
-        const start = (safePage - 1) * ITEMS_PER_PAGE
-        return filteredPrestamos.slice(start, start + ITEMS_PER_PAGE)
-    }, [filteredPrestamos, safePage])
-
-    // Reset page in URL when search shrinks results past current page
-    useEffect(() => {
-        if (currentPage > totalPages && currentPage > 1) {
-            const params = new URLSearchParams(searchParams.toString())
-            params.delete('page')
-            router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-        }
-    }, [totalPages, currentPage, searchParams, pathname, router])
-
-    // Reset to page 1 whenever the local search term changes
-    useEffect(() => {
-        if (currentPage > 1) {
-            const params = new URLSearchParams(searchParams.toString())
-            params.delete('page')
-            router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [localSearch])
 
     // --------------------------------------------------------------------------------
     // 3. STATS/COUNTS Logic (Must use PROCESSED but ALL data to count correctly)
@@ -1081,24 +1056,14 @@ export function PrestamosTable({
                         </div>
                     ) : (
                         <>
-                            {/* Pagination Top */}
-                            <PaginationControlled
-                                currentPage={currentPage}
-                                totalPages={totalPages}
-                                onPageChange={(page) => updateParams({ page: String(page) })}
-                                totalRecords={filteredPrestamos.length}
-                                pageSize={ITEMS_PER_PAGE}
-                                className="mb-4"
-                            />
-
                             {/* -------------------- MOBILE CARDS VIEW -------------------- */}
                             <div className={cn(
                                 "space-y-2 pb-32",
                                 viewType === 'cards' ? "md:hidden" : "hidden"
                             )}>
-                                {paginatedPrestamos.map((prestamo, index) => {
+                                {filteredPrestamos.slice(0, itemsToShow).map((prestamo, index) => {
                                     const isProgramado = prestamo.cuota_dia_programada > 0.01
-                                    const prevPrestamo = index > 0 ? paginatedPrestamos[index - 1] : null
+                                    const prevPrestamo = index > 0 ? filteredPrestamos[index - 1] : null
                                     const prevProgramado = prevPrestamo ? prevPrestamo.cuota_dia_programada > 0.01 : null
                                     const showSeparator = activeFilter === 'visitas_control' && (index === 0 || isProgramado !== prevProgramado)
 
@@ -1852,9 +1817,9 @@ export function PrestamosTable({
 
                                     {/* Table Body */}
                                     <div className="divide-y divide-slate-800/50 text-sm">
-                                        {paginatedPrestamos.map((prestamo, index) => {
+                                        {filteredPrestamos.slice(0, itemsToShow).map((prestamo, index) => {
                                             const isProgramado = prestamo.cuota_dia_programada > 0.01;
-                                            const prevPrestamo = index > 0 ? paginatedPrestamos[index - 1] : null;
+                                            const prevPrestamo = index > 0 ? filteredPrestamos[index - 1] : null;
                                             const prevProgramado = prevPrestamo ? prevPrestamo.cuota_dia_programada > 0.01 : null;
                                             const showSeparator = activeFilter === 'visitas_control' && (index === 0 || isProgramado !== prevProgramado);
 
@@ -2617,18 +2582,20 @@ export function PrestamosTable({
                                                 <p>No se encontraron resultados</p>
                                             </div>
                                         )}
+
+                                        {itemsToShow < filteredPrestamos.length && filteredPrestamos.length > 0 && (
+                                            <div className="flex justify-center py-8">
+                                                <Button
+                                                    onClick={() => setItemsToShow(prev => prev + ITEMS_PER_LOAD)}
+                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 py-2 rounded-lg transition-all"
+                                                >
+                                                    Cargar {Math.min(ITEMS_PER_LOAD, filteredPrestamos.length - itemsToShow)} más
+                                                </Button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
-                            {/* Pagination Bottom */}
-                            <PaginationControlled
-                                currentPage={currentPage}
-                                totalPages={totalPages}
-                                onPageChange={(page) => updateParams({ page: String(page) })}
-                                totalRecords={filteredPrestamos.length}
-                                pageSize={ITEMS_PER_PAGE}
-                                className="mt-6"
-                            />
                         </>
                     )}
                 </div> {/* transition wrapper */}

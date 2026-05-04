@@ -147,7 +147,10 @@ export function KpiCards({
       ? (cobradoEficienciaTotal / metaEficienciaTotal) * 100
       : 0
 
-    const moraBancaria = calculateMoraBancaria(prestamosGlobal || relevant, today)
+    const moraBancaria = calculateMoraBancaria(
+      hasActiveFilters ? relevant : (prestamosGlobal || relevant),
+      today
+    )
 
     const totalPagado = baseForKpi.reduce((acc, p) => acc + (p.total_pagado_acumulado || 0), 0)
     const totalDeuda = baseForKpi.reduce((acc, p) =>
@@ -233,37 +236,39 @@ export function KpiCards({
           </div>
         </Link>
 
-        {/* Eficiencia Cobro */}
-        <div className="bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] transition-all group">
-          <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12 group-hover:opacity-[0.03] transition-opacity">
-            <TrendingUp className="w-20 h-20 md:w-24 md:h-24 text-white" />
-          </div>
-          <div className="relative z-10">
-            <p className="text-blue-400 font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-1 md:mb-2">Eficiencia Cobro</p>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg md:text-2xl font-black text-white tracking-tighter">${kpis.cobradoEficienciaTotal.toLocaleString()}</span>
-              <span className="text-slate-600 text-[9px] md:text-sm font-medium">/ ${kpis.metaEficienciaTotal.toLocaleString()}</span>
+        {/* Eficiencia Cobro - Solo Admin */}
+        {userRole === 'admin' && (
+          <div className="bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] transition-all group">
+            <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12 group-hover:opacity-[0.03] transition-opacity">
+              <TrendingUp className="w-20 h-20 md:w-24 md:h-24 text-white" />
             </div>
-          </div>
-          <div className="relative z-10 mt-1 md:mt-2 space-y-1.5">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1 h-1 bg-slate-800/40 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-1000 ease-out"
-                  style={{ width: `${Math.min(100, kpis.porcentajeEficiencia)}%` }}
-                />
+            <div className="relative z-10">
+              <p className="text-blue-400 font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-1 md:mb-2">Eficiencia Cobro</p>
+              <div className="flex items-baseline gap-1">
+                <span className="text-lg md:text-2xl font-black text-white tracking-tighter">${kpis.cobradoEficienciaTotal.toLocaleString()}</span>
+                <span className="text-slate-600 text-[9px] md:text-sm font-medium">/ ${kpis.metaEficienciaTotal.toLocaleString()}</span>
               </div>
-              <p className="text-blue-400 font-bold text-[7px] md:text-[9px] flex items-center gap-1 shrink-0">
-                <span>{kpis.porcentajeEficiencia.toFixed(0)}%</span>
-              </p>
             </div>
-            <div className="flex">
-              <span className="bg-blue-500/10 text-blue-400 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-wider mt-1">
-                Hoy + Atrasados
-              </span>
+            <div className="relative z-10 mt-1 md:mt-2 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 h-1 bg-slate-800/40 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-1000 ease-out"
+                    style={{ width: `${Math.min(100, kpis.porcentajeEficiencia)}%` }}
+                  />
+                </div>
+                <p className="text-blue-400 font-bold text-[7px] md:text-[9px] flex items-center gap-1 shrink-0">
+                  <span>{kpis.porcentajeEficiencia.toFixed(0)}%</span>
+                </p>
+              </div>
+              <div className="flex">
+                <span className="bg-blue-500/10 text-blue-400 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-wider mt-1">
+                  Hoy + Atrasados
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Renovaciones */}
         <Link href={buildHref('renovaciones')} className={cn(

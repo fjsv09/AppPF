@@ -223,10 +223,11 @@ export function calculateLoanMetrics(
   // (ver línea anterior al check de estado !== 'activo')
 
   // 2.6. Meta y Cobrado Eficiencia (Hoy + Atrasados): Lógica Centralizada
+  // Solo cuenta cuotas vencidas hasta hoy que aún tienen saldo pendiente (sin adelantos)
   let metaTotalHoyYAtrasados = 0;
   let cobradoTotalHoyYAtrasados = 0;
 
-  cronograma.forEach((c: any) => {
+  cronograma.forEach((c: any, idx: number) => {
     if (c.fecha_vencimiento <= today) {
       const pagosDeEstaCuotaHoy = (c.pagos || [])
         .filter((p: any) => getIsToday(p.created_at) && p.estado_verificacion !== 'rechazado' && p.estado_verificacion !== 'pendiente')
@@ -236,6 +237,17 @@ export function calculateLoanMetrics(
       const totalPagadoAcumuladoCuota = Number(c.monto_pagado || 0);
       const pagadoAntes = Math.max(0, totalPagadoAcumuladoCuota - pagosDeEstaCuotaHoy);
       const pendienteAlInicio = Math.max(0, metaCuota - pagadoAntes);
+
+      // DEBUG: log para cuotas vencidas
+      if (idx < 3 && c.fecha_vencimiento <= today) {
+        console.log(`📋 Cuota ${idx} (${c.fecha_vencimiento}):`, {
+          monto_cuota: metaCuota,
+          monto_pagado: totalPagadoAcumuladoCuota,
+          pagos_count: (c.pagos || []).length,
+          pagosHoy: pagosDeEstaCuotaHoy,
+          pendiente: pendienteAlInicio
+        });
+      }
 
       if (pendienteAlInicio > 0.01) {
         metaTotalHoyYAtrasados += pendienteAlInicio;
@@ -381,31 +393,41 @@ export function calculateMoraBancaria(prestamos: any[], today: string = getToday
   const loansInMora = new Set<string>();
 
   // Solo consideramos préstamos activos o en estados de riesgo para el cálculo de la cartera vigente
-  const relevantPrestamos = (prestamos || []).filter(p => 
+  const relevantPrestamos = (prestamos || []).filter(p =>
     ['activo', 'vencido', 'moroso', 'cpp', 'legal'].includes(p.estado)
   );
+
 
   relevantPrestamos.forEach(p => {
     const montoCapital = parseFloat(p.monto) || 0;
     totalCapitalOriginal += montoCapital;
 
     const cuotas = p.cronograma_cuotas || [];
-    // Intentar obtener el número de cuotas real del préstamo, fallback a la longitud del cronograma o 30
+    if (cuotas.length === 0) return;
+
     const numCuotas = p.numero_cuotas || p.cuotas || cuotas.length || 30;
     const capitalPorCuota = montoCapital / numCuotas;
 
-    cuotas.filter((c: any) => c.fecha_vencimiento <= today && c.estado !== 'pagado').forEach((c: any) => {
-      const montoCuota = parseFloat(c.monto_cuota) || 0;
-      const montoPagado = parseFloat(c.monto_pagado) || 0;
-      const pendiente = Math.max(0, montoCuota - montoPagado);
+    const totalExigibleHastaHoy = cuotas
+      .filter((c: any) => c.fecha_vencimiento <= today)
+      .reduce((s: number, c: any) => s + (parseFloat(c.monto_cuota) || 0), 0);
 
-      if (pendiente > 0.01) {
-        // El capital vencido se calcula proporcionalmente a cuánto de la cuota (que incluye interés) falta pagar
-        const proporcionPendiente = montoCuota > 0 ? pendiente / montoCuota : 1;
-        totalCapitalVencido += capitalPorCuota * proporcionPendiente;
+    const totalPagadoAcumulado = cuotas
+      .reduce((s: number, c: any) => s + (parseFloat(c.monto_pagado) || 0), 0);
+
+    const deudaExigibleHoy = Math.max(0, totalExigibleHastaHoy - totalPagadoAcumulado);
+
+    if (deudaExigibleHoy > 0.01) {
+      const valorCuotaPromedio = cuotas
+        .reduce((s: number, c: any) => s + (parseFloat(c.monto_cuota) || 0), 0) / cuotas.length;
+
+      if (valorCuotaPromedio > 0) {
+        const cuotasEquivalentesAtrasadas = deudaExigibleHoy / valorCuotaPromedio;
+        totalCapitalVencido += capitalPorCuota * cuotasEquivalentesAtrasadas;
         loansInMora.add(p.id);
+
       }
-    });
+    }
   });
 
   return {

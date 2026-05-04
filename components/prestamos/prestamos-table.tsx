@@ -1023,7 +1023,11 @@ export function PrestamosTable({
                             <SelectContent className="bg-slate-900 border-slate-700">
                                 <SelectItem value="todos">Todos Asesores</SelectItem>
                                 {perfiles
-                                    .filter(p => p.rol === 'asesor' && (filtroSupervisor === 'todos' || p.supervisor_id === filtroSupervisor))
+                                    .filter(p => {
+                                        if (p.rol !== 'asesor') return false
+                                        if (userRol === 'supervisor') return p.supervisor_id === userId
+                                        return filtroSupervisor === 'todos' || p.supervisor_id === filtroSupervisor
+                                    })
                                     .map((asesor) => (
                                         <SelectItem key={asesor.id} value={asesor.id}>{asesor.nombre_completo}</SelectItem>
                                     ))}

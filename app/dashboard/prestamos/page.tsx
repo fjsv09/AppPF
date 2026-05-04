@@ -75,9 +75,16 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             .from('clientes').select('id').eq('asesor_id', user.id)
         clienteIdFilter = misClientes?.map((c: any) => c.id) || []
     } else if (userRole === 'supervisor' && user?.id) {
-        const { data: misAsesores } = await supabaseAdmin
-            .from('perfiles').select('id').eq('supervisor_id', user.id)
-        const asesorIds = misAsesores?.map((a: any) => a.id) || []
+        let asesorIds: string[] = []
+        if (filtroAsesor !== 'todos') {
+            // Si se selecciona un asesor específico, usar solo ese
+            asesorIds = [filtroAsesor]
+        } else {
+            // Si no hay filtro de asesor, obtener todos los del supervisor
+            const { data: misAsesores } = await supabaseAdmin
+                .from('perfiles').select('id').eq('supervisor_id', user.id)
+            asesorIds = misAsesores?.map((a: any) => a.id) || []
+        }
         if (asesorIds.length > 0) {
             const { data: misClientes } = await supabaseAdmin
                 .from('clientes').select('id').in('asesor_id', asesorIds)
@@ -103,11 +110,11 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         .from('prestamos')
         .select(`
             *,
-            clientes (
+            clientes!inner (
                 *,
                 sectores (id, nombre),
                 solicitudes (gps_coordenadas, created_at),
-                asesor:asesor_id(nombre_completo)
+                asesor_data:asesor_id(nombre_completo)
             ),
             gestiones (
                 id,

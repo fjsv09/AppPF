@@ -59,13 +59,24 @@ export default async function AdminCuadresPage() {
     .limit(100)
 
   // Fetch Global Accounts (Caja and Digital) to move funds to
-  // We only show accounts belonging to the Global Cartera (id: 0s)
+  // We show accounts belonging to the Global Cartera or carteras managed by admins
+  const { data: adminCarteras } = await adminClient
+    .from('carteras')
+    .select('id, asesor_id, perfiles(rol)')
+
+  const adminCarteraIds = (adminCarteras || [])
+    .filter((c: any) => !c.asesor_id || c.perfiles?.rol === 'admin')
+    .map((c: any) => c.id)
+
   const GLOBAL_CARTERA_ID = '00000000-0000-0000-0000-000000000000'
-  const { data: accounts } = await supabase
+  const targetCarteraIds = [...new Set([...adminCarteraIds, GLOBAL_CARTERA_ID])]
+
+  const { data: accounts } = await adminClient
     .from('cuentas_financieras')
     .select('*')
-    .eq('cartera_id', GLOBAL_CARTERA_ID)
+    .in('cartera_id', targetCarteraIds)
     .in('tipo', ['caja', 'digital'])
+    .order('nombre')
 
   const pendingCount = pendingCuadres?.length || 0
 

@@ -41,12 +41,12 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json()
-        const { 
+        const {
             prestamo_id,
-            monto_solicitado, 
-            interes, 
-            cuotas, 
-            modalidad, 
+            monto_solicitado,
+            interes,
+            cuotas,
+            modalidad,
             fecha_inicio_propuesta,
             score_al_solicitar,
             monto_minimo_permitido,
@@ -56,8 +56,13 @@ export async function POST(request: Request) {
             reputation_score,
             detalles_score,
             reputation_data,
-            cuenta_id
+            cuenta_id,
+            tipo_excepcion
         } = body
+
+        const tipoExcepcionFinal = tipo_excepcion === 'mora_critica_excepcion'
+            ? 'mora_critica_excepcion'
+            : 'mora_critica_admin'
 
         if (!prestamo_id || monto_solicitado === undefined || interes === undefined || !cuotas || !modalidad || !fecha_inicio_propuesta || !cuenta_id) {
             return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
@@ -131,7 +136,7 @@ export async function POST(request: Request) {
             fecha_inicio_propuesta,
             estado_solicitud: 'pre_aprobado',
             requiere_excepcion: true,
-            tipo_excepcion: 'mora_critica_admin',
+            tipo_excepcion: tipoExcepcionFinal,
             score_al_solicitar: health_score || score_al_solicitar,
             reputation_score_al_solicitar: reputation_score || 0,
             monto_minimo_permitido: monto_minimo_permitido || 0,
@@ -265,10 +270,12 @@ export async function POST(request: Request) {
             // 7. Auditoría y Tareas
             await supabaseAdmin.from('auditoria').insert({
                 usuario_id: user.id,
-                accion: 'refinanciar_directo_admin',
+                accion: tipoExcepcionFinal === 'mora_critica_excepcion'
+                    ? 'refinanciar_excepcion_admin'
+                    : 'refinanciar_directo_admin',
                 tabla_afectada: 'prestamos',
                 registro_id: resultado.prestamo_nuevo_id,
-                detalle: { prestamo_original: prestamo_id, monto: monto_solicitado }
+                detalle: { prestamo_original: prestamo_id, monto: monto_solicitado, tipo_excepcion: tipoExcepcionFinal }
             })
 
             // Obtener el asesor del cliente para la tarea

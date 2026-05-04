@@ -35,6 +35,8 @@ interface SolicitudRenovacionModalProps {
     userRole?: string | null
     esRefinanciado?: boolean
     isAdminDirectRefinance?: boolean
+    /** Refinanciación administrativa por excepción (el préstamo no llega al umbral de mora directa) */
+    isAdminExceptionRefinance?: boolean
     /** El préstamo actual es producto de un refinanciamiento previo */
     esProductoDeRefinanciamiento?: boolean
     systemSchedule?: {
@@ -96,6 +98,7 @@ export function SolicitudRenovacionModal({
     userRole,
     esRefinanciado = false,
     isAdminDirectRefinance = false,
+    isAdminExceptionRefinance = false,
     esProductoDeRefinanciamiento = false,
     systemSchedule,
     isBlockedByCuadre,
@@ -238,7 +241,10 @@ export function SolicitudRenovacionModal({
             score_al_solicitar: elegibilidad?.healthScore || elegibilidad?.score || 0,
             monto_minimo_permitido: elegibilidad?.monto_minimo || 0,
             monto_maximo_permitido: elegibilidad?.monto_maximo || 0,
-            razon_limite: elegibilidad?.ajuste_detalles?.map((d: any) => `${d.factor}: ${d.razon} (${d.pct}%)`).join(' | ') || 'Ajuste según score',
+            razon_limite: isAdminExceptionRefinance
+                ? 'Refinanciación administrativa por excepción (mora bajo el umbral directo)'
+                : (elegibilidad?.ajuste_detalles?.map((d: any) => `${d.factor}: ${d.razon} (${d.pct}%)`).join(' | ') || 'Ajuste según score'),
+            tipo_excepcion: isAdminExceptionRefinance ? 'mora_critica_excepcion' : undefined,
             // [SNAPSHOT] Datos para evitar recalculación historial
             health_score: elegibilidad?.healthScore || elegibilidad?.score || 0,
             reputation_score: elegibilidad?.reputationScore || 0,
@@ -401,7 +407,9 @@ export function SolicitudRenovacionModal({
             >
                 <DialogHeader>
                     <DialogTitle className="text-xl">
-                        {isAdminDirectRefinance ? 'Refinanciación Directa (Mora Crítica)' : 'Solicitar Renovación'}
+                        {isAdminExceptionRefinance
+                            ? 'Refinanciación Administrativa (Excepción)'
+                            : isAdminDirectRefinance ? 'Refinanciación Directa (Mora Crítica)' : 'Solicitar Renovación'}
                     </DialogTitle>
                     <div className="flex items-center gap-4 mt-2">
                         <div className="h-12 w-12 shrink-0 rounded-full bg-slate-800 flex items-center justify-center shadow-lg border border-white/10 overflow-hidden relative group">

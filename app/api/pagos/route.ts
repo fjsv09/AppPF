@@ -28,7 +28,7 @@ export async function POST(request: Request) {
         // Verify User Profile & Role (using Admin)
         const { data: perfil, error: perfilError } = await supabaseAdmin
             .from('perfiles')
-            .select('rol, supervisor_id, exigir_gps_cobranza')
+            .select('rol, supervisor_id, exigir_gps_cobranza, nombre_completo')
             .eq('id', user.id)
             .single()
 
@@ -138,6 +138,7 @@ export async function POST(request: Request) {
 
         const isDigital = ['Yape', 'Plin', 'Transferencia'].includes(metodo_pago)
         let result: any = null
+        let cuotaRaw: any = null
 
         // --- DETERMINAR TARGET USER ID (Para atribución de dinero/comisiones) ---
         // [NUEVO] Si quien registra es un Supervisor, el dinero debe atribuirse al Asesor del préstamo
@@ -159,14 +160,15 @@ export async function POST(request: Request) {
         if (isDigital) {
             // --- NUEVO FLUJO SILENCIOSO PARA PAGOS DIGITALES ---
             // 1. Obtener datos de la cuota y del préstamo para el desglose
-            const { data: cuotaRaw, error: cErr } = await supabaseAdmin
+            const { data: cData, error: cErr } = await supabaseAdmin
                 .from('cronograma_cuotas')
-                .select('monto_cuota, monto_pagado, prestamos(interes)')
+                .select('monto_cuota, monto_pagado, prestamos(interes, clientes(nombres))')
                 .eq('id', cuota_id)
                 .single()
             
             if (cErr) return NextResponse.json({ error: 'Cuota no encontrada' }, { status: 404 })
-            const cuota = cuotaRaw as any
+            cuotaRaw = cData as any
+            const cuota = cuotaRaw
             const tasaInteres = parseFloat(cuota.prestamos?.interes || '0')
             
             // Cálculo del desglose (Interés Simple / Flat)
@@ -257,7 +259,14 @@ export async function POST(request: Request) {
             import('@/utils/notifications').then(mod => {
                 mod.notificarPagoCliente(result.pago_id)
                 if (['Yape', 'Plin', 'Transferencia'].includes(metodo_pago)) {
-                    mod.notificarATodos(['admin', 'secretaria'], 'Nuevo Pago Digital', `S/ ${monto} por validar.`, 'warning')
+                    const clienteNombre = (cuotaRaw as any)?.prestamos?.clientes?.nombres || 'Cliente'
+                    const registradorNombre = perfil?.nombre_completo || 'Usuario'
+                    mod.notificarATodos(
+                        ['admin', 'secretaria'], 
+                        'Nuevo Pago Digital', 
+                        `${clienteNombre} - S/ ${monto} por validar. (Registrado por: ${registradorNombre})`, 
+                        'warning'
+                    )
                 }
             }).catch(e => console.error('Notify Error:', e))
         }

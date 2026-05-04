@@ -242,7 +242,17 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
     const esRefinanciado = prestamo.estado === 'refinanciado'
     const esCandidatoRefinanciacionAdmin = (metrics.riesgoPorcentaje >= refinanciacionMinMora) && (userRole === 'admin');
     const esRenovacionParaleloAdmin = esParalelo && (userRole === 'admin');
-    const esFlujoRefinanciacionAdmin = esCandidatoRefinanciacionAdmin || esRenovacionParaleloAdmin;
+    // Excepción: admin puede refinanciar cliente atrasado que no llega al umbral de mora ni al de renovación normal
+    const estadoAdmiteRefinanciacionAdmin = ['activo', 'vencido', 'moroso', 'cpp', 'legal'].includes(prestamo.estado);
+    const esExcepcionRefinanciacionAdmin = (
+        userRole === 'admin' &&
+        estadoAdmiteRefinanciacionAdmin &&
+        !esParalelo &&
+        metrics.cuotasAtrasadas > 0 &&
+        !esCandidatoRefinanciacionAdmin &&
+        !cumpleLimiteRenovacion
+    );
+    const esFlujoRefinanciacionAdmin = esCandidatoRefinanciacionAdmin || esRenovacionParaleloAdmin || esExcepcionRefinanciacionAdmin;
 
     const tieneSolicitudPendiente = !!solicitudRenovacion
     const puedeRenovar = userRole && !prestamo.clientes?.bloqueado_renovacion && (
@@ -251,9 +261,10 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
         (userRole === 'supervisor' && !esProductoDeRefinanciamiento)
     )
 
-    const mostrarBotonRenovacion = esUltimoPrestamo && !tieneSolicitudPendiente && (
+    const mostrarBotonRenovacion = (esUltimoPrestamo || esFlujoRefinanciacionAdmin) && !tieneSolicitudPendiente && (
         prestamo.estado === 'activo' ||
-        prestamo.estado === 'finalizado'
+        prestamo.estado === 'finalizado' ||
+        (esFlujoRefinanciacionAdmin && ['vencido', 'moroso', 'cpp', 'legal'].includes(prestamo.estado))
     ) && (puedeRenovar || esFlujoRefinanciacionAdmin)
 
     // [NUEVO] Obtener cuadres de hoy para validación visual de edición
@@ -376,6 +387,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                                                 userRole: userRole || 'asesor',
                                                 esRefinanciado,
                                                 isAdminDirectRefinance: esFlujoRefinanciacionAdmin,
+                                                isAdminExceptionRefinance: esExcepcionRefinanciacionAdmin,
                                                 esProductoDeRefinanciamiento,
                                                 systemSchedule: currentSystemSchedule,
                                                 isBlockedByCuadre,
@@ -388,7 +400,9 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                                                     className={cn(
                                                         "h-9 text-[11px] md:text-xs bg-gradient-to-r text-white rounded-xl flex items-center justify-center gap-2 px-3 shadow-md w-full",
                                                         (canOperateDueToTime && !isBlockedByCuadre)
-                                                            ? (esFlujoRefinanciacionAdmin ? "from-purple-600 to-indigo-600" : "from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400")
+                                                            ? (esExcepcionRefinanciacionAdmin ? "from-rose-600 to-pink-600"
+                                                                : esFlujoRefinanciacionAdmin ? "from-purple-600 to-indigo-600"
+                                                                    : "from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400")
                                                             : "from-slate-700 to-slate-800 opacity-60 cursor-not-allowed"
                                                     )}
                                                 >
@@ -397,7 +411,8 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                                                         {isBlockedByCuadre ? 'Bloqueado' :
                                                             !canOperateDueToTime ? 'Cerrado' :
                                                                 userRole === 'supervisor' ? 'Ver Evaluación' :
-                                                                    (esFlujoRefinanciacionAdmin ? (esRenovacionParaleloAdmin ? 'Renovar Paralelo' : 'Refinanciar') : 'Renovar')}
+                                                                    esExcepcionRefinanciacionAdmin ? 'Refinanciar (Excepción)' :
+                                                                        (esFlujoRefinanciacionAdmin ? (esRenovacionParaleloAdmin ? 'Renovar Paralelo' : 'Refinanciar') : 'Renovar')}
                                                     </span>
                                                 </Button>
                                             }

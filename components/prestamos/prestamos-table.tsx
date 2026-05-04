@@ -521,9 +521,11 @@ export function PrestamosTable({
 
         switch (activeFilter) {
             case 'ruta_hoy':
-                // Ruta Hoy: Quota due TODAY and Pending (cuota_dia_hoy logic covers this partially, but let's be strict)
-                // Using existing logic: cuota_dia_hoy calculated in page.tsx strictly sums quotas due today.
-                filtered = filtered.filter(p => p.cuota_dia_hoy > 0.01 && p.estado === 'activo')
+                // Ruta Hoy: Todos los préstamos con saldo pendiente hoy
+                // Incluye activos y migradores que aún están en proceso
+                // Excluye solo los finalizados/liquidados (cobranza completada)
+                filtered = filtered.filter(p => p.cuota_dia_hoy > 0.01 &&
+                    !['finalizado', 'liquidado', 'anulado', 'castigado'].includes(p.estado))
                 break
 
             case 'cobranza':

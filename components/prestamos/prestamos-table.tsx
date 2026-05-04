@@ -410,20 +410,43 @@ export function PrestamosTable({
             const isFinalizado = p.estado === 'finalizado'
             const isRenovable = !!p.es_renovable_estricto
             const diasSinPago = parseInt(p.dias_sin_pago || 0)
-            const valorCuota = parseFloat(p.valor_cuota_promedio || 0)
-
-            const totalPagar = p.monto * (1 + (p.interes / 100))
+            const totalPagar = (p.monto || 0) * (1 + ((p.interes || 0) / 100))
             const pagado = p.total_pagado_acumulado || 0
             const progreso = Math.min((pagado / totalPagar) * 100, 100)
+            const valorCuota = parseFloat(p.valor_cuota_promedio || p.valor_cuota || 0) || 
+                (p.cuotas ? (totalPagar / p.cuotas) : (p.numero_cuotas ? (totalPagar / p.numero_cuotas) : 0))
 
             // Calculated Fields for UI
             const calculatedTotal = valorCuota > 0 ? Math.round(totalPagar / valorCuota) : 0
-            const totalCuotas = p.metrics?.totalCuotas || p.numero_cuotas || p.cuotas || calculatedTotal || 0
+            const cronograma = p.cronograma_cuotas || []
+            const totalCuotasCalculado = cronograma.length || p.numero_cuotas || p.cuotas || calculatedTotal || 0
+
+            const totalDinero = cronograma.reduce((acc: number, c: any) => acc + parseFloat(c.monto_cuota || 0), 0)
+            const totalPagado = cronograma.reduce((acc: number, c: any) => acc + parseFloat(c.monto_pagado || 0), 0)
+            const pagadoAcumulado = p.total_pagado_acumulado || totalPagado || 0
+
+            const valorCuotaPromedio = cronograma.length > 0
+                ? totalDinero / cronograma.length
+                : (valorCuota || 0)
+
+            const cuotasPagadasCalculado = Math.min(
+                totalCuotasCalculado,
+                Math.max(
+                    cronograma.filter((c: any) =>
+                        c.estado === 'pagado' ||
+                        (parseFloat(c.monto_pagado || 0) >= parseFloat(c.monto_cuota || 0) - 0.01 && parseFloat(c.monto_cuota || 0) > 0)
+                    ).length,
+                    valorCuotaPromedio > 0 ? Math.floor(pagadoAcumulado / valorCuotaPromedio) : 0
+                )
+            )
+
+            const totalCuotas = p.metrics?.totalCuotas || totalCuotasCalculado || 0
             // For archived loans without cronograma (not fetched in list), all cuotas count as paid
             const isArchivedNoCronograma = ['finalizado', 'renovado', 'refinanciado', 'anulado', 'castigado'].includes(p.estado) && !(p.metrics?.totalCuotas > 0)
             const cuotasPagadas = isArchivedNoCronograma
                 ? totalCuotas
-                : (p.metrics?.cuotasPagadas ?? (valorCuota > 0 ? Math.floor(pagado / valorCuota) : 0))
+                : Math.max(p.metrics?.cuotasPagadas || 0, cuotasPagadasCalculado)
+
             const cuotasAtrasadas = p.metrics?.cuotasAtrasadas ?? (valorCuota > 0 ? Math.floor(deudaHoy / valorCuota) : 0)
 
             // Frequency Analysis for Supervisor Rules
@@ -435,7 +458,6 @@ export function PrestamosTable({
             const asesor_nombre = asesor?.nombre_completo || 'N/A'
 
             const dateAudit = propSelectedDate || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
-            const cronograma = p.cronograma_cuotas || []
             const isVisitadoHoy = cronograma.some((c: any) =>
                 c.fecha_vencimiento === dateAudit && (c.visitado === true || (c.visitas_terreno && c.visitas_terreno.length > 0))
             )

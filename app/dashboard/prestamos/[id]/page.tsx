@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CronogramaClient } from "@/components/prestamos/cronograma-client"; 
+import { CronogramaClient } from "@/components/prestamos/cronograma-client";
 import { ContratoGenerator } from "@/components/prestamos/contrato-generator";
 import { SolicitudRenovacionModal } from "@/components/prestamos/solicitud-renovacion-modal";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
@@ -79,7 +79,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
         .from('configuracion_sistema')
         .select('clave, valor')
         .in('clave', ['horario_apertura', 'horario_cierre', 'desbloqueo_hasta', 'horario_fin_turno_1'])
-    
+
     const systemSchedule = (scheduleConfigs || []).reduce((acc: any, curr) => {
         acc[curr.clave] = curr.valor
         return acc
@@ -112,7 +112,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    
+
     let userRole: string | null = null
     if (user) {
         const { data: perfil } = await supabaseAdmin
@@ -137,7 +137,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
     // RESTRICCIÓN DE ACCESO CENTRALIZADA
     const { checkSystemAccess } = await import('@/utils/systemRestrictions')
     const accessResult = await checkSystemAccess(supabaseAdmin, user?.id || '', userRole || 'asesor', 'prestamo')
-    
+
     const isBlockedByCuadre = !accessResult.allowed && userRole !== 'admin'
     const blockReasonCierre = accessResult.reason || ''
     const systemAccess = accessResult
@@ -171,14 +171,14 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
             }
         }
     }
-    
+
     const { data: qCuentas } = await supabaseAdmin
         .from('cuentas_financieras')
         .select('id, nombre, saldo, cartera_id, usuarios_autorizados')
         .order('nombre')
-    
-    const cuentas = (qCuentas || []).filter((c: any) => 
-        c.cartera_id === '00000000-0000-0000-0000-000000000000' || 
+
+    const cuentas = (qCuentas || []).filter((c: any) =>
+        c.cartera_id === '00000000-0000-0000-0000-000000000000' ||
         (c.usuarios_autorizados && c.usuarios_autorizados.length > 0)
     )
 
@@ -202,15 +202,15 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
 
     const todayPeru = getTodayPeru()
 
-    const metrics = calculateLoanMetrics({ 
-        ...prestamo, 
-        cronograma_cuotas: cronograma || [] 
-    }, todayPeru, { 
-        renovacionMinPagado, 
-        umbralCpp: 4, 
-        umbralMoroso: 7, 
-        umbralCppOtros: 1, 
-        umbralMorosoOtros: 2 
+    const metrics = calculateLoanMetrics({
+        ...prestamo,
+        cronograma_cuotas: cronograma || []
+    }, todayPeru, {
+        renovacionMinPagado,
+        umbralCpp: 4,
+        umbralMoroso: 7,
+        umbralCppOtros: 1,
+        umbralMorosoOtros: 2
     }, pagos)
 
     // [ATOMICO] Calcular Salud del Préstamo (La "Verdad" de 18 PTS)
@@ -236,7 +236,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
             esElegibleParaRenovar = false
         }
     }
-    
+
     const esUltimoPrestamo = esElegibleParaRenovar
 
     const esRefinanciado = prestamo.estado === 'refinanciado'
@@ -246,13 +246,13 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
 
     const tieneSolicitudPendiente = !!solicitudRenovacion
     const puedeRenovar = userRole && !prestamo.clientes?.bloqueado_renovacion && (
-        (userRole === 'admin') || 
+        (userRole === 'admin') ||
         (userRole === 'asesor' && !esParalelo && !esRefinanciado && !esProductoDeRefinanciamiento) ||
         (userRole === 'supervisor' && !esProductoDeRefinanciamiento)
     )
-    
+
     const mostrarBotonRenovacion = esUltimoPrestamo && !tieneSolicitudPendiente && (
-        prestamo.estado === 'activo' || 
+        prestamo.estado === 'activo' ||
         prestamo.estado === 'finalizado'
     ) && (puedeRenovar || esFlujoRefinanciacionAdmin)
 
@@ -266,7 +266,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
             .eq('fecha', todayPeru)
             .in('asesor_id', uniqueAsesores)
             .in('estado', ['pendiente', 'aprobado'])
-        
+
         cuadresHoy = qCuadres || []
     }
 
@@ -299,13 +299,13 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
             <div className="relative overflow-hidden rounded-2xl md:rounded-3xl bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 border border-slate-800 shadow-xl flex flex-col mx-0.5">
                 <div className="absolute top-0 right-0 -mt-20 -mr-20 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl opacity-50 z-0 pointer-events-none" />
                 <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl opacity-50 z-0 pointer-events-none" />
-                
+
                 {/* BANNER DE BLOQUEO GLOBAL (NUEVA UBICACIÓN) */}
                 {(!canOperateDueToTime || isBlockedByCuadre) && (
                     <div className={cn(
                         "relative z-20 w-full px-6 py-4 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left border-b",
-                        isBlockedByCuadre 
-                            ? "bg-rose-500/20 border-rose-500/30" 
+                        isBlockedByCuadre
+                            ? "bg-rose-500/20 border-rose-500/30"
                             : "bg-amber-500/10 border-amber-500/20"
                     )}>
                         <div className={cn(
@@ -354,58 +354,58 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                         <div className="flex flex-row items-center gap-3 lg:gap-4 w-full lg:w-auto">
                             <div className="flex items-center gap-2 w-full lg:w-auto">
                                 <div className="flex-1 lg:flex-none lg:w-auto">
-                                {(userRole === 'admin' || userRole === 'supervisor') && (
-                                    <ContratoGenerator prestamo={prestamo} cronograma={cronograma || []} defaultOpen={isContractTab} />
-                                )}
+                                    {(userRole === 'admin' || userRole === 'supervisor') && (
+                                        <ContratoGenerator prestamo={prestamo} cronograma={cronograma || []} defaultOpen={isContractTab} />
+                                    )}
                                 </div>
 
                                 <div className="flex-1 lg:flex-none lg:w-auto">
                                     {mostrarBotonRenovacion && (
-                                        <SolicitudRenovacionModal 
-                                                {...{ 
-                                                    prestamoId: prestamo.id, 
-                                                    clienteId: prestamo.cliente_id || prestamo.clientes?.id || '',
-                                                    clienteNombre: prestamo.clientes?.nombres || 'Cliente', 
-                                                    clienteFotoPerfil: prestamo.clientes?.foto_perfil,
-                                                    clienteTelefono: prestamo.clientes?.telefono,
-                                                    currentMonto: prestamo.monto,
-                                                    currentInteres: prestamo.interes,
-                                                    currentModalidad: prestamo.frecuencia?.toLowerCase() || 'diario',
-                                                    currentCuotas: prestamo.cuotas || 30,
-                                                    solicitudPendiente: solicitudRenovacion,
-                                                    userRole: userRole || 'asesor',
-                                                    esRefinanciado,
-                                                    isAdminDirectRefinance: esFlujoRefinanciacionAdmin,
-                                                    esProductoDeRefinanciamiento,
-                                                    systemSchedule: currentSystemSchedule,
-                                                    isBlockedByCuadre,
-                                                    blockReasonCierre,
-                                                    cuentas
-                                                }}
-                                                trigger={
-                                                    <Button 
-                                                        disabled={(!canOperateDueToTime && userRole !== 'admin') || isBlockedByCuadre}
-                                                        className={cn(
-                                                            "h-9 text-[11px] md:text-xs bg-gradient-to-r text-white rounded-xl flex items-center justify-center gap-2 px-3 shadow-md w-full",
-                                                            (canOperateDueToTime && !isBlockedByCuadre)
-                                                                ? (esFlujoRefinanciacionAdmin ? "from-purple-600 to-indigo-600" : "from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400")
-                                                                : "from-slate-700 to-slate-800 opacity-60 cursor-not-allowed"
-                                                        )}
-                                                    >
-                                                        {(canOperateDueToTime && !isBlockedByCuadre) ? <Calendar className="w-3.5 h-3.5 shrink-0" /> : <Lock className="w-3.5 h-3.5 shrink-0" />}
-                                                        <span className="font-bold uppercase tracking-tight">
-                                                            {isBlockedByCuadre ? 'Bloqueado' : 
-                                                             !canOperateDueToTime ? 'Cerrado' :
-                                                             userRole === 'supervisor' ? 'Ver Evaluación' :
-                                                             (esFlujoRefinanciacionAdmin ? (esRenovacionParaleloAdmin ? 'Renovar Paralelo' : 'Refinanciar') : 'Renovar')}
-                                                        </span>
-                                                    </Button>
-                                                }
+                                        <SolicitudRenovacionModal
+                                            {...{
+                                                prestamoId: prestamo.id,
+                                                clienteId: prestamo.cliente_id || prestamo.clientes?.id || '',
+                                                clienteNombre: prestamo.clientes?.nombres || 'Cliente',
+                                                clienteFotoPerfil: prestamo.clientes?.foto_perfil,
+                                                clienteTelefono: prestamo.clientes?.telefono,
+                                                currentMonto: prestamo.monto,
+                                                currentInteres: prestamo.interes,
+                                                currentModalidad: prestamo.frecuencia?.toLowerCase() || 'diario',
+                                                currentCuotas: prestamo.cuotas || 30,
+                                                solicitudPendiente: solicitudRenovacion,
+                                                userRole: userRole || 'asesor',
+                                                esRefinanciado,
+                                                isAdminDirectRefinance: esFlujoRefinanciacionAdmin,
+                                                esProductoDeRefinanciamiento,
+                                                systemSchedule: currentSystemSchedule,
+                                                isBlockedByCuadre,
+                                                blockReasonCierre,
+                                                cuentas
+                                            }}
+                                            trigger={
+                                                <Button
+                                                    disabled={(!canOperateDueToTime && userRole !== 'admin') || isBlockedByCuadre}
+                                                    className={cn(
+                                                        "h-9 text-[11px] md:text-xs bg-gradient-to-r text-white rounded-xl flex items-center justify-center gap-2 px-3 shadow-md w-full",
+                                                        (canOperateDueToTime && !isBlockedByCuadre)
+                                                            ? (esFlujoRefinanciacionAdmin ? "from-purple-600 to-indigo-600" : "from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400")
+                                                            : "from-slate-700 to-slate-800 opacity-60 cursor-not-allowed"
+                                                    )}
+                                                >
+                                                    {(canOperateDueToTime && !isBlockedByCuadre) ? <Calendar className="w-3.5 h-3.5 shrink-0" /> : <Lock className="w-3.5 h-3.5 shrink-0" />}
+                                                    <span className="font-bold uppercase tracking-tight">
+                                                        {isBlockedByCuadre ? 'Bloqueado' :
+                                                            !canOperateDueToTime ? 'Cerrado' :
+                                                                userRole === 'supervisor' ? 'Ver Evaluación' :
+                                                                    (esFlujoRefinanciacionAdmin ? (esRenovacionParaleloAdmin ? 'Renovar Paralelo' : 'Refinanciar') : 'Renovar')}
+                                                    </span>
+                                                </Button>
+                                            }
                                         />
                                     )}
                                 </div>
                             </div>
-                            
+
                             <div className="hidden lg:flex items-center gap-4">
                                 <div className="w-px h-8 bg-white/10 mx-1" />
                                 <div className="flex items-center gap-2 md:gap-3 bg-white/5 h-11 px-3 rounded-xl border border-white/10 backdrop-blur-md hover:bg-white/10 hover:border-blue-500/30 transition-all cursor-pointer group w-fit min-w-[140px]">
@@ -541,12 +541,12 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                     <p className="text-slate-500 text-sm font-medium">Cargando detalles del préstamo...</p>
                 </div>
             }>
-                <LoanTabs 
-                    prestamo={prestamo} 
-                    cronograma={cronograma || []} 
+                <LoanTabs
+                    prestamo={prestamo}
+                    cronograma={cronograma || []}
                     pagos={pagos || []}
                     cuadresHoy={cuadresHoy}
-                    userRole={userRole as any} 
+                    userRole={userRole as any}
                     cliente={prestamo.clientes}
                     tareaEvidencia={tareaEvidencia}
                     systemSchedule={currentSystemSchedule}

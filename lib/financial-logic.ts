@@ -171,12 +171,16 @@ export function calculateLoanMetrics(
       valorCuotaPromedio: valorCuotaPromedioNA,
       saldoCuotaParcial: 0,
       totalCuotas: cronograma.length || loan.numero_cuotas || loan.cuotas || (valorCuotaPromedioNA > 0 ? Math.round(totalPagar / valorCuotaPromedioNA) : 0),
-      cuotasPagadas: cronograma.length > 0
-        ? cronograma.filter((c: any) =>
+      cuotasPagadas: Math.min(
+        cronograma.length || loan.numero_cuotas || loan.cuotas || 0,
+        Math.max(
+          cronograma.filter((c: any) =>
             c.estado === 'pagado' ||
             (Number(c.monto_pagado || 0) >= Number(c.monto_cuota || 0) - 0.01 && Number(c.monto_cuota || 0) > 0)
-          ).length
-        : (valorCuotaPromedioNA > 0 ? Math.floor(totalPagadoAcumulado / valorCuotaPromedioNA) : 0),
+          ).length,
+          valorCuotaPromedioNA > 0 ? Math.floor(totalPagadoAcumulado / valorCuotaPromedioNA) : 0
+        )
+      ),
       metaTotalHoyYAtrasados: 0,
       cobradoTotalHoyYAtrasados: 0,
       loanScore: calculateLoanScore(loan, pagos, today, config)
@@ -351,12 +355,16 @@ export function calculateLoanMetrics(
     valorCuotaPromedio,
     saldoCuotaParcial,
     totalCuotas: cronograma.length || loan.numero_cuotas || loan.cuotas || (valorCuotaPromedio > 0 ? Math.round(totalPagar / valorCuotaPromedio) : 0),
-    cuotasPagadas: cronograma.length > 0
-      ? cronograma.filter((c: any) =>
+    cuotasPagadas: Math.min(
+      cronograma.length || loan.numero_cuotas || loan.cuotas || 0,
+      Math.max(
+        cronograma.filter((c: any) =>
           c.estado === 'pagado' ||
           (Number(c.monto_pagado || 0) >= Number(c.monto_cuota || 0) - 0.01 && Number(c.monto_cuota || 0) > 0)
-        ).length
-      : (valorCuotaPromedio > 0 ? Math.floor(totalPagadoAcumulado / valorCuotaPromedio) : 0),
+        ).length,
+        valorCuotaPromedio > 0 ? Math.floor(totalPagadoAcumulado / valorCuotaPromedio) : 0
+      )
+    ),
     metaTotalHoyYAtrasados,
     cobradoTotalHoyYAtrasados,
     loanScore: calculateLoanScore(loan, pagos, today, config) // Integración del nuevo score

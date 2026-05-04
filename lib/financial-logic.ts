@@ -147,17 +147,18 @@ export function calculateLoanMetrics(
       ? cronograma.reduce((s: number, c: any) => s + Number(c.monto_cuota), 0) / cronograma.length
       : 0;
     const cuotasAtrasadasNA = valorCuotaPromedioNA > 0 ? Math.floor(deudaExigibleHoyNA / valorCuotaPromedioNA) : 0;
+    const saldoPendienteNA = Math.max(0, totalPagar - totalPagadoAcumulado);
 
     return {
       cuotasAtrasadas: cuotasAtrasadasNA,
-      deudaExigibleTotal: totalPagadoAcumulado > 0 ? saldoPendiente : 0,
+      deudaExigibleTotal: saldoPendienteNA,
       deudaExigibleHoy: deudaExigibleHoyNA,
       cuotaDiaHoy: 0,
       cuotaDiaProgramada: cuotaDiaProgramada,
       cobradoHoy: 0,
       cobradoRutaHoy: 0,
       totalPagadoAcumulado: totalPagadoAcumulado,
-      saldoPendiente: saldoPendiente,
+      saldoPendiente: saldoPendienteNA,
       riesgoPorcentaje: (totalPagar > 0) ? (deudaExigibleHoyNA / totalPagar) * 100 : 0,
       diasSinPago: 0,
       isCritico: false,

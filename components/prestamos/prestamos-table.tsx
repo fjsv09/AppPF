@@ -440,14 +440,22 @@ export function PrestamosTable({
                 )
             )
 
-            const totalCuotas = p.metrics?.totalCuotas || totalCuotasCalculado || 0
+            const metricsCalculated = calculateLoanMetrics(p, propSelectedDate || today, {
+                renovacionMinPagado,
+                umbralCpp,
+                umbralMoroso,
+                umbralCppOtros,
+                umbralMorosoOtros
+            })
+            const totalCuotas = typeof metricsCalculated.totalCuotas === 'number' ? metricsCalculated.totalCuotas : (p.metrics?.totalCuotas || totalCuotasCalculado || 0)
             // For archived loans without cronograma (not fetched in list), all cuotas count as paid
-            const isArchivedNoCronograma = ['finalizado', 'renovado', 'refinanciado', 'anulado', 'castigado'].includes(p.estado) && !(p.metrics?.totalCuotas > 0)
+            const isArchivedNoCronograma = ['finalizado', 'renovado', 'refinanciado', 'anulado', 'castigado'].includes(p.estado) && !(totalCuotas > 0)
             const cuotasPagadas = isArchivedNoCronograma
                 ? totalCuotas
-                : Math.max(p.metrics?.cuotasPagadas || 0, cuotasPagadasCalculado)
+                : (typeof metricsCalculated.cuotasPagadas === 'number' ? metricsCalculated.cuotasPagadas : cuotasPagadasCalculado)
 
-            const cuotasAtrasadas = p.metrics?.cuotasAtrasadas ?? (valorCuota > 0 ? Math.floor(deudaHoy / valorCuota) : 0)
+            const cuotasAtrasadas = typeof metricsCalculated.cuotasAtrasadas === 'number' ? metricsCalculated.cuotasAtrasadas : (p.metrics?.cuotasAtrasadas ?? (valorCuota > 0 ? Math.floor(deudaHoy / valorCuota) : 0))
+
 
             // Frequency Analysis for Supervisor Rules
             const isDiario = p.frecuencia === 'Diario'

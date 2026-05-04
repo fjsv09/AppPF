@@ -239,7 +239,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         ?.map(p => p.id) || []
 
     const cuotasByLoan = new Map<string, any[]>()
-    const chunkSize = 200
+    const chunkSize = 35
 
     for (let i = 0; i < idsConCronograma.length; i += chunkSize) {
         const chunk = idsConCronograma.slice(i, i + chunkSize)
@@ -250,6 +250,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                 pagos (id, created_at, monto_pagado, metodo_pago, voucher_compartido, latitud, longitud, registrado_por, estado_verificacion)
             `)
             .in('prestamo_id', chunk)
+            .limit(5000)
 
         if (cuotasError) {
             console.error(`Error fetching cuotas chunk ${i / chunkSize}:`, cuotasError)

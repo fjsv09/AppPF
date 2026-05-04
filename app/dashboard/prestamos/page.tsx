@@ -2,16 +2,13 @@ import { Metadata } from "next";
 import { Suspense } from "react";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Plus, Wallet, TrendingUp, AlertCircle, Users, Trophy, CheckCircle2, ArrowUpRight, RotateCcw } from "lucide-react";
 import { PrestamosTable } from "@/components/prestamos/prestamos-table";
 import { TableSkeleton } from "@/components/prestamos/table-skeleton";
 import { AdminLoanActions } from "@/components/prestamos/admin-loan-actions";
 import { BackButton } from "@/components/ui/back-button";
 import { getTodayPeru, calculateLoanMetrics, calculateMoraBancaria } from "@/lib/financial-logic";
-import { cn } from "@/lib/utils";
+import { KpiCards } from "@/components/prestamos/kpi-cards";
 import { DashboardAlerts } from "@/components/dashboard/dashboard-alerts";
 import { checkAdvisorBlocked } from "@/utils/checkAdvisorBlocked";
 
@@ -25,6 +22,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     const filtroAsesor = sParams.asesor as string || 'todos';
     const filtroSector = sParams.sector as string || 'todos';
     const filtroFrecuencia = sParams.frecuencia as string || 'todos';
+    const searchQuery = ((sParams.search as string) || '').trim();
     const activeTab = sParams.tab as string;
 
     const supabase = await createClient();
@@ -130,6 +128,7 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             observacion_supervisor
         `)
         .order('created_at', { ascending: false })
+        .limit(5000)
 
     // Filtro de sector a nivel DB
     if (filtroSector !== 'todos') {
@@ -140,6 +139,41 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
             clienteIdFilter = clienteIdFilter.filter(id => sectorClienteIds.includes(id))
         } else {
             clienteIdFilter = sectorClienteIds
+        }
+    }
+
+    // Filtro de búsqueda server-side: nombres/dni del cliente. Evita el límite de filas
+    // de PostgREST cuando la base crece (no dependemos de cargar todos los préstamos).
+    // Mínimo 2 caracteres para no disparar queries demasiado amplias.
+    if (searchQuery.length >= 2) {
+        // Sanitizar wildcards de PostgREST (% y _) en el término de búsqueda
+        const sanitized = searchQuery.replace(/[%_]/g, m => `\\${m}`)
+        const { data: matchingClientes } = await supabaseAdmin
+            .from('clientes')
+            .select('id')
+            .or(`nombres.ilike.%${sanitized}%,dni.ilike.%${sanitized}%`)
+            .limit(2000)
+        const searchClienteIds = (matchingClientes || []).map((c: any) => c.id)
+
+        // Soporte adicional: búsqueda por prefijo de UUID de préstamo (≥8 hex chars)
+        if (/^[0-9a-fA-F-]{8,}$/.test(searchQuery)) {
+            const { data: matchingPrestamos } = await supabaseAdmin
+                .from('prestamos')
+                .select('cliente_id')
+                .ilike('id', `${searchQuery}%`)
+                .limit(500)
+            for (const p of (matchingPrestamos || [])) {
+                if (p.cliente_id && !searchClienteIds.includes(p.cliente_id)) {
+                    searchClienteIds.push(p.cliente_id)
+                }
+            }
+        }
+
+        if (clienteIdFilter !== null) {
+            const filterSet = new Set(clienteIdFilter)
+            clienteIdFilter = searchClienteIds.filter(id => filterSet.has(id))
+        } else {
+            clienteIdFilter = searchClienteIds
         }
     }
 
@@ -169,12 +203,40 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         return <div className="p-8 text-center text-red-500 font-bold">Error al cargar préstamos: {error.message}</div>;
     }
 
-    // Step 2: Fetch cronograma_cuotas SOLO para préstamos que aportan KPIs activos
-    // Los finalizados/renovados/anulados no necesitan cronograma para los KPIs del día
+    // [NUEVO] Step 1.5: Cargar TODOS los préstamos globales para mora (sin filtros de rol) - admin only
+    let prestamosGlobal = prestamosRaw // Default: usar los mismos que se muestran
+    if (userRole === 'admin' || userRole === 'secretaria') {
+        const { data: allPrestamos, error: allError } = await supabaseAdmin
+            .from('prestamos')
+            .select(`
+                id,
+                estado,
+                monto,
+                interes,
+                numero_cuotas,
+                cuotas,
+                cronograma_cuotas (
+                    id,
+                    fecha_vencimiento,
+                    estado,
+                    monto_cuota,
+                    monto_pagado
+                )
+            `)
+            .in('estado', ['activo', 'vencido', 'moroso', 'cpp', 'legal'])
+            .limit(10000)
+
+        if (!allError && allPrestamos) {
+            prestamosGlobal = allPrestamos
+            console.log(`🌍 Préstamos Global (para mora): ${prestamosGlobal.length} total`)
+        }
+    }
+
+    // Step 2: Fetch cronograma_cuotas para TODOS los préstamos
+    // Se necesita para calcular cuotas vencidas hoy (META HOY) incluyendo préstamos finalizados/renovados
     const ESTADOS_ARCHIVADOS = ['finalizado', 'renovado', 'refinanciado', 'anulado', 'castigado']
     const idsConCronograma = prestamosRaw
-        ?.filter(p => !ESTADOS_ARCHIVADOS.includes(p.estado))
-        .map(p => p.id) || []
+        ?.map(p => p.id) || []
 
     const cuotasByLoan = new Map<string, any[]>()
     const chunkSize = 200
@@ -355,20 +417,6 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
 
         const totalPagar = p.monto * (1 + (p.interes / 100))
 
-        // Para préstamos archivados sin cronograma: métricas aproximadas
-        // Esto evita que total_pagado_acumulado = 0 y arruine los KPIs de renovación/recuperación
-        const sinCronograma = ESTADOS_ARCHIVADOS.includes(p.estado) && (!p.cronograma_cuotas || p.cronograma_cuotas.length === 0)
-        if (sinCronograma) {
-            metrics.totalPagadoAcumulado = totalPagar  // Asumimos pagado completo
-            metrics.saldoPendiente = 0
-            metrics.cuotasAtrasadas = 0
-            metrics.deudaExigibleHoy = 0
-            metrics.cuotaDiaHoy = 0
-            metrics.cuotaDiaProgramada = 0
-            metrics.cobradoHoy = 0
-            metrics.cobradoRutaHoy = 0
-        }
-        
 
 
         // Extract Coordinates
@@ -495,98 +543,15 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
         prestamo.es_renovable_estricto = evaluateEligibility()
     })
 
-    // 3. Totals for Dashboard
-    // 3. Totals for Dashboard
-    // Total Colocado = Cartera Activa (Total Pagar - Total Pagado de activos)
+    // 3. Totals for PrestamosTable props
     const totalPrestado = prestamos.filter(p => p.estado === 'activo').reduce((acc, p) => {
         const deudaTotal = (parseFloat(p.monto) * (1 + (parseFloat(p.interes)/100)))
         const pagado = p.total_pagado_acumulado || 0
         return acc + Math.max(0, deudaTotal - pagado)
     }, 0)
 
-    // --- NUEVA LÓGICA DE ACTIVOS (Sincronizada con Directorio de Clientes) ---
-    // 1. Agrupar préstamos por cliente para identificar el principal
-    const clientesMapActivos = new Map<string, any>()
-    prestamos.forEach(p => {
-        const cId = p.cliente_id
-        if (!cId) return
-        if (!clientesMapActivos.has(cId)) {
-            clientesMapActivos.set(cId, [])
-        }
-        clientesMapActivos.get(cId).push(p)
-    })
-
-    const activeLoans = Array.from(clientesMapActivos.entries()).filter(([cId, loans]) => {
-        const cliente = loans[0]?.clientes
-        // Regla: No estar bloqueado para renovar
-        if (!!cliente?.bloqueado_renovacion) return false
-
-        // Buscar préstamo principal activo (no paralelo, no refinanciado)
-        const mainActiveLoan = loans.find((p: any) => 
-            p.estado === 'activo' && 
-            !p.es_paralelo && 
-            p.estado !== 'refinanciado' &&
-            !prestamoIdsProductoRefinanciamiento.includes(p.id)
-        )
-
-        if (!mainActiveLoan) return false
-
-        // Regla: No estar vencido
-        if (mainActiveLoan.estado_mora === 'vencido') return false
-
-        // Regla: Debe tener saldo pendiente
-        const metrics = mainActiveLoan.metrics // Ya calculados arriba
-        return (metrics?.saldoPendiente || 0) > 0.01
-    }).length
-
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
-
-    const totalPagado = prestamos.reduce((acc, p) => acc + (p.total_pagado_acumulado || 0), 0)
-    const totalDeudaConInteres = prestamos.reduce((acc, p) => acc + (parseFloat(p.monto) * (1 + (parseFloat(p.interes)/100))), 0) || 1
-    const porcentajeRecuperacion = (totalPagado / totalDeudaConInteres) * 100
-
-    const moraBancaria = calculateMoraBancaria(prestamos, today);
-    const tasaMorosidadCapital = moraBancaria.tasaMorosidadCapital;
-    const capitalEnRiesgo = moraBancaria.capitalVencido;
-    
-    // Alertas Graves (Supervisor Rule):
-    // Daily -> 7+ overdue. Other -> 2+ overdue.
-    // Alertas Graves (Supervisor Rule):
-    // Daily -> 7+ overdue. Other -> 2+ overdue.
-    const alertasGraves = prestamos.filter(p => p.metrics?.isCritico).length
-    
-    // Mora (Supervisor Rule - Early Deterioration):
-    const clientesEnMora = prestamos.filter(p => p.metrics?.isMora).length
-
-    // Meta de Ruta Hoy: Suma de las cuotas programadas para hoy (fijo)
-    // Meta de Ruta Hoy: Suma de las cuotas programadas para hoy (fijo)
-    // [SINCRONIZADO] Consideramos activos, legales y estados de riesgo (como en Supervisión Central)
-    const relevantForToday = prestamos.filter(p => ['activo', 'legal', 'vencido', 'moroso', 'cpp'].includes(p.estado))
-    
-    const metaCobranzaHoy = relevantForToday.reduce((acc: number, p: any) => acc + (p.cuota_dia_programada || 0), 0)
-    const recaudadoTotalHoy = relevantForToday.reduce((acc: number, p: any) => acc + (p.cobrado_hoy || 0), 0)
-    const recaudadoRutaHoy = relevantForToday.reduce((acc: number, p: any) => acc + (p.cobrado_ruta_hoy || 0), 0)
-    
-    // Pendientes Hoy: Clientes que tienen pago programado hoy > 0 y pendiente
-    const clientesPendientesHoy = relevantForToday.filter(p => p.cuota_dia_hoy > 0).length
-    const totalClientesHoy = relevantForToday.filter(p => (p.cuota_dia_programada || 0) > 0).length
-    const clientesCobradosHoy = totalClientesHoy - clientesPendientesHoy
-    
-    // Use strictly evaluated property for perfectly synchronized counts
-    const oportunidadesRenovacion = prestamos.filter(p => p.es_renovable_estricto).length
-
-    // 4.5 Eficiencia de Cobranza CENTRALIZADA (Hoy + Atrasadas)
-    let metaEficienciaTotal = 0
-    let cobradoEficienciaTotal = 0
-
-    relevantForToday.forEach(p => {
-        metaEficienciaTotal += p.metrics.metaTotalHoyYAtrasados
-        cobradoEficienciaTotal += p.metrics.cobradoTotalHoyYAtrasados
-    })
-    const porcentajeEficiencia = metaEficienciaTotal > 0 ? (cobradoEficienciaTotal / metaEficienciaTotal) * 100 : 0
-
-    // Component Prop Compatibility
-    const overdueAmount = metaCobranzaHoy
+    const capitalEnRiesgo = calculateMoraBancaria(prestamos, today).capitalVencido
 
     // Perfiles ya cargados arriba (sección 2.1)
 
@@ -624,193 +589,23 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
                 )}
             </div>
 
-            {/* ---------------- KPI GRID (REORGANIZED COMPACT) ---------------- */}
-            <div className={cn(
-                "grid grid-cols-2 gap-2 md:gap-4 mb-6",
-                (userRole === 'admin' || userRole === 'secretaria') ? "lg:grid-cols-6" : "lg:grid-cols-5"
-            )}>
-                {/* Meta Hoy Card (Uniform Size) */}
-                <Link href={{ query: { ...sParams, tab: 'ruta_hoy', page: '1' } }} className="bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] transition-all group">
-                     {/* Decorative background wallet icon */}
-                     <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12 group-hover:opacity-[0.03] transition-opacity">
-                        <Wallet className="w-20 h-20 md:w-24 md:h-24 text-white" />
-                     </div>
-                     
-                     <div className="relative z-10">
-                        <p className="text-[#10b981] font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-1 md:mb-2">Meta Hoy</p>
-                        <div className="flex items-baseline gap-1">
-                           <span className="text-lg md:text-2xl font-black text-white tracking-tighter">${recaudadoRutaHoy.toLocaleString()}</span>
-                           <span className="text-slate-600 text-[9px] md:text-sm font-medium">/ ${metaCobranzaHoy.toLocaleString()}</span>
-                        </div>
-                     </div>
-
-                     <div className="relative z-10 mt-1 md:mt-2 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                            <div className="relative flex-1 h-1 bg-slate-800/40 rounded-full overflow-hidden">
-                               <div 
-                                   className="h-full bg-gradient-to-r from-[#10b981] to-[#34d399] transition-all duration-1000 ease-out"
-                                   style={{ width: `${metaCobranzaHoy > 0 ? (recaudadoRutaHoy / metaCobranzaHoy) * 100 : 0}%` }}
-                               />
-                            </div>
-                            <p className="text-[#10b981] font-bold text-[7px] md:text-[9px] flex items-center gap-1 shrink-0">
-                               <span>{metaCobranzaHoy > 0 ? Math.round((recaudadoRutaHoy / metaCobranzaHoy) * 100) : 0}%</span>
-                            </p>
-                        </div>
-                        <div className="flex">
-                            <span className="bg-[#10b981]/10 text-[#10b981] text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-[#10b981]/20 uppercase tracking-wider mt-1">
-                                {clientesCobradosHoy} de {totalClientesHoy} Préstamos
-                            </span>
-                        </div>
-                     </div>
-                </Link>
-
-                {/* KPI: ACTIVOS (NUEVO) */}
-                <Link href={{ query: { ...sParams, tab: 'activos', page: '1' } }} className="bg-[#090e16] border border-emerald-500/20 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] hover:border-emerald-500/40 transition-all group">
-                     {/* Decorative background wallet icon */}
-                     <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12 group-hover:opacity-[0.03] transition-opacity">
-                        <Users className="w-20 h-20 md:w-24 md:h-24 text-emerald-500" />
-                     </div>
-                     
-                     <div className="relative z-10">
-                        <p className="text-emerald-500 font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-1 md:mb-2">ACTIVOS</p>
-                        <h2 className="text-lg md:text-2xl font-black text-white tracking-tighter">{activeLoans}</h2>
-                     </div>
-
-                     <div className="relative z-10 mt-1 md:mt-2 space-y-1.5">
-                        <div className="flex">
-                            <span className="bg-emerald-500/10 text-emerald-400 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider mt-1">
-                                COBRANZA VIGENTE
-                            </span>
-                        </div>
-                     </div>
-                </Link>
-
-                {/* Eficiencia de Cobranza (Hoy + Atrasos) */}
-                <div className="bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] transition-all group">
-                     <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12 group-hover:opacity-[0.03] transition-opacity">
-                        <TrendingUp className="w-20 h-20 md:w-24 md:h-24 text-white" />
-                     </div>
-                     
-                     <div className="relative z-10">
-                        <p className="text-blue-400 font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-1 md:mb-2">Eficiencia Cobro</p>
-                        <div className="flex items-baseline gap-1">
-                           <span className="text-lg md:text-2xl font-black text-white tracking-tighter">${cobradoEficienciaTotal.toLocaleString()}</span>
-                           <span className="text-slate-600 text-[9px] md:text-sm font-medium">/ ${metaEficienciaTotal.toLocaleString()}</span>
-                        </div>
-                     </div>
-
-                     <div className="relative z-10 mt-1 md:mt-2 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                            <div className="relative flex-1 h-1 bg-slate-800/40 rounded-full overflow-hidden">
-                               <div 
-                                   className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-1000 ease-out"
-                                   style={{ width: `${porcentajeEficiencia}%` }}
-                               />
-                            </div>
-                            <p className="text-blue-400 font-bold text-[7px] md:text-[9px] flex items-center gap-1 shrink-0">
-                               <span>{porcentajeEficiencia.toFixed(0)}%</span>
-                            </p>
-                        </div>
-                        <div className="flex">
-                            <span className="bg-blue-500/10 text-blue-400 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-wider mt-1">
-                                Hoy + Atrasados
-                            </span>
-                        </div>
-                     </div>
-                </div>
-
-                {/* Renovaciones Card */}
-                <Link href={{ query: { ...sParams, tab: 'renovaciones', page: '1' } }} className="bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between hover:bg-[#0d1421] transition-all group min-h-[90px] md:min-h-[120px]">
-                    <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12 group-hover:opacity-[0.03] transition-opacity">
-                        <TrendingUp className="w-20 h-20 md:w-24 md:h-24 text-white" />
-                    </div>
-                    <div className="relative z-10">
-                        <p className="text-amber-500 font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-1 md:mb-2">Renovaciones</p>
-                        <h2 className="text-lg md:text-3xl font-black text-white tracking-tighter">{oportunidadesRenovacion}</h2>
-                    </div>
-                    <div className="relative z-10 flex">
-                        <span className="bg-amber-500/10 text-amber-500 text-[6px] md:text-[8px] font-black px-1.5 py-0.5 rounded border border-amber-500/20 uppercase tracking-wider">
-                            Disponibles
-                        </span>
-                    </div>
-                </Link>
-
-                {/* Mora (%) Card */}
-                <div className="bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px]">
-                    <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12">
-                        <AlertCircle className="w-20 h-20 md:w-24 md:h-24 text-white" />
-                    </div>
-                    <div className="relative z-10">
-                        <p className="text-rose-500 font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-1 md:mb-2">Índice Mora</p>
-                        <h2 className="text-lg md:text-3xl font-black text-white tracking-tighter">
-                            {tasaMorosidadCapital.toFixed(1)}%
-                        </h2>
-                    </div>
-                    <div className="relative z-10 flex">
-                        <span className="bg-rose-500/10 text-rose-500 text-[6px] md:text-[8px] font-black px-1.5 py-0.5 rounded border border-rose-500/20 uppercase tracking-wider">
-                            {(userRole === 'admin' || userRole === 'secretaria') ? `$${capitalEnRiesgo.toLocaleString()}` : "Riesgo"}
-                        </span>
-                    </div>
-                </div>
-
-                {/* Recuperación Card (Solo Admin & Secretaria) */}
-                {(userRole === 'admin' || userRole === 'secretaria') && (
-                    <div className="bg-[#090e16] border border-slate-800/40 rounded-xl p-2.5 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[95px] md:min-h-[125px]">
-                        <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12">
-                            <TrendingUp className="w-20 h-20 md:w-24 md:h-24 text-white" />
-                        </div>
-                        <div className="relative z-10">
-                            <p className="text-blue-500 font-bold text-[8px] md:text-[9px] uppercase tracking-[0.2em] mb-1 md:mb-1.5">Recuperación</p>
-                            <h2 className="text-xl md:text-3xl font-black text-white tracking-tighter">
-                                {porcentajeRecuperacion.toFixed(1)}%
-                            </h2>
-                        </div>
-                        <div className="relative z-10 flex">
-                            <span className="bg-blue-500/10 text-blue-400 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-wider">
-                                {(userRole === 'admin' || userRole === 'secretaria') ? `$${totalPagado.toLocaleString()}` : "Retorno"}
-                            </span>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Admin/Supervisor/Secretaria Alerts Bar - More Compact */}
-            {['admin', 'supervisor', 'secretaria'].includes(userRole) && (
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                    <Link href={{ query: { ...sParams, tab: 'notificar', page: '1' } }} className="bg-slate-900/40 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between hover:bg-slate-900/60 transition-colors border-l-2 border-l-rose-500/40">
-                        <div>
-                            <p className="text-rose-500/80 font-bold text-[8px] uppercase tracking-tighter">Alertas Críticas</p>
-                            <p className="text-lg font-black text-white">{alertasGraves}</p>
-                        </div>
-                        <AlertCircle className="w-5 h-5 text-rose-500/20" />
-                    </Link>
-                    <Link href={{ query: { ...sParams, tab: 'morosos', page: '1' } }} className="bg-slate-900/40 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between hover:bg-slate-900/60 transition-colors border-l-2 border-l-amber-500/40">
-                        <div>
-                            <p className="text-amber-500/80 font-bold text-[8px] uppercase tracking-tighter">Advertencia</p>
-                            <p className="text-lg font-black text-white">{clientesEnMora}</p>
-                        </div>
-                        <TrendingUp className="w-5 h-5 text-amber-500/20" />
-                    </Link>
-                </div>
-            )}
+            {/* KPI Cards + Alerts Bar (client component, reactive to filters) */}
+            <Suspense fallback={<div className="h-52 mb-6 animate-pulse rounded-xl bg-slate-900/20" />}>
+                <KpiCards
+                    prestamos={prestamos}
+                    prestamosGlobal={prestamosGlobal}
+                    perfiles={perfiles}
+                    userRole={userRole}
+                    prestamoIdsProductoRefinanciamiento={prestamoIdsProductoRefinanciamiento}
+                    today={today}
+                    umbralCpp={umbralCpp}
+                    umbralMoroso={umbralMoroso}
+                    umbralCppOtros={umbralCppOtros}
+                    umbralMorosoOtros={umbralMorosoOtros}
+                />
+            </Suspense>
 
             <div className="mt-4 space-y-6">
-                {(userRole === 'admin' || userRole === 'secretaria') && (
-                    <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-3 text-xs text-slate-400 flex flex-col md:flex-row gap-4">
-                        <div className="flex items-start gap-2">
-                            <AlertCircle className="w-4 h-4 text-rose-500 mt-0.5 shrink-0" />
-                            <div>
-                                <span className="text-rose-400 font-bold uppercase italic">Moroso:</span> Diario ≥{umbralMoroso} atr. Otros ≥{umbralMorosoOtros} atr.
-                            </div>
-                        </div>
-                        <div className="flex items-start gap-2">
-                            <TrendingUp className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                            <div>
-                                <span className="text-amber-400 font-bold uppercase italic">Advertencia:</span> Diario {umbralCpp}-{umbralMoroso - 1} atr. Otros {umbralCppOtros}-{umbralMorosoOtros - 1} atr.
-                            </div>
-                        </div>
-                    </div>
-                )}
                 <Suspense fallback={<TableSkeleton />}>
                     <PrestamosTable 
                         prestamos={prestamos || []} 

@@ -70,6 +70,7 @@ export function calculateLoanMetrics(
   config: SystemConfig = { renovacionMinPagado: 60, umbralCpp: 1, umbralMoroso: 4, umbralCppOtros: 1, umbralMorosoOtros: 2 },
   standalonePagos?: any[]
 ): LoanMetrics {
+
   if (!loan) {
     return {
       cuotasAtrasadas: 0,
@@ -148,6 +149,7 @@ export function calculateLoanMetrics(
       : 0;
     const cuotasAtrasadasNA = valorCuotaPromedioNA > 0 ? Math.floor(deudaExigibleHoyNA / valorCuotaPromedioNA) : 0;
     const saldoPendienteNA = Math.max(0, totalPagar - totalPagadoAcumulado);
+
 
     return {
       cuotasAtrasadas: cuotasAtrasadasNA,
@@ -245,6 +247,22 @@ export function calculateLoanMetrics(
     .reduce((sum: number, c: any) => sum + Number(c.monto_cuota), 0);
 
   const deudaExigibleHoy = Math.max(0, totalExigibleHastaHoy - totalPagadoAcumulado);
+
+  // DEBUG: Log todos los préstamos activos para ver si Segundo aparece
+  // DEBUG para Segundo Aníbal - buscar en cualquier formato de nombre
+  const allNamesInLoan = `${JSON.stringify(loan)}`.toLowerCase();
+  if (allNamesInLoan.includes('segundo') && allNamesInLoan.includes('olorrega')) {
+    console.log('DEBUG SEGUNDO ENCONTRADO:', {
+      loan_id: loan.id,
+      estado: loan.estado,
+      cronograma_length: cronograma.length,
+      totalPagar,
+      totalPagadoAcumulado,
+      totalExigibleHastaHoy,
+      deudaExigibleHoy,
+      cuotasAtrasadas: valorCuotaPromedio > 0 ? Math.floor(deudaExigibleHoy / valorCuotaPromedio) : 0
+    });
+  }
 
   // 4. Cuotas Exigibles (Mora + Hoy)
   const cuotasAtrasadas = valorCuotaPromedio > 0 ? Math.floor(deudaExigibleHoy / valorCuotaPromedio) : 0;

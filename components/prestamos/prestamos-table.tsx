@@ -424,7 +424,7 @@ export function PrestamosTable({
             const cuotasPagadas = isArchivedNoCronograma
                 ? totalCuotas
                 : (p.metrics?.cuotasPagadas ?? (valorCuota > 0 ? Math.floor(pagado / valorCuota) : 0))
-            const cuotasAtrasadas = valorCuota > 0 ? Math.floor(deudaHoy / valorCuota) : 0
+            const cuotasAtrasadas = p.metrics?.cuotasAtrasadas ?? (valorCuota > 0 ? Math.floor(deudaHoy / valorCuota) : 0)
 
             // Frequency Analysis for Supervisor Rules
             const isDiario = p.frecuencia === 'Diario'

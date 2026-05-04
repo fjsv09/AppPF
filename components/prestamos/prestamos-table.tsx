@@ -304,25 +304,19 @@ export function PrestamosTable({
     }, [systemSchedule, userRol, isBlockedByCuadre])
     // --- FIN LOGICA DE HORARIO ---
 
-    // Sync local state if URL changes externally
+    // Búsqueda híbrida: filtro inmediato client-side + sync debounced a URL para refetch server-side.
+    // Esto permite que el servidor pre-filtre por nombre/DNI sin depender del límite de filas en memoria.
     useEffect(() => {
-        setLocalSearch(searchParams.get('search') || '')
-    }, [searchParams])
-
-    // Debounce Search Effect
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            const current = searchParams.get('search') || ''
-            if (localSearch !== current) {
-                startTransition(() => {
-                    const params = new URLSearchParams(searchParams.toString())
-                    if (localSearch) params.set('search', localSearch)
-                    else params.delete('search')
-                    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-                })
-            }
-        }, 600)
-        return () => clearTimeout(timer)
+        const handler = setTimeout(() => {
+            const currentUrlSearch = searchParams.get('search') || ''
+            if (localSearch === currentUrlSearch) return
+            const params = new URLSearchParams(searchParams.toString())
+            if (localSearch) params.set('search', localSearch)
+            else params.delete('search')
+            params.delete('page')
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+        }, 400)
+        return () => clearTimeout(handler)
     }, [localSearch, searchParams, pathname, router])
 
 
@@ -424,8 +418,12 @@ export function PrestamosTable({
 
             // Calculated Fields for UI
             const calculatedTotal = valorCuota > 0 ? Math.round(totalPagar / valorCuota) : 0
-            const totalCuotas = p.numero_cuotas || calculatedTotal || 0
-            const cuotasPagadas = valorCuota > 0 ? Math.floor(pagado / valorCuota) : 0
+            const totalCuotas = p.metrics?.totalCuotas || p.numero_cuotas || p.cuotas || calculatedTotal || 0
+            // For archived loans without cronograma (not fetched in list), all cuotas count as paid
+            const isArchivedNoCronograma = ['finalizado', 'renovado', 'refinanciado', 'anulado', 'castigado'].includes(p.estado) && !(p.metrics?.totalCuotas > 0)
+            const cuotasPagadas = isArchivedNoCronograma
+                ? totalCuotas
+                : (p.metrics?.cuotasPagadas ?? (valorCuota > 0 ? Math.floor(pagado / valorCuota) : 0))
             const cuotasAtrasadas = valorCuota > 0 ? Math.floor(deudaHoy / valorCuota) : 0
 
             // Frequency Analysis for Supervisor Rules
@@ -484,9 +482,9 @@ export function PrestamosTable({
     const filteredPrestamos = useMemo(() => {
         let filtered = [...processedPrestamos]
 
-        // 1. Text Search
-        if (searchQuery) {
-            const lower = searchQuery.toLowerCase()
+        // 1. Text Search (local state, no URL round-trip)
+        if (localSearch) {
+            const lower = localSearch.toLowerCase()
             filtered = filtered.filter(p =>
                 p.clientes?.nombres?.toLowerCase().includes(lower) ||
                 p.clientes?.dni?.includes(lower) ||
@@ -686,14 +684,34 @@ export function PrestamosTable({
         })
 
         return filtered
-    }, [processedPrestamos, activeFilter, searchQuery, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia, userRol, perfiles, sortBy, sortOrder]) // Dependencies Updated
+    }, [processedPrestamos, activeFilter, localSearch, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia, userRol, perfiles, sortBy, sortOrder])
 
     // 2.5 Pagination
-    const totalPages = Math.ceil(filteredPrestamos.length / ITEMS_PER_PAGE)
+    const totalPages = Math.max(1, Math.ceil(filteredPrestamos.length / ITEMS_PER_PAGE))
+    const safePage = Math.min(Math.max(1, currentPage), totalPages)
     const paginatedPrestamos = useMemo(() => {
-        const start = (currentPage - 1) * ITEMS_PER_PAGE
+        const start = (safePage - 1) * ITEMS_PER_PAGE
         return filteredPrestamos.slice(start, start + ITEMS_PER_PAGE)
-    }, [filteredPrestamos, currentPage])
+    }, [filteredPrestamos, safePage])
+
+    // Reset page in URL when search shrinks results past current page
+    useEffect(() => {
+        if (currentPage > totalPages && currentPage > 1) {
+            const params = new URLSearchParams(searchParams.toString())
+            params.delete('page')
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+        }
+    }, [totalPages, currentPage, searchParams, pathname, router])
+
+    // Reset to page 1 whenever the local search term changes
+    useEffect(() => {
+        if (currentPage > 1) {
+            const params = new URLSearchParams(searchParams.toString())
+            params.delete('page')
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [localSearch])
 
     // --------------------------------------------------------------------------------
     // 3. STATS/COUNTS Logic (Must use PROCESSED but ALL data to count correctly)
@@ -771,9 +789,9 @@ export function PrestamosTable({
     const handleFrequencyFilter = (val: string) => updateParams({ frecuencia: val });
     const handleSortBy = (val: SortBy) => updateParams({ sortBy: val });
     const handleSortOrder = (val: SortOrder) => updateParams({ sortOrder: val });
-    const handleClearFilters = () => router.push(pathname);
+    const handleClearFilters = () => { setLocalSearch(''); router.push(pathname); };
 
-    const hasActiveFilters = searchQuery || filtroSupervisor !== 'todos' || filtroAsesor !== 'todos' || filtroSector !== 'todos' || filtroFrecuencia !== 'todos' || activeFilter !== 'ruta_hoy';
+    const hasActiveFilters = localSearch || filtroSupervisor !== 'todos' || filtroAsesor !== 'todos' || filtroSector !== 'todos' || filtroFrecuencia !== 'todos' || activeFilter !== 'ruta_hoy';
 
     const supervisores = useMemo(() => {
         return perfiles.filter(p => p.rol === 'supervisor');
@@ -1800,10 +1818,9 @@ export function PrestamosTable({
                                             const prevProgramado = prevPrestamo ? prevPrestamo.cuota_dia_programada > 0.01 : null;
                                             const showSeparator = activeFilter === 'visitas_control' && (index === 0 || isProgramado !== prevProgramado);
 
-                                            // Calculate quotas info
-                                            const calculatedTotal = prestamo.valorCuota > 0 ? Math.round(prestamo.totalPagar / prestamo.valorCuota) : 0
-                                            const totalCuotas = prestamo.numero_cuotas || calculatedTotal || 0
-                                            const cuotasPagadas = prestamo.valorCuota > 0 ? Math.floor((prestamo.total_pagado_acumulado || 0) / prestamo.valorCuota) : 0
+                                            // Use pre-computed values from processedPrestamos (sourced from calculateLoanMetrics)
+                                            const totalCuotas = prestamo.totalCuotas
+                                            const cuotasPagadas = prestamo.cuotasPagadas
                                             const cuotasPendientes = Math.max(0, totalCuotas - cuotasPagadas)
 
                                             // Format dates

@@ -118,13 +118,31 @@ export function calculateLoanMetrics(
   const sumCronograma = cronograma.reduce((sum: number, c: any) => sum + (Number(c.monto_pagado) || 0), 0);
   const totalPagadoAcumulado = (pagosRaw.length > 0) ? Math.max(totalPagadoAcumuladoReal, sumCronograma) : sumCronograma;
 
+  // Helper para determinar si es hoy
+  const getIsToday = (date: string) => {
+    if (!date) return false;
+    try {
+      const dateDate = new Date(date).toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+      return dateDate === today;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // CALCULAR CUOTA DÍA PROGRAMADA PRIMERO (para todos los préstamos, no solo activos)
+  // Esto es necesario para que META HOY muestre TODAS las cuotas que vencen hoy sin filtrar
+  // El objetivo es la SUMA TOTAL de todas las cuotas vencidas hoy, sin importar pagos
+  const cuotaDiaProgramada = cronograma
+    .filter((c: any) => c.fecha_vencimiento === today)
+    .reduce((sum: number, c: any) => sum + Number(c.monto_cuota), 0);
+
   if (loan.estado !== 'activo') {
     return {
       cuotasAtrasadas: 0,
       deudaExigibleTotal: 0,
       deudaExigibleHoy: 0,
       cuotaDiaHoy: 0,
-      cuotaDiaProgramada: 0,
+      cuotaDiaProgramada: cuotaDiaProgramada, // AHORA INCLUYE CUOTAS DE HOY AUNQUE NO SEA ACTIVO
       cobradoHoy: 0,
       cobradoRutaHoy: 0,
       totalPagadoAcumulado: totalPagadoAcumulado,
@@ -152,16 +170,6 @@ export function calculateLoanMetrics(
     .reduce((sum: number, c: any) => sum + Math.max(0, Number(c.monto_cuota) - (Number(c.monto_pagado) || 0)), 0);
 
   // 2. Cobrados Hoy
-  const getIsToday = (date: string) => {
-    if (!date) return false;
-    try {
-      // Usar un formato ultra-robusto para comparación
-      const dateDate = new Date(date).toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
-      return dateDate === today;
-    } catch (e) {
-      return false;
-    }
-  };
 
   const cobradoHoy = pagos
     .filter((pay: any) => getIsToday(pay.created_at || pay.fecha_pago))
@@ -188,24 +196,8 @@ export function calculateLoanMetrics(
       return sum + Math.min(pagosDeEstaCuotaHoy, pendienteAlInicio);
     }, 0);
 
-  // 2.5. Cuota Programada para Hoy: La meta real al iniciar el día
-  const cuotaDiaProgramada = cronograma
-    .filter((c: any) => c.fecha_vencimiento === today)
-    .reduce((sum: number, c: any) => {
-      const pagosDeEstaCuotaHoy = (c.pagos || [])
-        .filter((p: any) => getIsToday(p.created_at) && p.estado_verificacion !== 'rechazado' && p.estado_verificacion !== 'pendiente')
-        .reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
-
-      const metaCuota = Number(c.monto_cuota);
-      const totalPagadoAcumulado = Number(c.monto_pagado || 0);
-      const pagadoAntes = Math.max(0, totalPagadoAcumulado - pagosDeEstaCuotaHoy);
-      const pendienteAlInicio = Math.max(0, metaCuota - pagadoAntes);
-
-      // Si ya estaba pagada totalmente antes de hoy (pendiente 0), no se agrega a la meta del día
-      if (pendienteAlInicio <= 0.01) return sum;
-
-      return sum + pendienteAlInicio;
-    }, 0);
+  // 2.5. Cuota Programada para Hoy: Ya calculada al principio para todos los préstamos
+  // (ver línea anterior al check de estado !== 'activo')
 
   // 2.6. Meta y Cobrado Eficiencia (Hoy + Atrasados): Lógica Centralizada
   let metaTotalHoyYAtrasados = 0;
@@ -323,8 +315,13 @@ export function calculateLoanMetrics(
     estadoCalculado,
     valorCuotaPromedio,
     saldoCuotaParcial,
-    totalCuotas: loan.numero_cuotas || loan.cuotas || (valorCuotaPromedio > 0 ? Math.round(totalPagar / valorCuotaPromedio) : 0) || cronograma.length,
-    cuotasPagadas: valorCuotaPromedio > 0 ? Math.floor(totalPagadoAcumulado / valorCuotaPromedio) : 0,
+    totalCuotas: cronograma.length || loan.numero_cuotas || loan.cuotas || (valorCuotaPromedio > 0 ? Math.round(totalPagar / valorCuotaPromedio) : 0),
+    cuotasPagadas: cronograma.length > 0
+      ? cronograma.filter((c: any) =>
+          c.estado === 'pagado' ||
+          (Number(c.monto_pagado || 0) >= Number(c.monto_cuota || 0) - 0.01 && Number(c.monto_cuota || 0) > 0)
+        ).length
+      : (valorCuotaPromedio > 0 ? Math.floor(totalPagadoAcumulado / valorCuotaPromedio) : 0),
     metaTotalHoyYAtrasados,
     cobradoTotalHoyYAtrasados,
     loanScore: calculateLoanScore(loan, pagos, today, config) // Integración del nuevo score
@@ -1410,45 +1407,55 @@ export async function generarCronogramaNode(supabase: any, prestamoId: string) {
     const quotaAmount = Math.round((totalToPay / nCuotas) * 100) / 100;
     
     const schedule = [];
-    let currentDate = new Date(fInicio);
-    
-    // Regla de día libre para cobro diario (+1 día de gracia antes de empezar a contar)
-    if (nFrecuencia === 'diario') {
-        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-    }
+    const anchorDate = new Date(fInicio);
 
-    for (let i = 1; i <= nCuotas; i++) {
-        let nextDate = new Date(currentDate);
-        
-        if (nFrecuencia === 'diario') nextDate.setUTCDate(nextDate.getUTCDate() + 1);
-        else if (nFrecuencia === 'semanal') nextDate.setUTCDate(nextDate.getUTCDate() + 7);
-        else if (nFrecuencia === 'quincenal') nextDate.setUTCDate(nextDate.getUTCDate() + 14);
-        else if (nFrecuencia === 'mensual') nextDate.setUTCMonth(nextDate.getUTCMonth() + 1);
-
-        // Validar domingos y feriados
-        let isValidDay = false;
-        let checkDate = new Date(nextDate);
-        let daySafety = 0;
-        while (!isValidDay && daySafety < 30) {
-            daySafety++;
-            const dayOfWeek = checkDate.getUTCDay();
-            const dateStr = checkDate.toISOString().split('T')[0]; // formatUTCDate inline
+    const validateDate = (d: Date): Date => {
+        let check = new Date(d);
+        let safety = 0;
+        while (safety < 30) {
+            safety++;
+            const dayOfWeek = check.getUTCDay();
+            const dateStr = check.toISOString().split('T')[0];
             if (dayOfWeek === 0 || holidaysSet.has(dateStr)) {
-                checkDate.setUTCDate(checkDate.getUTCDate() + 1);
-            } else {
-                isValidDay = true;
-            }
+                check.setUTCDate(check.getUTCDate() + 1);
+            } else break;
         }
-        
-        const dateStrFinal = checkDate.toISOString().split('T')[0];
-        schedule.push({
-            prestamo_id: prestamoId,
-            numero_cuota: i,
-            monto_cuota: i === nCuotas ? parseFloat((totalToPay - (quotaAmount * (nCuotas - 1))).toFixed(2)) : quotaAmount,
-            fecha_vencimiento: dateStrFinal,
-            estado: 'pendiente'
-        });
-        currentDate = checkDate;
+        return check;
+    };
+
+    if (nFrecuencia === 'diario') {
+        // Domino: cada cuota desde el día hábil anterior + 1
+        let currentDate = new Date(anchorDate);
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+        for (let i = 1; i <= nCuotas; i++) {
+            let next = new Date(currentDate);
+            next.setUTCDate(next.getUTCDate() + 1);
+            next = validateDate(next);
+            schedule.push({
+                prestamo_id: prestamoId,
+                numero_cuota: i,
+                monto_cuota: i === nCuotas ? parseFloat((totalToPay - (quotaAmount * (nCuotas - 1))).toFixed(2)) : quotaAmount,
+                fecha_vencimiento: next.toISOString().split('T')[0],
+                estado: 'pendiente'
+            });
+            currentDate = next;
+        }
+    } else {
+        // Ancla fija: cada cuota se calcula desde fecha_inicio, no desde la cuota ajustada anterior
+        for (let i = 1; i <= nCuotas; i++) {
+            let next = new Date(anchorDate);
+            if (nFrecuencia === 'semanal') next.setUTCDate(next.getUTCDate() + i * 7);
+            else if (nFrecuencia === 'quincenal') next.setUTCDate(next.getUTCDate() + i * 14);
+            else next.setUTCMonth(next.getUTCMonth() + i);
+            next = validateDate(next);
+            schedule.push({
+                prestamo_id: prestamoId,
+                numero_cuota: i,
+                monto_cuota: i === nCuotas ? parseFloat((totalToPay - (quotaAmount * (nCuotas - 1))).toFixed(2)) : quotaAmount,
+                fecha_vencimiento: next.toISOString().split('T')[0],
+                estado: 'pendiente'
+            });
+        }
     }
 
     // 4. Operaciones en DB

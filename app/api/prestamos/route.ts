@@ -1,7 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
-import { addDays, addWeeks, addMonths } from 'date-fns'
 import { checkSystemAccess } from '@/utils/systemRestrictions'
 import { createFullNotification } from '@/services/notification-service'
 
@@ -111,51 +110,47 @@ export async function POST(request: Request) {
     }) || [])
 
     const schedule = []
-    let currentDate = parseUTCDate(fecha_inicio)
-
-    // Regla de día libre para cobro diario
-    if (freqNormal === 'diario') {
-        currentDate.setUTCDate(currentDate.getUTCDate() + 1)
-    }
+    const anchorDate = parseUTCDate(fecha_inicio)
     const totalToPay = principal * (1 + (rate / 100))
     const quotaAmount = Math.round((totalToPay / numCuotas) * 100) / 100
 
-    let quotasCount = 0
-    let safetyCounter = 0
-    while (quotasCount < numCuotas && safetyCounter < 1000) {
-        safetyCounter++
-        let nextDate = new Date(currentDate)
-        
-        if (freqNormal === 'diario') nextDate.setUTCDate(nextDate.getUTCDate() + 1)
-        else if (freqNormal === 'semanal') nextDate.setUTCDate(nextDate.getUTCDate() + 7)
-        else if (freqNormal === 'quincenal') nextDate.setUTCDate(nextDate.getUTCDate() + 14)
-        else if (freqNormal === 'mensual') nextDate.setUTCMonth(nextDate.getUTCMonth() + 1)
-
-        let isValidDay = false
-        let checkDate = new Date(nextDate)
-        let daySafety = 0
-        while (!isValidDay && daySafety < 30) {
-            daySafety++
-            const dayOfWeek = checkDate.getUTCDay()
-            const dateStr = formatUTCDate(checkDate)
-            if (dayOfWeek === 0 || holidaysSet.has(dateStr)) {
-                checkDate.setUTCDate(checkDate.getUTCDate() + 1)
-            } else {
-                isValidDay = true
-            }
+    const validateDate = (d: Date): Date => {
+        let check = new Date(d)
+        let safety = 0
+        while (safety < 30) {
+            safety++
+            const day = check.getUTCDay()
+            const str = formatUTCDate(check)
+            if (day === 0 || holidaysSet.has(str)) {
+                check.setUTCDate(check.getUTCDate() + 1)
+            } else break
         }
-        
-        schedule.push({
-            numero_cuota: quotasCount + 1,
-            fecha_vencimiento: formatUTCDate(checkDate),
-            monto_cuota: quotaAmount,
-            estado: 'pendiente'
-        })
-        quotasCount++
-        currentDate = checkDate
+        return check
     }
 
-    const formattedEndDate = formatUTCDate(currentDate)
+    // Diario: domino desde día de gracia; periódico: ancla fija en fecha_inicio
+    if (freqNormal === 'diario') {
+        let currentDate = new Date(anchorDate)
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1)
+        for (let i = 1; i <= numCuotas; i++) {
+            let next = new Date(currentDate)
+            next.setUTCDate(next.getUTCDate() + 1)
+            next = validateDate(next)
+            schedule.push({ numero_cuota: i, fecha_vencimiento: formatUTCDate(next), monto_cuota: quotaAmount, estado: 'pendiente' })
+            currentDate = next
+        }
+    } else {
+        for (let i = 1; i <= numCuotas; i++) {
+            let next = new Date(anchorDate)
+            if (freqNormal === 'semanal') next.setUTCDate(next.getUTCDate() + i * 7)
+            else if (freqNormal === 'quincenal') next.setUTCDate(next.getUTCDate() + i * 14)
+            else next.setUTCMonth(next.getUTCMonth() + i)
+            next = validateDate(next)
+            schedule.push({ numero_cuota: i, fecha_vencimiento: formatUTCDate(next), monto_cuota: quotaAmount, estado: 'pendiente' })
+        }
+    }
+
+    const formattedEndDate = schedule[schedule.length - 1].fecha_vencimiento
 
     // 7. CREACIÓN DEL PRÉSTAMO (Sin solicitud_id si es directo)
     const { data: prestamo, error: loanError } = await supabaseAdmin

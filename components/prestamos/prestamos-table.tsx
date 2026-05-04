@@ -2252,7 +2252,7 @@ export function PrestamosTable({
                                                                     )
                                                                 }
 
-                                                                const cuotasAtrasadas = prestamo.valorCuota > 0 ? Math.floor(prestamo.deudaHoy / prestamo.valorCuota) : 0
+                                                                const cuotasAtrasadas = prestamo.cuotasAtrasadas ?? (prestamo.valorCuota > 0 ? Math.floor(prestamo.deudaHoy / prestamo.valorCuota) : 0)
                                                                 return (
                                                                     <div className="flex flex-col items-center">
                                                                         <span className={cn(

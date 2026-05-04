@@ -171,7 +171,12 @@ export function calculateLoanMetrics(
       valorCuotaPromedio: valorCuotaPromedioNA,
       saldoCuotaParcial: 0,
       totalCuotas: cronograma.length,
-      cuotasPagadas: cronograma.filter((c: any) => c.estado === 'pagado').length,
+      cuotasPagadas: cronograma.length > 0
+        ? cronograma.filter((c: any) =>
+            c.estado === 'pagado' ||
+            (Number(c.monto_pagado || 0) >= Number(c.monto_cuota || 0) - 0.01 && Number(c.monto_cuota || 0) > 0)
+          ).length
+        : 0,
       metaTotalHoyYAtrasados: 0,
       cobradoTotalHoyYAtrasados: 0,
       loanScore: calculateLoanScore(loan, pagos, today, config)

@@ -137,24 +137,35 @@ export function calculateLoanMetrics(
     .reduce((sum: number, c: any) => sum + Number(c.monto_cuota), 0);
 
   if (loan.estado !== 'activo') {
+    // Para préstamos no-activos, calcular métricas de atrasos correctamente
+    // (migradores, refinanciados, etc. que aún están en cobranza)
+    const totalExigibleHastaHoyNA = cronograma
+      .filter((c: any) => c.fecha_vencimiento <= today)
+      .reduce((sum: number, c: any) => sum + Number(c.monto_cuota), 0);
+    const deudaExigibleHoyNA = Math.max(0, totalExigibleHastaHoyNA - totalPagadoAcumulado);
+    const valorCuotaPromedioNA = cronograma.length > 0
+      ? cronograma.reduce((s: number, c: any) => s + Number(c.monto_cuota), 0) / cronograma.length
+      : 0;
+    const cuotasAtrasadasNA = valorCuotaPromedioNA > 0 ? Math.floor(deudaExigibleHoyNA / valorCuotaPromedioNA) : 0;
+
     return {
-      cuotasAtrasadas: 0,
-      deudaExigibleTotal: 0,
-      deudaExigibleHoy: 0,
+      cuotasAtrasadas: cuotasAtrasadasNA,
+      deudaExigibleTotal: totalPagadoAcumulado > 0 ? saldoPendiente : 0,
+      deudaExigibleHoy: deudaExigibleHoyNA,
       cuotaDiaHoy: 0,
-      cuotaDiaProgramada: cuotaDiaProgramada, // AHORA INCLUYE CUOTAS DE HOY AUNQUE NO SEA ACTIVO
+      cuotaDiaProgramada: cuotaDiaProgramada,
       cobradoHoy: 0,
       cobradoRutaHoy: 0,
       totalPagadoAcumulado: totalPagadoAcumulado,
-      saldoPendiente: 0,
-      riesgoPorcentaje: 0,
+      saldoPendiente: saldoPendiente,
+      riesgoPorcentaje: (totalPagar > 0) ? (deudaExigibleHoyNA / totalPagar) * 100 : 0,
       diasSinPago: 0,
       isCritico: false,
       isMora: false,
-      isAlDia: true,
+      isAlDia: deudaExigibleHoyNA <= 0.01,
       esRenovable: (loan.estado === 'finalizado' || loan.estado === 'completado' || loan.estado === 'renovado'),
       estadoCalculado: loan?.estado === 'finalizado' ? 'finalizado' : 'sin_deuda',
-      valorCuotaPromedio: 0,
+      valorCuotaPromedio: valorCuotaPromedioNA,
       saldoCuotaParcial: 0,
       totalCuotas: cronograma.length,
       cuotasPagadas: cronograma.filter((c: any) => c.estado === 'pagado').length,

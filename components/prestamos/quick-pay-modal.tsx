@@ -312,8 +312,9 @@ export function QuickPayModal({
             const targetQuota = todayQuota || oldestPending
 
             if (targetQuota) {
-                const pendiente = targetQuota.monto_cuota - (targetQuota.monto_pagado || 0)
-                setAmount(pendiente.toFixed(2))
+                // No prefiller el monto — dejar vacío para que el usuario ingrese manualmente
+                // const pendiente = targetQuota.monto_cuota - (targetQuota.monto_pagado || 0)
+                // setAmount(pendiente.toFixed(2))
                 setQuota(targetQuota)
             } 
 
@@ -448,7 +449,15 @@ export function QuickPayModal({
     }
 
     const handlePayment = async () => {
-        if (!quota || !amount || parseFloat(amount) <= 0 || !metodoPago) {
+        if (!quota) {
+            toast.error('No hay cuota seleccionada')
+            return
+        }
+        if (!amount || parseFloat(amount) <= 0) {
+            toast.error('Ingresa un monto mayor a 0')
+            return
+        }
+        if (!metodoPago) {
             toast.error('Selecciona un método de pago')
             return
         }

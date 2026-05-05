@@ -191,19 +191,13 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
 
     let cuentasAdmin: any[] = []
     if (perfil?.rol === 'admin' && ['pre_aprobado', 'pendiente_supervision'].includes(solicitud.estado_solicitud)) {
-        // [NUEVO] Solo cuentas de la cartera del admin (Cartera Global)
-        const { data: globalCartera } = await supabaseAdmin
-            .from('carteras')
-            .select('id')
-            .ilike('nombre', '%Global%')
-            .single()
-
-        const { data: cuentas } = await supabaseAdmin
+        // Obtener todas las cuentas financieras disponibles para admin
+        const { data: cuentas, error: errorCuentas } = await supabaseAdmin
             .from('cuentas_financieras')
-            .select('id, nombre, saldo, tipo, cartera_id, usuarios_autorizados')
-            .eq('cartera_id', globalCartera?.id || '8d6abe49-cc8a-4428-a089-86e0aa4edee0')
+            .select('id, nombre, saldo, tipo, cartera_id')
             .order('nombre')
-        
+
+        console.log('DEBUG - Cuentas obtenidas:', cuentas?.length || 0, 'Error:', errorCuentas)
         cuentasAdmin = cuentas || []
     }
 

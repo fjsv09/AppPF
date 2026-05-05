@@ -226,6 +226,7 @@ export function QuickPayModal({
         if (!open) {
             setResult(null)
             setLastPayment(null)
+            setAmount('')
             setMetodoPago('')
             setLocation(null)
             setVoucherFile(null)
@@ -313,8 +314,7 @@ export function QuickPayModal({
 
             if (targetQuota) {
                 // No prefiller el monto — dejar vacío para que el usuario ingrese manualmente
-                // const pendiente = targetQuota.monto_cuota - (targetQuota.monto_pagado || 0)
-                // setAmount(pendiente.toFixed(2))
+                setAmount('')
                 setQuota(targetQuota)
             } 
 

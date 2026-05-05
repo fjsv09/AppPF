@@ -148,22 +148,15 @@ export function SimpleImageUpload({
 
       // Subir archivo a Supabase Storage
       const publicUrl = await uploadFile(fileToUpload, bucket, folder)
-      
-      if (!publicUrl) {
-        setError('Error al subir archivo. Intente nuevamente.')
-        setPreview('')
-        setIsUploading(false)
-        return
-      }
 
       // Guardar URL pública
-      onChange(publicUrl)
-      setPreview(publicUrl)
+      onChange(publicUrl!)
+      setPreview(publicUrl!)
       setIsUploading(false)
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al procesar archivo:', err)
-      setError('Error al procesar archivo')
+      setError(err?.message || 'Error al subir archivo. Intente nuevamente.')
       setPreview('')
       setIsUploading(false)
     }

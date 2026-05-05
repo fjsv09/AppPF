@@ -14,16 +14,16 @@ export async function uploadFile(
 ): Promise<string | null> {
   try {
     const supabase = createClient()
-    
+
     // Generar nombre único para el archivo
     const timestamp = Date.now()
     const randomStr = Math.random().toString(36).substring(7)
     const fileExt = file.name.split('.').pop()
     const fileName = `${timestamp}_${randomStr}.${fileExt}`
-    
+
     // Construir path completo
     const filePath = folder ? `${folder}/${fileName}` : fileName
-    
+
     // Subir archivo
     const { data, error } = await supabase.storage
       .from(bucket)
@@ -31,10 +31,10 @@ export async function uploadFile(
         cacheControl: '3600',
         upsert: false
       })
-    
+
     if (error) {
-      console.error('Error subiendo archivo:', error)
-      return null
+      console.error(`Error subiendo archivo al bucket "${bucket}":`, error.message)
+      throw new Error(error.message)
     }
     
     // Obtener URL pública

@@ -187,12 +187,12 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
                 <div className="md:col-span-1 space-y-2">
                     <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Foto de Perfil</label>
                     <div className="flex flex-col items-center gap-3">
-                        <SimpleImageUpload 
+                        <SimpleImageUpload
                             label="Avatar"
                             value={fotoPerfil}
                             onChange={setFotoPerfil}
                             folder="avatares"
-                            bucket="avatares"
+                            bucket="documentos-evaluacion"
                             disabled={isSubmitting}
                         />
                     </div>

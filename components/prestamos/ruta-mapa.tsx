@@ -36,7 +36,7 @@ if (typeof window !== 'undefined') {
 // Create custom icons for different statuses
 const createCustomIcon = (color: string, isPayment: boolean = false) => {
     if (typeof window === 'undefined') return {} as any;
-    
+
     if (isPayment) {
         return L.divIcon({
             className: 'payment-icon',
@@ -79,6 +79,34 @@ const createCustomIcon = (color: string, isPayment: boolean = false) => {
         iconSize: [24, 24],
         iconAnchor: [12, 24],
         popupAnchor: [0, -24]
+    })
+}
+
+const createExtraIcon = () => {
+    if (typeof window === 'undefined') return {} as any;
+    return L.divIcon({
+        className: 'extra-icon',
+        html: `
+            <div style="
+                background-color: #f97316;
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                border: 3px solid white;
+                box-shadow: 0 4px 10px rgba(249, 115, 22, 0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-weight: bold;
+                font-size: 14px;
+            ">
+                ★
+            </div>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+        popupAnchor: [0, -16]
     })
 }
 
@@ -180,13 +208,15 @@ export default function RutaMapa({
                         // Ignore [0,0], NaN and outside Peru
                         if (isValidPeruCoord(lat, lng)) {
                             const statusUI = getLoanStatusUI(p);
+                            const isExtra = !p.cuota_dia_programada || p.cuota_dia_programada <= 0.01;
                             items.push({
                                 ...p,
                                 id: `${p.id}-official`,
                                 lat,
                                 lng,
                                 isPayment: false,
-                                icon: createCustomIcon(statusUI.marker),
+                                isExtra,
+                                icon: isExtra ? createExtraIcon() : createCustomIcon(statusUI.marker),
                                 statusText: statusUI.label,
                                 statusColor: statusUI.color,
                                 badgeClass: cn(statusUI.border, statusUI.color, statusUI.animate && "animate-pulse"),
@@ -291,7 +321,7 @@ export default function RutaMapa({
                     lines.push({
                         id: `${item.id}-line`,
                         positions: [[centerLat, centerLng], [sLat, sLng]],
-                        color: item.isPayment ? '#10b981' : '#64748b'
+                        color: item.isPayment ? '#10b981' : item.isExtra ? '#f97316' : '#64748b'
                     });
                 });
             }
@@ -409,6 +439,8 @@ export default function RutaMapa({
                                         </div>
                                         {item.isPayment ? (
                                             <Badge className="bg-emerald-500 hover:bg-emerald-600 text-[10px] font-black uppercase">Cobro Realizado</Badge>
+                                        ) : item.isExtra ? (
+                                            <Badge className="bg-orange-500 hover:bg-orange-600 text-[10px] font-black uppercase">Extra / Otra Fecha</Badge>
                                         ) : (
                                             distance !== null && (
                                                 <div className={cn(
@@ -538,6 +570,7 @@ export default function RutaMapa({
                     <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-orange-500 shadow-sm border border-orange-600"></div><span className="text-slate-600 font-medium">CPP (Mora Leve)</span></div>
                     <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-rose-500 shadow-sm border border-rose-600"></div><span className="text-slate-600 font-medium">Moroso / Vencido</span></div>
                     <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-500 shadow-sm border border-slate-600"></div><span className="text-slate-600 font-medium">Finalizado / Renovado</span></div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-4 rounded-full bg-orange-500 shadow-sm border border-white flex items-center justify-center text-[8px] text-white font-bold">★</div><span className="text-slate-600 font-medium font-bold">Extra / Otras Fechas</span></div>
                 </div>
             </div>
 

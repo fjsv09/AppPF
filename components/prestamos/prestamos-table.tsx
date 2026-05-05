@@ -484,6 +484,12 @@ export function PrestamosTable({
             })
             const metodosPagoHoy = Array.from(new Set(pagosHoy.map((pag: any) => pag.metodo_pago))).filter(Boolean).join(', ')
             const hasVoucherHoy = pagosHoy.some((pag: any) => pag.voucher_compartido)
+            const cobradoPorHoy = pagosHoy.length > 0
+                ? Array.from(new Set(pagosHoy.map((pag: any) => {
+                    const cobrador = perfiles.find((pf: any) => pf.id === pag.registrado_por)
+                    return cobrador?.nombre_completo?.split(' ')[0] || null
+                }))).filter(Boolean).join(', ')
+                : null
 
             return {
                 ...p,
@@ -505,7 +511,8 @@ export function PrestamosTable({
                 asesor_nombre, // Add asesor name
                 isVisitadoHoy,
                 metodosPagoHoy,
-                hasVoucherHoy
+                hasVoucherHoy,
+                cobradoPorHoy
             }
         })
         return enriched
@@ -1791,17 +1798,19 @@ export function PrestamosTable({
                                     {/* Table Header */}
                                     <div className={cn(
                                         "grid grid-cols-[repeat(13,minmax(0,1fr))] gap-2 px-6 py-4 bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-400",
-                                        activeFilter === 'visitas_control' && "grid-cols-[repeat(14,minmax(0,1fr))]"
+                                        activeFilter === 'visitas_control' && "grid-cols-[repeat(16,minmax(0,1fr))]"
                                     )}>
                                         {activeFilter === 'visitas_control' ? (
                                             <>
                                                 <div className="col-span-2 pl-2">Asesor / Cliente</div>
                                                 <div className="col-span-1 text-center">Sector</div>
+                                                <div className="col-span-1 text-center">Frec.</div>
                                                 <div className="col-span-1 text-center">Cuota</div>
                                                 <div className="col-span-1 text-center">Visita</div>
                                                 <div className="col-span-1 text-center">Cobro Real</div>
                                                 <div className="col-span-1 text-center font-black text-rose-400">Mora</div>
                                                 <div className="col-span-1 text-center">M. Pago</div>
+                                                <div className="col-span-1 text-center">Cobrado Por</div>
                                                 <div className="col-span-1 text-center">Recibo</div>
                                                 <div className="col-span-3">Gestión / Motivo</div>
                                                 <div className="col-span-2 text-right pr-4">Acciones</div>
@@ -1907,8 +1916,8 @@ export function PrestamosTable({
                                                 return (
                                                     <Fragment key={prestamo.id}>
                                                         {showSeparator && (
-                                                            <div className="grid grid-cols-[repeat(14,minmax(0,1fr))] gap-2 px-6 py-3 bg-slate-950/60 border-y border-slate-800/50">
-                                                                <div className="col-span-14 flex items-center gap-3">
+                                                            <div className="grid grid-cols-[repeat(16,minmax(0,1fr))] gap-2 px-6 py-3 bg-slate-950/60 border-y border-slate-800/50">
+                                                                <div className="col-span-16 flex items-center gap-3">
                                                                     <div className="w-1.5 h-4 bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
                                                                     <span className="text-xs font-black text-indigo-300 uppercase tracking-[0.3em] whitespace-nowrap">
                                                                         {isProgramado ? "Ruta Programada Hoy" : "Pagos Extra / Otras Fechas"}
@@ -1919,7 +1928,7 @@ export function PrestamosTable({
                                                         )}
                                                         <div
                                                             className={cn(
-                                                                "grid grid-cols-[repeat(14,minmax(0,1fr))] gap-2 px-6 py-4 hover:bg-slate-800/40 transition-all items-center border-l-[4px]",
+                                                                "grid grid-cols-[repeat(16,minmax(0,1fr))] gap-2 px-6 py-4 hover:bg-slate-800/40 transition-all items-center border-l-[4px]",
                                                                 auditStatus === 'pending' ? 'border-l-slate-700 bg-slate-900/10' :
                                                                     auditStatus === 'success' ? 'border-l-emerald-500 bg-emerald-500/5' :
                                                                         'border-l-rose-500 bg-rose-500/5'
@@ -1938,6 +1947,23 @@ export function PrestamosTable({
                                                             {/* Sector */}
                                                             <div className="col-span-1 text-center">
                                                                 <span className="text-[10px] font-bold text-slate-500 uppercase">{prestamo.clientes?.sectores?.nombre || '-'}</span>
+                                                            </div>
+
+                                                            {/* Frecuencia */}
+                                                            <div className="col-span-1 flex justify-center">
+                                                                {(() => {
+                                                                    const freq = (prestamo.frecuencia || '').toLowerCase()
+                                                                    const map: Record<string, { label: string; cls: string }> = {
+                                                                        diario:    { label: 'D',  cls: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
+                                                                        semanal:   { label: 'S',  cls: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
+                                                                        quincenal: { label: 'Q',  cls: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
+                                                                        mensual:   { label: 'M',  cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+                                                                    }
+                                                                    const entry = map[freq]
+                                                                    return entry
+                                                                        ? <Badge className={`${entry.cls} text-[9px] font-black px-1.5 py-0 border`}>{entry.label}</Badge>
+                                                                        : <span className="text-[10px] text-slate-700">-</span>
+                                                                })()}
                                                             </div>
 
                                                             {/* Cuota */}
@@ -1984,6 +2010,15 @@ export function PrestamosTable({
                                                                 <span className="text-[10px] font-bold text-slate-400 uppercase">
                                                                     {prestamo.metodosPagoHoy || '-'}
                                                                 </span>
+                                                            </div>
+
+                                                            {/* Cobrado Por */}
+                                                            <div className="col-span-1 text-center">
+                                                                {prestamo.cobradoPorHoy ? (
+                                                                    <span className="text-[10px] font-bold text-cyan-400 uppercase truncate block px-0.5">{prestamo.cobradoPorHoy}</span>
+                                                                ) : (
+                                                                    <span className="text-slate-800">-</span>
+                                                                )}
                                                             </div>
 
                                                             {/* Recibo / Voucher */}

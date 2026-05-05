@@ -130,6 +130,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
 
     // Edit Modal State
     const [editingCliente, setEditingCliente] = useState<any>(null)
+    const [clientOverrides, setClientOverrides] = useState<Record<string, any>>({})
 
     // Registrar Gestión State
     const [gestionOpen, setGestionOpen] = useState(false)
@@ -801,11 +802,11 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                 </DropdownMenuItem>
                                             )}
                                             {(userRol === 'admin' || userRol === 'supervisor') && (
-                                                <DropdownMenuItem 
+                                                <DropdownMenuItem
                                                     onClick={() => {
-                                                        setPendingEditClient(cliente)
+                                                        setPendingEditClient(clientOverrides[cliente.id] ? { ...cliente, ...clientOverrides[cliente.id] } : cliente)
                                                         setConfirmEditOpen(true)
-                                                    }} 
+                                                    }}
                                                     className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400"
                                                 >
                                                     <Edit className="w-4 h-4 mr-2" /> Editar Datos
@@ -1009,11 +1010,11 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                 </DropdownMenuItem>
                                             )}
                                             {(userRol === 'admin' || userRol === 'supervisor') && (
-                                                <DropdownMenuItem 
+                                                <DropdownMenuItem
                                                     onClick={() => {
-                                                        setPendingEditClient(cliente)
+                                                        setPendingEditClient(clientOverrides[cliente.id] ? { ...cliente, ...clientOverrides[cliente.id] } : cliente)
                                                         setConfirmEditOpen(true)
-                                                    }} 
+                                                    }}
                                                     className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400 font-bold"
                                                 >
                                                     <Edit className="w-4 h-4 mr-2" /> Editar Datos
@@ -1124,7 +1125,10 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                     isOpen={!!editingCliente}
                     userRol={userRol}
                     onClose={() => setEditingCliente(null)}
-                    onSuccess={() => {
+                    onSuccess={(updated) => {
+                        if (updated?.id) {
+                            setClientOverrides(prev => ({ ...prev, [updated.id]: updated }))
+                        }
                         setEditingCliente(null)
                         router.refresh()
                     }}

@@ -183,6 +183,25 @@ export async function PATCH(request: Request) {
                 .from('solicitudes')
                 .update(solicitationPayload)
                 .eq('id', latest.id)
+        } else {
+            // Cliente sin solicitud (ej: importación masiva) — crear registro mínimo
+            await supabaseAdmin
+                .from('solicitudes')
+                .insert({
+                    cliente_id: id,
+                    asesor_id: oldClient.asesor_id,
+                    estado_solicitud: 'aprobado',
+                    prospecto_nombres: oldClient.nombres,
+                    prospecto_dni: oldClient.dni,
+                    prospecto_telefono: oldClient.telefono || null,
+                    prospecto_direccion: oldClient.direccion || null,
+                    monto_solicitado: 0,
+                    interes: 0,
+                    cuotas: 1,
+                    modalidad: 'diario',
+                    fecha_inicio_propuesta: new Date().toISOString().split('T')[0],
+                    ...solicitationPayload
+                })
         }
     }
 

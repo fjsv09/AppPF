@@ -152,7 +152,8 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
       }
       
       const updated = await updateClientAction(payload)
-      onSuccess(updated)
+      // Merge form data + DB response so el parent tiene todos los campos actualizados
+      onSuccess({ ...cliente, ...payload, ...updated })
       router.refresh()
       onClose()
     } catch (err: any) {

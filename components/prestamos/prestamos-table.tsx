@@ -1693,15 +1693,8 @@ export function PrestamosTable({
                                                                                         {prestamo.estado !== 'inactivo' ? (
                                                                                             <>
                                                                                                 <DropdownMenuItem
-                                                                                                    className={cn(
-                                                                                                        "hover:bg-amber-900/20 cursor-pointer text-xs font-bold",
-                                                                                                        (prestamo.total_pagado_acumulado || 0) > 0.01 ? "opacity-30 grayscale cursor-not-allowed" : "text-amber-500"
-                                                                                                    )}
+                                                                                                    className="hover:bg-amber-900/20 cursor-pointer text-xs font-bold text-amber-500"
                                                                                                     onClick={() => {
-                                                                                                        if ((prestamo.total_pagado_acumulado || 0) > 0.01) {
-                                                                                                            toast.warning("No se puede editar: El préstamo ya tiene pagos.")
-                                                                                                            return
-                                                                                                        }
                                                                                                         setLoanToEdit(prestamo)
                                                                                                         setIsConfirmEditOpen(true)
                                                                                                     }}
@@ -2499,16 +2492,9 @@ export function PrestamosTable({
                                                                             {prestamo.estado !== 'inactivo' ? (
                                                                                 <>
                                                                                     <DropdownMenuItem
-                                                                                        className={cn(
-                                                                                            "hover:bg-amber-900/20 cursor-pointer text-xs font-bold",
-                                                                                            (prestamo.total_pagado_acumulado || 0) > 0.01 ? "opacity-30 grayscale cursor-not-allowed" : "text-amber-500"
-                                                                                        )}
+                                                                                        className="hover:bg-amber-900/20 cursor-pointer text-xs font-bold text-amber-500"
                                                                                         onClick={(e) => {
                                                                                             e.stopPropagation()
-                                                                                            if ((prestamo.total_pagado_acumulado || 0) > 0.01) {
-                                                                                                toast.warning("No se puede editar: El préstamo ya tiene pagos.")
-                                                                                                return
-                                                                                            }
                                                                                             setLoanToEdit(prestamo)
                                                                                             setIsConfirmEditOpen(true)
                                                                                         }}
@@ -2849,7 +2835,7 @@ export function PrestamosTable({
                             ¿Editar Préstamo?
                         </AlertDialogTitle>
                         <AlertDialogDescription className="text-slate-400 text-base leading-relaxed">
-                            Vas a modificar los datos generales del préstamo. Esta acción debe realizarse con precaución.
+                            Vas a modificar los datos generales del préstamo. Si existen cuotas pagadas, estas se preservarán y solo se recalcularán las cuotas pendientes.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter className="gap-3 mt-4">

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from 'sonner'
-import { Loader2, Pencil, AlertTriangle, Wallet, Calculator, Info } from 'lucide-react'
+import { Loader2, Pencil, AlertTriangle, Wallet, Calculator, Info, RefreshCw } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { calcularInteresProporcional, CUOTAS_ESTANDAR } from '@/lib/financial-logic'
 import { formatMoney } from '@/utils/format'
@@ -23,6 +23,8 @@ export function EditLoanModal({ open, onOpenChange, prestamo, onSuccess }: EditL
     const [loading, setLoading] = useState(false)
     const [fetchingCuentas, setFetchingCuentas] = useState(false)
     const [cuentas, setCuentas] = useState<any[]>([])
+    const [pagosInfo, setPagosInfo] = useState<{ count: number, totalPagado: number }>({ count: 0, totalPagado: 0 })
+    const [fetchingPagos, setFetchingPagos] = useState(false)
     const [formData, setFormData] = useState({
         monto: '',
         interes: '',
@@ -53,6 +55,7 @@ export function EditLoanModal({ open, onOpenChange, prestamo, onSuccess }: EditL
                 cuenta_id: ''
             })
             fetchCuentas()
+            fetchPagosInfo()
         }
     }, [open, prestamo])
 
@@ -67,8 +70,45 @@ export function EditLoanModal({ open, onOpenChange, prestamo, onSuccess }: EditL
         const totalPagar = montoVal * (1 + interesFinal / 100)
         const cuotaMonto = cuotasVal > 0 ? totalPagar / cuotasVal : 0
 
-        return { interesFinal, totalPagar, cuotaMonto }
-    }, [formData.monto, formData.interes, formData.cuotas, formData.frecuencia])
+        // Cuántas cuotas se cubrirían con lo ya pagado
+        const cuotasCubiertas = cuotaMonto > 0 ? Math.floor(pagosInfo.totalPagado / cuotaMonto) : 0
+        const sobrante = cuotaMonto > 0 ? pagosInfo.totalPagado - (cuotasCubiertas * cuotaMonto) : 0
+        const saldoPendiente = Math.max(0, totalPagar - pagosInfo.totalPagado)
+
+        return { interesFinal, totalPagar, cuotaMonto, cuotasCubiertas, sobrante, saldoPendiente }
+    }, [formData.monto, formData.interes, formData.cuotas, formData.frecuencia, pagosInfo])
+
+    const fetchPagosInfo = async () => {
+        if (!prestamo?.id) return
+        setFetchingPagos(true)
+        try {
+            // Obtener todas las cuotas del préstamo con sus montos pagados
+            // cronograma_cuotas.monto_pagado es la fuente de verdad (incluye migración + pagos reales)
+            const { data: cuotas } = await supabase
+                .from('cronograma_cuotas')
+                .select('id, numero_cuota, monto_pagado')
+                .eq('prestamo_id', prestamo.id)
+
+            // Deduplicar por numero_cuota (protección contra ediciones fallidas)
+            const byNum = new Map<number, number>()
+            for (const c of (cuotas || [])) {
+                const num = Number(c.numero_cuota)
+                const mp = Number(c.monto_pagado || 0)
+                byNum.set(num, Math.max(byNum.get(num) || 0, mp))
+            }
+            let totalPagado = 0
+            let count = 0
+            for (const mp of byNum.values()) {
+                totalPagado += mp
+                if (mp > 0.01) count++
+            }
+            setPagosInfo({ count, totalPagado })
+        } catch (error) {
+            console.error('Error fetching payment info', error)
+        } finally {
+            setFetchingPagos(false)
+        }
+    }
 
     const fetchCuentas = async () => {
         setFetchingCuentas(true)
@@ -117,7 +157,7 @@ export function EditLoanModal({ open, onOpenChange, prestamo, onSuccess }: EditL
                 throw new Error(result.error || 'Error al actualizar préstamo')
             }
 
-            toast.success('Préstamo actualizado exitosamente')
+            toast.success(result.message || 'Préstamo actualizado exitosamente')
             if (onSuccess) onSuccess()
             onOpenChange(false)
         } catch (error: any) {
@@ -127,20 +167,42 @@ export function EditLoanModal({ open, onOpenChange, prestamo, onSuccess }: EditL
         }
     }
 
+    const hasPagos = pagosInfo.count > 0
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-slate-100">
+            <DialogContent className="sm:max-w-[540px] bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-xl font-bold text-amber-500">
                         <Pencil className="w-5 h-5" />
                         Editar Parámetros del Préstamo
                     </DialogTitle>
                     <DialogDescription className="text-slate-400">
-                        Solo se pueden editar préstamos sin cuotas pagadas. Cualquier cambio de capital afectará el saldo de la cuenta seleccionada.
+                        {hasPagos
+                            ? 'Se regenerará todo el cronograma y los pagos existentes se re-aplicarán automáticamente.'
+                            : 'Cualquier cambio de capital afectará el saldo de la cuenta seleccionada.'
+                        }
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="grid gap-4 py-4">
+                {/* ALERTA: Pagos existentes detectados */}
+                {hasPagos && (
+                    <div className="flex items-start gap-3 p-3.5 rounded-xl bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border border-blue-500/25">
+                        <RefreshCw className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-blue-300 mb-1">
+                                {pagosInfo.count} cuota{pagosInfo.count > 1 ? 's' : ''} con pagos — Total: S/ {formatMoney(pagosInfo.totalPagado)}
+                            </p>
+                            <p className="text-[10px] text-slate-400 leading-relaxed">
+                                El cronograma completo se regenerará con los nuevos datos.
+                                Todo lo pagado (<strong className="text-emerald-300">S/ {formatMoney(pagosInfo.totalPagado)}</strong> incluyendo pagos de migración/sistema)
+                                se re-aplicará al nuevo cronograma en cascada.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                <div className="grid gap-4 py-2">
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="monto">Capital (Monto)</Label>
@@ -207,6 +269,7 @@ export function EditLoanModal({ open, onOpenChange, prestamo, onSuccess }: EditL
                              <Input
                                  id="cuotas"
                                  type="number"
+                                 min={1}
                                  value={formData.cuotas}
                                  onChange={(e) => setFormData({ ...formData, cuotas: e.target.value })}
                                  className="bg-slate-950 border-slate-700"
@@ -231,7 +294,7 @@ export function EditLoanModal({ open, onOpenChange, prestamo, onSuccess }: EditL
                              </div>
                          </div>
  
-                         <div className="grid grid-cols-2 gap-3 relative z-10">
+                         <div className={`grid ${hasPagos ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'} gap-3 relative z-10`}>
                              <div className="bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/50">
                                  <p className="text-[8px] text-slate-500 uppercase font-bold mb-0.5 tracking-wider">Interés Final</p>
                                  <p className="text-sm font-bold text-blue-400">{calculation.interesFinal}%</p>
@@ -240,7 +303,33 @@ export function EditLoanModal({ open, onOpenChange, prestamo, onSuccess }: EditL
                                  <p className="text-[8px] text-slate-500 uppercase font-bold mb-0.5 tracking-wider">Total Final</p>
                                  <p className="text-sm font-bold text-white">${formatMoney(calculation.totalPagar)}</p>
                              </div>
+                             {hasPagos && (
+                                 <>
+                                     <div className="bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-800/30">
+                                         <p className="text-[8px] text-emerald-500 uppercase font-bold mb-0.5 tracking-wider">Pagado</p>
+                                         <p className="text-sm font-bold text-emerald-400">${formatMoney(pagosInfo.totalPagado)}</p>
+                                     </div>
+                                     <div className="bg-amber-950/40 p-2.5 rounded-xl border border-amber-800/30">
+                                         <p className="text-[8px] text-amber-500 uppercase font-bold mb-0.5 tracking-wider">Saldo</p>
+                                         <p className="text-sm font-bold text-amber-400">${formatMoney(calculation.saldoPendiente)}</p>
+                                     </div>
+                                 </>
+                             )}
                          </div>
+
+                         {hasPagos && (
+                             <div className="mt-3 pt-3 border-t border-slate-800/50 relative z-10">
+                                 <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                                     <Info className="w-3 h-3 text-blue-400 shrink-0" />
+                                     <span>
+                                         Los pagos cubrirán ~<strong className="text-emerald-400">{calculation.cuotasCubiertas}</strong> cuota{calculation.cuotasCubiertas !== 1 ? 's' : ''} completa{calculation.cuotasCubiertas !== 1 ? 's' : ''}
+                                         {calculation.sobrante > 0.01 && (
+                                             <> + <strong className="text-blue-300">S/ {formatMoney(calculation.sobrante)}</strong> de saldo parcial</>
+                                         )}
+                                     </span>
+                                 </div>
+                             </div>
+                         )}
                      </div>
 
                     <div className="space-y-2">
@@ -290,7 +379,7 @@ export function EditLoanModal({ open, onOpenChange, prestamo, onSuccess }: EditL
                         className="bg-amber-600 hover:bg-amber-700 text-white"
                     >
                         {loading ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Pencil className="w-4 h-4 mr-2" />}
-                        Guardar Cambios
+                        {hasPagos ? 'Guardar y Recalcular' : 'Guardar Cambios'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

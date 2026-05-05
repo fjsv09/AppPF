@@ -1440,26 +1440,32 @@ export async function generarCronogramaNode(supabase: any, prestamoId: string) {
 
     if (pError || !prestamo) throw new Error('Préstamo no encontrado para generación de cronograma');
 
-    // 0. Seguridad: No regenerar si hay cuotas pagadas (total o parcialmente)
-    const { data: cuotasPagadas } = await supabase
+    // 2. Obtener cuotas pagadas existentes (con pagos registrados)
+    const { data: cuotasExistentes } = await supabase
         .from('cronograma_cuotas')
-        .select('id')
+        .select('*')
         .eq('prestamo_id', prestamoId)
-        .gt('monto_pagado', 0)
-        .limit(1);
+        .order('numero_cuota', { ascending: true });
 
-    if (cuotasPagadas && cuotasPagadas.length > 0) {
-        throw new Error('No se puede sincronizar el cronograma porque ya existen cuotas con pagos registrados.');
+    const cuotasPagadas = (cuotasExistentes || []).filter(
+        (c: any) => Number(c.monto_pagado || 0) > 0.01 || c.estado === 'pagado'
+    );
+
+    // Si hay cuotas pagadas, usar la lógica inteligente que las preserva
+    if (cuotasPagadas.length > 0) {
+        return await _regenerarConCuotasPagadas(supabase, prestamo, prestamoId, cuotasPagadas, cuotasExistentes);
     }
 
-    // 2. Obtener feriados
+    // --- Modo Original: Sin cuotas pagadas, regenerar todo ---
+
+    // 3. Obtener feriados
     const { data: holidaysData } = await supabase.from('feriados').select('fecha');
     const holidaysSet = new Set(holidaysData?.map((h: any) => {
         if (typeof h.fecha === 'string') return h.fecha.split('T')[0];
         return String(h.fecha).split('T')[0];
     }) || []);
 
-    // 3. Preparar variables
+    // 4. Preparar variables
     const nCuotas = prestamo.cuotas;
     const nFrecuencia = (prestamo.frecuencia || 'diario').toLowerCase();
     const fInicioStr = prestamo.fecha_inicio;
@@ -1523,7 +1529,7 @@ export async function generarCronogramaNode(supabase: any, prestamoId: string) {
         }
     }
 
-    // 4. Operaciones en DB
+    // 5. Operaciones en DB
     // a. Limpiar cronograma antiguo
     await supabase.from('cronograma_cuotas').delete().eq('prestamo_id', prestamoId);
 
@@ -1537,3 +1543,108 @@ export async function generarCronogramaNode(supabase: any, prestamoId: string) {
 
     return { success: true, fecha_fin: finalEndDate };
 }
+
+/**
+ * Regenera TODO el cronograma y re-aplica pagos existentes (FIFO).
+ * ORDEN: Insertar nuevas cuotas → Reasignar pagos → Borrar antiguas
+ */
+async function _regenerarConCuotasPagadas(
+    supabase: any, prestamo: any, prestamoId: string,
+    cuotasPagadas: any[], cuotasExistentes: any[]
+) {
+    // 1. Deduplicar cuotas por numero_cuota (protege contra ediciones fallidas previas)
+    // Si hay duplicados, tomar el MAX monto_pagado por numero_cuota
+    const cuotasByNum = new Map<number, number>();
+    for (const c of (cuotasExistentes || [])) {
+        const num = Number(c.numero_cuota);
+        const mp = Number(c.monto_pagado) || 0;
+        cuotasByNum.set(num, Math.max(cuotasByNum.get(num) || 0, mp));
+    }
+    let totalPagadoCuotas = 0;
+    for (const mp of cuotasByNum.values()) totalPagadoCuotas += mp;
+
+    const oldCuotaIds = (cuotasExistentes || []).map((c: any) => c.id);
+    let todosLosPagos: any[] = [];
+    if (oldCuotaIds.length > 0) {
+        const { data: p } = await supabase.from('pagos').select('*').in('cuota_id', oldCuotaIds).order('created_at', { ascending: true });
+        todosLosPagos = p || [];
+    }
+    const totalPagosTabla = todosLosPagos.reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
+    const montoMigracion = Math.max(0, totalPagadoCuotas - totalPagosTabla);
+    console.log(`[EDIT LOAN] Cuotas(dedup): ${totalPagadoCuotas}, Pagos tabla: ${totalPagosTabla}, Migración: ${montoMigracion}, CuotasDB: ${oldCuotaIds.length}`);
+
+    const { data: hd } = await supabase.from('feriados').select('fecha');
+    const hs = new Set(hd?.map((h: any) => (typeof h.fecha === 'string' ? h.fecha : String(h.fecha)).split('T')[0]) || []);
+    const vd = (dt: Date): Date => { let c = new Date(dt); let s = 0; while (s < 30) { s++; if (c.getUTCDay() === 0 || hs.has(c.toISOString().split('T')[0])) c.setUTCDate(c.getUTCDate() + 1); else break; } return c; };
+
+    const nC = prestamo.cuotas;
+    const nF = (prestamo.frecuencia || 'diario').toLowerCase();
+    const [yr, mo, dy] = prestamo.fecha_inicio.split('-').map(Number);
+    const fI = new Date(Date.UTC(yr, mo - 1, dy));
+    const tP = prestamo.monto * (1 + (prestamo.interes / 100));
+    const qA = Math.round((tP / nC) * 100) / 100;
+
+    const schedule: any[] = [];
+    if (nF === 'diario') {
+        let cur = new Date(fI); cur.setUTCDate(cur.getUTCDate() + 1);
+        for (let i = 1; i <= nC; i++) {
+            let nx = new Date(cur); nx.setUTCDate(nx.getUTCDate() + 1); nx = vd(nx);
+            schedule.push({ prestamo_id: prestamoId, numero_cuota: i, monto_cuota: i === nC ? parseFloat((tP - qA * (nC - 1)).toFixed(2)) : qA, fecha_vencimiento: nx.toISOString().split('T')[0], estado: 'pendiente', monto_pagado: 0 });
+            cur = nx;
+        }
+    } else {
+        const anch = new Date(fI);
+        for (let i = 1; i <= nC; i++) {
+            let nx = new Date(anch);
+            if (nF === 'semanal') nx.setUTCDate(nx.getUTCDate() + i * 7);
+            else if (nF === 'quincenal') nx.setUTCDate(nx.getUTCDate() + i * 14);
+            else nx.setUTCMonth(nx.getUTCMonth() + i);
+            nx = vd(nx);
+            schedule.push({ prestamo_id: prestamoId, numero_cuota: i, monto_cuota: i === nC ? parseFloat((tP - qA * (nC - 1)).toFixed(2)) : qA, fecha_vencimiento: nx.toISOString().split('T')[0], estado: 'pendiente', monto_pagado: 0 });
+        }
+    }
+
+    // PASO 1: INSERTAR NUEVAS CUOTAS PRIMERO
+    const { data: ins, error: insE } = await supabase.from('cronograma_cuotas').insert(schedule).select('id, numero_cuota, monto_cuota');
+    if (insE) throw new Error('Error insertando cuotas: ' + insE.message);
+    const newCuotas = (ins || []).sort((a: any, b: any) => a.numero_cuota - b.numero_cuota);
+
+    // PASO 2: FIFO - Migración + Pagos reales
+    const track = newCuotas.map((c: any) => ({ id: c.id, mc: Number(c.monto_cuota), mp: 0 }));
+    if (montoMigracion > 0.01) {
+        let mr = montoMigracion;
+        for (const t of track) { if (mr <= 0.01) break; const p = t.mc - t.mp; if (p <= 0.01) continue; const a = Math.min(mr, p); t.mp += a; mr -= a; }
+        if (mr > 0.01 && track.length > 0) track[track.length - 1].mp += mr;
+    }
+    const assigns: { pid: string, cid: string, m: number }[] = [];
+    for (const pg of todosLosPagos) {
+        let r = Number(pg.monto_pagado) || 0;
+        for (const t of track) { if (r <= 0.01) break; const p = t.mc - t.mp; if (p <= 0.01) continue; const a = Math.min(r, p); t.mp += a; r -= a; assigns.push({ pid: pg.id, cid: t.id, m: parseFloat(a.toFixed(2)) }); }
+        if (r > 0.01 && track.length > 0) { track[track.length - 1].mp += r; assigns.push({ pid: pg.id, cid: track[track.length - 1].id, m: parseFloat(r.toFixed(2)) }); }
+    }
+
+    // PASO 3: REASIGNAR PAGOS A NUEVAS CUOTAS
+    const pMap = new Map<string, string>();
+    for (const a of assigns) { if (!pMap.has(a.pid)) pMap.set(a.pid, a.cid); }
+    for (const [pid, cid] of pMap) { await supabase.from('pagos').update({ cuota_id: cid }).eq('id', pid); }
+    for (const pg of todosLosPagos) { if (!pMap.has(pg.id) && track.length > 0) await supabase.from('pagos').update({ cuota_id: track[track.length - 1].id }).eq('id', pg.id); }
+
+    // PASO 4: BORRAR DISTRIBUCIONES Y CUOTAS ANTIGUAS
+    if (oldCuotaIds.length > 0) {
+        await supabase.from('pagos_distribucion').delete().in('cuota_id', oldCuotaIds);
+        const { error: delE } = await supabase.from('cronograma_cuotas').delete().in('id', oldCuotaIds);
+        if (delE) console.error('[EDIT LOAN] Error borrando cuotas antiguas:', delE.message);
+    }
+
+    // PASO 5: Recrear distribuciones + actualizar cuotas
+    if (assigns.length > 0) await supabase.from('pagos_distribucion').insert(assigns.map(a => ({ pago_id: a.pid, cuota_id: a.cid, monto: a.m })));
+    for (const t of track) {
+        await supabase.from('cronograma_cuotas').update({ monto_pagado: parseFloat(t.mp.toFixed(2)), estado: t.mp >= (t.mc - 0.01) ? 'pagado' : 'pendiente' }).eq('id', t.id);
+    }
+
+    const fe = schedule[schedule.length - 1].fecha_vencimiento;
+    await supabase.from('prestamos').update({ fecha_fin: fe }).eq('id', prestamoId);
+    const cpR = track.filter((c: any) => c.mp >= (c.mc - 0.01)).length;
+    return { success: true, fecha_fin: fe, pagos_reaplicados: todosLosPagos.length, monto_migracion: parseFloat(montoMigracion.toFixed(2)), total_pagado_reaplicado: parseFloat(totalPagadoCuotas.toFixed(2)), cuotas_pagadas_resultado: cpR, cuotas_pendientes: nC - cpR };
+}
+

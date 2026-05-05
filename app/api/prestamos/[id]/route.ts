@@ -44,17 +44,14 @@ export async function PUT(
             return NextResponse.json({ error: 'Solo administradores pueden editar préstamos' }, { status: 403 })
         }
 
-        // 2. Verificar si el préstamo tiene cuotas pagadas
-        const { data: cuotasPagadas, error: checkError } = await supabaseAdmin
+        // 2. Contar cuotas pagadas (informativo - la regeneración las preservará)
+        const { data: cuotasPagadas } = await supabaseAdmin
             .from('cronograma_cuotas')
-            .select('id')
+            .select('id, monto_pagado')
             .eq('prestamo_id', id)
             .gt('monto_pagado', 0)
-            .limit(1)
         
-        if (cuotasPagadas && cuotasPagadas.length > 0) {
-            return NextResponse.json({ error: 'No se puede editar un préstamo que ya tiene cuotas pagadas total o parcialmente' }, { status: 400 })
-        }
+        const numCuotasPagadas = cuotasPagadas?.length || 0
 
         // 3. Obtener datos actuales del préstamo
         const { data: prestamoActual, error: fetchError } = await supabaseAdmin
@@ -164,15 +161,19 @@ export async function PUT(
         if (updateError) throw updateError
 
         // 7. Regenerar cronograma MANUALMENTE (Centralizado en Node)
-        await generarCronogramaNode(supabaseAdmin, id)
+        // La función ahora preserva cuotas pagadas automáticamente
+        const cronogramaResult = await generarCronogramaNode(supabaseAdmin, id)
 
         // 8. Registrar en historial para que aparezca en la pestaña Historial
+        const motivoPagadas = numCuotasPagadas > 0
+            ? ` (${numCuotasPagadas} cuotas pagadas preservadas)`
+            : ''
         await supabaseAdmin.rpc('registrar_cambio_estado', {
             p_prestamo_id: id,
             p_estado_anterior: prestamoActual.estado,
             p_estado_nuevo: prestamoActual.estado, // El estado no cambia, solo los datos
             p_dias_atraso: 0,
-            p_motivo: `Edición administrativa: Capital ${prestamoActual.monto} -> ${nuevoMonto}, Cuotas ${prestamoActual.cuotas} -> ${nCuotas}`,
+            p_motivo: `Edición administrativa: Capital ${prestamoActual.monto} -> ${nuevoMonto}, Cuotas ${prestamoActual.cuotas} -> ${nCuotas}${motivoPagadas}`,
             p_responsable: user.id
         })
 
@@ -183,13 +184,26 @@ export async function PUT(
             accion: 'editar_prestamo',
             tabla_afectada: 'prestamos',
             registro_id: id,
-            detalle: { antes: prestamoActual, despues: body, diffMonto, cuenta_id }
+            detalle: { 
+                antes: prestamoActual, 
+                despues: body, 
+                diffMonto, 
+                cuenta_id,
+                cuotas_pagadas_preservadas: numCuotasPagadas,
+                cronograma: cronogramaResult
+            }
         })
 
         revalidatePath('/dashboard/prestamos', 'page')
         revalidatePath(`/dashboard/prestamos/${id}`, 'page')
 
-        return NextResponse.json({ message: 'Préstamo actualizado exitosamente' })
+        return NextResponse.json({ 
+            message: numCuotasPagadas > 0
+                ? `Préstamo actualizado. Cronograma regenerado y ${numCuotasPagadas} pagos re-aplicados.`
+                : 'Préstamo actualizado exitosamente',
+            pagos_reaplicados: numCuotasPagadas,
+            cronograma: cronogramaResult
+        })
 
 
     } catch (error: any) {

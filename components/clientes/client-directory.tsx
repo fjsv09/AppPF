@@ -370,19 +370,22 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             case 'bloqueados': result = result.filter(c => !!c.bloqueado_renovacion); break;
         }
 
-        // Search
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase()
-            result = result.filter(c => 
-                c.nombres?.toLowerCase().includes(query) ||
-                c.dni?.includes(query) ||
-                c.telefono?.includes(query) ||
-                c.sectores?.nombre?.toLowerCase().includes(query)
-            )
+        // Search — accent-insensitive + multi-word
+        if (localSearch.trim()) {
+            const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+            const words = norm(localSearch).split(/\s+/).filter(Boolean)
+            result = result.filter(c => {
+                const nombre = norm(c.nombres || '')
+                const sector = norm(c.sectores?.nombre || '')
+                const dni = c.dni || ''
+                const tel = c.telefono || ''
+                if (dni.includes(localSearch.toLowerCase()) || tel.includes(localSearch.toLowerCase())) return true
+                return words.every(w => nombre.includes(w) || sector.includes(w))
+            })
         }
 
         return result
-    }, [clientes, activeFilter, searchQuery, filtroSupervisor, filtroAsesor, filtroSector, userRol, perfiles])
+    }, [clientes, activeFilter, localSearch, filtroSupervisor, filtroAsesor, filtroSector, userRol, perfiles])
 
     // Pagination
     const totalPages = Math.ceil(filteredClientes.length / ITEMS_PER_PAGE)
@@ -510,8 +513,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                         placeholder="Buscar cliente (DNI, Nombre)..."
                         value={localSearch}
                         onChange={(e) => setLocalSearch(e.target.value)}
-                        className={cn("h-10 pl-9 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:bg-slate-900 transition-colors w-full", isPending && "opacity-70 cursor-wait")}
-                        disabled={isPending}
+                        className="h-10 pl-9 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:bg-slate-900 transition-colors w-full"
                     />
                 </div>
 

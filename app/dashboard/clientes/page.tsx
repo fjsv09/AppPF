@@ -269,15 +269,18 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
     // --- APLICAR FILTROS PARA KPI ACTIVOS (REACTIVOS AL URL) ---
     let filteredForKPIs = [...clients]
 
-    // Filtro por Texto (Q)
+    // Filtro por Texto (Q) — accent-insensitive + multi-word
     if (searchQuery) {
-        const query = searchQuery.toLowerCase()
-        filteredForKPIs = filteredForKPIs.filter(c => 
-            c.nombres?.toLowerCase().includes(query) ||
-            c.dni?.includes(query) ||
-            c.telefono?.includes(query) ||
-            c.sectores?.nombre?.toLowerCase().includes(query)
-        )
+        const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+        const words = norm(searchQuery).split(/\s+/).filter(Boolean)
+        filteredForKPIs = filteredForKPIs.filter(c => {
+            const nombre = norm(c.nombres || '')
+            const sector = norm(c.sectores?.nombre || '')
+            const dni = c.dni || ''
+            const tel = c.telefono || ''
+            if (dni.includes(searchQuery.toLowerCase()) || tel.includes(searchQuery.toLowerCase())) return true
+            return words.every(w => nombre.includes(w) || sector.includes(w))
+        })
     }
 
     // Filtro por Supervisor (Admin & Secretaria only)

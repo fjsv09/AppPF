@@ -154,18 +154,21 @@ export function ClientesTable({ clientes, perfiles = [], userRol = 'asesor', use
             case 'sin_prestamos': result = result.filter(c => c.stats.activeLoansCount === 0); break;
         }
 
-        // Search
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase()
-            result = result.filter(c => 
-                c.nombres?.toLowerCase().includes(query) ||
-                c.dni?.includes(query) ||
-                c.telefono?.includes(query)
-            )
+        // Search — accent-insensitive + multi-word
+        if (localSearch.trim()) {
+            const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+            const words = norm(localSearch).split(/\s+/).filter(Boolean)
+            result = result.filter(c => {
+                const nombre = norm(c.nombres || '')
+                const dni = c.dni || ''
+                const tel = c.telefono || ''
+                if (dni.includes(localSearch.toLowerCase()) || tel.includes(localSearch.toLowerCase())) return true
+                return words.every(w => nombre.includes(w))
+            })
         }
 
         return result
-    }, [clientes, activeFilter, searchQuery, filtroSupervisor, filtroAsesor, userRol, perfiles])
+    }, [clientes, activeFilter, localSearch, filtroSupervisor, filtroAsesor, userRol, perfiles])
 
     // Pagination Logic...
     const totalPages = Math.ceil(filteredClientes.length / ITEMS_PER_PAGE)

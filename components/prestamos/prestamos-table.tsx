@@ -691,7 +691,12 @@ export function PrestamosTable({
         }
 
         // 6. SORTING (New Logic)
-        const frequencyWeight: Record<string, number> = { 'Diario': 1, 'Semanal': 2, 'Quincenal': 3, 'Mensual': 4 }
+        const frequencyWeight: Record<string, number> = {
+          'diario': 1, 'Diario': 1, 'DIARIO': 1,
+          'semanal': 2, 'Semanal': 2, 'SEMANAL': 2,
+          'quincenal': 3, 'Quincenal': 3, 'QUINCENAL': 3,
+          'mensual': 4, 'Mensual': 4, 'MENSUAL': 4
+        }
 
         filtered.sort((a, b) => {
             // Prioridad para Control Ruta: Programados arriba, Extras abajo. Luego Pendientes vs Pagados.
@@ -705,15 +710,18 @@ export function PrestamosTable({
                 if (isPaidA !== isPaidB) return isPaidA - isPaidB
             }
 
-            let res = 0
-            if (sortBy === 'fecha_inicio') {
-                res = new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime()
-            } else if (sortBy === 'frecuencia') {
-                const wA = frequencyWeight[a.frecuencia] || 99
-                const wB = frequencyWeight[b.frecuencia] || 99
-                res = wA - wB
+            // Ordenar SIEMPRE por: 1) Frecuencia (DIARIO, SEMANAL, QUINCENAL, MENSUAL), 2) Fecha de inicio
+            const freqWeightA = frequencyWeight[a.frecuencia] || 99
+            const freqWeightB = frequencyWeight[b.frecuencia] || 99
+
+            if (freqWeightA !== freqWeightB) {
+                return freqWeightA - freqWeightB
             }
-            return sortOrder === 'asc' ? res : -res
+
+            // Si tienen la misma frecuencia, ordenar por fecha_inicio
+            const dateA = new Date(a.fecha_inicio).getTime()
+            const dateB = new Date(b.fecha_inicio).getTime()
+            return dateB - dateA // Descendente: más recientes primero
         })
 
         return filtered

@@ -178,7 +178,7 @@ export function KpiCards({
     <>
       <div className={cn(
         "grid grid-cols-2 gap-2 md:gap-4 mb-6",
-        isAdmin ? "lg:grid-cols-6" : "lg:grid-cols-5"
+        isAdmin ? "lg:grid-cols-5" : "lg:grid-cols-4"
       )}>
         {/* Meta Hoy */}
         <Link href={buildHref('ruta_hoy')} className={cn(

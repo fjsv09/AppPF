@@ -16,7 +16,67 @@ export const metadata: Metadata = {
     title: 'Panel de Préstamos'
 }
 
+function NetworkError({ message }: { message?: string }) {
+    return (
+        <div className="min-h-screen bg-black flex items-center justify-center p-4">
+            <div className="relative w-full max-w-md text-center">
+                <div className="absolute -top-20 -left-20 w-64 h-64 bg-yellow-600/10 rounded-full blur-[80px]" />
+                <div className="relative z-10 backdrop-blur-xl bg-slate-900/60 border border-white/10 rounded-3xl p-8 shadow-2xl">
+                    <div className="h-1 w-full bg-gradient-to-r from-yellow-500 to-orange-500 absolute top-0 left-0 rounded-t-3xl" />
+                    <div className="w-20 h-20 rounded-2xl bg-yellow-950/50 border border-yellow-500/30 flex items-center justify-center mb-6 mx-auto">
+                        <svg className="w-10 h-10 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728M15.536 8.464a5 5 0 010 7.072M6.343 17.657a9 9 0 010-12.728M8.464 15.536a5 5 0 000-7.072M12 12h.01" />
+                        </svg>
+                    </div>
+                    <h1 className="text-2xl font-bold text-white mb-2">Sin conexión</h1>
+                    <p className="text-slate-400 mb-6 text-sm">
+                        No se pudo cargar el Panel de Préstamos. Verifica tu señal de internet y vuelve a intentarlo.
+                    </p>
+                    <a
+                        href="/dashboard/prestamos"
+                        className="inline-flex items-center gap-2 h-12 px-6 bg-white text-black font-bold rounded-xl hover:bg-slate-200 transition-all active:scale-95"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Reintentar
+                    </a>
+                    <p className="mt-6 text-xs text-slate-600 font-mono">Error: network_timeout</p>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function isNetworkError(err: unknown): boolean {
+    if (!(err instanceof Error)) return false
+    const msg = err.message?.toLowerCase() || ''
+    const causeCode = (err as any)?.cause?.code || ''
+    return (
+        msg.includes('fetch failed') ||
+        msg.includes('network') ||
+        msg.includes('econnreset') ||
+        msg.includes('etimedout') ||
+        msg.includes('enotfound') ||
+        causeCode === 'ECONNRESET' ||
+        causeCode === 'ETIMEDOUT' ||
+        causeCode === 'ENOTFOUND' ||
+        err.name === 'AbortError'
+    )
+}
+
 export default async function PrestamosPage({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
+    try {
+    return await PrestamosPageInner({ searchParams })
+    } catch (err: unknown) {
+        if (isNetworkError(err)) {
+            return <NetworkError />
+        }
+        throw err
+    }
+}
+
+async function PrestamosPageInner({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
     const sParams = searchParams;
     const filtroSupervisor = sParams.supervisor as string || 'todos';
     const filtroAsesor = sParams.asesor as string || 'todos';

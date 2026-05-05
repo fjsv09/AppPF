@@ -304,7 +304,7 @@ export function PrestamosTable({
     // --- FIN LOGICA DE HORARIO ---
 
     // Búsqueda híbrida: filtro inmediato client-side + sync debounced a URL para refetch server-side.
-    // Esto permite que el servidor pre-filtre por nombre/DNI sin depender del límite de filas en memoria.
+    // Debounce de 600ms para reducir round-trips innecesarios al servidor.
     useEffect(() => {
         const handler = setTimeout(() => {
             const currentUrlSearch = searchParams.get('search') || ''
@@ -312,8 +312,10 @@ export function PrestamosTable({
             const params = new URLSearchParams(searchParams.toString())
             if (localSearch) params.set('search', localSearch)
             else params.delete('search')
-            router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-        }, 400)
+            startTransition(() => {
+                router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+            })
+        }, 600)
         return () => clearTimeout(handler)
     }, [localSearch, searchParams, pathname, router])
 
@@ -514,13 +516,19 @@ export function PrestamosTable({
         let filtered = [...processedPrestamos]
 
         // 1. Text Search (local state, no URL round-trip)
+        // Accent-insensitive + multi-word: "maria ramos" finds "José María Pupuche Ramos"
         if (localSearch) {
-            const lower = localSearch.toLowerCase()
-            filtered = filtered.filter(p =>
-                p.clientes?.nombres?.toLowerCase().includes(lower) ||
-                p.clientes?.dni?.includes(lower) ||
-                p.id.toLowerCase().includes(lower)
-            )
+            const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+            const words = norm(localSearch).split(/\s+/).filter(Boolean)
+            filtered = filtered.filter(p => {
+                const nombre = norm(p.clientes?.nombres || '')
+                const dni = p.clientes?.dni || ''
+                const id = p.id.toLowerCase()
+                // DNI / ID: basta con que contenga el término completo
+                if (dni.includes(localSearch.toLowerCase()) || id.includes(localSearch.toLowerCase())) return true
+                // Nombre: TODAS las palabras deben aparecer en algún lugar del nombre
+                return words.every(w => nombre.includes(w))
+            })
         }
 
         // 2. Supervisor Filter
@@ -838,8 +846,7 @@ export function PrestamosTable({
                         placeholder="Buscar cliente, DNI..."
                         value={localSearch}
                         onChange={(e) => setLocalSearch(e.target.value)}
-                        className={cn("h-10 pl-9 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:bg-slate-900 transition-colors pr-8", isPending && "opacity-70 cursor-wait")}
-                        disabled={isPending}
+                        className="h-10 pl-9 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:bg-slate-900 transition-colors pr-8"
                     />
                     {hasActiveFilters && (
                         <Button

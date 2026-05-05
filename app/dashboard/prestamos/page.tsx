@@ -154,12 +154,48 @@ export default async function PrestamosPage({ searchParams }: { searchParams: { 
     // Mínimo 2 caracteres para no disparar queries demasiado amplias.
     if (searchQuery.length >= 2) {
         // Sanitizar wildcards de PostgREST (% y _) en el término de búsqueda
+        const normAccents = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+
+        // Genera variantes con tildes españolas para cada vocal de un término normalizado.
+        // Permite que "solis" encuentre "Solís" y "Sólís" sin requerir unaccent() en DB.
+        const ACCENT_MAP: Record<string, string> = { a: 'á', e: 'é', i: 'í', o: 'ó', u: 'ú', n: 'ñ' }
+        function accentVariants(term: string): string[] {
+            const base = normAccents(term).toLowerCase()
+            const set = new Set([base])
+            for (let i = 0; i < base.length; i++) {
+                if (ACCENT_MAP[base[i]]) {
+                    set.add(base.slice(0, i) + ACCENT_MAP[base[i]] + base.slice(i + 1))
+                }
+            }
+            // Incluir el término original si ya tenía tildes (evita doble normalización)
+            if (term !== base) set.add(term.toLowerCase())
+            return Array.from(set)
+        }
+
         const sanitized = searchQuery.replace(/[%_]/g, m => `\\${m}`)
-        const { data: matchingClientes } = await supabaseAdmin
-            .from('clientes')
-            .select('id')
-            .or(`nombres.ilike.%${sanitized}%,dni.ilike.%${sanitized}%`)
-            .limit(2000)
+        // Multi-palabra: si hay espacios, cada palabra debe aparecer en el nombre
+        const words = normAccents(sanitized).toLowerCase().split(/\s+/).filter(w => w.length >= 2)
+
+        let clientesQuery = supabaseAdmin.from('clientes').select('id')
+
+        if (words.length > 1) {
+            // AND implícito: encadenamos un .or() por cada palabra con todas sus variantes de tilde
+            for (const word of words) {
+                const variants = accentVariants(word)
+                const orParts = variants.map(v => `nombres.ilike.%${v}%`).join(',')
+                clientesQuery = clientesQuery.or(orParts)
+            }
+        } else {
+            // Término único: nombres con todas las variantes de tilde + dni con el original
+            const variants = accentVariants(sanitized)
+            const orParts = [
+                ...variants.map(v => `nombres.ilike.%${v}%`),
+                `dni.ilike.%${normAccents(sanitized).toLowerCase()}%`
+            ].join(',')
+            clientesQuery = clientesQuery.or(orParts)
+        }
+
+        const { data: matchingClientes } = await clientesQuery.limit(2000)
         const searchClienteIds = (matchingClientes || []).map((c: any) => c.id)
 
         // Soporte adicional: búsqueda por prefijo de UUID de préstamo (≥8 hex chars)

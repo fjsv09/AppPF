@@ -3,7 +3,8 @@ import { useState, useEffect, useTransition } from 'react'
 
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { DollarSign, TrendingUp, Search, User, Users, Briefcase, X, CalendarDays, Loader2, Clock, CreditCard, Wallet, ArrowUpRight, ArrowRight } from 'lucide-react'
+import { DollarSign, TrendingUp, Search, User, Users, Briefcase, X, CalendarDays, Loader2, Clock, CreditCard, Wallet, ArrowUpRight, ArrowRight, ExternalLink } from 'lucide-react'
+import Link from 'next/link'
 import { PaginationControlled } from '@/components/ui/pagination-controlled'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Input } from '@/components/ui/input'
@@ -371,60 +372,120 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
                         <Loader2 className="h-6 w-6 text-blue-400 animate-spin" />
                     </div>
                 )}
-                <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-slate-950/50 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500 items-center">
-                    <div className="col-span-5 md:col-span-6">Detalle del Pago / Fecha</div>
+                <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 bg-slate-950/50 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500 items-center">
+                    <div className="col-span-6">Detalle del Pago / Fecha</div>
                     <div className="col-span-3 text-right">Monto</div>
-                    <div className="col-span-4 md:col-span-3 text-right">Método</div>
+                    <div className="col-span-2 text-right">Método</div>
+                    <div className="col-span-1 text-center"></div>
                 </div>
 
                 <div className="divide-y divide-slate-800/40">
-                    {pagos?.map((pago) => (
-                        <div key={pago.id} className="group grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-800/30 transition-all cursor-default items-center">
-                            <div className="col-span-9 md:col-span-9 flex items-center gap-4">
+                    {pagos?.map((pago) => {
+                        const prestamoId = pago.cronograma_cuotas?.prestamo_id || pago.cronograma_cuotas?.prestamos?.id
+                        return (
+                        <div key={pago.id} className="group px-4 md:px-6 py-3 md:py-4 hover:bg-slate-800/30 transition-all items-center border-b border-slate-800/20 last:border-0">
+                            {/* DESKTOP */}
+                            <div className="hidden md:grid grid-cols-12 gap-4 items-center">
+                                <div className="col-span-6 flex items-center gap-3">
+                                    <div className={cn(
+                                        "h-9 w-9 rounded-xl flex items-center justify-center shadow-inner shrink-0 transition-transform group-hover:scale-110",
+                                        pago.metodo_pago === 'Efectivo' ? "bg-emerald-500/10 text-emerald-500" :
+                                        pago.metodo_pago === 'Transferencia' ? "bg-blue-500/10 text-blue-500" :
+                                        "bg-purple-500/10 text-purple-500"
+                                    )}>
+                                        {pago.metodo_pago === 'Efectivo' ? <Wallet className="h-4 w-4" /> :
+                                         pago.metodo_pago === 'Transferencia' ? <ArrowUpRight className="h-4 w-4" /> :
+                                         <CreditCard className="h-4 w-4" />}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2 mb-0.5">
+                                            <p className="text-sm font-bold text-slate-200 truncate group-hover:text-white transition-colors">
+                                                {pago.cronograma_cuotas?.prestamos?.clientes?.nombres || 'Cliente no identificado'}
+                                            </p>
+                                            <span className={cn(
+                                                "text-[9px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter shrink-0",
+                                                pago.turno_calculado === 'Turno 1' ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-indigo-500/10 text-indigo-500 border border-indigo-500/20"
+                                            )}>
+                                                {pago.turno_calculado === 'Turno 1' ? '🌅 AM' : '🌆 PM'}
+                                            </span>
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 font-mono">
+                                            {format(new Date(pago.fecha_pago), 'dd MMM HH:mm', { locale: es })} • {pago.perfiles?.nombre_completo || 'Sistema'} • Cuota #{pago.cronograma_cuotas?.numero_cuota || '-'}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="col-span-3 text-right">
+                                    <div className="text-base font-bold text-emerald-400 group-hover:text-emerald-300 transition-colors">
+                                        +S/ {pago.monto_pagado}
+                                    </div>
+                                    {userRol === 'admin' && pago.interes_cobrado > 0 && (
+                                        <div className="text-[10px] font-bold text-purple-400/80 uppercase tracking-tighter">
+                                            Ganancia: S/ {pago.interes_cobrado}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="col-span-2 text-right text-xs text-slate-400 font-medium">
+                                    {pago.metodo_pago || '-'}
+                                </div>
+                                <div className="col-span-1 flex justify-center">
+                                    {prestamoId && (
+                                        <Link
+                                            href={`/dashboard/prestamos/${prestamoId}?tab=historial`}
+                                            className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 border border-transparent hover:border-blue-500/20 transition-all"
+                                            title="Ver préstamo"
+                                        >
+                                            <ExternalLink className="h-3.5 w-3.5" />
+                                        </Link>
+                                    )}
+                                </div>
+                            </div>
+                            {/* MOBILE */}
+                            <div className="flex md:hidden items-center gap-3">
                                 <div className={cn(
-                                    "h-10 w-10 rounded-xl flex items-center justify-center shadow-inner shrink-0 transition-transform group-hover:scale-110",
+                                    "h-9 w-9 rounded-xl flex items-center justify-center shadow-inner shrink-0",
                                     pago.metodo_pago === 'Efectivo' ? "bg-emerald-500/10 text-emerald-500" :
                                     pago.metodo_pago === 'Transferencia' ? "bg-blue-500/10 text-blue-500" :
                                     "bg-purple-500/10 text-purple-500"
                                 )}>
-                                    {pago.metodo_pago === 'Efectivo' ? <Wallet className="h-5 w-5" /> :
-                                     pago.metodo_pago === 'Transferencia' ? <ArrowUpRight className="h-5 w-5" /> :
-                                     <CreditCard className="h-5 w-5" />}
+                                    {pago.metodo_pago === 'Efectivo' ? <Wallet className="h-4 w-4" /> :
+                                     pago.metodo_pago === 'Transferencia' ? <ArrowUpRight className="h-4 w-4" /> :
+                                     <CreditCard className="h-4 w-4" />}
                                 </div>
-                                
                                 <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2 mb-0.5">
-                                        <p className="text-sm font-bold text-slate-200 truncate group-hover:text-white transition-colors">
-                                            {pago.cronograma_cuotas?.prestamos?.clientes?.nombres || 'Cliente no identificado'}
+                                    <div className="flex items-center gap-1.5">
+                                        <p className="text-xs font-bold text-slate-200 truncate">
+                                            {pago.cronograma_cuotas?.prestamos?.clientes?.nombres || 'Sin nombre'}
                                         </p>
                                         <span className={cn(
-                                            "text-[9px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter shrink-0",
-                                            pago.turno_calculado === 'Turno 1' ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-indigo-500/10 text-indigo-500 border border-indigo-500/20"
+                                            "text-[8px] px-1 py-0.5 rounded-full font-black uppercase shrink-0",
+                                            pago.turno_calculado === 'Turno 1' ? "bg-amber-500/10 text-amber-500" : "bg-indigo-500/10 text-indigo-500"
                                         )}>
-                                            {pago.turno_calculado === 'Turno 1' ? '🌅 AM' : '🌆 PM'}
+                                            {pago.turno_calculado === 'Turno 1' ? 'AM' : 'PM'}
                                         </span>
                                     </div>
-                                    <div className="text-xs text-slate-500 font-mono mt-0.5">
-                                        Cobro: {format(new Date(pago.fecha_pago), 'dd MMM HH:mm', { locale: es })} • 
-                                        {pago.perfiles?.nombre_completo || 'Sistema'} • 
-                                        Vence: {pago.cronograma_cuotas?.fecha_vencimiento ? format(new Date(pago.cronograma_cuotas.fecha_vencimiento), 'dd MMM', { locale: es }) : '-'} • 
-                                        Cuota #{pago.cronograma_cuotas?.numero_cuota || '-'}
+                                    <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                        {format(new Date(pago.fecha_pago), 'dd MMM HH:mm', { locale: es })} • {pago.perfiles?.nombre_completo || 'Sistema'} • #{pago.cronograma_cuotas?.numero_cuota || '-'} • {pago.metodo_pago}
                                     </div>
                                 </div>
-                            </div>
-                            
-                            <div className="col-span-3 md:col-span-3 text-right">
-                                <div className="text-base font-bold text-emerald-400 group-hover:text-emerald-300 transition-colors">
-                                    +S/ {pago.monto_pagado}
-                                </div>
-                                {userRol === 'admin' && pago.interes_cobrado > 0 && (
-                                    <div className="text-[10px] font-bold text-purple-400/80 uppercase tracking-tighter">
-                                        Ganancia: S/ {pago.interes_cobrado}
+                                <div className="text-right shrink-0 flex items-center gap-2">
+                                    <div>
+                                        <div className="text-sm font-bold text-emerald-400">+S/ {pago.monto_pagado}</div>
+                                        {userRol === 'admin' && pago.interes_cobrado > 0 && (
+                                            <div className="text-[9px] font-bold text-purple-400/80">G: S/ {pago.interes_cobrado}</div>
+                                        )}
                                     </div>
-                                )}
+                                    {prestamoId && (
+                                        <Link
+                                            href={`/dashboard/prestamos/${prestamoId}?tab=historial`}
+                                            className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 transition-all"
+                                        >
+                                            <ExternalLink className="h-3 w-3" />
+                                        </Link>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                    ))}
+                    )})}
                     
                     {(!pagos || pagos.length === 0) && (
                         <div className="flex flex-col items-center justify-center py-12 text-slate-500">

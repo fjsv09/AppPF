@@ -112,7 +112,7 @@ export async function POST(request: Request) {
     const schedule = []
     const anchorDate = parseUTCDate(fecha_inicio)
     const totalToPay = principal * (1 + (rate / 100))
-    const quotaAmount = Math.round((totalToPay / numCuotas) * 100) / 100
+    const quotaAmount = Math.ceil(totalToPay / numCuotas)
 
     const validateDate = (d: Date): Date => {
         let check = new Date(d)

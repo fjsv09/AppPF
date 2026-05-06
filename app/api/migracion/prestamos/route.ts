@@ -229,6 +229,7 @@ export async function POST(request: Request) {
                     estado: esPagado ? 'finalizado' : 'activo',
                     created_by: user.id,
                     observacion_supervisor: '[MIGRACIÓN] Importado del sistema anterior',
+                    bloqueo_cronograma: true,
                 },
                 schedule,
                 egresoBase: {

@@ -313,7 +313,7 @@ export function SolicitudForm({ clients, defaultClientId, feriados = [] }: Solic
     const monto = parseFloat(formData.monto) || 0
     const cuotas = parseInt(formData.cuotas) || 1
     const totalPagar = monto * (1 + calcularInteres.interes / 100)
-    const cuotaMonto = totalPagar / cuotas
+    const cuotaMonto = Math.ceil(totalPagar / cuotas)
 
     // Descripción de cuotas estándar
     const getModalidadLabel = (mod: keyof typeof CUOTAS_ESTANDAR) => {

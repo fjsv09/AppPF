@@ -1476,7 +1476,7 @@ export async function generarCronogramaNode(supabase: any, prestamoId: string) {
     const fInicio = new Date(Date.UTC(y, m - 1, d));
 
     const totalToPay = prestamo.monto * (1 + (prestamo.interes / 100));
-    const quotaAmount = Math.round((totalToPay / nCuotas) * 100) / 100;
+    const quotaAmount = Math.ceil(totalToPay / nCuotas);
     
     const schedule = [];
     const anchorDate = new Date(fInicio);
@@ -1506,7 +1506,7 @@ export async function generarCronogramaNode(supabase: any, prestamoId: string) {
             schedule.push({
                 prestamo_id: prestamoId,
                 numero_cuota: i,
-                monto_cuota: i === nCuotas ? parseFloat((totalToPay - (quotaAmount * (nCuotas - 1))).toFixed(2)) : quotaAmount,
+                monto_cuota: quotaAmount, // Todas las cuotas iguales redondeadas hacia arriba
                 fecha_vencimiento: next.toISOString().split('T')[0],
                 estado: 'pendiente'
             });
@@ -1523,7 +1523,7 @@ export async function generarCronogramaNode(supabase: any, prestamoId: string) {
             schedule.push({
                 prestamo_id: prestamoId,
                 numero_cuota: i,
-                monto_cuota: i === nCuotas ? parseFloat((totalToPay - (quotaAmount * (nCuotas - 1))).toFixed(2)) : quotaAmount,
+                monto_cuota: quotaAmount, // Todas las cuotas iguales redondeadas hacia arriba
                 fecha_vencimiento: next.toISOString().split('T')[0],
                 estado: 'pendiente'
             });
@@ -1583,14 +1583,14 @@ async function _regenerarConCuotasPagadas(
     const [yr, mo, dy] = prestamo.fecha_inicio.split('-').map(Number);
     const fI = new Date(Date.UTC(yr, mo - 1, dy));
     const tP = prestamo.monto * (1 + (prestamo.interes / 100));
-    const qA = Math.round((tP / nC) * 100) / 100;
+    const qA = Math.ceil(tP / nC);
 
     const schedule: any[] = [];
     if (nF === 'diario') {
         let cur = new Date(fI); cur.setUTCDate(cur.getUTCDate() + 1);
         for (let i = 1; i <= nC; i++) {
             let nx = new Date(cur); nx.setUTCDate(nx.getUTCDate() + 1); nx = vd(nx);
-            schedule.push({ prestamo_id: prestamoId, numero_cuota: i, monto_cuota: i === nC ? parseFloat((tP - qA * (nC - 1)).toFixed(2)) : qA, fecha_vencimiento: nx.toISOString().split('T')[0], estado: 'pendiente', monto_pagado: 0 });
+            schedule.push({ prestamo_id: prestamoId, numero_cuota: i, monto_cuota: qA, fecha_vencimiento: nx.toISOString().split('T')[0], estado: 'pendiente', monto_pagado: 0 });
             cur = nx;
         }
     } else {
@@ -1601,7 +1601,7 @@ async function _regenerarConCuotasPagadas(
             else if (nF === 'quincenal') nx.setUTCDate(nx.getUTCDate() + i * 14);
             else nx.setUTCMonth(nx.getUTCMonth() + i);
             nx = vd(nx);
-            schedule.push({ prestamo_id: prestamoId, numero_cuota: i, monto_cuota: i === nC ? parseFloat((tP - qA * (nC - 1)).toFixed(2)) : qA, fecha_vencimiento: nx.toISOString().split('T')[0], estado: 'pendiente', monto_pagado: 0 });
+            schedule.push({ prestamo_id: prestamoId, numero_cuota: i, monto_cuota: qA, fecha_vencimiento: nx.toISOString().split('T')[0], estado: 'pendiente', monto_pagado: 0 });
         }
     }
 

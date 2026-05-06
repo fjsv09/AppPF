@@ -148,8 +148,11 @@ export function AdminNuevoPrestamoModal({ isOpen, onClose, cuentas, feriados }: 
     }, [formData.fecha_inicio, formData.cuotas, formData.modalidad, feriadosSet])
 
     const monto = parseFloat(formData.monto) || 0
-    const totalPagar = monto * (1 + calcInteres.interes / 100)
-    const cuotaMonto = (parseInt(formData.cuotas) || 1) > 0 ? totalPagar / (parseInt(formData.cuotas) || 1) : 0
+    const totalBruto = monto * (1 + calcInteres.interes / 100)
+    const cuotaMonto = (parseInt(formData.cuotas) || 1) > 0 ? Math.ceil(totalBruto / (parseInt(formData.cuotas) || 1)) : 0
+    // Total real = cuota redondeada × N cuotas (cronograma guarda todas las cuotas iguales)
+    const totalPagar = cuotaMonto * (parseInt(formData.cuotas) || 0)
+    const ajusteRedondeo = totalPagar - totalBruto
 
     const handleCreate = async () => {
         if (!selectedClient) {
@@ -490,33 +493,44 @@ export function AdminNuevoPrestamoModal({ isOpen, onClose, cuentas, feriados }: 
                                 <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl relative overflow-hidden group shadow-xl">
                                     <div className="flex justify-between items-center gap-4 mb-4">
                                          <div>
-                                            <h4 className="text-[10px] font-bold text-emerald-400 uppercase tracking-[0.2em] mb-0.5">Amortización</h4>
-                                            <p className="text-[8px] text-slate-500 font-medium">Validado al {formatDate(formData.fecha_inicio)}</p>
+                                            <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-[0.2em] mb-0.5">Amortización</h4>
+                                            <p className="text-[10px] text-slate-500 font-medium">Validado al {formatDate(formData.fecha_inicio)}</p>
                                          </div>
                                          <div className="text-right bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/10">
-                                            <p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Cuota {formData.modalidad}</p>
-                                            <p className="text-lg font-black text-white tabular-nums">S/ {cuotaMonto.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                                            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Cuota {formData.modalidad}</p>
+                                            <p className="text-xl font-black text-white tabular-nums">S/ {cuotaMonto.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                                          </div>
                                     </div>
 
                                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-                                        <div className="bg-slate-950/40 p-2 rounded-xl border border-slate-800/50">
-                                            <p className="text-[7px] text-slate-500 uppercase font-bold mb-0.5 tracking-wider">Interés</p>
-                                            <p className="text-[10px] font-bold text-emerald-400 font-mono">{calcInteres.interes}%</p>
+                                        <div className="bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/50">
+                                            <p className="text-[10px] text-slate-500 uppercase font-bold mb-1 tracking-wider">Interés</p>
+                                            <p className="text-sm font-bold text-emerald-400 font-mono">{calcInteres.interes}%</p>
                                         </div>
-                                        <div className="bg-slate-950/40 p-2 rounded-xl border border-slate-800/50">
-                                            <p className="text-[7px] text-slate-500 uppercase font-bold mb-0.5 tracking-wider">Total</p>
-                                            <p className="text-[10px] font-bold text-white font-mono">S/ {totalPagar.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                                        <div className="bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/50">
+                                            <p className="text-[10px] text-slate-500 uppercase font-bold mb-1 tracking-wider">Total</p>
+                                            <p className="text-sm font-bold text-white font-mono">S/ {totalPagar.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                                         </div>
-                                        <div className="bg-slate-950/40 p-2 rounded-xl border border-slate-800/50">
-                                            <p className="text-[7px] text-slate-500 uppercase font-bold mb-0.5 tracking-wider">Inicio</p>
-                                            <p className="text-[10px] font-bold text-emerald-500 font-mono">{formatDate(calcFechas.fechaInicio)}</p>
+                                        <div className="bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/50">
+                                            <p className="text-[10px] text-slate-500 uppercase font-bold mb-1 tracking-wider">Inicio</p>
+                                            <p className="text-sm font-bold text-emerald-500 font-mono">{formatDate(calcFechas.fechaInicio)}</p>
                                         </div>
-                                        <div className="bg-slate-950/40 p-2 rounded-xl border border-slate-800/50">
-                                            <p className="text-[7px] text-slate-500 uppercase font-bold mb-0.5 tracking-wider">Fin</p>
-                                            <p className="text-[10px] font-bold text-emerald-600 font-mono">{formatDate(calcFechas.fechaFin)}</p>
+                                        <div className="bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/50">
+                                            <p className="text-[10px] text-slate-500 uppercase font-bold mb-1 tracking-wider">Fin</p>
+                                            <p className="text-sm font-bold text-emerald-600 font-mono">{formatDate(calcFechas.fechaFin)}</p>
                                         </div>
                                     </div>
+
+                                    {ajusteRedondeo > 0.01 && (
+                                        <div className="mt-3 flex items-start gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                                            <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                                            <p className="text-[11px] text-amber-200 leading-relaxed">
+                                                La cuota se redondea hacia arriba. El cliente paga{' '}
+                                                <strong className="text-amber-100">S/ {ajusteRedondeo.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
+                                                {' '}adicionales sobre el total bruto (S/ {totalBruto.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}).
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

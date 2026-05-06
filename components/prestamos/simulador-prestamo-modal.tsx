@@ -63,8 +63,11 @@ export function SimuladorPrestamoModal({ isOpen, onClose }: SimuladorPrestamoMod
     }, [formData.fecha_inicio, formData.cuotas, formData.modalidad])
 
     const monto = parseFloat(formData.monto) || 0
-    const totalPagar = monto * (1 + (calcInteres.interes / 100))
-    const cuotaMonto = (parseInt(formData.cuotas) || 1) > 0 ? totalPagar / (parseInt(formData.cuotas) || 1) : 0
+    const totalBruto = monto * (1 + (calcInteres.interes / 100))
+    const cuotaMonto = (parseInt(formData.cuotas) || 1) > 0 ? Math.ceil(totalBruto / (parseInt(formData.cuotas) || 1)) : 0
+    // Total real = cuota redondeada × N cuotas (cronograma guarda todas las cuotas iguales)
+    const totalPagar = cuotaMonto * (parseInt(formData.cuotas) || 0)
+    const ajusteRedondeo = totalPagar - totalBruto
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -222,6 +225,17 @@ export function SimuladorPrestamoModal({ isOpen, onClose }: SimuladorPrestamoMod
                                     <p className="text-xs font-bold text-blue-600 font-mono">{formatDate(calcFechas.fechaFin)}</p>
                                 </div>
                             </div>
+
+                            {ajusteRedondeo > 0.01 && (
+                                <div className="mt-3 flex items-start gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                                    <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                                    <p className="text-[11px] text-amber-200 leading-relaxed">
+                                        La cuota se redondea hacia arriba. El cliente paga{' '}
+                                        <strong className="text-amber-100">S/ {ajusteRedondeo.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
+                                        {' '}adicionales sobre el total bruto (S/ {totalBruto.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}).
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -576,7 +576,8 @@ export function PrestamosTable({
 
             case 'cobranza':
                 // Cobranza: Real Arrears >= 1 quota. Exclude "Al dia".
-                filtered = filtered.filter(p => p.atrasadas >= 1 && p.deudaHoy > 0 && p.estado === 'activo')
+                // Include both 'activo' and 'vencido' — vencido loans with saldo pendiente must appear
+                filtered = filtered.filter(p => p.atrasadas >= 1 && p.deudaHoy > 0 && ['activo', 'vencido'].includes(p.estado))
                 break
 
             case 'morosos':

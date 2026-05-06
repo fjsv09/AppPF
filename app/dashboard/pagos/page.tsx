@@ -78,7 +78,9 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
             cronograma_cuotas!inner (
                 numero_cuota,
                 fecha_vencimiento,
+                prestamo_id,
                 prestamos!inner (
+                    id,
                     clientes!inner (nombres, asesor_id)
                 )
             ),
@@ -150,15 +152,9 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
     }
 
 
-
     if (metodoFilter && metodoFilter !== 'all') {
         pagosQuery = pagosQuery.eq('metodo_pago', metodoFilter)
     }
-
-    const { data: pagos, count: totalPagos, error: pagosError } = await pagosQuery
-        .order('fecha_pago', { ascending: false })
-        .order('id', { ascending: false })
-        .range((paymentPage - 1) * ITEMS_PER_PAGE, (paymentPage * ITEMS_PER_PAGE) - 1)
 
     // -------------------------------------------------------------------------
     // [NUEVO] TURN SEGMENTATION LOGIC
@@ -195,15 +191,61 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         return turno
     }
 
-    const pagosWithTurns = pagos?.map(p => {
-        // Para determinar el turno, necesitamos el asesor_id del préstamo (no el registrado_por)
-        // ya que el pago pudo ser hecho por admin/supervisor
+    // -------------------------------------------------------------------------
+    // TURNO FILTER FIX: When turno filter is active, we must fetch ALL matching
+    // records first, apply the turno filter, then paginate manually. Otherwise
+    // the turno filter runs AFTER Supabase pagination and can return 0 results.
+    // -------------------------------------------------------------------------
+    const isTurnoActive = turnoFilter && turnoFilter !== 'all'
+
+    let pagos: any[] | null = null
+    let totalPagos: number | null = 0
+    let pagosError: any = null
+
+    if (isTurnoActive) {
+        // Fetch all records (up to 1000) so we can filter by turno, then paginate
+        const { data, error } = await pagosQuery
+            .order('fecha_pago', { ascending: false })
+            .order('id', { ascending: false })
+            .limit(1000)
+
+        pagosError = error
+        
+        // Apply turno filter to ALL fetched records
+        const allWithTurns = data?.map(p => {
+            const clienteAsesorId = (p as any).cronograma_cuotas?.prestamos?.clientes?.asesor_id
+            const advisorId = clienteAsesorId || p.registrado_por
+            const turno = calculateTurno(p.fecha_pago, advisorId)
+            return { ...p, turno_calculado: turno }
+        }) || []
+
+        const filtered = allWithTurns.filter(p => p.turno_calculado === turnoFilter)
+        totalPagos = filtered.length
+
+        // Manual pagination
+        const start = (paymentPage - 1) * ITEMS_PER_PAGE
+        const end = start + ITEMS_PER_PAGE
+        pagos = filtered.slice(start, end)
+    } else {
+        // No turno filter: use normal Supabase pagination
+        const { data, count, error } = await pagosQuery
+            .order('fecha_pago', { ascending: false })
+            .order('id', { ascending: false })
+            .range((paymentPage - 1) * ITEMS_PER_PAGE, (paymentPage * ITEMS_PER_PAGE) - 1)
+
+        pagos = data
+        totalPagos = count
+        pagosError = error
+    }
+
+    // Add turno to paginated results (for records that don't have it yet)
+    const pagosWithTurns = (pagos || []).map(p => {
+        if ((p as any).turno_calculado) return p
         const clienteAsesorId = (p as any).cronograma_cuotas?.prestamos?.clientes?.asesor_id
         const advisorId = clienteAsesorId || p.registrado_por
         const turno = calculateTurno(p.fecha_pago, advisorId)
-
         return { ...p, turno_calculado: turno }
-    }) || []
+    })
 
     if (pagosError) {
         console.error('Error fetching pagos:', pagosError.message)
@@ -260,6 +302,10 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         statsQuery = statsQuery.ilike('cronograma_cuotas.prestamos.clientes.nombres', `%${query}%`)
     }
 
+    if (metodoFilter && metodoFilter !== 'all') {
+        statsQuery = statsQuery.eq('metodo_pago', metodoFilter)
+    }
+
     if (fechaInicioParam && fechaFinParam && userRol === 'admin') {
         statsQuery = statsQuery.gte('fecha_pago', `${fechaInicioParam}T00:00:00`)
             .lte('fecha_pago', `${fechaFinParam}T23:59:59`)
@@ -286,8 +332,6 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
 
     const { data: statsData } = await statsQuery
 
-
-    
     // Apply Turn logic to Stats too
     const filteredStats = statsData?.filter(s => {
         if (!turnoFilter) return true
@@ -320,10 +364,8 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         return p.fecha_pago.startsWith(todayISO)
     }).reduce((acc: number, curr: any) => acc + (parseFloat(curr.interes_cobrado?.toString() || '0')), 0) || 0
 
-    // Filter main list by turn if selected
-    const finalPagos = turnoFilter && turnoFilter !== 'all'
-        ? pagosWithTurns.filter(p => p.turno_calculado === turnoFilter)
-        : pagosWithTurns
+    // finalPagos already has turno applied (either from turno-filtered path or regular path)
+    const finalPagos = pagosWithTurns
 
     const hasFilters = Boolean(
         fechaParam || 

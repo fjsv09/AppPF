@@ -97,7 +97,7 @@ export function StepPrestamo({ initialData, onNext, onBack, isSubmitting = false
 
   // Calcular totales
   const totalPagar = monto * (1 + calcularInteres.interes / 100)
-  const cuotaMonto = totalPagar / cuotas
+  const cuotaMonto = Math.ceil(totalPagar / cuotas)
 
   const onSubmit = (data: any) => {
     // Verificar horario antes de permitir submit

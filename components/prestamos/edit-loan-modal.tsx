@@ -67,8 +67,10 @@ export function EditLoanModal({ open, onOpenChange, prestamo, onSuccess }: EditL
         const frecuenciaVal = formData.frecuencia as keyof typeof CUOTAS_ESTANDAR
         
         const { interes: interesFinal } = calcularInteresProporcional(cuotasVal, frecuenciaVal, interesBase)
-        const totalPagar = montoVal * (1 + interesFinal / 100)
-        const cuotaMonto = cuotasVal > 0 ? totalPagar / cuotasVal : 0
+        const totalBruto = montoVal * (1 + interesFinal / 100)
+        const cuotaMonto = cuotasVal > 0 ? Math.ceil(totalBruto / cuotasVal) : 0
+        // Total real a pagar = cuotaMonto × cuotas (cronograma guarda todas las cuotas iguales)
+        const totalPagar = cuotaMonto * cuotasVal
 
         // Cuántas cuotas se cubrirían con lo ya pagado
         const cuotasCubiertas = cuotaMonto > 0 ? Math.floor(pagosInfo.totalPagado / cuotaMonto) : 0

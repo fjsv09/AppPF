@@ -49,6 +49,8 @@ export async function POST(request: Request) {
             .update({ gps_coordenadas })
             .eq('id', latest.id)
             .select().single()
+            
+         if (res.error) throw new Error("Error actualizando solicitud: " + res.error.message)
          updateResult = res.data
     } else {
         // Creamos nueva solicitud con los datos del cliente
@@ -62,13 +64,15 @@ export async function POST(request: Request) {
                 prospecto_dni: oldClient.dni,
                 prospecto_telefono: oldClient.telefono || null,
                 prospecto_direccion: oldClient.direccion || null,
-                monto_solicitado: 0,
-                interes: 0,
-                cuotas: 1,
+                monto_solicitado: 100, // Validar check constraint > 0
+                interes: 20,
+                cuotas: 24,
                 modalidad: 'diario',
                 fecha_inicio_propuesta: new Date().toISOString().split('T')[0],
                 gps_coordenadas: gps_coordenadas
             }).select().single()
+            
+        if (res.error) throw new Error("Error creando solicitud: " + res.error.message)
         updateResult = res.data
     }
 

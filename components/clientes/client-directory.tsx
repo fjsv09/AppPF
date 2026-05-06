@@ -18,8 +18,8 @@ import { RegistrarGestionModal } from '../gestiones/registrar-gestion-modal'
 import { Edit, MessageSquare, DollarSign } from 'lucide-react'
 import { QuickPayModal } from '../prestamos/quick-pay-modal'
 import { BulkImportModal } from './bulk-import-modal'
-const ClientEditSectorModal = dynamic(() => import('./client-edit-sector-modal').then(mod => mod.ClientEditSectorModal), { ssr: false })
-const ClientAddGpsModal = dynamic(() => import('./client-add-gps-modal').then(mod => mod.ClientAddGpsModal), { ssr: false })
+import { ClientEditSectorModal } from './client-edit-sector-modal'
+import { ClientAddGpsModal } from './client-add-gps-modal'
 import { FileUp } from 'lucide-react'
 import { getTodayPeru, calculateLoanMetrics } from '@/lib/financial-logic'
 

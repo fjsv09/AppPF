@@ -195,9 +195,9 @@ export async function PATCH(request: Request) {
                     prospecto_dni: oldClient.dni,
                     prospecto_telefono: oldClient.telefono || null,
                     prospecto_direccion: oldClient.direccion || null,
-                    monto_solicitado: 0,
-                    interes: 0,
-                    cuotas: 1,
+                    monto_solicitado: 100, // Prevenir constraint > 0
+                    interes: 20,
+                    cuotas: 24,
                     modalidad: 'diario',
                     fecha_inicio_propuesta: new Date().toISOString().split('T')[0],
                     ...solicitationPayload

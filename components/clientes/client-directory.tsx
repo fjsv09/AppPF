@@ -18,6 +18,7 @@ import { RegistrarGestionModal } from '../gestiones/registrar-gestion-modal'
 import { Edit, MessageSquare, DollarSign } from 'lucide-react'
 import { QuickPayModal } from '../prestamos/quick-pay-modal'
 import { BulkImportModal } from './bulk-import-modal'
+import { ClientEditSectorModal } from './client-edit-sector-modal'
 import { FileUp } from 'lucide-react'
 import { getTodayPeru, calculateLoanMetrics } from '@/lib/financial-logic'
 
@@ -130,6 +131,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
 
     // Edit Modal State
     const [editingCliente, setEditingCliente] = useState<any>(null)
+    const [editingSectorCliente, setEditingSectorCliente] = useState<any>(null)
     const [clientOverrides, setClientOverrides] = useState<Record<string, any>>({})
 
     // Registrar Gestión State
@@ -804,15 +806,23 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                 </DropdownMenuItem>
                                             )}
                                             {(userRol === 'admin' || userRol === 'supervisor') && (
-                                                <DropdownMenuItem
-                                                    onClick={() => {
-                                                        setPendingEditClient(clientOverrides[cliente.id] ? { ...cliente, ...clientOverrides[cliente.id] } : cliente)
-                                                        setConfirmEditOpen(true)
-                                                    }}
-                                                    className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400"
-                                                >
-                                                    <Edit className="w-4 h-4 mr-2" /> Editar Datos
-                                                </DropdownMenuItem>
+                                                <>
+                                                    <DropdownMenuItem 
+                                                        onClick={() => setEditingSectorCliente(cliente)}
+                                                        className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-purple-400 font-bold"
+                                                    >
+                                                        <MapPin className="w-4 h-4 mr-2" /> Editar Sector
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={() => {
+                                                            setPendingEditClient(clientOverrides[cliente.id] ? { ...cliente, ...clientOverrides[cliente.id] } : cliente)
+                                                            setConfirmEditOpen(true)
+                                                        }}
+                                                        className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400"
+                                                    >
+                                                        <Edit className="w-4 h-4 mr-2" /> Editar Datos
+                                                    </DropdownMenuItem>
+                                                </>
                                             )}
                                             <DropdownMenuItem onClick={() => setQuickViewClientId(cliente.id)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
                                                 <Eye className="w-4 h-4 mr-2" /> Ver Detalle Rápido
@@ -1012,15 +1022,23 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                 </DropdownMenuItem>
                                             )}
                                             {(userRol === 'admin' || userRol === 'supervisor') && (
-                                                <DropdownMenuItem
-                                                    onClick={() => {
-                                                        setPendingEditClient(clientOverrides[cliente.id] ? { ...cliente, ...clientOverrides[cliente.id] } : cliente)
-                                                        setConfirmEditOpen(true)
-                                                    }}
-                                                    className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400 font-bold"
-                                                >
-                                                    <Edit className="w-4 h-4 mr-2" /> Editar Datos
-                                                </DropdownMenuItem>
+                                                <>
+                                                    <DropdownMenuItem 
+                                                        onClick={() => setEditingSectorCliente(cliente)}
+                                                        className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-purple-400 font-bold"
+                                                    >
+                                                        <MapPin className="w-4 h-4 mr-2" /> Editar Sector
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={() => {
+                                                            setPendingEditClient(clientOverrides[cliente.id] ? { ...cliente, ...clientOverrides[cliente.id] } : cliente)
+                                                            setConfirmEditOpen(true)
+                                                        }}
+                                                        className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400 font-bold"
+                                                    >
+                                                        <Edit className="w-4 h-4 mr-2" /> Editar Datos
+                                                    </DropdownMenuItem>
+                                                </>
                                             )}
                                             <DropdownMenuItem onClick={() => setQuickViewClientId(cliente.id)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
                                                 <Eye className="w-4 h-4 mr-2" /> Ver Detalle Rápido
@@ -1149,6 +1167,21 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                             setClientOverrides(prev => ({ ...prev, [updated.id]: updated }))
                         }
                         setEditingCliente(null)
+                        router.refresh()
+                    }}
+                />
+            )}
+
+            {editingSectorCliente && (
+                <ClientEditSectorModal
+                    cliente={editingSectorCliente}
+                    isOpen={!!editingSectorCliente}
+                    onClose={() => setEditingSectorCliente(null)}
+                    onSuccess={(updated) => {
+                        if (updated?.id) {
+                            setClientOverrides(prev => ({ ...prev, [updated.id]: updated }))
+                        }
+                        setEditingSectorCliente(null)
                         router.refresh()
                     }}
                 />

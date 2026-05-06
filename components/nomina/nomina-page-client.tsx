@@ -719,6 +719,7 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
         open={showPagoModal}
         onOpenChange={setShowPagoModal}
         nomina={payrollData}
+        userRole={currentRole}
         trabajador={{ 
             id: selectedId, 
             nombre_completo: selectedTrabajador?.nombre_completo || '', 
@@ -730,6 +731,7 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
       <AdelantoModal
         open={showAdelantoModal}
         onOpenChange={setShowAdelantoModal}
+        userRole={currentRole}
         trabajador={selectedTrabajador ? { id: selectedId, nombre_completo: selectedTrabajador.nombre_completo } : { id: '', nombre_completo: '' }}
         onSuccess={fetchNomina}
       />
@@ -737,6 +739,7 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
       <LiquidacionModal
         open={showLiquidacionModal}
         onOpenChange={setShowLiquidacionModal}
+        userRole={currentRole}
         trabajador={perfil ? { id: selectedId, ...perfil } : null}
         nominaActual={payrollData}
         onSuccess={fetchNomina}

@@ -10,6 +10,7 @@ interface PagoModalProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     nomina: any
+    userRole?: string
     trabajador: { 
         id: string
         nombre_completo: string
@@ -18,7 +19,7 @@ interface PagoModalProps {
     onSuccess: () => void
 }
 
-export function PagoModal({ open, onOpenChange, nomina, trabajador, onSuccess }: PagoModalProps) {
+export function PagoModal({ open, onOpenChange, nomina, userRole, trabajador, onSuccess }: PagoModalProps) {
     const [cuentas, setCuentas] = useState<any[]>([])
     const [selectedCuenta, setSelectedCuenta] = useState<string>('')
     const [incluirBonos, setIncluirBonos] = useState(false)
@@ -32,17 +33,40 @@ export function PagoModal({ open, onOpenChange, nomina, trabajador, onSuccess }:
             setSelectedCuenta('')
             setIncluirBonos(false)
         }
-    }, [open])
+    }, [open, userRole])
 
     async function fetchCuentas() {
         const GLOBAL_CARTERA_ID = '00000000-0000-0000-0000-000000000000'
         setLoadingCuentas(true)
         const { data } = await supabase
             .from('cuentas_financieras')
-            .select('id, nombre, saldo, tipo')
-            .eq('cartera_id', GLOBAL_CARTERA_ID)
+            .select('id, nombre, saldo, tipo, cartera_id')
             .order('nombre')
-        setCuentas(data || [])
+        
+        // Filtrar cuentas: Ocultar cobranzas y restringir cuentas 'caja' o 'admin' según rol
+        const filtered = (data || []).filter((c: any) => {
+            const name = c.nombre.toUpperCase()
+            
+            // 1. Siempre ocultar cuentas de cobranzas de carteras en este modal
+            if (name.startsWith('COBRANZAS - CARTERA')) return false
+
+            // 2. Solo mostrar cuentas globales o administrativas en este flujo de nómina
+            const isGlobalOrAdmin = c.cartera_id === GLOBAL_CARTERA_ID || 
+                                    name.includes('GLOBAL') || 
+                                    name.includes('ADMIN');
+            
+            if (!isGlobalOrAdmin) return false
+            
+            // 3. Si no es admin, ocultar cuentas de tipo 'caja' o que contengan 'ADMIN'
+            if (userRole?.toLowerCase() !== 'admin') {
+                if (c.tipo === 'caja') return false
+                if (name.includes('ADMIN')) return false
+            }
+            
+            return true
+        })
+
+        setCuentas(filtered)
         setLoadingCuentas(false)
     }
 

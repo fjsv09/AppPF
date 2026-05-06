@@ -176,13 +176,23 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
 
     const { data: qCuentas } = await supabaseAdmin
         .from('cuentas_financieras')
-        .select('id, nombre, saldo, cartera_id, usuarios_autorizados')
+        .select('id, nombre, saldo, cartera_id, usuarios_autorizados, tipo')
         .order('nombre')
 
-    const cuentas = (qCuentas || []).filter((c: any) =>
-        c.cartera_id === '00000000-0000-0000-0000-000000000000' ||
-        (c.usuarios_autorizados && c.usuarios_autorizados.length > 0)
-    )
+    const cuentas = (qCuentas || []).filter((c: any) => {
+        const isAuthorized = c.cartera_id === '00000000-0000-0000-0000-000000000000' || 
+                             (c.usuarios_autorizados && c.usuarios_autorizados.length > 0)
+        
+        if (!isAuthorized) return false
+        
+        // Restricción: No ver cuentas de caja ni con nombre ADMIN si no es admin
+        if (userRole?.toLowerCase() !== 'admin') {
+            if (c.tipo === 'caja') return false
+            if (c.nombre.toUpperCase().includes('ADMIN')) return false
+        }
+        
+        return true
+    })
 
     const { data: cuotasIds } = await supabaseAdmin.from('cronograma_cuotas').select('id').eq('prestamo_id', params.id);
     const idsCuotas = cuotasIds?.map(c => c.id) || [];

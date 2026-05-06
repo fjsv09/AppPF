@@ -9,12 +9,13 @@ import { UserMinus, Wallet, Loader2, CheckCircle2, AlertTriangle, CalendarDays, 
 interface LiquidacionModalProps {
     open: boolean
     onOpenChange: (open: boolean) => void
+    userRole?: string
     trabajador: any // { id, nombre_completo, sueldo_base, fecha_ingreso }
     nominaActual: any // nomina del mes actual (puede ser null)
     onSuccess: () => void
 }
 
-export function LiquidacionModal({ open, onOpenChange, trabajador, nominaActual, onSuccess }: LiquidacionModalProps) {
+export function LiquidacionModal({ open, onOpenChange, userRole, trabajador, nominaActual, onSuccess }: LiquidacionModalProps) {
     const [cuentas, setCuentas] = useState<any[]>([])
     const [selectedCuenta, setSelectedCuenta] = useState<string>('')
     const [diasTrabajados, setDiasTrabajados] = useState(0)
@@ -30,7 +31,7 @@ export function LiquidacionModal({ open, onOpenChange, trabajador, nominaActual,
             setSelectedCuenta('')
             setNotas('')
         }
-    }, [open, trabajador])
+    }, [open, trabajador, userRole])
 
     async function fetchData() {
         const GLOBAL_CARTERA_ID = '00000000-0000-0000-0000-000000000000'
@@ -43,7 +44,22 @@ export function LiquidacionModal({ open, onOpenChange, trabajador, nominaActual,
             .eq('cartera_id', GLOBAL_CARTERA_ID)
             .order('nombre')
 
-        setCuentas(cuentasData || [])
+        // Filtrar cuentas: Ocultar cobranzas y restringir cuentas 'caja' o 'admin' según rol
+        const filtered = (cuentasData || []).filter((c: any) => {
+            const name = c.nombre.toUpperCase()
+            // 1. Siempre ocultar cuentas de cobranzas de carteras en este modal
+            if (name.startsWith('COBRANZAS - CARTERA')) return false
+            
+            // 2. Si no es admin, ocultar cuentas de tipo 'caja' o que contengan 'ADMIN'
+            if (userRole?.toLowerCase() !== 'admin') {
+                if (c.tipo === 'caja') return false
+                if (name.includes('ADMIN')) return false
+            }
+            
+            return true
+        })
+
+        setCuentas(filtered)
 
         // Fetch attendance count for current month
         const now = new Date()

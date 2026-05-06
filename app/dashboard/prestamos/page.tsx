@@ -406,20 +406,30 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
     if (userRole === 'admin' || userRole === 'supervisor' || userRole === 'secretaria') {
         const { data: qAdmin } = await supabaseAdmin
             .from('cuentas_financieras')
-            .select('id, nombre, saldo, cartera_id, usuarios_autorizados')
+            .select('id, nombre, saldo, cartera_id, usuarios_autorizados, tipo')
             .order('nombre')
         
-        if (userRole === 'admin') {
+        if (userRole?.toLowerCase() === 'admin') {
             // El admin solo quiere ver cuentas globales/propias, ocultando las de los asesores
             cuentasAdmin = (qAdmin || []).filter((c: any) => 
                 !c.nombre.startsWith('Cobranzas - Cartera ')
             )
         } else {
-            // Supervisores/Secretarias: Filtrar solo cuentas compartidas y de la cartera global
-            cuentasAdmin = (qAdmin || []).filter((c: any) => 
-                c.cartera_id === '00000000-0000-0000-0000-000000000000' || 
-                (c.usuarios_autorizados && c.usuarios_autorizados.length > 0)
-            )
+            // Supervisores/Secretarias: Filtrar solo cuentas compartidas y de la cartera global (excluyendo caja/admin)
+            cuentasAdmin = (qAdmin || []).filter((c: any) => {
+                const isAuthorized = c.cartera_id === '00000000-0000-0000-0000-000000000000' || 
+                                     (c.usuarios_autorizados && c.usuarios_autorizados.length > 0)
+                
+                if (!isAuthorized) return false
+                
+                // Restricción: No ver cuentas de caja ni con nombre ADMIN si no es admin
+        if (userRole?.toLowerCase() !== 'admin') {
+            if (c.tipo === 'caja') return false
+            if (c.nombre.toUpperCase().includes('ADMIN')) return false
+        }
+        
+                return true
+            })
         }
 
     }

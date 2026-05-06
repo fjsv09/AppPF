@@ -9,11 +9,12 @@ import { Wallet, Loader2, CheckCircle2, TrendingUp, HelpCircle, Smartphone, Coin
 interface AdelantoModalProps {
     open: boolean
     onOpenChange: (open: boolean) => void
+    userRole?: string
     trabajador: { id: string; nombre_completo: string }
     onSuccess: () => void
 }
 
-export function AdelantoModal({ open, onOpenChange, trabajador, onSuccess }: AdelantoModalProps) {
+export function AdelantoModal({ open, onOpenChange, userRole, trabajador, onSuccess }: AdelantoModalProps) {
     const [cuentas, setCuentas] = useState<any[]>([])
     const [selectedCuenta, setSelectedCuenta] = useState<string>('')
     const [monto, setMonto] = useState<string>('')
@@ -29,7 +30,7 @@ export function AdelantoModal({ open, onOpenChange, trabajador, onSuccess }: Ade
             setMonto('')
             setConcepto('')
         }
-    }, [open])
+    }, [open, userRole])
 
     async function fetchCuentas() {
         const GLOBAL_CARTERA_ID = '00000000-0000-0000-0000-000000000000'
@@ -39,7 +40,23 @@ export function AdelantoModal({ open, onOpenChange, trabajador, onSuccess }: Ade
             .select('id, nombre, saldo, tipo')
             .eq('cartera_id', GLOBAL_CARTERA_ID)
             .order('nombre')
-        setCuentas(data || [])
+        
+        // Filtrar cuentas: Ocultar cobranzas y restringir cuentas 'caja' o 'admin' según rol
+        const filtered = (data || []).filter((c: any) => {
+            const name = c.nombre.toUpperCase()
+            // 1. Siempre ocultar cuentas de cobranzas de carteras en este modal
+            if (name.startsWith('COBRANZAS - CARTERA')) return false
+            
+            // 2. Si no es admin, ocultar cuentas de tipo 'caja' o que contengan 'ADMIN'
+            if (userRole?.toLowerCase() !== 'admin') {
+                if (c.tipo === 'caja') return false
+                if (name.includes('ADMIN')) return false
+            }
+            
+            return true
+        })
+
+        setCuentas(filtered)
         setLoadingCuentas(false)
     }
 

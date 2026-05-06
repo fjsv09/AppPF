@@ -90,16 +90,6 @@ export function KpiCards({
     // This ensures KPI shows complete role-based totals, not just table-filtered view
     const baseForKpi = hasActiveFilters ? filtered : prestamos
 
-    // DEBUG: Log data sizes
-    if (typeof window !== 'undefined') {
-      console.log('🔍 KPI Debug:', {
-        prestamosLength: prestamos.length,
-        filteredLength: filtered.length,
-        baseForKpiLength: baseForKpi.length,
-        hasActiveFilters,
-        filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia
-      })
-    }
 
     // For KPI calculations: include all states when no filters applied, only active/risk when filters applied
     const relevant = hasActiveFilters

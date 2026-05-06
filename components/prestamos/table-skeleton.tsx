@@ -1,3 +1,5 @@
+import { Loader2 } from "lucide-react"
+
 export const TableSkeleton = () => (
     <div className="animate-pulse space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -20,10 +22,16 @@ export const TableSkeleton = () => (
             ))}
         </div>
 
-        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden">
+        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden relative">
+            {/* Overlay Loading Indicator */}
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/10 backdrop-blur-[1px]">
+                <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-2" />
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Cargando Datos...</p>
+            </div>
+
             <div className="h-12 bg-slate-800/30 border-b border-slate-800" />
             {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} className="p-4 border-b border-slate-800 flex items-center justify-between">
+                <div key={i} className="p-4 border-b border-slate-800 flex items-center justify-between opacity-50">
                     <div className="flex items-center gap-4">
                         <div className="h-10 w-10 bg-slate-800 rounded-xl" />
                         <div className="space-y-2">
@@ -43,3 +51,4 @@ export const TableSkeleton = () => (
         </div>
     </div>
 )
+

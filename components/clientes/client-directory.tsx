@@ -13,7 +13,6 @@ import { Users, Search, Phone, ChevronLeft, ChevronRight, Calendar, Loader2, Lin
 import { cn } from "@/lib/utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import dynamic from 'next/dynamic'
-import { PaginationControlled } from '@/components/ui/pagination-controlled'
 import { ClientEditModal } from './client-edit-modal'
 import { RegistrarGestionModal } from '../gestiones/registrar-gestion-modal'
 import { Edit, MessageSquare, DollarSign } from 'lucide-react'
@@ -86,7 +85,7 @@ interface ClientDirectoryProps {
 
 type FilterTab = 'todos' | 'con_deuda' | 'activos_deuda' | 'sin_prestamos' | 'reasignados' | 'recibos' | 'bloqueados'
 
-const ITEMS_PER_PAGE = 10
+const ITEMS_PER_LOAD = 20
 
 const formatMoney = (value: number): string => {
     return value.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
@@ -104,7 +103,8 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     const filtroSupervisor = searchParams.get('supervisor') || 'todos'
     const filtroAsesor = searchParams.get('asesor') || 'todos'
     const filtroSector = searchParams.get('sector') || 'todos'
-    const currentPage = Number(searchParams.get('page')) || 1
+    
+    const [itemsToShow, setItemsToShow] = useState(ITEMS_PER_LOAD)
 
     // 2. Local state
     const [localSearch, setLocalSearch] = useState(searchQuery)
@@ -251,11 +251,16 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     useEffect(() => {
         const timer = setTimeout(() => {
             if (localSearch !== searchQuery) {
-                updateParams({ q: localSearch || null, page: '1' })
+                updateParams({ q: localSearch || null })
             }
         }, 600)
         return () => clearTimeout(timer)
     }, [localSearch, searchQuery])
+
+    // Reset itemsToShow on filter changes
+    useEffect(() => {
+        setItemsToShow(ITEMS_PER_LOAD)
+    }, [activeFilter, searchQuery, filtroSupervisor, filtroAsesor, filtroSector])
 
     // Supervisores for Admin
     const supervisores = useMemo(() => {
@@ -389,19 +394,16 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     }, [clientes, activeFilter, localSearch, filtroSupervisor, filtroAsesor, filtroSector, userRol, perfiles])
 
     // Pagination
-    const totalPages = Math.ceil(filteredClientes.length / ITEMS_PER_PAGE)
     const paginatedClientes = useMemo(() => {
-        const start = (currentPage - 1) * ITEMS_PER_PAGE
-        return filteredClientes.slice(start, start + ITEMS_PER_PAGE)
-    }, [filteredClientes, currentPage])
+        return filteredClientes.slice(0, itemsToShow)
+    }, [filteredClientes, itemsToShow])
 
     const totalDebt = filteredClientes.reduce((acc, c) => acc + (c.stats.totalDebt || 0), 0)
 
-    const handleFilterChange = (val: string) => updateParams({ tab: val, page: '1' })
-    const handleSupervisorChange = (val: string) => updateParams({ supervisor: val, page: '1' })
-    const handleAsesorChange = (val: string) => updateParams({ asesor: val, page: '1' })
-    const handleSectorChange = (val: string) => updateParams({ sector: val, page: '1' })
-    const handlePageChange = (page: number) => updateParams({ page: String(page) })
+    const handleFilterChange = (val: string) => updateParams({ tab: val })
+    const handleSupervisorChange = (val: string) => updateParams({ supervisor: val })
+    const handleAsesorChange = (val: string) => updateParams({ asesor: val })
+    const handleSectorChange = (val: string) => updateParams({ sector: val })
 
     // Bulk Actions Logic
     const selectedClientsCurrentAsesorIds = useMemo(() => {
@@ -1048,15 +1050,32 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             </div>
             )}
             
-            {/* Pagination Components */}
-            <PaginationControlled
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={handlePageChange}
-                totalRecords={filteredClientes.length}
-                pageSize={ITEMS_PER_PAGE}
-                className="mt-6"
-            />
+            {/* Pagination / Load More */}
+            <div className="mt-8 mb-12 border-t border-slate-800/50 pt-8 flex flex-col items-center gap-6">
+                {itemsToShow < filteredClientes.length && filteredClientes.length > 0 && (
+                    <div className="flex flex-col items-center gap-4">
+                        <Button
+                            onClick={() => setItemsToShow(prev => prev + ITEMS_PER_LOAD)}
+                            className="group flex items-center gap-2 bg-slate-800/50 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-white px-8 py-2 rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
+                        >
+                            <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+                            Cargar 20 más
+                        </Button>
+                    </div>
+                )}
+
+                {filteredClientes.length > 0 && (
+                    <div className="flex flex-col items-center gap-2 opacity-60">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                            Mostrando {Math.min(itemsToShow, filteredClientes.length)} de {filteredClientes.length}
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Recuento</span>
+                            <span className="text-sm font-black text-slate-300">{filteredClientes.length}</span>
+                        </div>
+                    </div>
+                )}
+            </div>
 
             {/* Reassign Modal */}
             <Dialog open={isReasignModalOpen} onOpenChange={setIsReasignModalOpen}>

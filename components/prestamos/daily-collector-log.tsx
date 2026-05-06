@@ -13,8 +13,7 @@ import { EditPaymentModal } from './edit-payment-modal'
 import { VisitActionButton } from './visit-action-button'
 import { useRouter } from 'next/navigation'
 import { api } from '@/services/api'
-
-import { PaginationControlled } from '@/components/ui/pagination-controlled'
+import { ChevronDown } from 'lucide-react'
 
 export function DailyCollectorLog({ 
     cronograma, 
@@ -33,8 +32,8 @@ export function DailyCollectorLog({
     const [isVoucherOpen, setIsVoucherOpen] = useState(false)
     const [isEditModalOpen, setIsEditModalOpen] = useState(false)
     const [quickPayOpen, setQuickPayOpen] = useState(false)
-    const [currentPage, setCurrentPage] = useState(1)
-    const ITEMS_PER_PAGE = 10
+    const [itemsToShow, setItemsToShow] = useState(20)
+    const ITEMS_PER_LOAD = 20
 
     const today = startOfDay(new Date())
     const todayStr = new Intl.DateTimeFormat('en-CA', { 
@@ -317,8 +316,7 @@ export function DailyCollectorLog({
                         </thead>
                         <tbody className="divide-y divide-slate-800/40">
                             {(() => {
-                                const start = (currentPage - 1) * ITEMS_PER_PAGE
-                                const paginatedRows = allRows.slice(start, start + ITEMS_PER_PAGE)
+                                const paginatedRows = allRows.slice(0, itemsToShow)
                                 
                                 return paginatedRows.map(({ date, cuota, physical }) => {
                                     const totalDay = physical.reduce((s: any, p: any) => s + Number(p.monto_pagado), 0)
@@ -454,14 +452,26 @@ export function DailyCollectorLog({
                     </table>
                 </div>
                 {allRows.length > 0 && (
-                  <div className="p-4 border-t border-slate-800 bg-slate-950/40">
-                    <PaginationControlled 
-                      currentPage={currentPage}
-                      totalPages={Math.ceil(allRows.length / ITEMS_PER_PAGE)}
-                      onPageChange={setCurrentPage}
-                      totalRecords={allRows.length}
-                      pageSize={ITEMS_PER_PAGE}
-                    />
+                  <div className="p-8 border-t border-slate-800 bg-slate-950/40 flex flex-col items-center gap-6">
+                    {itemsToShow < allRows.length && (
+                        <Button
+                            onClick={() => setItemsToShow(prev => prev + ITEMS_PER_LOAD)}
+                            className="group flex items-center gap-2 bg-slate-800/50 hover:bg-blue-600 border border-slate-700 hover:border-blue-500 text-slate-300 hover:text-white px-8 py-2 rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
+                        >
+                            <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+                            Cargar 20 más
+                        </Button>
+                    )}
+
+                    <div className="flex flex-col items-center gap-2 opacity-60">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                            Mostrando {Math.min(itemsToShow, allRows.length)} de {allRows.length}
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Recuento</span>
+                            <span className="text-sm font-black text-slate-300">{allRows.length}</span>
+                        </div>
+                    </div>
                   </div>
                 )}
             </div>

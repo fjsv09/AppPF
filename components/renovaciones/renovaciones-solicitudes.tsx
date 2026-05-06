@@ -20,7 +20,6 @@ import {
 import { toast } from 'sonner'
 import { cn, getFrequencyBadgeStyles } from '@/lib/utils'
 import { formatMoney, formatDate, formatTime, formatDateTime } from '@/utils/format'
-import { PaginationControlled } from '@/components/ui/pagination-controlled'
 import { DocumentButtonAsync } from '@/components/prestamos/document-button-async'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useEffect, useTransition } from 'react'
@@ -55,9 +54,9 @@ interface RenovacionesSolicitudesProps {
     userRole: 'asesor' | 'supervisor' | 'admin'
     userId: string
     totalRecords: number
-    currentPage: number
-    pageSize: number
 }
+
+const ITEMS_PER_LOAD = 20
 
 const estadoConfig: Record<string, { label: string; icon: any; color: string; bg: string }> = {
     'pendiente_supervision': {
@@ -92,11 +91,12 @@ const estadoConfig: Record<string, { label: string; icon: any; color: string; bg
     }
 }
 
-export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRecords, currentPage, pageSize }: RenovacionesSolicitudesProps) {
+export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRecords }: RenovacionesSolicitudesProps) {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
     const [isPending, startTransition] = useTransition()
+    const [itemsToShow, setItemsToShow] = useState(ITEMS_PER_LOAD)
 
     const [actionDialog, setActionDialog] = useState<{
         type: 'preprobar' | 'observar' | 'aprobar' | 'rechazar' | null
@@ -120,6 +120,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
         const timeout = setTimeout(() => {
             if (searchTerm !== (searchParams.get('q') || '')) {
                 updateFilter('q', searchTerm)
+                setItemsToShow(ITEMS_PER_LOAD)
             }
         }, 500)
         return () => clearTimeout(timeout)
@@ -139,11 +140,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
     }
 
     const handlePageChange = (page: number) => {
-        startTransition(() => {
-            const params = new URLSearchParams(searchParams.toString())
-            params.set('page', String(page))
-            router.push(`${pathname}?${params.toString()}`, { scroll: false })
-        })
+        // Obsolete
     }
 
     const handleSortChange = (field: string) => {
@@ -328,7 +325,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                                 <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
                             </div>
                         )}
-                        {solicitudes.map((sol) => {
+                        {solicitudes.slice(0, itemsToShow).map((sol) => {
                             const estado = estadoConfig[sol.estado_solicitud] || estadoConfig['pendiente_supervision']
 
                             return (
@@ -492,7 +489,7 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
 
                                 {/* Content */}
                                 <div className="divide-y divide-slate-800/50 text-sm">
-                                    {solicitudes.map((sol) => {
+                                    {solicitudes.slice(0, itemsToShow).map((sol) => {
                                         const estado = estadoConfig[sol.estado_solicitud] || estadoConfig['pendiente_supervision']
                                         const IconEstado = estado.icon
 
@@ -737,18 +734,32 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                         </DialogContent>
                     </Dialog>
 
-                    {/* Pagination Controls */}
-                    {!loading && solicitudes.length > 0 && (
-                        <div className="mt-6">
-                            <PaginationControlled
-                                currentPage={currentPage}
-                                totalPages={Math.ceil(totalRecords / pageSize)}
-                                onPageChange={handlePageChange}
-                                totalRecords={totalRecords}
-                                pageSize={pageSize}
-                            />
-                        </div>
-                    )}
+                    {/* Load More & Record Count */}
+                    <div className="mt-8 mb-12 border-t border-slate-800/50 pt-8 flex flex-col items-center gap-6">
+                        {itemsToShow < totalRecords && solicitudes.length > 0 && (
+                            <div className="flex flex-col items-center gap-4">
+                                <Button
+                                    onClick={() => setItemsToShow(prev => prev + ITEMS_PER_LOAD)}
+                                    className="group flex items-center gap-2 bg-slate-800/50 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-white px-8 py-2 rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
+                                >
+                                    <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+                                    Cargar 20 más
+                                </Button>
+                            </div>
+                        )}
+
+                        {totalRecords > 0 && (
+                            <div className="flex flex-col items-center gap-2 opacity-60">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                    Mostrando {Math.min(itemsToShow, totalRecords)} de {totalRecords}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Recuento</span>
+                                    <span className="text-sm font-black text-slate-300">{totalRecords}</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </>
             )}
         </div>

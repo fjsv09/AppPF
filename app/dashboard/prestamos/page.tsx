@@ -11,6 +11,7 @@ import { getTodayPeru, calculateLoanMetrics, calculateMoraBancaria } from "@/lib
 import { KpiCards } from "@/components/prestamos/kpi-cards";
 import { DashboardAlerts } from "@/components/dashboard/dashboard-alerts";
 import { checkAdvisorBlocked } from "@/utils/checkAdvisorBlocked";
+import { LoadingProvider } from "@/components/prestamos/loading-context";
 
 export const metadata: Metadata = {
     title: 'Panel de Préstamos'
@@ -541,7 +542,7 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
             cliente_nombre: p.clientes?.nombres,
             cliente_dni: p.clientes?.dni,
             asesor_id: p.clientes?.asesor_id,
-            asesor_nombre: p.clientes?.asesor?.nombre_completo,
+            asesor_nombre: p.clientes?.asesor_data?.nombre_completo,
             gps_coordenadas,
             
             deuda_exigible_hoy: metrics.deudaExigibleHoy,
@@ -670,85 +671,87 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
 
     // Perfiles ya cargados arriba (sección 2.1)
 
-    return (
-        <div className="page-container">
-            <DashboardAlerts 
-                userId={user?.id || ''} 
-                blockInfo={blockInfo} 
-                accessInfo={accessResult} 
-            />
 
-            {/* Header with Title and Action Button */}
-            {/* Header with Title and Subtitle */}
-            <div className="page-header">
-                <div>
-                    <div className="flex items-center gap-4">
-                        <BackButton />
-                        <div>
-                            <h1 className="page-title">Panel de Préstamos</h1>
-                            <p className="page-subtitle">
-                                {(userRole === 'admin' || userRole === 'secretaria') ? 'Visión Global y Rentabilidad' : 
-                                 userRole === 'supervisor' ? 'Supervisión de Riesgo y Alertas' : 
-                                 'Gestión Diaria de Cobranza'}
-                            </p>
+    return (
+        <LoadingProvider>
+            <div className="page-container">
+                <DashboardAlerts 
+                    userId={user?.id || ''} 
+                    blockInfo={blockInfo} 
+                    accessInfo={accessResult} 
+                />
+
+                {/* Header with Title and Subtitle */}
+                <div className="page-header">
+                    <div>
+                        <div className="flex items-center gap-4">
+                            <BackButton />
+                            <div>
+                                <h1 className="page-title">Panel de Préstamos</h1>
+                                <p className="page-subtitle">
+                                    {(userRole === 'admin' || userRole === 'secretaria') ? 'Visión Global y Rentabilidad' : 
+                                     userRole === 'supervisor' ? 'Supervisión de Riesgo y Alertas' : 
+                                     'Gestión Diaria de Cobranza'}
+                                </p>
+                            </div>
                         </div>
                     </div>
+
+                    {/* Acciones de Admin (Creación Directa) */}
+                    {userRole === 'admin' && (
+                        <AdminLoanActions 
+                            cuentas={cuentasAdmin}
+                            feriados={feriados}
+                        />
+                    )}
                 </div>
 
-                {/* Acciones de Admin (Creación Directa) */}
-                {userRole === 'admin' && (
-                    <AdminLoanActions 
-                        cuentas={cuentasAdmin}
-                        feriados={feriados}
-                    />
-                )}
-            </div>
-
-            {/* KPI Cards + Alerts Bar (client component, reactive to filters) */}
-            <Suspense fallback={<div className="h-52 mb-6 animate-pulse rounded-xl bg-slate-900/20" />}>
-                <KpiCards
-                    prestamos={prestamos}
-                    prestamosGlobal={prestamosGlobal}
-                    perfiles={perfiles}
-                    userRole={userRole}
-                    prestamoIdsProductoRefinanciamiento={prestamoIdsProductoRefinanciamiento}
-                    today={today}
-                    umbralCpp={umbralCpp}
-                    umbralMoroso={umbralMoroso}
-                    umbralCppOtros={umbralCppOtros}
-                    umbralMorosoOtros={umbralMorosoOtros}
-                />
-            </Suspense>
-
-            <div className="mt-4 space-y-6">
-                <Suspense fallback={<TableSkeleton />}>
-                    <PrestamosTable 
-                        prestamos={prestamos || []} 
-                        today={today}
-                        selectedDate={selectedDate}
-                        totalPrestado={totalPrestado}
-                        overdueAmount={capitalEnRiesgo}
-                        perfiles={perfiles || []}
-                        userRol={userRole}
-                        userId={user?.id}
-                        prestamoIdsConSolicitudPendiente={prestamoIdsConSolicitudPendiente}
-                        prestamoIdsConEvidenciaPendiente={prestamoIdsConEvidenciaPendiente}
-                        renovacionMinPagado={renovacionMinPagado}
-                        refinanciacionMinMora={refinanciacionMinMora}
+                {/* KPI Cards + Alerts Bar (client component, reactive to filters) */}
+                <Suspense fallback={<div className="h-52 mb-6 animate-pulse rounded-xl bg-slate-900/20" />}>
+                    <KpiCards
+                        prestamos={prestamos}
+                        prestamosGlobal={prestamosGlobal}
+                        perfiles={perfiles}
+                        userRole={userRole}
                         prestamoIdsProductoRefinanciamiento={prestamoIdsProductoRefinanciamiento}
-                        systemSchedule={systemSchedule}
+                        today={today}
                         umbralCpp={umbralCpp}
                         umbralMoroso={umbralMoroso}
                         umbralCppOtros={umbralCppOtros}
                         umbralMorosoOtros={umbralMorosoOtros}
-                        isBlockedByCuadre={isBlockedByCuadre}
-                        blockReasonCierre={blockReasonCierre}
-                        systemAccess={systemAccess}
-                        cuentas={cuentasAdmin || []}
-                        exigirGpsCobranza={exigirGpsCobranza}
                     />
                 </Suspense>
+
+                <div className="mt-4 space-y-6">
+                    <Suspense fallback={<TableSkeleton />}>
+                        <PrestamosTable 
+                            prestamos={prestamos || []} 
+                            today={today}
+                            selectedDate={selectedDate}
+                            totalPrestado={totalPrestado}
+                            overdueAmount={capitalEnRiesgo}
+                            perfiles={perfiles || []}
+                            userRol={userRole}
+                            userId={user?.id}
+                            prestamoIdsConSolicitudPendiente={prestamoIdsConSolicitudPendiente}
+                            prestamoIdsConEvidenciaPendiente={prestamoIdsConEvidenciaPendiente}
+                            renovacionMinPagado={renovacionMinPagado}
+                            refinanciacionMinMora={refinanciacionMinMora}
+                            prestamoIdsProductoRefinanciamiento={prestamoIdsProductoRefinanciamiento}
+                            systemSchedule={systemSchedule}
+                            umbralCpp={umbralCpp}
+                            umbralMoroso={umbralMoroso}
+                            umbralCppOtros={umbralCppOtros}
+                            umbralMorosoOtros={umbralMorosoOtros}
+                            isBlockedByCuadre={isBlockedByCuadre}
+                            blockReasonCierre={blockReasonCierre}
+                            systemAccess={systemAccess}
+                            cuentas={cuentasAdmin || []}
+                            exigirGpsCobranza={exigirGpsCobranza}
+                        />
+                    </Suspense>
+                </div>
             </div>
-        </div>
+        </LoadingProvider>
     )
 }

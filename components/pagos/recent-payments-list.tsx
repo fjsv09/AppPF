@@ -5,7 +5,6 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { DollarSign, TrendingUp, Search, User, Users, Briefcase, X, CalendarDays, Loader2, Clock, CreditCard, Wallet, ArrowUpRight, ArrowRight, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
-import { PaginationControlled } from '@/components/ui/pagination-controlled'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -15,21 +14,20 @@ import { cn } from '@/lib/utils'
 interface RecentPaymentsListProps {
     pagos: any[]
     totalRecords: number
-    currentPage: number
-    pageSize: number
     perfiles: any[]
     userRol: 'admin' | 'supervisor' | 'asesor' | 'secretaria'
     userId: string
 }
 
-export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize, perfiles, userRol, userId }: RecentPaymentsListProps) {
+const ITEMS_PER_LOAD = 20
+
+export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, userId }: RecentPaymentsListProps) {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
     const [isPending, startTransition] = useTransition()
-    
     const [isRangeMode, setIsRangeMode] = useState(Boolean(searchParams.get('fecha_inicio') || searchParams.get('fecha_fin')))
-    
+    const [itemsToShow, setItemsToShow] = useState(ITEMS_PER_LOAD)
     const currentSearch = searchParams.get('q') || ''
     const currentAsesor = searchParams.get('asesor') || 'all'
     const currentSupervisor = searchParams.get('supervisor') || 'all'
@@ -76,15 +74,7 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
         return () => clearTimeout(timeout)
     }, [tempFecha, tempFechaInicio, tempFechaFin, isRangeMode])
 
-    const totalPages = Math.ceil(totalRecords / pageSize)
 
-    const handlePageChange = (page: number) => {
-        startTransition(() => {
-            const params = new URLSearchParams(searchParams.toString())
-            params.set('p_page', String(page))
-            router.push(`${pathname}?${params.toString()}`, { scroll: false })
-        })
-    }
 
     const applyDates = (forcedMode?: boolean) => {
         const mode = forcedMode !== undefined ? forcedMode : isRangeMode
@@ -380,7 +370,7 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
                 </div>
 
                 <div className="divide-y divide-slate-800/40">
-                    {pagos?.map((pago) => {
+                    {pagos?.slice(0, itemsToShow).map((pago) => {
                         const prestamoId = pago.cronograma_cuotas?.prestamo_id || pago.cronograma_cuotas?.prestamos?.id
                         return (
                         <div key={pago.id} className="group px-4 md:px-6 py-3 md:py-4 hover:bg-slate-800/30 transition-all items-center border-b border-slate-800/20 last:border-0">
@@ -500,14 +490,31 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
                     )}
                 </div>
 
-                <div className="p-4 border-t border-slate-800">
-                    <PaginationControlled 
-                        currentPage={currentPage}
-                        totalPages={totalPages}
-                        onPageChange={handlePageChange}
-                        totalRecords={totalRecords}
-                        pageSize={pageSize}
-                    />
+                {/* Pagination / Load More */}
+                <div className="mt-8 mb-12 border-t border-slate-800/50 pt-8 flex flex-col items-center gap-6">
+                    {itemsToShow < totalRecords && pagos.length > 0 && (
+                        <div className="flex flex-col items-center gap-4">
+                            <Button
+                                onClick={() => setItemsToShow(prev => prev + ITEMS_PER_LOAD)}
+                                className="group flex items-center gap-2 bg-slate-800/50 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-white px-8 py-2 rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
+                            >
+                                <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+                                Cargar 20 más
+                            </Button>
+                        </div>
+                    )}
+
+                    {totalRecords > 0 && (
+                        <div className="flex flex-col items-center gap-2 opacity-60">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                Mostrando {Math.min(itemsToShow, totalRecords)} de {totalRecords}
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Recuento</span>
+                                <span className="text-sm font-black text-slate-300">{totalRecords}</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

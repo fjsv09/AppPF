@@ -18,6 +18,7 @@ import {
     CalendarDays, CheckCircle2, AlertTriangle, MapPin, DollarSign, FileText, ChevronRight, ChevronDown, Eye, Files,
     X, XCircle, RotateCcw, MessageCircle, MessageSquare, Loader2, ListFilter, LayoutGrid, Table, Lock, ClipboardList, ShieldAlert, ShieldOff, Shield, Pencil
 } from 'lucide-react'
+import { useLoading } from './loading-context'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
@@ -128,7 +129,7 @@ export function PrestamosTable({
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
-    const [isPending, startTransition] = useTransition()
+    const { isPending, updateParams: updateParamsContext, startTransition } = useLoading()
 
     const [userLoc, setUserLoc] = useState<[number, number] | null>(null)
     const [viewType, setViewType] = useState<'cards' | 'table'>('cards')
@@ -247,17 +248,7 @@ export function PrestamosTable({
 
     // Helper to update URL params
     const updateParams = (updates: Record<string, string | null>) => {
-        startTransition(() => {
-            const params = new URLSearchParams(searchParams.toString())
-            Object.entries(updates).forEach(([key, value]) => {
-                if (value === null || value === '') {
-                    params.delete(key)
-                } else {
-                    params.set(key, value)
-                }
-            })
-            router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-        })
+        updateParamsContext(updates)
     }
 
 
@@ -1063,9 +1054,12 @@ export function PrestamosTable({
             <div className="relative min-h-[400px]">
                 {/* Loader centralizado (basado en feedback de usuario) */}
                 {(isPending || isFiltering) && (
-                    <div className="absolute inset-x-0 top-20 z-50 flex items-center justify-center animate-in fade-in duration-300">
-                        <div className="bg-slate-950/40 backdrop-blur-md p-4 rounded-full border border-white/5 shadow-2xl">
-                            <Loader2 className="w-8 h-8 text-slate-400 animate-spin" />
+                    <div className="absolute inset-x-0 top-32 z-50 flex items-center justify-center animate-in zoom-in-95 duration-300">
+                        <div className="bg-[#090e16]/80 backdrop-blur-xl p-8 rounded-full border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] ring-1 ring-white/5">
+                            <div className="relative">
+                                <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+                                <div className="absolute inset-0 bg-blue-500/20 blur-[20px] rounded-full animate-pulse" />
+                            </div>
                         </div>
                     </div>
                 )}

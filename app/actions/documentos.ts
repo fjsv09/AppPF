@@ -11,7 +11,7 @@ export async function fetchDocumentData(solicitudId: string, type: 'solicitud' |
         const { data: sol } = await supabaseAdmin.from('prestamos').select('id').eq('solicitud_id', solicitudId).maybeSingle()
         prestamoIdToFetch = sol?.id
     } else {
-        const { data: sol } = await supabaseAdmin.from('solicitudes').select('prestamo_nuevo_id').eq('id', solicitudId).maybeSingle()
+        const { data: sol } = await supabaseAdmin.from('solicitudes_renovacion').select('prestamo_nuevo_id').eq('id', solicitudId).maybeSingle()
         prestamoIdToFetch = sol?.prestamo_nuevo_id
     }
 

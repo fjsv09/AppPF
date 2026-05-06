@@ -21,8 +21,7 @@ export default async function RenovacionesPage(props: { searchParams: Promise<{ 
     const statusFilter = searchParams.estado || 'todos'
     const sortField = (searchParams.sort as 'created_at' | 'fecha_inicio' | 'fecha_aprobacion') || 'created_at'
     const sortOrder = (searchParams.order as 'desc' | 'asc') || 'desc'
-    const currentPage = Number(searchParams.page) || 1
-    const ITEMS_PER_PAGE = 10
+    const MAX_RECORDS = 500
 
     const supabase = await createClient()
     const supabaseAdmin = createAdminClient()
@@ -83,7 +82,7 @@ export default async function RenovacionesPage(props: { searchParams: Promise<{ 
 
     const { data: solicitudes, count: totalRecords } = await mainQuery
         .order(sortField, { ascending: sortOrder === 'asc' })
-        .range((currentPage - 1) * ITEMS_PER_PAGE, (currentPage * ITEMS_PER_PAGE) - 1)
+        .limit(MAX_RECORDS)
 
     // Consultas para KPIs (independientes de la búsqueda)
     const getKpiCount = async (estados: string | string[]) => {
@@ -192,8 +191,6 @@ export default async function RenovacionesPage(props: { searchParams: Promise<{ 
                 userRole={perfil.rol}
                 userId={user.id}
                 totalRecords={totalRecords || 0}
-                currentPage={currentPage}
-                pageSize={ITEMS_PER_PAGE}
             />
         </div>
     )

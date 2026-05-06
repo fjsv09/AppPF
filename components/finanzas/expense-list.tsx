@@ -2,9 +2,8 @@
 
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { Receipt, Calendar, Tag, CreditCard, User, History, Camera, ExternalLink, Pencil, Loader2, Trash2 } from 'lucide-react'
+import { Receipt, Calendar, Tag, CreditCard, User, History, Camera, ExternalLink, Pencil, Loader2, Trash2, ChevronDown } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import { PaginationControlled } from '@/components/ui/pagination-controlled'
 import { useState, useMemo, useTransition, useEffect, useCallback, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import {
@@ -32,9 +31,9 @@ interface ExpenseListProps {
 }
 
 export function ExpenseList({ expenses, onEdit, userRole, isPending, advisors = [] }: ExpenseListProps) {
-  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsToShow, setItemsToShow] = useState(20)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const ITEMS_PER_PAGE = 10
+  const ITEMS_PER_LOAD = 20
 
   const handleDelete = useCallback(async (expense: any) => {
     const esMigracion = expense.descripcion?.startsWith('[MIGRACIÓN]') || expense.descripcion?.startsWith('[MIGRACION]')
@@ -59,12 +58,14 @@ export function ExpenseList({ expenses, onEdit, userRole, isPending, advisors = 
     }
   }, [])
 
-  const totalPages = Math.ceil(expenses.length / ITEMS_PER_PAGE)
+  // Reset itemsToShow when expenses change (filters applied)
+  useEffect(() => {
+    setItemsToShow(ITEMS_PER_LOAD)
+  }, [expenses])
   
   const paginatedExpenses = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE
-    return expenses.slice(start, start + ITEMS_PER_PAGE)
-  }, [expenses, currentPage])
+    return expenses.slice(0, itemsToShow)
+  }, [expenses, itemsToShow])
 
   const getUserInfo = (userId: string) => {
     return advisors.find(a => a.id === userId)
@@ -313,15 +314,31 @@ export function ExpenseList({ expenses, onEdit, userRole, isPending, advisors = 
           </Table>
         </div>
 
-        {/* Pagination */}
-        <div className="p-4 border-t border-slate-800/50">
-          <PaginationControlled 
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            totalRecords={expenses.length}
-            pageSize={ITEMS_PER_PAGE}
-          />
+        {/* Pagination / Load More */}
+        <div className="mt-8 mb-12 border-t border-slate-800/50 pt-8 flex flex-col items-center gap-6">
+          {itemsToShow < expenses.length && expenses.length > 0 && (
+            <div className="flex flex-col items-center gap-4">
+              <button
+                onClick={() => setItemsToShow(prev => prev + ITEMS_PER_LOAD)}
+                className="group flex items-center gap-2 bg-slate-800/50 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-white px-8 py-2 rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
+              >
+                <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+                Cargar 20 más
+              </button>
+            </div>
+          )}
+
+          {expenses.length > 0 && (
+            <div className="flex flex-col items-center gap-2 opacity-60">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                Mostrando {Math.min(itemsToShow, expenses.length)} de {expenses.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Recuento</span>
+                <span className="text-sm font-black text-slate-300">{expenses.length}</span>
+              </div>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

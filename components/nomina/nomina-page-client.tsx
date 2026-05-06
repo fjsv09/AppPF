@@ -43,7 +43,6 @@ import { PagoModal } from './pago-modal'
 import { LiquidacionModal } from './liquidacion-modal'
 import { AdelantoModal } from './adelanto-modal'
 import { BoletaPDF } from './boleta-pdf'
-import { PaginationControlled } from '@/components/ui/pagination-controlled'
 
 interface NominaPageClientProps {
   trabajadores: { id: string; nombre_completo: string; rol: string }[]
@@ -74,10 +73,10 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
   const [showBoletaPDF, setShowBoletaPDF] = useState(false)
   const [selectedBoleta, setSelectedBoleta] = useState<any>(null)
 
-  // Paginación
-  const [currentPageActividad, setCurrentPageActividad] = useState(1)
-  const [currentPageBoletas, setCurrentPageBoletas] = useState(1)
-  const itemsPerPage = 10
+  // Paginación (Cargar Más)
+  const [itemsToShowActividad, setItemsToShowActividad] = useState(10)
+  const [itemsToShowBoletas, setItemsToShowBoletas] = useState(10)
+  const itemsPerLoad = 10
   
   const supabase = createClient()
   const selectedTrabajador = trabajadores.find(t => t.id === selectedId)
@@ -471,7 +470,7 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
                     
                     <div className="flex bg-slate-950/60 p-1 rounded-xl border border-slate-800/50">
                         <button 
-                            onClick={() => { setActiveTab('financiero'); setCurrentPageActividad(1); }}
+                            onClick={() => { setActiveTab('financiero'); setItemsToShowActividad(itemsPerLoad); }}
                             className={cn(
                                 "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
                                 activeTab === 'financiero' 
@@ -482,7 +481,7 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
                             Financiero
                         </button>
                         <button 
-                            onClick={() => { setActiveTab('asistencia'); setCurrentPageActividad(1); }}
+                            onClick={() => { setActiveTab('asistencia'); setItemsToShowActividad(itemsPerLoad); }}
                             className={cn(
                                 "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
                                 activeTab === 'asistencia' 
@@ -498,7 +497,7 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
                     <div className="divide-y divide-slate-800/50">
                         {(() => {
                             const currentData = activeTab === 'financiero' ? actividadFinanciera : actividadAsistencia;
-                            return currentData.length > 0 ? currentData.slice((currentPageActividad - 1) * itemsPerPage, currentPageActividad * itemsPerPage).map((item: any, idx: number) => (
+                            return currentData.length > 0 ? currentData.slice(0, itemsToShowActividad).map((item: any, idx: number) => (
                                 <div key={item.id} className="p-4 flex items-start gap-4 hover:bg-slate-800/20 transition-colors">
                                 <div className="mt-1">
                                     <div className={`w-2 h-2 rounded-full ${
@@ -580,17 +579,28 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
                     </div>
                 </CardContent>
                 
-                {((activeTab === 'financiero' ? actividadFinanciera.length : actividadAsistencia.length)) > itemsPerPage && (
-                    <div className="p-2 border-t border-slate-800/50 bg-slate-900/50">
-                        <PaginationControlled 
-                            currentPage={currentPageActividad}
-                            totalPages={Math.ceil((activeTab === 'financiero' ? actividadFinanciera.length : actividadAsistencia.length) / itemsPerPage)}
-                            onPageChange={setCurrentPageActividad}
-                            totalRecords={activeTab === 'financiero' ? actividadFinanciera.length : actividadAsistencia.length}
-                            pageSize={itemsPerPage}
-                        />
-                    </div>
-                )}
+                {(() => {
+                    const currentData = activeTab === 'financiero' ? actividadFinanciera : actividadAsistencia;
+                    return currentData.length > 0 && (
+                        <div className="p-4 border-t border-slate-800/50 bg-slate-900/50 flex flex-col items-center gap-4">
+                            {itemsToShowActividad < currentData.length && (
+                                <Button
+                                    onClick={() => setItemsToShowActividad(prev => prev + itemsPerLoad)}
+                                    size="sm"
+                                    className="group flex items-center gap-2 bg-slate-800/50 hover:bg-blue-600 border border-slate-700 hover:border-blue-500 text-slate-300 hover:text-white px-6 h-8 rounded-lg text-xs font-bold transition-all"
+                                >
+                                    <ChevronDown className="w-3.5 h-3.5 group-hover:translate-y-0.5 transition-transform" />
+                                    Cargar más
+                                </Button>
+                            )}
+                            <div className="flex items-center gap-2 opacity-50">
+                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+                                    Mostrando {Math.min(itemsToShowActividad, currentData.length)} de {currentData.length}
+                                </span>
+                            </div>
+                        </div>
+                    );
+                })()}
             </Card>
           </div>
 
@@ -609,7 +619,7 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
               </CardHeader>
               <CardContent className="p-4 flex-1 overflow-y-auto custom-scrollbar">
                 <div className="grid grid-cols-1 gap-3">
-                  {history.slice((currentPageBoletas - 1) * itemsPerPage, currentPageBoletas * itemsPerPage).map((p: any) => (
+                  {history.slice(0, itemsToShowBoletas).map((p: any) => (
                     <div 
                       key={p.id} 
                       onClick={() => viewBoleta(p)}
@@ -680,15 +690,23 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
                 </div>
               </CardContent>
 
-              {history.length > itemsPerPage && (
-                <div className="p-2 border-t border-white/5 bg-slate-900/50 mt-auto">
-                   <PaginationControlled 
-                      currentPage={currentPageBoletas}
-                      totalPages={Math.ceil(history.length / itemsPerPage)}
-                      onPageChange={setCurrentPageBoletas}
-                      totalRecords={history.length}
-                      pageSize={itemsPerPage}
-                   />
+              {history.length > 0 && (
+                <div className="p-4 border-t border-white/5 bg-slate-900/50 mt-auto flex flex-col items-center gap-4">
+                  {itemsToShowBoletas < history.length && (
+                    <Button
+                        onClick={() => setItemsToShowBoletas(prev => prev + itemsPerLoad)}
+                        size="sm"
+                        className="group flex items-center gap-2 bg-slate-800/50 hover:bg-blue-600 border border-slate-700 hover:border-blue-500 text-slate-300 hover:text-white px-6 h-8 rounded-lg text-xs font-bold transition-all"
+                    >
+                        <ChevronDown className="w-3.5 h-3.5 group-hover:translate-y-0.5 transition-transform" />
+                        Cargar más
+                    </Button>
+                  )}
+                  <div className="flex items-center gap-2 opacity-50">
+                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+                        Mostrando {Math.min(itemsToShowBoletas, history.length)} de {history.length}
+                    </span>
+                  </div>
                 </div>
               )}
             </Card>

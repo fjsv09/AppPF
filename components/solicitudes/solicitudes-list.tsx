@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { PaginationControlled } from '@/components/ui/pagination-controlled'
 import { formatDate, formatTime, formatDateTime } from '@/utils/format'
 import { DocumentButtonAsync } from '@/components/prestamos/document-button-async'
 
@@ -33,8 +32,9 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
     const asesorFilter = searchParams.get('asesor') || 'todos'
     const sortField = (searchParams.get('sortBy') as 'created_at' | 'fecha_aprobacion' | 'fecha_inicio' | 'updated_at') || 'updated_at'
     const sortOrder = (searchParams.get('order') as 'desc' | 'asc') || 'desc'
-    const currentPage = Number(searchParams.get('page')) || 1
-    const ITEMS_PER_PAGE = 10
+    
+    const ITEMS_PER_LOAD = 20
+    const [itemsToShow, setItemsToShow] = useState(ITEMS_PER_LOAD)
 
     // Debounce State for Search
     const [localSearch, setLocalSearch] = useState(searchTerm)
@@ -65,11 +65,16 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                     params.set(key, value)
                 }
             })
-            // Al cambiar filtros (excepto página), resetear a página 1
-            if (!updates.page) params.set('page', '1')
+            // Al cambiar filtros, resetear a página 1 (no necesario con itemsToShow local pero se mantiene para compatibilidad)
+            params.delete('page')
             router.replace(`${pathname}?${params.toString()}`, { scroll: false })
         })
     }
+
+    // Reset itemsToShow when filters change
+    useEffect(() => {
+        setItemsToShow(ITEMS_PER_LOAD)
+    }, [searchTerm, statusFilter, asesorFilter, sortField, sortOrder])
 
     // Lista de asesores únicos para filtrar (solo para admin/supervisor)
     const asesoresList = useMemo(() => {
@@ -117,12 +122,9 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
         }) || []
     }, [initialSolicitudes, searchTerm, statusFilter, asesorFilter, sortField, sortOrder])
 
-    const totalPages = Math.ceil(filteredSolicitudes.length / ITEMS_PER_PAGE)
-    
     const paginatedSolicitudes = useMemo(() => {
-        const start = (currentPage - 1) * ITEMS_PER_PAGE
-        return filteredSolicitudes.slice(start, start + ITEMS_PER_PAGE)
-    }, [filteredSolicitudes, currentPage])
+        return filteredSolicitudes.slice(0, itemsToShow)
+    }, [filteredSolicitudes, itemsToShow])
 
     return (
         <div className="space-y-4 pb-32">
@@ -531,18 +533,32 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                 </div>
                 </div>
 
-                {/* Pagination */}
-                {filteredSolicitudes.length > 0 && (
-                    <div className="mt-6">
-                        <PaginationControlled 
-                            currentPage={currentPage}
-                            totalPages={totalPages}
-                            onPageChange={(page) => updateParams({ page: String(page) })}
-                            totalRecords={filteredSolicitudes.length}
-                            pageSize={ITEMS_PER_PAGE}
-                        />
-                    </div>
-                )}
+                {/* Pagination / Load More */}
+                <div className="mt-8 mb-12 border-t border-slate-800/50 pt-8 flex flex-col items-center gap-6">
+                    {itemsToShow < filteredSolicitudes.length && filteredSolicitudes.length > 0 && (
+                        <div className="flex flex-col items-center gap-4">
+                            <Button
+                                onClick={() => setItemsToShow(prev => prev + ITEMS_PER_LOAD)}
+                                className="group flex items-center gap-2 bg-slate-800/50 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-white px-8 py-2 rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
+                            >
+                                <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+                                Cargar 20 más
+                            </Button>
+                        </div>
+                    )}
+
+                    {filteredSolicitudes.length > 0 && (
+                        <div className="flex flex-col items-center gap-2 opacity-60">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                Mostrando {Math.min(itemsToShow, filteredSolicitudes.length)} de {filteredSolicitudes.length}
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Recuento</span>
+                                <span className="text-sm font-black text-slate-300">{filteredSolicitudes.length}</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     )

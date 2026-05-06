@@ -34,8 +34,7 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
     const metodoFilter = searchParams.metodo;
     const pagoPorFilter = searchParams.pago_por;
 
-    const paymentPage = Number(searchParams.p_page) || 1
-    const ITEMS_PER_PAGE = 10
+    const MAX_RECORDS = 500
 
     const supabase = await createClient()
     const supabaseAdmin = createAdminClient(
@@ -223,15 +222,13 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
         totalPagos = filtered.length
 
         // Manual pagination
-        const start = (paymentPage - 1) * ITEMS_PER_PAGE
-        const end = start + ITEMS_PER_PAGE
-        pagos = filtered.slice(start, end)
+        pagos = filtered.slice(0, MAX_RECORDS)
     } else {
-        // No turno filter: use normal Supabase pagination
+        // No turno filter: fetch up to MAX_RECORDS
         const { data, count, error } = await pagosQuery
             .order('fecha_pago', { ascending: false })
             .order('id', { ascending: false })
-            .range((paymentPage - 1) * ITEMS_PER_PAGE, (paymentPage * ITEMS_PER_PAGE) - 1)
+            .limit(MAX_RECORDS)
 
         pagos = data
         totalPagos = count
@@ -456,8 +453,6 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
             <RecentPaymentsList
                 pagos={finalPagos}
                 totalRecords={totalPagos || 0}
-                currentPage={paymentPage}
-                pageSize={ITEMS_PER_PAGE}
                 perfiles={perfiles || []}
                 userRol={userRol}
                 userId={userId}

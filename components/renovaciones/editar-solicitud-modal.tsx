@@ -67,8 +67,9 @@ export function EditarSolicitudModal({ solicitud }: EditarSolicitudModalProps) {
         const factor = cuotas > 0 ? (cuotas / cuotasEstandar) : 1
         const interesFinal = interesBase * factor
 
-        const totalPagar = monto * (1 + interesFinal / 100)
-        const valorCuota = cuotas > 0 ? totalPagar / cuotas : 0
+        const totalBruto = monto * (1 + interesFinal / 100)
+        const valorCuota = cuotas > 0 ? Math.ceil(totalBruto / cuotas) : 0
+        const totalPagar = valorCuota * cuotas
 
         return { totalPagar, valorCuota, interesFinal }
     }

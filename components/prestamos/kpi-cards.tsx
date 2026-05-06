@@ -1,9 +1,9 @@
 'use client'
 
 import { useMemo } from 'react'
-import { useSearchParams, usePathname } from 'next/navigation'
-import Link from 'next/link'
-import { Wallet, TrendingUp, AlertCircle, Users } from 'lucide-react'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import { Wallet, TrendingUp, AlertCircle, Users, Loader2 } from 'lucide-react'
+import { useLoading } from './loading-context'
 import { calculateMoraBancaria } from '@/lib/financial-logic'
 import { cn } from '@/lib/utils'
 
@@ -32,14 +32,17 @@ export function KpiCards({
   umbralCppOtros,
   umbralMorosoOtros,
 }: KpiCardsProps) {
-  const searchParams = useSearchParams()
-  const pathname = usePathname()
+  const { isPending, loadingTab, navigateWithLoading, searchParams, pathname } = useLoading()
 
   const filtroSupervisor = searchParams.get('supervisor') || 'todos'
   const filtroAsesor = searchParams.get('asesor') || 'todos'
   const filtroSector = searchParams.get('sector') || 'todos'
   const filtroFrecuencia = searchParams.get('frecuencia') || 'todos'
   const activeTab = searchParams.get('tab') || ''
+
+  const handleTabChange = (tab: string) => {
+    navigateWithLoading(tab)
+  }
 
   const buildHref = (tab: string) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -171,10 +174,19 @@ export function KpiCards({
         isAdmin ? "lg:grid-cols-5" : "lg:grid-cols-4"
       )}>
         {/* Meta Hoy */}
-        <Link href={buildHref('ruta_hoy')} className={cn(
-          "bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] transition-all group",
-          activeTab === 'ruta_hoy' && "border-[#10b981]/40 ring-1 ring-[#10b981]/20"
-        )}>
+        <div 
+          onClick={() => handleTabChange('ruta_hoy')}
+          className={cn(
+            "bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] transition-all group cursor-pointer",
+            activeTab === 'ruta_hoy' && "border-[#10b981]/40 ring-1 ring-[#10b981]/20",
+            isPending && loadingTab === 'ruta_hoy' && "opacity-70 ring-1 ring-white/10"
+          )}
+        >
+          {isPending && loadingTab === 'ruta_hoy' && (
+            <div className="absolute top-2 right-2">
+              <Loader2 className="w-3 h-3 text-[#10b981] animate-spin" />
+            </div>
+          )}
           <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12 group-hover:opacity-[0.03] transition-opacity">
             <Wallet className="w-20 h-20 md:w-24 md:h-24 text-white" />
           </div>
@@ -203,13 +215,22 @@ export function KpiCards({
               </span>
             </div>
           </div>
-        </Link>
+        </div>
 
         {/* ACTIVOS */}
-        <Link href={buildHref('activos')} className={cn(
-          "bg-[#090e16] border border-emerald-500/20 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] hover:border-emerald-500/40 transition-all group",
-          activeTab === 'activos' && "border-emerald-500/50 ring-1 ring-emerald-500/25"
-        )}>
+        <div 
+          onClick={() => handleTabChange('activos')}
+          className={cn(
+            "bg-[#090e16] border border-emerald-500/20 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px] hover:bg-[#0d1421] hover:border-emerald-500/40 transition-all group cursor-pointer",
+            activeTab === 'activos' && "border-emerald-500/50 ring-1 ring-emerald-500/25",
+            isPending && loadingTab === 'activos' && "opacity-70 ring-1 ring-white/10"
+          )}
+        >
+          {isPending && loadingTab === 'activos' && (
+            <div className="absolute top-2 right-2">
+              <Loader2 className="w-3 h-3 text-emerald-500 animate-spin" />
+            </div>
+          )}
           <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12 group-hover:opacity-[0.03] transition-opacity">
             <Users className="w-20 h-20 md:w-24 md:h-24 text-emerald-500" />
           </div>
@@ -224,7 +245,8 @@ export function KpiCards({
               </span>
             </div>
           </div>
-        </Link>
+        </div>
+
 
         {/* Eficiencia Cobro - Solo Admin */}
         {userRole === 'admin' && (
@@ -261,10 +283,19 @@ export function KpiCards({
         )}
 
         {/* Renovaciones */}
-        <Link href={buildHref('renovaciones')} className={cn(
-          "bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between hover:bg-[#0d1421] transition-all group min-h-[90px] md:min-h-[120px]",
-          activeTab === 'renovaciones' && "border-amber-500/40 ring-1 ring-amber-500/20"
-        )}>
+        <div 
+          onClick={() => handleTabChange('renovaciones')}
+          className={cn(
+            "bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between hover:bg-[#0d1421] transition-all group min-h-[90px] md:min-h-[120px] cursor-pointer",
+            activeTab === 'renovaciones' && "border-amber-500/40 ring-1 ring-amber-500/20",
+            isPending && loadingTab === 'renovaciones' && "opacity-70 ring-1 ring-white/10"
+          )}
+        >
+          {isPending && loadingTab === 'renovaciones' && (
+            <div className="absolute top-2 right-2">
+              <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />
+            </div>
+          )}
           <div className="absolute top-1/2 -translate-y-1/2 -right-2 opacity-[0.02] rotate-12 group-hover:opacity-[0.03] transition-opacity">
             <TrendingUp className="w-20 h-20 md:w-24 md:h-24 text-white" />
           </div>
@@ -277,7 +308,8 @@ export function KpiCards({
               Disponibles
             </span>
           </div>
-        </Link>
+        </div>
+
 
         {/* Índice Mora */}
         <div className="bg-[#090e16] border border-slate-800/40 rounded-xl p-3 md:p-4 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[90px] md:min-h-[120px]">
@@ -321,20 +353,42 @@ export function KpiCards({
       {/* Alerts Bar */}
       {['admin', 'supervisor', 'secretaria'].includes(userRole) && (
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <Link href={buildHref('notificar')} className="bg-slate-900/40 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between hover:bg-slate-900/60 transition-colors border-l-2 border-l-rose-500/40">
+          <div 
+            onClick={() => handleTabChange('notificar')}
+            className={cn(
+              "bg-slate-900/40 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between hover:bg-slate-900/60 transition-colors border-l-2 border-l-rose-500/40 cursor-pointer relative",
+              isPending && loadingTab === 'notificar' && "opacity-70"
+            )}
+          >
+            {isPending && loadingTab === 'notificar' && (
+              <div className="absolute top-1 right-1">
+                <Loader2 className="w-2 h-2 text-rose-500 animate-spin" />
+              </div>
+            )}
             <div>
               <p className="text-rose-500/80 font-bold text-[8px] uppercase tracking-tighter">Alertas Críticas</p>
               <p className="text-lg font-black text-white">{kpis.alertasGraves}</p>
             </div>
             <AlertCircle className="w-5 h-5 text-rose-500/20" />
-          </Link>
-          <Link href={buildHref('morosos')} className="bg-slate-900/40 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between hover:bg-slate-900/60 transition-colors border-l-2 border-l-amber-500/40">
+          </div>
+          <div 
+            onClick={() => handleTabChange('morosos')}
+            className={cn(
+              "bg-slate-900/40 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between hover:bg-slate-900/60 transition-colors border-l-2 border-l-amber-500/40 cursor-pointer relative",
+              isPending && loadingTab === 'morosos' && "opacity-70"
+            )}
+          >
+            {isPending && loadingTab === 'morosos' && (
+              <div className="absolute top-1 right-1">
+                <Loader2 className="w-2 h-2 text-amber-500 animate-spin" />
+              </div>
+            )}
             <div>
               <p className="text-amber-500/80 font-bold text-[8px] uppercase tracking-tighter">Advertencia</p>
               <p className="text-lg font-black text-white">{kpis.clientesEnMora}</p>
             </div>
             <TrendingUp className="w-5 h-5 text-amber-500/20" />
-          </Link>
+          </div>
         </div>
       )}
 

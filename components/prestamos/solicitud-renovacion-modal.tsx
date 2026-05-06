@@ -336,8 +336,9 @@ export function SolicitudRenovacionModal({
            interesFinal = Math.round((cuotas / cuotasEstandar) * interesBase * 100) / 100
         }
 
-        const totalPagar = monto * (1 + interesFinal / 100)
-        const valorCuota = cuotas > 0 ? totalPagar / cuotas : 0
+        const totalBruto = monto * (1 + interesFinal / 100)
+        const valorCuota = cuotas > 0 ? Math.ceil(totalBruto / cuotas) : 0
+        const totalPagar = valorCuota * cuotas
 
         // [NUEVO] Calcular Fecha Fin
         const fechas = calcularFechasProyectadas(

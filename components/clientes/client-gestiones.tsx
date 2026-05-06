@@ -14,7 +14,7 @@ import { cn, formatDatePeru } from "@/lib/utils"
 import { toast } from "sonner"
 import { AsignarVisitaModal } from "@/components/gestiones/asignar-visita-modal"
 import { RegistrarGestionModal } from "@/components/gestiones/registrar-gestion-modal"
-import { PaginationControlled } from "@/components/ui/pagination-controlled"
+import { ChevronDown } from "lucide-react"
 
 const TIPO_ICON: Record<string, any> = {
     Llamada: Phone,
@@ -89,8 +89,8 @@ export function ClientGestiones({ loans = [], clienteId, clienteNombre = 'Client
     const [modalOpen, setModalOpen] = useState(false)
     const [asignarOpen, setAsignarOpen] = useState(false)
 
-    const [currentPage, setCurrentPage] = useState(1)
-    const ITEMS_PER_PAGE = 10
+    const [itemsToShow, setItemsToShow] = useState(10)
+    const ITEMS_PER_LOAD = 10
 
     const canCreate = userRol !== 'admin'
     const isAdmin = userRol === 'admin'
@@ -109,13 +109,12 @@ export function ClientGestiones({ loans = [], clienteId, clienteNombre = 'Client
         if (res.ok) {
             const data = await res.json()
             setGestiones(data)
-            setCurrentPage(1) // Reset to first page on loan change
+            setItemsToShow(ITEMS_PER_LOAD) // Reset on loan change
         }
         setLoading(false)
     }
 
-    const totalPages = Math.ceil(gestiones.length / ITEMS_PER_PAGE)
-    const paginatedGestiones = gestiones.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+    const paginatedGestiones = gestiones.slice(0, itemsToShow)
 
     return (
         <div className="flex flex-col">
@@ -249,14 +248,22 @@ export function ClientGestiones({ loans = [], clienteId, clienteNombre = 'Client
                             )
                         })}
 
-                        <div className="pt-2 border-t border-slate-800/50">
-                            <PaginationControlled 
-                                currentPage={currentPage}
-                                totalPages={totalPages}
-                                onPageChange={setCurrentPage}
-                                totalRecords={gestiones.length}
-                                pageSize={ITEMS_PER_PAGE}
-                            />
+                        <div className="pt-2 border-t border-slate-800/50 flex flex-col items-center gap-4">
+                            {itemsToShow < gestiones.length && (
+                                <Button
+                                    onClick={() => setItemsToShow(prev => prev + ITEMS_PER_LOAD)}
+                                    size="sm"
+                                    className="group flex items-center gap-2 bg-slate-800/50 hover:bg-blue-600 border border-slate-700 hover:border-blue-500 text-slate-300 hover:text-white px-6 h-8 rounded-lg text-[10px] font-bold uppercase transition-all"
+                                >
+                                    <ChevronDown className="w-3.5 h-3.5 group-hover:translate-y-0.5 transition-transform" />
+                                    Cargar más
+                                </Button>
+                            )}
+                            <div className="flex items-center gap-2 opacity-50">
+                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+                                    Mostrando {Math.min(itemsToShow, gestiones.length)} de {gestiones.length}
+                                </span>
+                            </div>
                         </div>
                     </>
                 )}

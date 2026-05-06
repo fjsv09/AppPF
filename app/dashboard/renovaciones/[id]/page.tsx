@@ -230,6 +230,14 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
         feriadosSet
     )
 
+    // [NUEVO] Calcular Valor Cuota con Redondeo (Consistencia)
+    const montoSol = Number(solicitud.monto_solicitado || 0)
+    const interesSol = Number(solicitud.interes || 0)
+    const cuotasSol = Number(solicitud.cuotas || 0)
+    const totalBruto = montoSol * (1 + interesSol / 100)
+    const valorCuota = cuotasSol > 0 ? Math.ceil(totalBruto / cuotasSol) : 0
+    const totalActualizado = valorCuota * cuotasSol
+
     return (
         <div className="page-container max-w-4xl mx-auto">
                 {/* Header */}
@@ -467,6 +475,14 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Cuotas</span>
                                 <span className="text-white">{solicitud.cuotas}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-500">Valor Cuota</span>
+                                <span className="text-emerald-400 font-bold">S/ {formatMoney(valorCuota)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-500">Total a Pagar</span>
+                                <span className="text-white font-bold">S/ {formatMoney(totalActualizado)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Modalidad</span>

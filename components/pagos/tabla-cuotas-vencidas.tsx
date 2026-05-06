@@ -6,8 +6,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowUpRight, Search, Filter, Users, UserCheck, Calendar } from 'lucide-react'
-import { PaginationControlled } from '@/components/ui/pagination-controlled'
+import { ArrowUpRight, Search, Filter, Users, UserCheck, Calendar, ChevronDown } from 'lucide-react'
 
 interface CuotaVencida {
     id: string
@@ -54,6 +53,8 @@ export function TablaCuotasVencidas({ cuotasVencidas, perfiles, userRol, userId,
     const [filtroSupervisor, setFiltroSupervisor] = useState<string>('todos')
     const [filtroAsesor, setFiltroAsesor] = useState<string>('todos')
     const [fechaFiltro, setFechaFiltro] = useState<string>(initialDate || getToday())
+    const [itemsToShow, setItemsToShow] = useState(20)
+    const ITEMS_PER_LOAD = 20
 
     // Efecto para actualizar URL cuando cambia la fecha
     const handleFechaChange = (nuevaFecha: string) => {
@@ -102,19 +103,17 @@ export function TablaCuotasVencidas({ cuotasVencidas, perfiles, userRol, userId,
         })
     }, [cuotasVencidas, busqueda, filtroSupervisor, filtroAsesor, userRol])
 
-    // Pagination Logic
-    const currentPage = Number(searchParams.get('page')) || 1
-    const totalPages = Math.ceil(cuotasFiltradas.length / ITEMS_PER_PAGE)
-    
+    // Reset itemsToShow when filters change
+    useEffect(() => {
+        setItemsToShow(ITEMS_PER_LOAD)
+    }, [busqueda, filtroSupervisor, filtroAsesor])
+
     const paginatedCuotas = useMemo(() => {
-        const start = (currentPage - 1) * ITEMS_PER_PAGE
-        return cuotasFiltradas.slice(start, start + ITEMS_PER_PAGE)
-    }, [cuotasFiltradas, currentPage])
+        return cuotasFiltradas.slice(0, itemsToShow)
+    }, [cuotasFiltradas, itemsToShow])
 
     const handlePageChange = (page: number) => {
-        const params = new URLSearchParams(searchParams.toString())
-        params.set('page', String(page))
-        router.push(`${pathname}?${params.toString()}`, { scroll: false })
+        // Obsolete
     }
 
     // Calcular totales
@@ -306,15 +305,32 @@ export function TablaCuotasVencidas({ cuotasVencidas, perfiles, userRol, userId,
                         ))}
                     </div>
 
-                    {/* Pagination */}
-                    <PaginationControlled 
-                        currentPage={currentPage}
-                        totalPages={totalPages}
-                        onPageChange={handlePageChange}
-                        totalRecords={cuotasFiltradas.length}
-                        pageSize={ITEMS_PER_PAGE}
-                        className="mt-6"
-                    />
+                    {/* Load More & Record Count */}
+                    <div className="mt-8 mb-12 border-t border-slate-800/50 pt-8 flex flex-col items-center gap-6">
+                        {itemsToShow < cuotasFiltradas.length && cuotasFiltradas.length > 0 && (
+                            <div className="flex flex-col items-center gap-4">
+                                <Button
+                                    onClick={() => setItemsToShow(prev => prev + ITEMS_PER_LOAD)}
+                                    className="group flex items-center gap-2 bg-slate-800/50 hover:bg-red-600 border border-slate-700 hover:border-red-500 text-slate-300 hover:text-white px-8 py-2 rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
+                                >
+                                    <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+                                    Cargar 20 más
+                                </Button>
+                            </div>
+                        )}
+
+                        {cuotasFiltradas.length > 0 && (
+                            <div className="flex flex-col items-center gap-2 opacity-60">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                    Mostrando {Math.min(itemsToShow, cuotasFiltradas.length)} de {cuotasFiltradas.length}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Recuento</span>
+                                    <span className="text-sm font-black text-slate-300">{cuotasFiltradas.length}</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </>
             )}
         </div>

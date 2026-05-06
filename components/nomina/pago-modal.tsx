@@ -70,6 +70,7 @@ export function PagoModal({ open, onOpenChange, nomina, userRole, trabajador, on
         setLoadingCuentas(false)
     }
 
+
     const frecuencia = trabajador.frecuencia_pago || 'mensual'
     const divisor = frecuencia === 'semanal' ? 4 : frecuencia === 'quincenal' ? 2 : 1
     const nroPago = (nomina?.pagos_completados || 0) + 1

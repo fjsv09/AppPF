@@ -38,7 +38,7 @@ export default function AdminSectoresPage() {
       const { data, error } = await supabase
         .from('sectores')
         .select('*')
-        .order('orden', { ascending: true })
+        .order('nombre', { ascending: true })
 
       if (error) throw error
       setSectores(data || [])
@@ -84,7 +84,7 @@ export default function AdminSectoresPage() {
     setEditingId(null)
     setFormData({
       nombre: '',
-      orden: (sectores.length + 1).toString(),
+      orden: '0',
       activo: true
     })
   }

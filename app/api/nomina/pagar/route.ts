@@ -94,18 +94,10 @@ export async function POST(request: Request) {
         const frecuencia = trabajador.frecuencia_pago || 'mensual'
         
         // Contar sábados del mes para pagos semanales
-        const getSaturdaysInMonth = (m: number, y: number) => {
-            let count = 0
-            const daysInMonth = new Date(y, m, 0).getDate()
-            for (let i = 1; i <= daysInMonth; i++) {
-                if (new Date(y, m - 1, i).getDay() === 6) count++
-            }
-            return count
-        }
 
         let maxPagos = 1
         if (frecuencia === 'semanal') {
-            maxPagos = getSaturdaysInMonth(nomina.mes, nomina.anio)
+            maxPagos = 4
         } else if (frecuencia === 'quincenal') {
             maxPagos = 2
         }

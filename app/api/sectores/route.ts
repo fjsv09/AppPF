@@ -17,7 +17,7 @@ export async function GET() {
             .from('sectores')
             .select('id, nombre')
             .eq('activo', true)
-            .order('orden', { ascending: true })
+            .order('nombre', { ascending: true })
 
         if (error) {
             console.error('Error fetching sectores with admin client:', error)

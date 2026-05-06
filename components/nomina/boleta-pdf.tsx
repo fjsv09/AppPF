@@ -58,9 +58,9 @@ export function BoletaPDF({ nomina, trabajador, open, onOpenChange }: BoletaPDFP
     const descuentos = (nomina.descuentos_original || 0) + (nomina.descuentos || 0)
     const adelantos = (nomina.adelantos_original || 0) + (nomina.adelantos || 0)
     
-    // Calcular total ya pagado históricamente (transacciones de tipo 'pago')
+    // Calcular total ya descontado/pagado (pagos y adelantos ya ejecutados)
     const totalPagadoHistorico = detalles
-        .filter(d => d.tipo === 'pago')
+        .filter(d => ['pago', 'adelanto'].includes(d.tipo))
         .reduce((acc, d) => acc + parseFloat(d.monto || 0), 0)
 
     const totalNeto = sueldoBase + bonos - descuentos - adelantos - totalPagadoHistorico

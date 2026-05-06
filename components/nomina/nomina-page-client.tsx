@@ -206,6 +206,7 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
     }
   }, [selectedId])
 
+
   const frecuencia = perfil?.frecuencia_pago || 'mensual'
   const divisor = frecuencia === 'semanal' ? 4 : frecuencia === 'quincenal' ? 2 : 1
   const sueldoBaseProporcional = (payrollData?.sueldo_base || perfil?.sueldo_base || 0) / divisor

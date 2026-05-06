@@ -8,6 +8,7 @@ import { PaginationControlled } from '@/components/ui/pagination-controlled'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { getTodayPeru } from '@/lib/financial-logic'
 import { cn } from '@/lib/utils'
 
 interface RecentPaymentsListProps {
@@ -31,7 +32,7 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
     const currentSearch = searchParams.get('q') || ''
     const currentAsesor = searchParams.get('asesor') || 'all'
     const currentSupervisor = searchParams.get('supervisor') || 'all'
-    const today = new Date().toISOString().split('T')[0]
+    const today = getTodayPeru()
     const currentFecha = searchParams.get('fecha') || today
     const currentFechaInicio = searchParams.get('fecha_inicio') || today
     const currentFechaFin = searchParams.get('fecha_fin') || today
@@ -124,14 +125,14 @@ export function RecentPaymentsList({ pagos, totalRecords, currentPage, pageSize,
         startTransition(() => {
             const params = new URLSearchParams(searchParams.toString())
             if (nextMode) {
-                const current = tempFecha || new Date().toISOString().split('T')[0]
+                const current = tempFecha || getTodayPeru()
                 params.set('fecha_inicio', current)
                 params.set('fecha_fin', current)
                 params.delete('fecha')
                 setTempFechaInicio(current)
                 setTempFechaFin(current)
             } else {
-                const current = tempFechaInicio || new Date().toISOString().split('T')[0]
+                const current = tempFechaInicio || getTodayPeru()
                 params.set('fecha', current)
                 params.delete('fecha_inicio')
                 params.delete('fecha_fin')

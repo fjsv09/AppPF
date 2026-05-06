@@ -19,6 +19,7 @@ import { Edit, MessageSquare, DollarSign } from 'lucide-react'
 import { QuickPayModal } from '../prestamos/quick-pay-modal'
 import { BulkImportModal } from './bulk-import-modal'
 import { ClientEditSectorModal } from './client-edit-sector-modal'
+import { ClientAddGpsModal } from './client-add-gps-modal'
 import { FileUp } from 'lucide-react'
 import { getTodayPeru, calculateLoanMetrics } from '@/lib/financial-logic'
 
@@ -129,9 +130,9 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     const [confirmEditOpen, setConfirmEditOpen] = useState(false)
     const [pendingEditClient, setPendingEditClient] = useState<any>(null)
 
-    // Edit Modal State
     const [editingCliente, setEditingCliente] = useState<any>(null)
     const [editingSectorCliente, setEditingSectorCliente] = useState<any>(null)
+    const [addingGpsCliente, setAddingGpsCliente] = useState<any>(null)
     const [clientOverrides, setClientOverrides] = useState<Record<string, any>>({})
 
     // Registrar Gestión State
@@ -640,7 +641,8 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                         userRol === 'supervisor' ? "col-span-4" : "col-span-5"
                     )}>Cliente</div>
                     <div className="col-span-2 text-left">Sector</div>
-                    <div className="col-span-2 text-left">Dirección</div>
+                    <div className="col-span-1 text-left">Dirección</div>
+                    <div className="col-span-1 text-center">GPS</div>
                     {(userRol === 'admin' || userRol === 'supervisor') && (
                         <div className="col-span-2 text-left">{activeFilter === 'reasignados' ? 'Procedencia' : 'Asesor'}</div>
                     )}
@@ -793,6 +795,14 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                     {cliente.excepcion_voucher ? "Requerir Recibos" : "Exonerar Recibos"}
                                                 </DropdownMenuItem>
                                             )}
+                                            {(!cliente.gps_coordenadas || cliente.gps_coordenadas === "null") && (
+                                                <DropdownMenuItem 
+                                                    onClick={() => setAddingGpsCliente(cliente)}
+                                                    className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400 font-bold"
+                                                >
+                                                    <Map className="w-4 h-4 mr-2" /> Agregar GPS
+                                                </DropdownMenuItem>
+                                            )}
                                             {(userRol === 'admin' || (userRol === 'supervisor' && !cliente.bloqueado_renovacion)) && (
                                                 <DropdownMenuItem 
                                                     onClick={() => {
@@ -897,7 +907,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                     )}
                                 </div>
 
-                                <div className="col-span-2 min-w-0 flex items-center gap-1.5">
+                                <div className="col-span-1 min-w-0 flex items-center gap-1.5">
                                     {cliente.direccion ? (
                                         <>
                                             <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
@@ -905,6 +915,18 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                         </>
                                     ) : (
                                         <span className="text-[10px] text-slate-600 italic">Sin dirección</span>
+                                    )}
+                                </div>
+
+                                <div className="col-span-1 flex justify-center items-center">
+                                    {cliente.gps_coordenadas && cliente.gps_coordenadas !== "null" ? (
+                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[9px] h-5 px-1.5 font-bold shrink-0">
+                                            <Map className="w-3 h-3 mr-1" /> SÍ
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="bg-rose-500/10 text-rose-500 border-rose-500/20 text-[9px] h-5 px-1.5 font-bold shrink-0">
+                                            <Map className="w-3 h-3 mr-1" /> NO
+                                        </Badge>
                                     )}
                                 </div>
 
@@ -1007,6 +1029,14 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                 >
                                                     {cliente.excepcion_voucher ? <ShieldCheck className="w-4 h-4 mr-2" /> : <Receipt className="w-4 h-4 mr-2" />}
                                                     {cliente.excepcion_voucher ? "Requerir Recibos" : "Exonerar Recibos"}
+                                                </DropdownMenuItem>
+                                            )}
+                                            {(!cliente.gps_coordenadas || cliente.gps_coordenadas === "null") && (
+                                                <DropdownMenuItem 
+                                                    onClick={() => setAddingGpsCliente(cliente)}
+                                                    className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400 font-bold"
+                                                >
+                                                    <Map className="w-4 h-4 mr-2" /> Agregar GPS
                                                 </DropdownMenuItem>
                                             )}
                                             {(userRol === 'admin' || (userRol === 'supervisor' && !cliente.bloqueado_renovacion)) && (
@@ -1168,6 +1198,21 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                         }
                         setEditingCliente(null)
                         router.refresh()
+                    }}
+                />
+            )}
+
+            {addingGpsCliente && (
+                <ClientAddGpsModal
+                    cliente={addingGpsCliente}
+                    isOpen={!!addingGpsCliente}
+                    onClose={() => setAddingGpsCliente(null)}
+                    onSuccess={(clienteId, newGps) => {
+                        setClientOverrides(prev => ({ 
+                            ...prev, 
+                            [clienteId]: { ...(prev[clienteId] || addingGpsCliente), gps_coordenadas: newGps } 
+                        }))
+                        setAddingGpsCliente(null)
                     }}
                 />
             )}

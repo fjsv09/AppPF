@@ -7,14 +7,15 @@
  * Retorna la fecha actual en formato YYYY-MM-DD ajustada a la zona horaria de Perú.
  */
 export function getTodayPeru(): string {
-  // ISO format YYYY-MM-DD in Lima time
-  const date = new Date();
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Lima',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).format(date);
+  // Convertir la fecha actual UTC a Lima de forma precisa
+  const now = new Date();
+  const limaDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
+
+  const year = limaDate.getFullYear();
+  const month = String(limaDate.getMonth() + 1).padStart(2, '0');
+  const day = String(limaDate.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
 }
 
 interface SystemConfig {

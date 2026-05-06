@@ -659,7 +659,7 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
         return acc + Math.max(0, deudaTotal - pagado)
     }, 0)
 
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+    const today = getTodayPeru()
     const capitalEnRiesgo = calculateMoraBancaria(prestamos, today).capitalVencido
 
     // Perfiles ya cargados arriba (sección 2.1)

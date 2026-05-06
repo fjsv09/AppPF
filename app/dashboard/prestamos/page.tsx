@@ -618,7 +618,11 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
             const isFinalizado = prestamo.estado === 'finalizado' || prestamo.isFinalizado || (prestamo.saldo_pendiente <= 0 && typeof prestamo.saldo_pendiente === 'number')
             
             const totalPagar = prestamo.monto * (1 + (prestamo.interes / 100))
-            const pagado = prestamo.total_pagado_acumulado || 0
+            // saldo_pendiente (DB column) is reliable here; total_pagado_acumulado is 0 in the list
+            // query because cronograma/pagos are not fetched for each row.
+            const saldoDB = (typeof prestamo.saldo_pendiente === 'number' && !isNaN(prestamo.saldo_pendiente) && prestamo.saldo_pendiente >= 0)
+                ? prestamo.saldo_pendiente : null
+            const pagado = saldoDB !== null ? Math.max(0, totalPagar - saldoDB) : (prestamo.total_pagado_acumulado || 0)
             const porcentajePagado = totalPagar > 0 ? (pagado / totalPagar) : 0
             
             const limitePorcentaje = typeof renovacionMinPagado === 'number' ? renovacionMinPagado : 60

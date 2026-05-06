@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useTransition, Fragment } from 'react'
+import { useState, useMemo, useEffect, useTransition, Fragment, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import dynamic from 'next/dynamic'
@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectLabel, SelectGroup } from "@/components/ui/select"
 import {
     AlertCircle, Wallet, Search, Users, Calendar, MoreVertical,
-    CalendarDays, CheckCircle2, AlertTriangle, MapPin, DollarSign, FileText, ChevronRight, Eye, Files,
+    CalendarDays, CheckCircle2, AlertTriangle, MapPin, DollarSign, FileText, ChevronRight, ChevronDown, Eye, Files,
     X, XCircle, RotateCcw, MessageCircle, MessageSquare, Loader2, ListFilter, LayoutGrid, Table, Lock, ClipboardList, ShieldAlert, ShieldOff, Shield, Pencil
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -162,6 +162,11 @@ export function PrestamosTable({
     const [isConfirmEditOpen, setIsConfirmEditOpen] = useState(false)
     const [isFiltering, setIsFiltering] = useState(false)
     const [itemsToShow, setItemsToShow] = useState(ITEMS_PER_LOAD)
+    const observerTarget = useRef<HTMLDivElement>(null)
+
+
+
+
 
     useEffect(() => {
         if (typeof window !== 'undefined' && navigator.geolocation) {
@@ -221,6 +226,10 @@ export function PrestamosTable({
     const filtroAsesor = searchParams.get('asesor') || 'todos'
     const filtroSector = searchParams.get('sector') || 'todos'
     const filtroFrecuencia = searchParams.get('frecuencia') || 'todos'
+
+    useEffect(() => {
+        setItemsToShow(ITEMS_PER_LOAD)
+    }, [activeFilter, localSearch, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia])
 
     // --- PROTECCIÓN DE RUTA (VISITAS CONTROL) ---
     useEffect(() => {
@@ -319,9 +328,7 @@ export function PrestamosTable({
         return () => clearTimeout(handler)
     }, [localSearch, searchParams, pathname, router])
 
-    useEffect(() => {
-        setItemsToShow(ITEMS_PER_LOAD)
-    }, [activeFilter, searchQuery, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia])
+
 
     const handleQuickPay = (prestamo: any, e?: React.MouseEvent) => {
         if (e) {
@@ -575,9 +582,9 @@ export function PrestamosTable({
                 break
 
             case 'cobranza':
-                // Cobranza: Real Arrears >= 1 quota. Exclude "Al dia".
-                // Include both 'activo' and 'vencido' — vencido loans with saldo pendiente must appear
-                filtered = filtered.filter(p => p.atrasadas >= 1 && p.deudaHoy > 0 && ['activo', 'vencido'].includes(p.estado))
+                // Cobranza: Real Arrears >= 1 quota OR any arrears from previous days.
+                // Include both 'activo' and 'vencido' — loans with balance must appear if they are past due.
+                filtered = filtered.filter(p => (p.atrasadas >= 1 || p.deudaHoy > (p.cuota_dia_hoy || 0) + 0.1) && ['activo', 'vencido'].includes(p.estado))
                 break
 
             case 'morosos':
@@ -627,10 +634,10 @@ export function PrestamosTable({
                 break
 
             case 'en_curso':
-                // En Curso: Activo, Mora, CPP. (Excludes Finalizado/Anulado/Pagado)
+                // En Curso: Activo, Mora, CPP, Vencido con saldo. (Excludes Finalizado/Anulado/Pagado)
                 filtered = filtered.filter(p => {
                     const isEffectivelyPaid = (p.saldo_pendiente || p.metrics?.saldoPendiente || 0) <= 0.01;
-                    return ['activo'].includes(p.estado) && !['finalizado', 'anulado'].includes(p.estado) && !isEffectivelyPaid;
+                    return ['activo', 'vencido'].includes(p.estado) && !['finalizado', 'anulado'].includes(p.estado) && !isEffectivelyPaid;
                 })
                 break
 
@@ -744,6 +751,8 @@ export function PrestamosTable({
     }, [processedPrestamos, activeFilter, localSearch, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia, userRol, perfiles, sortBy, sortOrder])
 
 
+
+
     // --------------------------------------------------------------------------------
     // 3. STATS/COUNTS Logic (Must use PROCESSED but ALL data to count correctly)
     // --------------------------------------------------------------------------------
@@ -775,7 +784,7 @@ export function PrestamosTable({
 
             if (p.es_renovable_estricto) counts.renovaciones++
 
-            if (isActivo) {
+            if (isActivo || p.estado === 'vencido') {
                 const isEffectivelyPaid = (p.saldo_pendiente || p.metrics?.saldoPendiente || 0) <= 0.01;
                 if (!isEffectivelyPaid) counts.en_curso++
                 counts.semana++
@@ -786,7 +795,7 @@ export function PrestamosTable({
                 if (p.cuota_dia_programada > 0.01 || p.cobrado_hoy > 0.01) {
                     counts.visitas_control++
                 }
-                if (p.atrasadas >= 1 && p.deudaHoy > 0) counts.cobranza++
+                if ((p.atrasadas >= 1 || p.deudaHoy > (p.cuota_dia_hoy || 0) + 0.1) && p.deudaHoy > 0.01) counts.cobranza++
 
                 const hasCriticalStatus = ['vencido', 'legal', 'castigado'].includes(p.estado_mora || '')
                 const isCritical = hasCriticalStatus || (isDiario && p.atrasadas >= 7) || (!isDiario && p.atrasadas >= 2)
@@ -2610,28 +2619,39 @@ export function PrestamosTable({
                                                         </div>
                                                     </div>
                                                 </Fragment>
-                                            )
-                                        })}
+                                                )
+                                            })}
 
-                                        {filteredPrestamos.length === 0 && (
-                                            <div className="text-center py-12 text-slate-500 bg-slate-950/30">
-                                                <Search className="w-8 h-8 mx-auto mb-3 opacity-20" />
-                                                <p>No se encontraron resultados</p>
-                                            </div>
-                                        )}
-
-                                        {itemsToShow < filteredPrestamos.length && filteredPrestamos.length > 0 && (
-                                            <div className="flex justify-center py-8">
-                                                <Button
-                                                    onClick={() => setItemsToShow(prev => prev + ITEMS_PER_LOAD)}
-                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 py-2 rounded-lg transition-all"
-                                                >
-                                                    Cargar {Math.min(ITEMS_PER_LOAD, filteredPrestamos.length - itemsToShow)} más
-                                                </Button>
-                                            </div>
-                                        )}
+                                            {filteredPrestamos.length === 0 && (
+                                                <div className="text-center py-12 text-slate-500 bg-slate-950/30">
+                                                    <Search className="w-8 h-8 mx-auto mb-3 opacity-20" />
+                                                    <p>No se encontraron resultados</p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
+
+                            {/* Sentinel y Botón de Carga (Compartido para ambos views) */}
+                            <div className="mt-8 mb-12 border-t border-slate-800/50 pt-8 flex flex-col items-center gap-6">
+                                {itemsToShow < filteredPrestamos.length && filteredPrestamos.length > 0 && (
+                                    <div className="flex flex-col items-center gap-4">
+                                        <Button
+                                            onClick={() => setItemsToShow(prev => prev + ITEMS_PER_LOAD)}
+                                            className="group flex items-center gap-2 bg-slate-800/50 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-white px-8 py-2 rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
+                                        >
+                                            <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+                                            Cargar 20 más
+                                        </Button>
+                                    </div>
+                                )}
+
+                                {filteredPrestamos.length > 0 && (
+                                    <div className="flex items-center gap-2 opacity-60">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Recuento</span>
+                                        <span className="text-sm font-black text-slate-300">{filteredPrestamos.length}</span>
+                                    </div>
+                                )}
                             </div>
                         </>
                     )}

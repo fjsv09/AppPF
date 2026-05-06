@@ -404,7 +404,7 @@ export function SupervisorEfficiency({
                                 </div>
                             )}
                             <div className="flex justify-between items-start mb-1 md:mb-2 text-slate-400">
-                                <p className="font-medium text-[8px] md:text-[9px] uppercase tracking-widest text-blue-400">Salud</p>
+                                <p className="font-medium text-[10px] md:text-[11px] uppercase tracking-widest text-blue-400">Salud</p>
                                 <Zap className="w-3 h-3 md:w-3.5 md:h-3.5 text-blue-400 opacity-70 group-hover:opacity-100" />
                             </div>
                             <h3 className="text-lg md:text-3xl font-black text-white tracking-tighter uppercase italic truncate">
@@ -418,7 +418,7 @@ export function SupervisorEfficiency({
                                     <p className="text-blue-400 font-bold text-[9px]">{healthIndex.toFixed(0)}%</p>
                                 </div>
                                 <div className="flex">
-                                    <span className="bg-blue-500/10 text-blue-400 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-blue-500/10 uppercase tracking-widest">{data.teamSummary.totalClientes} Clientes</span>
+                                    <span className="bg-blue-500/10 text-blue-400 text-[10px] md:text-[12px] font-black px-1.5 md:px-2 py-0.5 rounded border border-blue-500/10 uppercase tracking-widest">{data.teamSummary.totalClientes} Clientes</span>
                                 </div>
                             </div>
                         </div>
@@ -436,14 +436,14 @@ export function SupervisorEfficiency({
                                 </div>
                             )}
                             <div className="flex justify-between items-start mb-1 md:mb-2 text-slate-400">
-                                <p className="font-medium text-[8px] md:text-[9px] uppercase tracking-widest text-[#10b981]">Cobranza Hoy</p>
+                                <p className="font-medium text-[10px] md:text-[11px] uppercase tracking-widest text-[#10b981]">Cobranza Hoy</p>
                                 <Wallet className="w-3 h-3 md:w-3.5 md:h-3.5 text-[#10b981] opacity-70 group-hover:opacity-100" />
                             </div>
                             <div className="flex flex-col">
                                 <span className="text-sm md:text-2xl font-black text-white tracking-tighter truncate">
                                     {formatMoney(data.teamSummary.metaHoyPagado)}
                                 </span>
-                                <span className="text-[9px] md:text-[11px] font-bold text-slate-500 tracking-tight">
+                                <span className="text-[10px] md:text-[12px] font-bold text-slate-500 tracking-tight">
                                     Meta: {formatMoney(data.teamSummary.metaHoyMonto)}
                                 </span>
                             </div>
@@ -455,7 +455,7 @@ export function SupervisorEfficiency({
                                     <p className="text-[#10b981] font-bold text-[9px]">{data.teamSummary.eficienciaHoy.toFixed(0)}%</p>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="bg-[#10b981]/10 text-[#10b981] text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-[#10b981]/10 uppercase tracking-widest">{data.teamSummary.metaHoyPrestamosPagados}/{data.teamSummary.metaHoyPrestamosTotal} Créd.</span>
+                                    <span className="bg-[#10b981]/10 text-[#10b981] text-[10px] md:text-[12px] font-black px-1.5 md:px-2 py-0.5 rounded border border-[#10b981]/10 uppercase tracking-widest">{data.teamSummary.metaHoyPrestamosPagados}/{data.teamSummary.metaHoyPrestamosTotal} Créd.</span>
                                 </div>
                             </div>
                         </div>
@@ -473,14 +473,14 @@ export function SupervisorEfficiency({
                                 </div>
                             )}
                             <div className="flex justify-between items-start mb-1 md:mb-2 text-slate-400">
-                                <p className="font-medium text-[8px] md:text-[9px] uppercase tracking-widest text-blue-400">Efc. Cobro</p>
+                                <p className="font-medium text-[10px] md:text-[11px] uppercase tracking-widest text-blue-400">Efc. Cobro</p>
                                 <TrendingUp className="w-3 h-3 md:w-3.5 md:h-3.5 text-blue-400 opacity-70 group-hover:opacity-100" />
                             </div>
                             <div className="flex flex-col">
                                 <span className="text-sm md:text-2xl font-black text-white tracking-tighter truncate">
                                     {formatMoney(data.teamSummary.eficienciaPagado)}
                                 </span>
-                                <span className="text-[9px] md:text-[11px] font-bold text-slate-500 tracking-tight">
+                                <span className="text-[10px] md:text-[12px] font-bold text-slate-500 tracking-tight">
                                     Meta: {formatMoney(data.teamSummary.eficienciaMonto)}
                                 </span>
                             </div>
@@ -493,7 +493,7 @@ export function SupervisorEfficiency({
                                         {((data.teamSummary.eficienciaPagado / (data.teamSummary.eficienciaMonto || 1)) * 100).toFixed(0)}%
                                     </p>
                                 </div>
-                                <span className="bg-blue-500/10 text-blue-400 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-blue-500/10 uppercase tracking-widest">Hoy + Atrasados</span>
+                                <span className="bg-blue-500/10 text-blue-400 text-[10px] md:text-[12px] font-black px-1.5 md:px-2 py-0.5 rounded border border-blue-500/10 uppercase tracking-widest">Hoy + Atrasados</span>
                             </div>
                         </div>
 
@@ -510,12 +510,12 @@ export function SupervisorEfficiency({
                                 </div>
                             )}
                             <div className="flex justify-between items-start mb-1 md:mb-2 text-slate-400">
-                                <p className="font-medium text-[8px] md:text-[9px] uppercase tracking-widest text-rose-500">Mora Global</p>
+                                <p className="font-medium text-[10px] md:text-[11px] uppercase tracking-widest text-rose-500">Mora Global</p>
                                 <AlertTriangle className="w-3 h-3 md:w-3.5 md:h-3.5 text-rose-500 opacity-70 group-hover:opacity-100" />
                             </div>
                             <h2 className="text-lg md:text-3xl font-black text-rose-500 tracking-tighter inline-flex items-baseline gap-2">
                                 {data.teamSummary.moraGlobal.toFixed(2)}%
-                                <span className="text-[10px] md:text-sm font-bold opacity-60">
+                                <span className="text-[11px] md:text-sm font-bold opacity-60">
                                     ({formatMoney(data.teamSummary.moraMontoGlobal)})
                                 </span>
                             </h2>
@@ -526,7 +526,7 @@ export function SupervisorEfficiency({
                                     </div>
                                     <p className="text-rose-500 font-bold text-[8px] md:text-[9px]">Riesgo</p>
                                 </div>
-                                <span className="bg-rose-500/10 text-rose-500 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-rose-500/10 uppercase tracking-widest">Cap. Vencido</span>
+                                <span className="bg-rose-500/10 text-rose-500 text-[10px] md:text-[12px] font-black px-1.5 md:px-2 py-0.5 rounded border border-rose-500/10 uppercase tracking-widest">Cap. Vencido</span>
                             </div>
                         </div>
                     </div>
@@ -557,7 +557,7 @@ export function SupervisorEfficiency({
                                     className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all group relative cursor-pointer"
                                     onClick={() => openDrilldown('total')}
                                 >
-                                    <p className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                    <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <Users className="w-2.5 h-2.5" /> Total Clientes
                                     </p>
                                     <div className="flex items-baseline gap-1">
@@ -569,7 +569,7 @@ export function SupervisorEfficiency({
                                     className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:border-emerald-500/30 hover:bg-emerald-500/5 transition-all group relative cursor-pointer"
                                     onClick={() => openDrilldown('nuevos')}
                                 >
-                                    <p className="text-[8px] md:text-[9px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                    <p className="text-[10px] md:text-[11px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <UserPlus className="w-2.5 h-2.5" /> Clientes Nuevos
                                     </p>
                                     <div className="flex items-baseline gap-1">
@@ -581,7 +581,7 @@ export function SupervisorEfficiency({
                                     className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:border-blue-400/30 hover:bg-blue-400/5 transition-all group relative cursor-pointer"
                                     onClick={() => openDrilldown('vigente')}
                                 >
-                                    <p className="text-[8px] md:text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                    <p className="text-[10px] md:text-[11px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <UserCheck className="w-2.5 h-2.5" /> Cartera Vigente
                                     </p>
                                     <div className="flex items-baseline gap-1">
@@ -593,7 +593,7 @@ export function SupervisorEfficiency({
                                     className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:border-purple-500/30 hover:bg-purple-500/5 transition-all group relative cursor-pointer"
                                     onClick={() => openDrilldown('renovaciones')}
                                 >
-                                    <p className="text-[8px] md:text-[9px] font-black text-purple-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                    <p className="text-[10px] md:text-[11px] font-black text-purple-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <Banknote className="w-2.5 h-2.5" /> Renovaciones
                                     </p>
                                     <div className="flex items-baseline gap-1">
@@ -605,7 +605,7 @@ export function SupervisorEfficiency({
                                     className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:border-emerald-400/30 hover:bg-emerald-400/5 transition-all group relative cursor-pointer"
                                     onClick={() => openDrilldown('aptos')}
                                 >
-                                    <p className="text-[8px] md:text-[9px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                    <p className="text-[10px] md:text-[11px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <Zap className="w-2.5 h-2.5" /> Aptos para Crédito
                                     </p>
                                     <div className="flex items-baseline gap-1">
@@ -617,7 +617,7 @@ export function SupervisorEfficiency({
                                     className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 hover:border-rose-500/30 hover:bg-rose-500/5 transition-all group relative cursor-pointer"
                                     onClick={() => openDrilldown('bloqueados')}
                                 >
-                                    <p className="text-[8px] md:text-[9px] font-black text-rose-500 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                    <p className="text-[10px] md:text-[11px] font-black text-rose-500 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <Lock className="w-2.5 h-2.5" /> Clientes Bloqueados
                                     </p>
                                     <div className="flex items-baseline gap-1">
@@ -631,7 +631,7 @@ export function SupervisorEfficiency({
                                     className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 border-red-500/20 hover:bg-red-500/5 transition-all group relative cursor-pointer"
                                     onClick={() => openDrilldown('critica')}
                                 >
-                                    <p className="text-[8px] md:text-[9px] font-black text-red-500 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                    <p className="text-[10px] md:text-[11px] font-black text-red-500 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <AlertTriangle className="w-2.5 h-2.5" /> Alerta Crítica
                                     </p>
                                     <div className="flex items-baseline gap-1">
@@ -643,7 +643,7 @@ export function SupervisorEfficiency({
                                     className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 border-amber-500/20 hover:bg-amber-500/5 transition-all group relative cursor-pointer"
                                     onClick={() => openDrilldown('advert')}
                                 >
-                                    <p className="text-[8px] md:text-[9px] font-black text-orange-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                    <p className="text-[10px] md:text-[11px] font-black text-orange-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <Activity className="w-2.5 h-2.5" /> En Advertencia
                                     </p>
                                     <div className="flex items-baseline gap-1">
@@ -660,7 +660,7 @@ export function SupervisorEfficiency({
                                     className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-3 border-orange-500/20 hover:bg-orange-500/5 transition-all group relative cursor-pointer"
                                     onClick={() => openDrilldown('vencidos')}
                                 >
-                                    <p className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
+                                    <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 truncate">
                                         <History className="w-2.5 h-2.5" /> Vencidos
                                     </p>
                                     <div className="flex items-baseline gap-1">

@@ -191,7 +191,7 @@ export function KpiCards({
             <Wallet className="w-20 h-20 md:w-24 md:h-24 text-white" />
           </div>
           <div className="relative z-10">
-            <p className="text-[#10b981] font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-1 md:mb-2">Meta Hoy</p>
+            <p className="text-[#10b981] font-bold text-[10px] md:text-[11px] uppercase tracking-[0.2em] mb-1 md:mb-2">Meta Hoy</p>
             <div className="flex items-baseline gap-1">
               <span className="text-lg md:text-2xl font-black text-white tracking-tighter">${kpis.recaudadoRutaHoy.toLocaleString()}</span>
               <span className="text-slate-600 text-[9px] md:text-sm font-medium">/ ${kpis.metaCobranzaHoy.toLocaleString()}</span>
@@ -205,12 +205,12 @@ export function KpiCards({
                   style={{ width: `${kpis.metaCobranzaHoy > 0 ? Math.min(100, (kpis.recaudadoRutaHoy / kpis.metaCobranzaHoy) * 100) : 0}%` }}
                 />
               </div>
-              <p className="text-[#10b981] font-bold text-[7px] md:text-[9px] flex items-center gap-1 shrink-0">
+              <p className="text-[#10b981] font-bold text-[10px] md:text-[11px] flex items-center gap-1 shrink-0">
                 <span>{kpis.metaCobranzaHoy > 0 ? Math.round((kpis.recaudadoRutaHoy / kpis.metaCobranzaHoy) * 100) : 0}%</span>
               </p>
             </div>
             <div className="flex">
-              <span className="bg-[#10b981]/10 text-[#10b981] text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-[#10b981]/20 uppercase tracking-wider mt-1">
+              <span className="bg-[#10b981]/10 text-[#10b981] text-[10px] md:text-[12px] font-black px-1.5 md:px-2 py-0.5 rounded border border-[#10b981]/20 uppercase tracking-wider mt-1">
                 {kpis.clientesCobradosHoy} de {kpis.totalClientesHoy} Préstamos
               </span>
             </div>
@@ -235,12 +235,12 @@ export function KpiCards({
             <Users className="w-20 h-20 md:w-24 md:h-24 text-emerald-500" />
           </div>
           <div className="relative z-10">
-            <p className="text-emerald-500 font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-1 md:mb-2">ACTIVOS</p>
+            <p className="text-emerald-500 font-bold text-[10px] md:text-[11px] uppercase tracking-[0.2em] mb-1 md:mb-2">ACTIVOS</p>
             <h2 className="text-lg md:text-2xl font-black text-white tracking-tighter">{kpis.activeLoans}</h2>
           </div>
           <div className="relative z-10 mt-1 md:mt-2 space-y-1.5">
             <div className="flex">
-              <span className="bg-emerald-500/10 text-emerald-400 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider mt-1">
+              <span className="bg-emerald-500/10 text-emerald-400 text-[10px] md:text-[12px] font-black px-1.5 md:px-2 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider mt-1">
                 COBRANZA VIGENTE
               </span>
             </div>
@@ -255,7 +255,7 @@ export function KpiCards({
               <TrendingUp className="w-20 h-20 md:w-24 md:h-24 text-white" />
             </div>
             <div className="relative z-10">
-              <p className="text-blue-400 font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-1 md:mb-2">Eficiencia Cobro</p>
+              <p className="text-blue-400 font-bold text-[10px] md:text-[11px] uppercase tracking-[0.2em] mb-1 md:mb-2">Eficiencia Cobro</p>
               <div className="flex items-baseline gap-1">
                 <span className="text-lg md:text-2xl font-black text-white tracking-tighter">${kpis.cobradoEficienciaTotal.toLocaleString()}</span>
                 <span className="text-slate-600 text-[9px] md:text-sm font-medium">/ ${kpis.metaEficienciaTotal.toLocaleString()}</span>
@@ -269,12 +269,12 @@ export function KpiCards({
                     style={{ width: `${Math.min(100, kpis.porcentajeEficiencia)}%` }}
                   />
                 </div>
-                <p className="text-blue-400 font-bold text-[7px] md:text-[9px] flex items-center gap-1 shrink-0">
+                <p className="text-blue-400 font-bold text-[10px] md:text-[11px] flex items-center gap-1 shrink-0">
                   <span>{kpis.porcentajeEficiencia.toFixed(0)}%</span>
                 </p>
               </div>
               <div className="flex">
-                <span className="bg-blue-500/10 text-blue-400 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-wider mt-1">
+                <span className="bg-blue-500/10 text-blue-400 text-[10px] md:text-[12px] font-black px-1.5 md:px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-wider mt-1">
                   Hoy + Atrasados
                 </span>
               </div>
@@ -300,11 +300,11 @@ export function KpiCards({
             <TrendingUp className="w-20 h-20 md:w-24 md:h-24 text-white" />
           </div>
           <div className="relative z-10">
-            <p className="text-amber-500 font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-1 md:mb-2">Renovaciones</p>
+            <p className="text-amber-500 font-bold text-[10px] md:text-[11px] uppercase tracking-[0.2em] mb-1 md:mb-2">Renovaciones</p>
             <h2 className="text-lg md:text-3xl font-black text-white tracking-tighter">{kpis.oportunidadesRenovacion}</h2>
           </div>
           <div className="relative z-10 flex">
-            <span className="bg-amber-500/10 text-amber-500 text-[6px] md:text-[8px] font-black px-1.5 py-0.5 rounded border border-amber-500/20 uppercase tracking-wider">
+            <span className="bg-amber-500/10 text-amber-500 text-[10px] md:text-[12px] font-black px-1.5 py-0.5 rounded border border-amber-500/20 uppercase tracking-wider">
               Disponibles
             </span>
           </div>
@@ -317,13 +317,13 @@ export function KpiCards({
             <AlertCircle className="w-20 h-20 md:w-24 md:h-24 text-white" />
           </div>
           <div className="relative z-10">
-            <p className="text-rose-500 font-bold text-[7px] md:text-[9px] uppercase tracking-[0.2em] mb-1 md:mb-2">Índice Mora</p>
+            <p className="text-rose-500 font-bold text-[10px] md:text-[11px] uppercase tracking-[0.2em] mb-1 md:mb-2">Índice Mora</p>
             <h2 className="text-lg md:text-3xl font-black text-white tracking-tighter">
               {kpis.tasaMorosidadCapital.toFixed(1)}%
             </h2>
           </div>
           <div className="relative z-10 flex">
-            <span className="bg-rose-500/10 text-rose-500 text-[6px] md:text-[8px] font-black px-1.5 py-0.5 rounded border border-rose-500/20 uppercase tracking-wider">
+            <span className="bg-rose-500/10 text-rose-500 text-[10px] md:text-[12px] font-black px-1.5 py-0.5 rounded border border-rose-500/20 uppercase tracking-wider">
               {isAdmin ? `$${Math.round(kpis.capitalEnRiesgo).toLocaleString()}` : "Riesgo"}
             </span>
           </div>
@@ -336,13 +336,13 @@ export function KpiCards({
               <TrendingUp className="w-20 h-20 md:w-24 md:h-24 text-white" />
             </div>
             <div className="relative z-10">
-              <p className="text-blue-500 font-bold text-[8px] md:text-[9px] uppercase tracking-[0.2em] mb-1 md:mb-1.5">Recuperación</p>
+              <p className="text-blue-500 font-bold text-[10px] md:text-[11px] uppercase tracking-[0.2em] mb-1 md:mb-1.5">Recuperación</p>
               <h2 className="text-xl md:text-3xl font-black text-white tracking-tighter">
                 {kpis.porcentajeRecuperacion.toFixed(1)}%
               </h2>
             </div>
             <div className="relative z-10 flex">
-              <span className="bg-blue-500/10 text-blue-400 text-[7px] md:text-[8px] font-black px-1.5 md:px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-wider">
+              <span className="bg-blue-500/10 text-blue-400 text-[10px] md:text-[12px] font-black px-1.5 md:px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-wider">
                 ${Math.round(kpis.totalPagado).toLocaleString()}
               </span>
             </div>
@@ -366,7 +366,7 @@ export function KpiCards({
               </div>
             )}
             <div>
-              <p className="text-rose-500/80 font-bold text-[8px] uppercase tracking-tighter">Alertas Críticas</p>
+              <p className="text-rose-500/80 font-bold text-[10px] uppercase tracking-tighter">Alertas Críticas</p>
               <p className="text-lg font-black text-white">{kpis.alertasGraves}</p>
             </div>
             <AlertCircle className="w-5 h-5 text-rose-500/20" />
@@ -384,7 +384,7 @@ export function KpiCards({
               </div>
             )}
             <div>
-              <p className="text-amber-500/80 font-bold text-[8px] uppercase tracking-tighter">Advertencia</p>
+              <p className="text-amber-500/80 font-bold text-[10px] uppercase tracking-tighter">Advertencia</p>
               <p className="text-lg font-black text-white">{kpis.clientesEnMora}</p>
             </div>
             <TrendingUp className="w-5 h-5 text-amber-500/20" />

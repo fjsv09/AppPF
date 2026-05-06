@@ -194,7 +194,9 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
             ),
             observacion_supervisor
         `)
+        .order('fecha_inicio', { ascending: false })
         .order('created_at', { ascending: false })
+
         .limit(5000)
 
     // Filtro de sector a nivel DB

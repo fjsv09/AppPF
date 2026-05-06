@@ -65,7 +65,9 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
             )
         `)
         .eq('cliente_id', id)
+        .order('fecha_inicio', { ascending: false })
         .order('created_at', { ascending: false })
+
 
     if (loansError) {
         console.error('❌ Error fetching loans for history:', loansError)

@@ -128,7 +128,9 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
         .select('id, estado, fecha_inicio, created_at')
         .eq('cliente_id', prestamo.cliente_id)
         .in('estado', ['activo', 'finalizado'])
+        .order('fecha_inicio', { ascending: true })
         .order('created_at', { ascending: true })
+
 
     const prestamosFinalizados = todosLosPrestamos?.filter(p => p.estado === 'finalizado') || []
     const esParalelo = prestamo.es_paralelo || false

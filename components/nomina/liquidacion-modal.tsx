@@ -40,17 +40,24 @@ export function LiquidacionModal({ open, onOpenChange, userRole, trabajador, nom
         // Fetch accounts filtered by Global Cartera
         const { data: cuentasData } = await supabase
             .from('cuentas_financieras')
-            .select('id, nombre, saldo, tipo')
-            .eq('cartera_id', GLOBAL_CARTERA_ID)
+            .select('id, nombre, saldo, tipo, cartera_id')
             .order('nombre')
 
         // Filtrar cuentas: Ocultar cobranzas y restringir cuentas 'caja' o 'admin' según rol
         const filtered = (cuentasData || []).filter((c: any) => {
             const name = c.nombre.toUpperCase()
+            
             // 1. Siempre ocultar cuentas de cobranzas de carteras en este modal
             if (name.startsWith('COBRANZAS - CARTERA')) return false
+
+            // 2. Solo mostrar cuentas globales o administrativas en este flujo de nómina
+            const isGlobalOrAdmin = c.cartera_id === GLOBAL_CARTERA_ID || 
+                                    name.includes('GLOBAL') || 
+                                    name.includes('ADMIN');
             
-            // 2. Si no es admin, ocultar cuentas de tipo 'caja' o que contengan 'ADMIN'
+            if (!isGlobalOrAdmin) return false
+            
+            // 3. Si no es admin, ocultar cuentas de tipo 'caja' o que contengan 'ADMIN'
             if (userRole?.toLowerCase() !== 'admin') {
                 if (c.tipo === 'caja') return false
                 if (name.includes('ADMIN')) return false

@@ -15,7 +15,7 @@ import {
     CheckCircle2, XCircle, Clock, AlertTriangle, Eye,
     MessageSquare, Loader2, RefreshCw, User, CalendarDays,
     DollarSign, ChevronRight, Calculator,
-    Search, X, Filter, MapPin, Activity, Files
+    Search, X, Filter, MapPin, Activity, Files, ChevronDown
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn, getFrequencyBadgeStyles } from '@/lib/utils'

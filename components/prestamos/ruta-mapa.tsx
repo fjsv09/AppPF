@@ -110,6 +110,34 @@ const createExtraIcon = () => {
     })
 }
 
+const createExtraPaymentIcon = () => {
+    if (typeof window === 'undefined') return {} as any;
+    return L.divIcon({
+        className: 'extra-payment-icon',
+        html: `
+            <div style="
+                background-color: #f97316;
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                border: 3px solid white;
+                box-shadow: 0 4px 10px rgba(249, 115, 22, 0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-weight: bold;
+                font-size: 15px;
+            ">
+                $
+            </div>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+        popupAnchor: [0, -16]
+    })
+}
+
 interface RutaMapaProps {
     prestamos: any[]
     onQuickPay: (prestamo: any, e: React.MouseEvent) => void
@@ -146,7 +174,7 @@ function BoundsAutoFitter({ markers }: { markers: [number, number][] }) {
                     map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
                 }
             } catch (err) {
-                console.error("Error fitting bounds:", err);
+                // ignore
             }
             
             // Invalidate size after a short delay to handle container animations
@@ -181,11 +209,11 @@ export default function RutaMapa({
             .then(data => {
                 if (data.valor) setRadioMax(parseInt(data.valor))
             })
-            .catch(err => console.error("Error fetching radius config:", err))
+            .catch(() => {})
         if (typeof window !== 'undefined' && navigator.geolocation) {
             const watchId = navigator.geolocation.watchPosition(
                 (pos) => setUserLoc([pos.coords.latitude, pos.coords.longitude]),
-                (err) => console.error("Error GPS:", err),
+                () => {},
                 { enableHighAccuracy: true }
             )
             return () => navigator.geolocation.clearWatch(watchId)
@@ -228,7 +256,7 @@ export default function RutaMapa({
 
                 // Real Payment Location (Today)
                 if (userRole === 'admin' || userRole === 'supervisor') {
-                    const hoyPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+                    const hoyPeru = getTodayPeru();
                     let myAdvisorIds: string[] = [];
                     if (userRole === 'supervisor' && currentUserId && Array.isArray(perfiles)) {
                         myAdvisorIds = perfiles
@@ -240,7 +268,7 @@ export default function RutaMapa({
                         .flatMap((c: any) => c.pagos || [])
                         .filter((pag: any) => {
                             if (!pag || !pag.created_at) return false;
-                            const fechaPago = new Date(pag.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+                            const fechaPago = new Date(pag.created_at).toISOString().split('T')[0];
                             // Ignore invalid coords and outside Peru
                             const lat = parseFloat(pag.latitud);
                             const lng = parseFloat(pag.longitud);
@@ -254,13 +282,15 @@ export default function RutaMapa({
                         });
 
                     pagosDeHoy.forEach((pag: any, idx: number) => {
+                        const isExtraPago = !p.cuota_dia_programada || p.cuota_dia_programada <= 0.01;
                         items.push({
                             ...p,
                             id: `${p.id}-payment-${idx}`,
                             lat: parseFloat(pag.latitud),
                             lng: parseFloat(pag.longitud),
                             isPayment: true,
-                            icon: createCustomIcon('', true),
+                            isExtra: isExtraPago,
+                            icon: isExtraPago ? createExtraPaymentIcon() : createCustomIcon('', true),
                             monto_pagado: pag.monto_pagado,
                             created_at: pag.created_at,
                             distancia_cobro: coordsStr ? calculateDistance(
@@ -275,7 +305,6 @@ export default function RutaMapa({
                 return items;
             }).filter(Boolean) as any[];
         } catch (error) {
-            console.error("CRITICAL ERROR IN MAP ITEMS COLLECTION:", error);
             return [];
         }
     }, [prestamos, userRole, currentUserId, perfiles]);
@@ -321,7 +350,7 @@ export default function RutaMapa({
                     lines.push({
                         id: `${item.id}-line`,
                         positions: [[centerLat, centerLng], [sLat, sLng]],
-                        color: item.isPayment ? '#10b981' : item.isExtra ? '#f97316' : '#64748b'
+                        color: (item.isPayment && !item.isExtra) ? '#10b981' : item.isExtra ? '#f97316' : '#64748b'
                     });
                 });
             }
@@ -497,7 +526,7 @@ export default function RutaMapa({
                                                 </a>
                                                 {(() => {
                                                     const cronograma = (item.cronograma_cuotas || []);
-                                                    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+                                                    const hoy = getTodayPeru();
                                                     const cuotaHoy = cronograma.find((c: any) => c.fecha_vencimiento === hoy && c.estado !== 'pagado');
                                                     const cuotaPendiente = cronograma.find((c: any) => c.estado !== 'pagado');
                                                     const cuotaTargetId = cuotaHoy?.id || cuotaPendiente?.id;
@@ -570,7 +599,7 @@ export default function RutaMapa({
                     <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-orange-500 shadow-sm border border-orange-600"></div><span className="text-slate-600 font-medium">CPP (Mora Leve)</span></div>
                     <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-rose-500 shadow-sm border border-rose-600"></div><span className="text-slate-600 font-medium">Moroso / Vencido</span></div>
                     <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-500 shadow-sm border border-slate-600"></div><span className="text-slate-600 font-medium">Finalizado / Renovado</span></div>
-                    <div className="flex items-center gap-2"><div className="w-3 h-4 rounded-full bg-orange-500 shadow-sm border border-white flex items-center justify-center text-[8px] text-white font-bold">★</div><span className="text-slate-600 font-medium font-bold">Extra / Otras Fechas</span></div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-4 rounded-full bg-orange-500 shadow-sm border border-white flex items-center justify-center text-[8px] text-white font-bold">$</div><span className="text-slate-600 font-medium font-bold">Extra / Otras Fechas</span></div>
                 </div>
             </div>
 

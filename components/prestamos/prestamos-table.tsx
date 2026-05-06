@@ -468,7 +468,7 @@ export function PrestamosTable({
             const asesor = perfiles.find(profile => profile.id === p.clientes?.asesor_id)
             const asesor_nombre = asesor?.nombre_completo || 'N/A'
 
-            const dateAudit = propSelectedDate || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+            const dateAudit = propSelectedDate || getTodayPeru()
             const isVisitadoHoy = cronograma.some((c: any) =>
                 c.fecha_vencimiento === dateAudit && (c.visitado === true || (c.visitas_terreno && c.visitas_terreno.length > 0))
             )
@@ -563,7 +563,7 @@ export function PrestamosTable({
 
         // 5. Tab Filter (The Big One)
         // 5. Tab Filter (9 VIEWS)
-        const todayPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' }) // YYYY-MM-DD
+        const todayPeru = getTodayPeru() // YYYY-MM-DD
 
         switch (activeFilter) {
             case 'ruta_hoy':
@@ -1653,7 +1653,7 @@ export function PrestamosTable({
                                                                             if (userRol !== 'asesor' || isEffectivelyFinalized) return null;
 
                                                                             const cronograma = (prestamo.cronograma_cuotas || []);
-                                                                            const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+                                                                            const hoy = getTodayPeru();
 
                                                                             const cuotaHoy = cronograma.find((c: any) => c.fecha_vencimiento === hoy && c.estado !== 'pagado');
                                                                             const cuotaPendiente = cronograma.find((c: any) => c.estado !== 'pagado');

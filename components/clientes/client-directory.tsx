@@ -18,8 +18,8 @@ import { RegistrarGestionModal } from '../gestiones/registrar-gestion-modal'
 import { Edit, MessageSquare, DollarSign } from 'lucide-react'
 import { QuickPayModal } from '../prestamos/quick-pay-modal'
 import { BulkImportModal } from './bulk-import-modal'
-import { ClientEditSectorModal } from './client-edit-sector-modal'
-import { ClientAddGpsModal } from './client-add-gps-modal'
+const ClientEditSectorModal = dynamic(() => import('./client-edit-sector-modal').then(mod => mod.ClientEditSectorModal), { ssr: false })
+const ClientAddGpsModal = dynamic(() => import('./client-add-gps-modal').then(mod => mod.ClientAddGpsModal), { ssr: false })
 import { FileUp } from 'lucide-react'
 import { getTodayPeru, calculateLoanMetrics } from '@/lib/financial-logic'
 
@@ -730,6 +730,15 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                         {cliente.sectores.nombre}
                                                     </span>
                                                 )}
+                                                {cliente.gps_coordenadas && cliente.gps_coordenadas !== "null" ? (
+                                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[9px] h-5 px-1 font-bold">
+                                                        GPS
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="bg-rose-500/10 text-rose-500 border-rose-500/20 text-[9px] h-5 px-1 font-bold animate-pulse">
+                                                        SIN GPS
+                                                    </Badge>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -772,6 +781,16 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                             }
                                         }}>
                                             <MapPin className="w-4 h-4 text-slate-500" />
+                                        </Button>
+                                    )}
+                                    {(!cliente.gps_coordenadas || cliente.gps_coordenadas === "null") && (
+                                        <Button 
+                                            size="sm" 
+                                            variant="outline" 
+                                            className="flex-1 bg-blue-500/10 border-blue-500/20 text-blue-400 h-8 hover:bg-blue-500/20 px-0 animate-pulse font-bold" 
+                                            onClick={() => setAddingGpsCliente(cliente)}
+                                        >
+                                            <Map className="w-4 h-4 mr-1" /> GPS
                                         </Button>
                                     )}
                                     <DropdownMenu>

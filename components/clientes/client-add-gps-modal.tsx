@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from "react"
-import { MapIcon, Save, X, Loader2, AlertCircle } from "lucide-react"
+import { Map, Save, X, Loader2, AlertCircle } from "lucide-react"
 import {
     Dialog,
     DialogContent,
@@ -71,7 +71,7 @@ export function ClientAddGpsModal({ cliente, isOpen, onClose, onSuccess }: Clien
             <DialogContent className="sm:max-w-md bg-slate-950 border-slate-800 text-slate-100 p-0 overflow-hidden">
                 <DialogHeader className="p-6 border-b border-white/5 bg-slate-900/50">
                     <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                        <MapIcon className="w-5 h-5 text-blue-400" />
+                        <Map className="w-5 h-5 text-blue-400" />
                         Agregar Ubicación GPS
                     </DialogTitle>
                     <DialogDescription className="text-slate-400 text-xs">
@@ -90,7 +90,7 @@ export function ClientAddGpsModal({ cliente, isOpen, onClose, onSuccess }: Clien
 
                     <div className="space-y-2">
                         <label className="text-xs text-slate-400 ml-1 font-bold uppercase tracking-wider flex items-center gap-2">
-                            <MapIcon className="w-3 h-3 text-emerald-400" /> Coordenadas Actuales
+                            <Map className="w-3 h-3 text-emerald-400" /> Coordenadas Actuales
                         </label>
                         <GpsInput value={gpsCoords} onChange={setGpsCoords} disabled={isSubmitting} />
                     </div>

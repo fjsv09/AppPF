@@ -12,6 +12,7 @@ import { RecentPaymentsList } from '@/components/pagos/recent-payments-list'
 import { BackButton } from '@/components/ui/back-button'
 import { DashboardAlerts } from '@/components/dashboard/dashboard-alerts'
 import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
+import { getTodayPeru } from '@/lib/financial-logic'
 import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
@@ -163,9 +164,7 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
     // [NUEVO] TURN SEGMENTATION LOGIC
     // -------------------------------------------------------------------------
     // We fetch the first 'parcial_mañana' of today for each relevant advisor
-    const today = new Date()
-    today.setHours(0,0,0,0)
-    const todayStr = today.toISOString().split('T')[0]
+    const todayStr = getTodayPeru()
 
     const { data: morningCuadres } = await supabaseAdmin
         .from('cuadres_diarios')
@@ -270,7 +269,9 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
     } else {
         // [NUEVO] Si no hay filtro de fecha, por defecto estadísticas del MES ACTUAL
         // para coincidir con el Resumen Financiero global
-        const startOfMonthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01T00:00:00`
+        const todayPeru = getTodayPeru()
+        const [year, month] = todayPeru.split('-')
+        const startOfMonthStr = `${year}-${month}-01T00:00:00`
         statsQuery = statsQuery.gte('fecha_pago', startOfMonthStr)
     }
 
@@ -309,8 +310,7 @@ export default async function PagosPage(props: { searchParams: Promise<{ fecha?:
     }, 0) || 0
 
     // Today's total for the filtered context
-    const now = new Date()
-    const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const todayISO = getTodayPeru()
     
     const totalCobradoHoy = filteredStats.filter((p: any) => {
         return p.fecha_pago.startsWith(todayISO) && !p.es_autopago_renovacion

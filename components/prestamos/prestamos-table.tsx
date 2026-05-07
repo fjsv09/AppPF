@@ -575,7 +575,7 @@ export function PrestamosTable({
             case 'cobranza':
                 // Cobranza: Real Arrears >= 1 quota OR any arrears from previous days.
                 // Include both 'activo' and 'vencido' — loans with balance must appear if they are past due.
-                filtered = filtered.filter(p => (p.atrasadas >= 1 || p.deudaHoy > (p.cuota_dia_hoy || 0) + 0.1) && ['activo', 'vencido'].includes(p.estado))
+                filtered = filtered.filter(p => (p.atrasadas >= 1 || p.deudaHoy > (p.cuota_dia_hoy || 0) + 0.1) && ['activo', 'vencido', 'moroso', 'cpp', 'legal'].includes(p.estado))
                 break
 
             case 'morosos':
@@ -585,7 +585,7 @@ export function PrestamosTable({
                     const isDiario = p.frecuencia?.toLowerCase() === 'diario'
                     const hasCriticalStatus = ['vencido', 'legal', 'castigado'].includes(p.estado_mora || '')
                     const isCritical = hasCriticalStatus || (isDiario && p.atrasadas >= 7) || (!isDiario && p.atrasadas >= 2)
-                    return p.estado === 'activo' && !isCritical && ((isDiario && p.atrasadas >= 4) || (!isDiario && p.atrasadas >= 1))
+                    return ['activo', 'vencido', 'moroso', 'cpp', 'legal'].includes(p.estado) && !isCritical && ((isDiario && p.atrasadas >= 4) || (!isDiario && p.atrasadas >= 1))
                 })
                 break
 
@@ -595,7 +595,7 @@ export function PrestamosTable({
                 filtered = filtered.filter(p => {
                     const isDiario = p.frecuencia?.toLowerCase() === 'diario'
                     const hasCriticalStatus = ['vencido', 'legal', 'castigado'].includes(p.estado_mora || '')
-                    return p.estado === 'activo' && (hasCriticalStatus || (isDiario && p.atrasadas >= 7) || (!isDiario && p.atrasadas >= 2))
+                    return ['activo', 'vencido', 'moroso', 'cpp', 'legal'].includes(p.estado) && (hasCriticalStatus || (isDiario && p.atrasadas >= 7) || (!isDiario && p.atrasadas >= 2))
                 })
                 break
 
@@ -696,7 +696,7 @@ export function PrestamosTable({
             case 'visitas_control':
                 // Control Ruta: Solo los de "Ruta Hoy" (quienes deben ser visitados hoy - Auditoría)
                 // Usamos cuota_dia_programada para que no desaparezcan al pagar. Se incluyen también pagos extra del día.
-                filtered = filtered.filter(p => (p.cuota_dia_programada > 0.01 || p.cobrado_hoy > 0.01) && p.estado === 'activo')
+                filtered = filtered.filter(p => (p.cuota_dia_programada > 0.01 || p.cobrado_hoy > 0.01) && !['finalizado', 'liquidado', 'anulado', 'castigado'].includes(p.estado))
                 break
 
             case 'todos':
@@ -775,7 +775,7 @@ export function PrestamosTable({
 
             if (p.es_renovable_estricto) counts.renovaciones++
 
-            if (isActivo || p.estado === 'vencido') {
+            if (['activo', 'vencido', 'moroso', 'cpp', 'legal'].includes(p.estado)) {
                 const isEffectivelyPaid = (p.saldo_pendiente || p.metrics?.saldoPendiente || 0) <= 0.01;
                 if (!isEffectivelyPaid) counts.en_curso++
                 counts.semana++

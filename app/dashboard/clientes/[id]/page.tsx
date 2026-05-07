@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Badge } from '@/components/ui/badge'
-import { User, CreditCard, Phone, MapPin, Activity, DollarSign, Calendar, FileText, TrendingUp, Wallet, CheckCircle, Plus, FileStack, MessageSquare, Users, History, AlertTriangle, Lock, Info, AlertCircle } from 'lucide-react'
+import { User, CreditCard, Phone, MapPin, Activity, DollarSign, Calendar, FileText, TrendingUp, Wallet, CheckCircle, Plus, FileStack, MessageSquare, Users, History, AlertTriangle, Lock, Info, AlertCircle, Navigation } from 'lucide-react'
 import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ClienteTabs } from '@/components/clientes/cliente-tabs'
 import { cn, getFrequencyBadgeStyles } from '@/lib/utils'
@@ -209,6 +209,31 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                  <Users className="w-3 h-3 text-blue-400 shrink-0" />
                                  <span className="text-[10px] text-slate-300 truncate">Asesor: {cliente.asesor?.nombre_completo || 'No asignado'}</span>
                               </div>
+
+                              {(() => {
+                                  const gps = cliente.gps_coordenadas || latestSolicitud?.gps_coordenadas
+                                  if (gps && gps !== "null") {
+                                      return (
+                                          <a 
+                                              href={`https://www.google.com/maps/search/?api=1&query=${gps}`} 
+                                              target="_blank" 
+                                              rel="noopener noreferrer"
+                                              className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-md max-w-full hover:bg-emerald-500/20 transition-all group/gps"
+                                          >
+                                              <Navigation className="w-3 h-3 text-emerald-400 shrink-0 group-hover/gps:scale-110 transition-transform" />
+                                              <span className="text-[10px] text-emerald-300 truncate font-semibold">GPS</span>
+                                          </a>
+                                      )
+                                  } else {
+                                      return (
+                                          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-800/30 border border-slate-700/30 backdrop-blur-md max-w-full opacity-60">
+                                              <Navigation className="w-3 h-3 text-slate-500 shrink-0" />
+                                              <span className="text-[10px] text-slate-500 truncate">SIN GPS</span>
+                                          </div>
+                                      )
+                                  }
+                              })()}
+
                               {cliente.sectores?.nombre && (
                                 <div className="flex items-center gap-2 px-2 py-0.5 rounded-lg bg-purple-900/20 border border-purple-500/20 backdrop-blur-md shrink-0">
                                     <span className="text-[10px] text-purple-300 uppercase tracking-wider font-semibold">{cliente.sectores.nombre}</span>

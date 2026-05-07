@@ -272,20 +272,20 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                         </Badge>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 md:gap-3">
                         <ClientMiniCard
                             clienteId={solicitud.cliente?.id}
                             nombres={solicitud.cliente?.nombres}
                             fotoPerfil={solicitud.cliente?.foto_perfil}
-                            className="bg-slate-800/50 border-slate-700 text-xs flex-1"
+                            className="bg-slate-800/50 border-slate-700 text-xs md:flex-none"
                         />
                         {prestamoNuevoAsociado && (perfil.rol === 'admin' || perfil.rol === 'supervisor') && (
                             <ContratoGenerator
                                 prestamo={prestamoNuevoAsociado}
                                 cronograma={cronogramaAsociado}
                                 trigger={
-                                    <button className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs md:text-sm font-bold shadow-lg shadow-blue-900/20 transition-all whitespace-nowrap flex-shrink-0">
-                                        <Files className="w-3.5 h-3.5" />
+                                    <button className="flex items-center gap-1.5 px-2.5 md:px-4 py-1.5 md:py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs md:text-sm font-bold shadow-lg shadow-blue-900/20 transition-all whitespace-nowrap flex-shrink-0">
+                                        <Files className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                         Docs
                                     </button>
                                 }

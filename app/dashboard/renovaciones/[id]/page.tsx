@@ -522,32 +522,32 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                 {/* Desglose de Entrega Neta al Cliente */}
                 <Card className="bg-emerald-900/20 border-emerald-700/50 shadow-lg relative overflow-hidden group">
                     <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
-                    <CardHeader className="pb-1 md:pb-2">
-                        <CardTitle className="text-base md:text-lg text-emerald-300 font-bold">Entrega Neta al Cliente</CardTitle>
+                    <CardHeader className="pb-0 md:pb-2 pt-3 md:pt-4">
+                        <CardTitle className="text-sm md:text-lg text-emerald-300 font-bold">Entrega Neta al Cliente</CardTitle>
                     </CardHeader>
-                    <CardContent className="relative z-10 pt-2">
-                        <div className="space-y-2 md:space-y-4">
-                            <div className="flex justify-between items-center p-2 md:p-3 bg-emerald-950/30 rounded-lg border border-emerald-700/30 text-xs md:text-sm">
+                    <CardContent className="relative z-10 pt-1 md:pt-2 pb-3 md:pb-6">
+                        <div className="space-y-1 md:space-y-3">
+                            <div className="flex justify-between items-center px-2 py-1.5 md:p-3 bg-emerald-950/30 rounded border border-emerald-700/30 text-[11px] md:text-sm">
                                 <span className="text-emerald-200 font-semibold">Capital Solicitado</span>
                                 <span className="text-white font-bold">S/ {formatMoney(solicitud.monto_solicitado)}</span>
                             </div>
 
-                            <div className="flex items-center justify-center">
+                            <div className="flex items-center justify-center py-0.5">
                                 <span className="text-slate-400 text-xs md:text-sm font-semibold">−</span>
                             </div>
 
-                            <div className="flex justify-between items-center p-2 md:p-3 bg-amber-950/30 rounded-lg border border-amber-700/30 text-xs md:text-sm">
-                                <span className="text-amber-200 font-semibold">Saldo Pendiente (Deuda)</span>
+                            <div className="flex justify-between items-center px-2 py-1.5 md:p-3 bg-amber-950/30 rounded border border-amber-700/30 text-[11px] md:text-sm">
+                                <span className="text-amber-200 font-semibold">Saldo Pendiente</span>
                                 <span className="text-amber-300 font-bold">
                                     S/ {formatMoney(Math.max(0, saldoPendienteOriginal))}
                                 </span>
                             </div>
 
-                            <div className="h-px bg-gradient-to-r from-emerald-500/20 via-emerald-500/5 to-transparent my-1 md:my-2" />
+                            <div className="h-px bg-gradient-to-r from-emerald-500/20 via-emerald-500/5 to-transparent my-0.5 md:my-1.5" />
 
-                            <div className="flex justify-between items-center p-2 md:p-4 bg-emerald-950/50 rounded-lg border border-emerald-600/50">
-                                <span className="text-emerald-100 text-sm md:text-lg font-black">= Efectivo a Recibir</span>
-                                <span className="text-emerald-300 font-black text-xl md:text-3xl">
+                            <div className="flex justify-between items-center px-2 py-1.5 md:p-3 bg-emerald-950/50 rounded border border-emerald-600/50">
+                                <span className="text-emerald-100 text-xs md:text-base font-black">= Efectivo</span>
+                                <span className="text-emerald-300 font-black text-lg md:text-2xl">
                                     S/ {formatMoney(Math.max(0, Number(solicitud.monto_solicitado) - Math.max(0, saldoPendienteOriginal)))}
                                 </span>
                             </div>
@@ -558,32 +558,32 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                 {/* Límites Dinámicos (Dual-Score Truth) */}
                 <Card className="bg-blue-900/20 border-blue-700/50 shadow-lg relative overflow-hidden group">
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
-                    <CardContent className="py-3 md:py-5 relative z-10">
-                        <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-4 md:gap-12 text-center">
-                            <div className="flex flex-col items-center gap-1">
-                                <p className="text-blue-400/60 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em]">Monto Mínimo</p>
-                                <div className="flex items-baseline gap-1">
-                                    <span className="text-white text-lg md:text-2xl font-black font-mono tracking-tighter">${limitsAdjustment.montoMinimo}</span>
-                                    <span className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase">usd</span>
+                    <CardContent className="py-2 md:py-4 relative z-10">
+                        <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-2 md:gap-8 text-center">
+                            <div className="flex flex-col items-center gap-0.5 md:gap-1">
+                                <p className="text-blue-400/60 text-[8px] md:text-[10px] font-black uppercase tracking-[0.15em]">Monto Mínimo</p>
+                                <div className="flex items-baseline gap-0.5 md:gap-1">
+                                    <span className="text-white text-base md:text-2xl font-black font-mono tracking-tighter">${limitsAdjustment.montoMinimo}</span>
+                                    <span className="text-[8px] md:text-[10px] text-slate-500 font-bold uppercase">usd</span>
                                 </div>
                                 {limitsAdjustment.montoMinimo > Number(solicitud.prestamo?.monto || 0) * 0.5 && (
-                                    <span className="text-[8px] md:text-[9px] text-amber-500/60 italic font-medium">Cap: Saldo Pendiente</span>
+                                    <span className="text-[7px] md:text-[9px] text-amber-500/60 italic font-medium">Cap: Saldo</span>
                                 )}
                             </div>
 
-                            <div className="w-px h-8 md:h-10 bg-blue-500/10 self-center hidden sm:block" />
+                            <div className="w-px h-6 md:h-10 bg-blue-500/10 self-center hidden sm:block" />
 
-                            <div className="flex flex-col items-center gap-1">
-                                <p className="text-blue-400 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em]">Monto Máximo</p>
-                                <div className="flex items-baseline gap-1">
-                                    <span className="text-emerald-400 text-2xl md:text-3xl font-black font-mono tracking-tighter shadow-emerald-500/10">${limitsAdjustment.montoMaximo}</span>
-                                    <span className="text-[9px] md:text-[10px] text-emerald-600 font-bold uppercase">usd</span>
+                            <div className="flex flex-col items-center gap-0.5 md:gap-1">
+                                <p className="text-blue-400 text-[8px] md:text-[10px] font-black uppercase tracking-[0.15em]">Monto Máximo</p>
+                                <div className="flex items-baseline gap-0.5 md:gap-1">
+                                    <span className="text-emerald-400 text-lg md:text-3xl font-black font-mono tracking-tighter shadow-emerald-500/10">${limitsAdjustment.montoMaximo}</span>
+                                    <span className="text-[8px] md:text-[10px] text-emerald-600 font-bold uppercase">usd</span>
                                 </div>
                                 <span className={cn(
-                                    "text-[8px] md:text-[9px] font-black uppercase tracking-widest px-1 md:px-1.5 py-0.5 rounded",
+                                    "text-[7px] md:text-[9px] font-black uppercase tracking-widest px-1 py-0.5 rounded",
                                     limitsAdjustment.totalPotentialPct < 0 ? "bg-rose-500/10 text-rose-400" : "bg-emerald-500/10 text-emerald-400"
                                 )}>
-                                    {limitsAdjustment.totalPotentialPct > 0 ? `+${limitsAdjustment.totalPotentialPct}%` : `${limitsAdjustment.totalPotentialPct}%`} (D-SCORE)
+                                    {limitsAdjustment.totalPotentialPct > 0 ? `+${limitsAdjustment.totalPotentialPct}%` : `${limitsAdjustment.totalPotentialPct}%`}
                                 </span>
                             </div>
                         </div>

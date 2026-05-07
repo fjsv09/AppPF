@@ -256,40 +256,41 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
     return (
         <div className="page-container max-w-4xl mx-auto">
                 {/* Header */}
-                <div className="page-header">
-                    <div>
+                <div className="page-header flex-col md:flex-row md:items-start gap-3 md:gap-0">
+                    <div className="flex-1">
                         <div className="flex items-center gap-3">
                             <BackButton />
                             <div>
-                                <h1 className="page-title flex items-center gap-3">
+                                <h1 className="page-title flex flex-wrap items-center gap-2">
                                     Solicitud de Renovación
-                                    <Badge className={`${estado.bg} ${estado.color} text-sm`}>
+                                    <Badge className={`${estado.bg} ${estado.color} text-xs md:text-sm`}>
                                         {estado.label}
                                     </Badge>
                                 </h1>
-                                <p className="page-subtitle">
+                                <p className="page-subtitle text-xs md:text-sm">
                                     #{id.split('-')[0]} • {formatDate(solicitud.created_at)}
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3 self-end md:self-auto">
-                        <ClientMiniCard 
+                    <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-3">
+                        <ClientMiniCard
                             clienteId={solicitud.cliente?.id}
                             nombres={solicitud.cliente?.nombres}
                             fotoPerfil={solicitud.cliente?.foto_perfil}
-                            className="bg-slate-800/50 border-slate-700"
+                            className="bg-slate-800/50 border-slate-700 text-xs md:text-sm"
                         />
                         {prestamoNuevoAsociado && (perfil.rol === 'admin' || perfil.rol === 'supervisor') && (
-                            <div className="ml-auto flex items-center gap-2">
-                                <ContratoGenerator 
-                                    prestamo={prestamoNuevoAsociado} 
+                            <div className="flex items-center">
+                                <ContratoGenerator
+                                    prestamo={prestamoNuevoAsociado}
                                     cronograma={cronogramaAsociado}
                                     trigger={
-                                        <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all">
-                                            <Files className="w-4 h-4" />
-                                            Ver Documentos
+                                        <button className="flex items-center justify-center gap-1 md:gap-2 px-3 md:px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg md:rounded-xl text-xs md:text-sm font-bold shadow-lg shadow-blue-900/20 transition-all w-full md:w-auto">
+                                            <Files className="w-3 md:w-4 h-3 md:h-4" />
+                                            <span className="hidden sm:inline">Ver Documentos</span>
+                                            <span className="sm:hidden">Documentos</span>
                                         </button>
                                     }
                                 />

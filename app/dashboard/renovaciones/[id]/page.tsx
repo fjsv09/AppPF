@@ -256,45 +256,41 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
     return (
         <div className="page-container max-w-4xl mx-auto">
                 {/* Header */}
-                <div className="page-header flex-col md:flex-row md:items-start gap-3 md:gap-0">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                            <BackButton />
-                            <div>
-                                <h1 className="page-title flex flex-wrap items-center gap-2">
-                                    Solicitud de Renovación
-                                    <Badge className={`${estado.bg} ${estado.color} text-xs md:text-sm`}>
-                                        {estado.label}
-                                    </Badge>
-                                </h1>
-                                <p className="page-subtitle text-xs md:text-sm">
-                                    #{id.split('-')[0]} • {formatDate(solicitud.created_at)}
-                                </p>
-                            </div>
+                <div className="page-header flex-row items-center gap-2">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <BackButton />
+                        <div className="min-w-0 flex-1">
+                            <h1 className="page-title text-sm md:text-xl inline-flex items-center gap-2 flex-wrap">
+                                Solicitud de Renovación
+                                <Badge className={`${estado.bg} ${estado.color} text-xs`}>
+                                    {estado.label}
+                                </Badge>
+                            </h1>
+                            <p className="page-subtitle text-xs mt-0.5">
+                                #{id.split('-')[0]} • {formatDate(solicitud.created_at)}
+                            </p>
                         </div>
                     </div>
 
-                    <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-3">
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
                         <ClientMiniCard
                             clienteId={solicitud.cliente?.id}
                             nombres={solicitud.cliente?.nombres}
                             fotoPerfil={solicitud.cliente?.foto_perfil}
-                            className="bg-slate-800/50 border-slate-700 text-xs md:text-sm"
+                            className="bg-slate-800/50 border-slate-700 text-xs"
                         />
                         {prestamoNuevoAsociado && (perfil.rol === 'admin' || perfil.rol === 'supervisor') && (
-                            <div className="flex items-center">
-                                <ContratoGenerator
-                                    prestamo={prestamoNuevoAsociado}
-                                    cronograma={cronogramaAsociado}
-                                    trigger={
-                                        <button className="flex items-center justify-center gap-1 md:gap-2 px-3 md:px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg md:rounded-xl text-xs md:text-sm font-bold shadow-lg shadow-blue-900/20 transition-all w-full md:w-auto">
-                                            <Files className="w-3 md:w-4 h-3 md:h-4" />
-                                            <span className="hidden sm:inline">Ver Documentos</span>
-                                            <span className="sm:hidden">Documentos</span>
-                                        </button>
-                                    }
-                                />
-                            </div>
+                            <ContratoGenerator
+                                prestamo={prestamoNuevoAsociado}
+                                cronograma={cronogramaAsociado}
+                                trigger={
+                                    <button className="flex items-center gap-1 px-2.5 md:px-3 py-1.5 md:py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs md:text-sm font-bold shadow-lg shadow-blue-900/20 transition-all whitespace-nowrap">
+                                        <Files className="w-3 h-3 md:w-4 md:h-4" />
+                                        <span className="hidden sm:inline">Ver Docs</span>
+                                        <span className="sm:hidden text-[10px]">Docs</span>
+                                    </button>
+                                }
+                            />
                         )}
                     </div>
                 </div>

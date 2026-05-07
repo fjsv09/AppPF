@@ -475,9 +475,9 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                                             <span className="text-[8px] text-blue-500/60 uppercase font-black tracking-tighter">Saldo</span>
                                                             <span className={cn(
                                                                 "font-mono text-xs font-extrabold leading-none",
-                                                                metrics.saldoPendiente > 0 ? "text-blue-400" : "text-slate-600"
+                                                                metrics.saldoCuotaParcial > 0 ? "text-blue-400" : "text-slate-600"
                                                             )}>
-                                                                ${metrics.saldoPendiente.toFixed(0)}
+                                                                ${metrics.saldoCuotaParcial.toFixed(0)}
                                                             </span>
                                                         </div>
                                                     </div>

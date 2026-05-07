@@ -1535,7 +1535,7 @@ export function PrestamosTable({
                                                                 })()}
                                                                 {!prestamo.isFinalizado && (
                                                                     <span className="text-slate-400 text-[11px] font-bold px-1">
-                                                                        {prestamo.cuotasPagadas}/{prestamo.totalCuotas}
+                                                                        {Math.min(prestamo.cuotasPagadas + ((prestamo.saldo_cuota_parcial || prestamo.metrics?.saldoCuotaParcial || 0) > 0 ? 1 : 0), prestamo.totalCuotas)}/{prestamo.totalCuotas}
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -2304,7 +2304,8 @@ export function PrestamosTable({
                                                                 }
 
                                                                 const cuotasAtrasadas = prestamo.cuotasAtrasadas ?? (prestamo.valorCuota > 0 ? Math.floor(prestamo.deudaHoy / prestamo.valorCuota) : 0)
-                                                                const displayProgreso = Math.min((cuotasPagadas || 0) + 1, totalCuotas)
+                                                                const tieneAbonoParcial = (prestamo.saldo_cuota_parcial || prestamo.metrics?.saldoCuotaParcial || 0) > 0;
+                                                                const displayProgreso = Math.min((cuotasPagadas || 0) + (tieneAbonoParcial ? 1 : 0), totalCuotas)
                                                                 return (
                                                                     <div className="flex flex-col items-center">
                                                                         <span className={cn(

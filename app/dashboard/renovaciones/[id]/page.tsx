@@ -559,7 +559,7 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                 <Card className="bg-blue-900/20 border-blue-700/50 shadow-lg relative overflow-hidden group">
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
                     <CardContent className="py-2 md:py-4 relative z-10">
-                        <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-2 md:gap-8 text-center">
+                        <div className="flex flex-row flex-wrap justify-center gap-2 md:gap-8 text-center">
                             <div className="flex flex-col items-center gap-0.5 md:gap-1">
                                 <p className="text-blue-400/60 text-[8px] md:text-[10px] font-black uppercase tracking-[0.15em]">Monto Mínimo</p>
                                 <div className="flex items-baseline gap-0.5 md:gap-1">
@@ -571,7 +571,7 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                                 )}
                             </div>
 
-                            <div className="w-px h-6 md:h-10 bg-blue-500/10 self-center hidden sm:block" />
+                            <div className="w-px h-6 md:h-10 bg-blue-500/10 self-center" />
 
                             <div className="flex flex-col items-center gap-0.5 md:gap-1">
                                 <p className="text-blue-400 text-[8px] md:text-[10px] font-black uppercase tracking-[0.15em]">Monto Máximo</p>

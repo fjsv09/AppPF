@@ -563,8 +563,7 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                             <div className="flex flex-col items-center gap-0.5 md:gap-1">
                                 <p className="text-blue-400/60 text-[8px] md:text-[10px] font-black uppercase tracking-[0.15em]">Monto Mínimo</p>
                                 <div className="flex items-baseline gap-0.5 md:gap-1">
-                                    <span className="text-white text-base md:text-2xl font-black font-mono tracking-tighter">${limitsAdjustment.montoMinimo}</span>
-                                    <span className="text-[8px] md:text-[10px] text-slate-500 font-bold uppercase">usd</span>
+                                    <span className="text-white text-base md:text-2xl font-black font-mono tracking-tighter">S/ {limitsAdjustment.montoMinimo}</span>
                                 </div>
                                 {limitsAdjustment.montoMinimo > Number(solicitud.prestamo?.monto || 0) * 0.5 && (
                                     <span className="text-[7px] md:text-[9px] text-amber-500/60 italic font-medium">Cap: Saldo</span>
@@ -575,16 +574,15 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
 
                             <div className="flex flex-col items-center gap-0.5 md:gap-1">
                                 <p className="text-blue-400 text-[8px] md:text-[10px] font-black uppercase tracking-[0.15em]">Monto Máximo</p>
-                                <div className="flex items-baseline gap-0.5 md:gap-1">
-                                    <span className="text-emerald-400 text-lg md:text-3xl font-black font-mono tracking-tighter shadow-emerald-500/10">${limitsAdjustment.montoMaximo}</span>
-                                    <span className="text-[8px] md:text-[10px] text-emerald-600 font-bold uppercase">usd</span>
+                                <div className="flex items-baseline gap-1 md:gap-2">
+                                    <span className="text-emerald-400 text-lg md:text-3xl font-black font-mono tracking-tighter shadow-emerald-500/10">S/ {limitsAdjustment.montoMaximo}</span>
+                                    <span className={cn(
+                                        "text-[7px] md:text-[9px] font-black uppercase tracking-widest px-1 py-0.5 rounded",
+                                        limitsAdjustment.totalPotentialPct < 0 ? "bg-rose-500/10 text-rose-400" : "bg-emerald-500/10 text-emerald-400"
+                                    )}>
+                                        {limitsAdjustment.totalPotentialPct > 0 ? `+${limitsAdjustment.totalPotentialPct}%` : `${limitsAdjustment.totalPotentialPct}%`}
+                                    </span>
                                 </div>
-                                <span className={cn(
-                                    "text-[7px] md:text-[9px] font-black uppercase tracking-widest px-1 py-0.5 rounded",
-                                    limitsAdjustment.totalPotentialPct < 0 ? "bg-rose-500/10 text-rose-400" : "bg-emerald-500/10 text-emerald-400"
-                                )}>
-                                    {limitsAdjustment.totalPotentialPct > 0 ? `+${limitsAdjustment.totalPotentialPct}%` : `${limitsAdjustment.totalPotentialPct}%`}
-                                </span>
                             </div>
                         </div>
                     </CardContent>

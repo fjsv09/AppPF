@@ -202,13 +202,6 @@ export function SolicitudRenovacionModal({
                 }
             } else {
                 setElegibilidad(data)
-                // [NUEVO] Auto-sugerir el monto máximo recomendado (Ajuste por Score)
-                if (data.monto_maximo) {
-                    setSimulacion(prev => ({
-                        ...prev,
-                        monto: data.monto_maximo
-                    }))
-                }
             }
         } catch (e: any) {
             if (e.name === 'AbortError') {

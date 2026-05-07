@@ -61,30 +61,19 @@ export async function PUT(
 
         // 3.5 VALIDACIÓN DE CUADRE (Restricción Temporal Precisa)
         // Buscar TODOS los cuadres del asesor en esta fecha, sin filtrar por tipo
-        const { data: cuadres, error: cuadreError } = await supabaseAdmin
+        const { data: cuadres } = await supabaseAdmin
             .from('cuadres_diarios')
             .select('id, tipo_cuadre, estado, created_at, fecha')
             .eq('asesor_id', pagoActual.registrado_por)
             .eq('fecha', pagoDate)
             .order('created_at', { ascending: false })
-        
-        console.log('=== DEBUG CUADRE VALIDATION ===')
-        console.log('Pago ID:', id)
-        console.log('Asesor ID:', pagoActual.registrado_por)
-        console.log('Pago Date (computed):', pagoDate)
-        console.log('Pago created_at:', pagoActual.created_at)
-        console.log('Cuadre query error:', cuadreError)
-        console.log('Cuadres encontrados:', JSON.stringify(cuadres, null, 2))
-        console.log('Cuadres count:', cuadres?.length || 0)
-        
+
         if (cuadres && cuadres.length > 0) {
             // Filtrar solo los estados válidos y tipos relevantes
-            const cuadresRelevantes = cuadres.filter(c => 
+            const cuadresRelevantes = cuadres.filter(c =>
                 ['pendiente', 'aprobado'].includes(c.estado) &&
                 ['parcial_mañana', 'final', 'parcial'].includes(c.tipo_cuadre)
             );
-            
-            console.log('Cuadres relevantes (después de filtro manual):', JSON.stringify(cuadresRelevantes, null, 2))
 
             if (cuadresRelevantes.length > 0) {
                 // A. Si hay un cierre final aprobado, bloqueamos toda edición histórica de ese día
@@ -97,12 +86,6 @@ export async function PUT(
 
                 // B. Bloquear si el pago es ANTERIOR a cualquier cierre (parcial, parcial_mañana o final)
                 const paymentTime = new Date(pagoActual.created_at).getTime();
-                console.log('Payment timestamp:', paymentTime, '=', new Date(pagoActual.created_at).toISOString())
-                
-                for (const c of cuadresRelevantes) {
-                    const cuadreTime = new Date(c.created_at).getTime();
-                    console.log(`Cuadre ${c.tipo_cuadre} (${c.estado}) timestamp: ${cuadreTime} = ${new Date(c.created_at).toISOString()} | posterior al pago? ${cuadreTime > paymentTime}`)
-                }
 
                 const cuadreQueLoBloquea = cuadresRelevantes.find(c => new Date(c.created_at).getTime() > paymentTime);
 
@@ -118,16 +101,9 @@ export async function PUT(
                     return NextResponse.json({ 
                         error: `No se puede editar. Este cobro ya fue procesado y validado en el ${tipoStr} de las ${horaCuadre}.` 
                     }, { status: 400 })
-                } else {
-                    console.log('NINGÚN cuadre es posterior al pago - permitiendo edición')
                 }
-            } else {
-                console.log('No hay cuadres relevantes después de filtrar por estado/tipo')
             }
-        } else {
-            console.log('No se encontraron cuadres para este asesor en esta fecha')
         }
-        console.log('=== FIN DEBUG ===')
 
         // 4. Obtener Distribución y Cuota relacionada
         const { data: distribuciones } = await supabaseAdmin

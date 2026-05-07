@@ -334,7 +334,6 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
 
         if (!allError && allPrestamos) {
             prestamosGlobal = allPrestamos
-            console.log(`🌍 Préstamos Global (para mora): ${prestamosGlobal.length} total`)
         }
     }
 
@@ -373,8 +372,6 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
     prestamosRaw?.forEach(p => {
         p.cronograma_cuotas = cuotasByLoan.get(p.id) || []
     })
-
-    console.log(`📉 Préstamos: ${prestamosRaw?.length} total, ${idsConCronograma.length} con cronograma`)
 
     // Una sola query para toda la configuración (era 2 queries secuenciales)
     const { data: configTodo } = await supabaseAdmin

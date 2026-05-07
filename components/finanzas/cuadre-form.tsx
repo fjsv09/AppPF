@@ -251,7 +251,6 @@ export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, 
           filter: `asesor_id=eq.${userId}`
         },
         () => {
-          console.log('🔄 Actualizando estado de cuadre (DB)...')
           if (fetchStatsRef.current) fetchStatsRef.current()
           router.refresh()
         }
@@ -261,7 +260,6 @@ export function CuadreForm({ carteras, userId, isDebtBlocked, isMorningBlocked, 
         { event: 'cuadre_updated' },
         (payload) => {
           if (payload.payload?.asesor_id === userId) {
-            console.log('🚀 Actualizando estado de cuadre (BC)...')
             if (fetchStatsRef.current) fetchStatsRef.current()
             router.refresh()
           }

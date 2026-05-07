@@ -153,7 +153,6 @@ export async function POST(request: Request) {
             const loanAdvisorId = (qData?.prestamos as any)?.clientes?.asesor_id
             if (loanAdvisorId) {
                 targetUserId = loanAdvisorId
-                console.log(`[PAGOS] Rol Supervisor (${user.id}) registrando cobro para Asesor ${targetUserId}`)
             }
         }
 

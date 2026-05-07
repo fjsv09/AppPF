@@ -154,7 +154,6 @@ export async function POST(request: Request) {
                         event: 'new_cuadre',
                         payload: { asesor_id: user.id }
                     })
-                    console.log('[BROADCAST] Evento de nuevo cuadre enviado.')
                     // Remover canal después de enviar
                     supabaseAdmin.removeChannel(channel)
                 }

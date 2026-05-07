@@ -89,10 +89,8 @@ export async function POST(request: Request) {
                             .from('cuentas_financieras')
                             .update({ saldo: nuevoSaldo })
                             .eq('id', cuenta_id)
-                        console.log('✅ Saldo actualizado mediante fallback manual')
                     }
                 } else {
-                    console.log('✅ Saldo actualizado mediante RPC')
                 }
             }
 

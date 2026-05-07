@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
+import { getSystemConfig } from '@/lib/config-cache'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -23,36 +24,21 @@ export async function POST(request: Request) {
         const limaDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }))
         const todayStr = `${limaDate.getFullYear()}-${String(limaDate.getMonth() + 1).padStart(2, '0')}-${String(limaDate.getDate()).padStart(2, '0')}`
 
-        // Buscar registro de hoy
-        const { data: record, error: recordError } = await supabaseAdmin
-            .from('asistencia_personal')
-            .select('*')
-            .eq('usuario_id', user.id)
-            .eq('fecha', todayStr)
-            .maybeSingle()
+        // Paralelizar: registro del día + config (cacheada)
+        const [recordRes, config] = await Promise.all([
+            supabaseAdmin
+                .from('asistencia_personal')
+                .select('*')
+                .eq('usuario_id', user.id)
+                .eq('fecha', todayStr)
+                .maybeSingle(),
+            getSystemConfig(),
+        ])
+        const record = recordRes.data
 
         if (!record || !record.permanencia_entrada_inicio || record.permanencia_entrada_estado !== 'pendiente') {
             return NextResponse.json({ message: 'No se requiere verificación de permanencia actualmente', estado: record?.permanencia_entrada_estado || 'n/a' })
         }
-
-        // Obtener configuración de oficina y minutos de permanencia
-        const { data: configRows } = await supabaseAdmin
-            .from('configuracion_sistema')
-            .select('clave, valor')
-            .in('clave', [
-                'oficina_lat', 
-                'oficina_lon', 
-                'asistencia_radio_metros', 
-                'asistencia_minutos_permanencia',
-                'asistencia_descuento_por_minuto',
-                'asistencia_tolerancia_minutos',
-                'horario_apertura'
-            ])
-
-        const config = configRows?.reduce((acc: any, curr) => {
-            acc[curr.clave] = curr.valor
-            return acc
-        }, {})
 
         const oficinaLat = parseFloat(config?.oficina_lat || '0')
         const oficinaLon = parseFloat(config?.oficina_lon || '0')

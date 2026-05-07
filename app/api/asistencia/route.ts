@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { createFullNotification } from '@/services/notification-service'
+import { getSystemConfig } from '@/lib/config-cache'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -22,12 +23,24 @@ export async function GET() {
         const todayStr = `${limaDate.getFullYear()}-${String(limaDate.getMonth() + 1).padStart(2, '0')}-${String(limaDate.getDate()).padStart(2, '0')}`
         const isSunday = limaDate.getDay() === 0
 
-        // 1. Verificar si hoy es feriado o domingo
-        const { data: holiday } = await supabaseAdmin
-            .from('feriados')
-            .select('id, descripcion')
-            .eq('fecha', todayStr)
-            .maybeSingle()
+        // Paralelizar las 3 queries: feriado, asistencia del día y config (cacheada)
+        const [holidayRes, asistenciaRes, config] = await Promise.all([
+            supabaseAdmin
+                .from('feriados')
+                .select('id, descripcion')
+                .eq('fecha', todayStr)
+                .maybeSingle(),
+            supabaseAdmin
+                .from('asistencia_personal')
+                .select('*')
+                .eq('usuario_id', user.id)
+                .eq('fecha', todayStr)
+                .maybeSingle(),
+            getSystemConfig(),
+        ])
+
+        const holiday = holidayRes.data
+        const asistencia = asistenciaRes.data
 
         if (isSunday || holiday) {
             return NextResponse.json({
@@ -36,42 +49,6 @@ export async function GET() {
                 reason: `Hoy es ${isSunday ? 'Domingo' : 'Feriado'}${holiday ? ': ' + holiday.descripcion : ''}`
             })
         }
-
-        // Verificar rol del usuario
-        const { data: perfil } = await supabaseAdmin
-            .from('perfiles')
-            .select('rol')
-            .eq('id', user.id)
-            .single()
-
-        // Buscar registro de hoy
-        const { data: asistencia } = await supabaseAdmin
-            .from('asistencia_personal')
-            .select('*')
-            .eq('usuario_id', user.id)
-            .eq('fecha', todayStr)
-            .maybeSingle()
-
-        // Obtener configuración de asistencia completa
-        const { data: configRows } = await supabaseAdmin
-            .from('configuracion_sistema')
-            .select('clave, valor')
-            .in('clave', [
-                'asistencia_radio_metros',
-                'asistencia_descuento_por_minuto',
-                'asistencia_tolerancia_minutos',
-                'horario_apertura',
-                'horario_fin_turno_1',
-                'horario_cierre',
-                'oficina_lat',
-                'oficina_lon',
-                'asistencia_minutos_permanencia'
-            ])
-
-        const config = configRows?.reduce((acc: any, curr) => {
-            acc[curr.clave] = curr.valor
-            return acc
-        }, {})
 
         // Determinar qué evento se requiere marcar siguiendo un orden acumulativo
         const timeToMinutes = (t: string) => {
@@ -157,34 +134,17 @@ export async function POST(request: Request) {
         const todayStr = `${limaDate.getFullYear()}-${String(limaDate.getMonth() + 1).padStart(2, '0')}-${String(limaDate.getDate()).padStart(2, '0')}`
         const horaActual = `${String(limaDate.getHours()).padStart(2, '0')}:${String(limaDate.getMinutes()).padStart(2, '0')}`
 
-        // Buscar registro de hoy
-        const { data: existingRecord } = await supabaseAdmin
-            .from('asistencia_personal')
-            .select('*')
-            .eq('usuario_id', user.id)
-            .eq('fecha', todayStr)
-            .maybeSingle()
-
-        // Obtener configuración completa
-        const { data: configRows } = await supabaseAdmin
-            .from('configuracion_sistema')
-            .select('clave, valor')
-            .in('clave', [
-                'asistencia_radio_metros',
-                'asistencia_descuento_por_minuto',
-                'asistencia_tolerancia_minutos',
-                'horario_apertura',
-                'horario_fin_turno_1',
-                'horario_cierre',
-                'oficina_lat',
-                'oficina_lon',
-                'asistencia_minutos_permanencia'
-            ])
-
-        const config = configRows?.reduce((acc: any, curr) => {
-            acc[curr.clave] = curr.valor
-            return acc
-        }, {})
+        // Paralelizar lookup de registro existente + config (cacheada)
+        const [existingRes, config] = await Promise.all([
+            supabaseAdmin
+                .from('asistencia_personal')
+                .select('*')
+                .eq('usuario_id', user.id)
+                .eq('fecha', todayStr)
+                .maybeSingle(),
+            getSystemConfig(),
+        ])
+        const existingRecord = existingRes.data
 
         // Determinar qué evento estamos marcando
         const timeToMinutes = (t: string) => {
@@ -389,21 +349,23 @@ export async function POST(request: Request) {
             const currentMonth = limaDate.getMonth() + 1
             const currentYear = limaDate.getFullYear()
 
-            // Obtener perfil para sueldo base
-            const { data: perfil } = await supabaseAdmin
-                .from('perfiles')
-                .select('sueldo_base')
-                .eq('id', user.id)
-                .single()
-
-            // Buscar o crear registro de nómina del mes
-            const { data: nomina } = await supabaseAdmin
-                .from('nomina_personal')
-                .select('id, descuentos')
-                .eq('trabajador_id', user.id)
-                .eq('mes', currentMonth)
-                .eq('anio', currentYear)
-                .maybeSingle()
+            // Paralelizar: perfil (sueldo base) y nomina del mes
+            const [perfilRes, nominaRes] = await Promise.all([
+                supabaseAdmin
+                    .from('perfiles')
+                    .select('sueldo_base')
+                    .eq('id', user.id)
+                    .single(),
+                supabaseAdmin
+                    .from('nomina_personal')
+                    .select('id, descuentos')
+                    .eq('trabajador_id', user.id)
+                    .eq('mes', currentMonth)
+                    .eq('anio', currentYear)
+                    .maybeSingle(),
+            ])
+            const perfil = perfilRes.data
+            const nomina = nominaRes.data
 
             if (nomina) {
                 // Sumar el descuento actual al existente en la nómina

@@ -63,7 +63,6 @@ export function CuadreApproval({ pendingCuadres: initialCuadres, adminId, global
           table: 'cuadres_diarios'
         },
         (payload) => {
-          console.log('🔄 Sincronizando GESTIÓN DE CUADRES (DB):', payload.eventType)
           if (payload.eventType === 'INSERT') {
             toast('Nueva solicitud recibida', {
               description: 'Un asesor ha enviado un nuevo cuadre para revisión.',
@@ -78,7 +77,6 @@ export function CuadreApproval({ pendingCuadres: initialCuadres, adminId, global
         'broadcast',
         { event: 'new_cuadre' },
         (payload) => {
-          console.log('🚀 Sincronizando GESTIÓN DE CUADRES (BC):', payload)
           toast('Nueva solicitud recibida (BC)', {
             description: 'Se ha detectado una nueva solicitud de cuadre por canal prioritario.',
             icon: <Clock className="w-4 h-4 text-blue-400" />,
@@ -87,9 +85,7 @@ export function CuadreApproval({ pendingCuadres: initialCuadres, adminId, global
           router.refresh()
         }
       )
-      .subscribe((status) => {
-        console.log('Estado suscripción GESTIÓN DE CUADRES:', status)
-      })
+      .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
@@ -245,28 +241,64 @@ export function CuadreApproval({ pendingCuadres: initialCuadres, adminId, global
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
                     {/* Info Panel */}
                     <div className="space-y-3">
-                       <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Resumen de Recaudación</p>
-                       <div className="grid grid-cols-2 gap-3">
-                          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/50">
-                             <div className="flex items-center gap-1.5 text-slate-400 mb-1">
-                                <Landmark className="w-3.5 h-3.5 text-emerald-400" />
-                                <span className="text-[10px] font-medium tracking-tight">Efectivo</span>
+                       <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Detalles del Cuadre</p>
+
+                       {/* Recaudación */}
+                       <div className="space-y-2">
+                          <p className="text-[8px] font-bold text-slate-600 uppercase tracking-widest px-2">Recaudación</p>
+                          <div className="grid grid-cols-2 gap-3">
+                             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/50">
+                                <div className="flex items-center gap-1.5 text-slate-400 mb-1">
+                                   <Landmark className="w-3.5 h-3.5 text-emerald-400" />
+                                   <span className="text-[10px] font-medium tracking-tight">Efectivo</span>
+                                </div>
+                                <p className="text-lg font-bold text-white tracking-tight">S/ {c.monto_cobrado_efectivo}</p>
                              </div>
-                             <p className="text-lg font-bold text-white tracking-tight">S/ {c.monto_cobrado_efectivo}</p>
+                             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/50">
+                                <div className="flex items-center gap-1.5 text-slate-400 mb-1">
+                                   <Smartphone className="w-3.5 h-3.5 text-blue-400" />
+                                   <span className="text-[10px] font-medium tracking-tight">Digital</span>
+                                </div>
+                                <p className="text-lg font-bold text-white tracking-tight">S/ {c.monto_cobrado_digital}</p>
+                             </div>
                           </div>
-                          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/50">
-                             <div className="flex items-center gap-1.5 text-slate-400 mb-1">
-                                <Smartphone className="w-3.5 h-3.5 text-blue-400" />
-                                <span className="text-[10px] font-medium tracking-tight">Digital</span>
-                             </div>
-                             <p className="text-lg font-bold text-white tracking-tight">S/ {c.monto_cobrado_digital}</p>
+                          <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 flex justify-between items-center">
+                             <span className="text-xs font-bold text-slate-400">TOTAL COBRADO:</span>
+                             <span className="text-lg font-black text-emerald-400">
+                                S/ {(c.monto_cobrado_efectivo + c.monto_cobrado_digital).toFixed(2)}
+                             </span>
                           </div>
                        </div>
-                       <div className="p-3 rounded-xl bg-slate-800/20 border border-slate-700/50 flex justify-between items-center">
-                          <span className="text-xs font-bold text-slate-400">TOTAL:</span>
-                          <span className="text-xl font-black text-white underline decoration-emerald-500/50 underline-offset-4">
-                             S/ {c.saldo_entregado}
-                          </span>
+
+                       {/* Gastos */}
+                       {c.total_gastos > 0 && (
+                          <div className="p-3 rounded-lg bg-rose-500/5 border border-rose-500/20 flex justify-between items-center">
+                             <span className="text-xs font-bold text-slate-400">Menos gastos:</span>
+                             <span className="text-lg font-black text-rose-400">
+                                - S/ {parseFloat(c.total_gastos).toFixed(2)}
+                             </span>
+                          </div>
+                       )}
+
+                       {/* Entregado y Saldo Pendiente */}
+                       <div className="space-y-2">
+                          <div className="p-3 rounded-lg bg-slate-800/40 border border-slate-700/50 flex justify-between items-center">
+                             <span className="text-xs font-bold text-slate-400">ENTREGADO AL ADMIN:</span>
+                             <span className="text-lg font-black text-white">
+                                S/ {c.saldo_entregado}
+                             </span>
+                          </div>
+                          {(((c.monto_cobrado_efectivo + c.monto_cobrado_digital) - c.saldo_entregado) > 0.05) && (
+                             <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex justify-between items-center">
+                                <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
+                                   <AlertCircle className="w-3.5 h-3.5" />
+                                   SALDO PENDIENTE (ASESOR):
+                                </span>
+                                <span className="text-lg font-black text-amber-400">
+                                   S/ {((c.monto_cobrado_efectivo + c.monto_cobrado_digital) - c.saldo_entregado).toFixed(2)}
+                                </span>
+                             </div>
+                          )}
                        </div>
                     </div>
 

@@ -201,7 +201,6 @@ export async function POST(request: Request) {
         if (!elegibilidad.elegible) {
             // EXCEPCIÓN ADMIN: Permitir renovar aunque sea paralelo
             if (perfil.rol === 'admin' && elegibilidad.razon_bloqueo?.toLowerCase().includes('paralelo')) {
-                 console.log('✅ Admin bypass for paralelo loan renewal eligibility');
             } else {
                 return NextResponse.json({ 
                     error: elegibilidad.razon_bloqueo || 'No elegible para renovación',
@@ -215,7 +214,6 @@ export async function POST(request: Request) {
         // VALIDACIÓN ADICIONAL: Advertir si requiere excepción de admin
         if (elegibilidad.requiere_admin_excepcion && perfil.rol !== 'admin') {
             // Permitir que asesores creen la solicitud, pero será marcada para revisión admin
-            console.log('⚠️ Solicitud requiere excepción de admin - será escalada')
         }
 
         // [SINCRONIZACIÓN] Alinear montos límites con la lógica Dual-Score del frontend.

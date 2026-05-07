@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { NextResponse } from 'next/server'
+import { invalidateConfigCache } from '@/lib/config-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,6 +65,9 @@ export async function PATCH(request: Request) {
             usuario_id: user.id,
             detalles: { clave, valor_nuevo: valor }
         })
+
+        // Invalidar caché para que la próxima request lea el nuevo valor
+        invalidateConfigCache()
 
         return NextResponse.json({ success: true })
     } catch (error: any) {

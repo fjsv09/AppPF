@@ -99,7 +99,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         const initUser = async () => {
             const { data: { user } } = await supabase.auth.getUser()
             userIdRef.current = user?.id || null
-            console.log('NotificationProvider: Usuario cargado ->', userIdRef.current)
         }
         
         initUser()
@@ -132,8 +131,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         
         checkNotificationInit()
 
-        console.log('Configurando canal realtime para notificaciones...')
-        
         const channel = supabase
             .channel('notificaciones-globales')
             .on(

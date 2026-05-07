@@ -239,17 +239,6 @@ export function calculateLoanMetrics(
       const pagadoAntes = Math.max(0, totalPagadoAcumuladoCuota - pagosDeEstaCuotaHoy);
       const pendienteAlInicio = Math.max(0, metaCuota - pagadoAntes);
 
-      // DEBUG: log para cuotas vencidas
-      if (idx < 3 && c.fecha_vencimiento <= today) {
-        console.log(`📋 Cuota ${idx} (${c.fecha_vencimiento}):`, {
-          monto_cuota: metaCuota,
-          monto_pagado: totalPagadoAcumuladoCuota,
-          pagos_count: (c.pagos || []).length,
-          pagosHoy: pagosDeEstaCuotaHoy,
-          pendiente: pendienteAlInicio
-        });
-      }
-
       if (pendienteAlInicio > 0.01) {
         metaTotalHoyYAtrasados += pendienteAlInicio;
         cobradoTotalHoyYAtrasados += Math.min(pagosDeEstaCuotaHoy, pendienteAlInicio);
@@ -269,22 +258,6 @@ export function calculateLoanMetrics(
     .reduce((sum: number, c: any) => sum + Number(c.monto_cuota), 0);
 
   const deudaExigibleHoy = Math.max(0, totalExigibleHastaHoy - totalPagadoAcumulado);
-
-  // DEBUG: Log todos los préstamos activos para ver si Segundo aparece
-  // DEBUG para Segundo Aníbal - buscar en cualquier formato de nombre
-  const allNamesInLoan = `${JSON.stringify(loan)}`.toLowerCase();
-  if (allNamesInLoan.includes('segundo') && allNamesInLoan.includes('olorrega')) {
-    console.log('DEBUG SEGUNDO ENCONTRADO:', {
-      loan_id: loan.id,
-      estado: loan.estado,
-      cronograma_length: cronograma.length,
-      totalPagar,
-      totalPagadoAcumulado,
-      totalExigibleHastaHoy,
-      deudaExigibleHoy,
-      cuotasAtrasadas: valorCuotaPromedio > 0 ? Math.floor(deudaExigibleHoy / valorCuotaPromedio) : 0
-    });
-  }
 
   // 4. Cuotas Exigibles (Mora + Hoy)
   const cuotasAtrasadas = valorCuotaPromedio > 0 ? Math.floor(deudaExigibleHoy / valorCuotaPromedio) : 0;
@@ -1572,7 +1545,6 @@ async function _regenerarConCuotasPagadas(
     }
     const totalPagosTabla = todosLosPagos.reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
     const montoMigracion = Math.max(0, totalPagadoCuotas - totalPagosTabla);
-    console.log(`[EDIT LOAN] Cuotas(dedup): ${totalPagadoCuotas}, Pagos tabla: ${totalPagosTabla}, Migración: ${montoMigracion}, CuotasDB: ${oldCuotaIds.length}`);
 
     const { data: hd } = await supabase.from('feriados').select('fecha');
     const hs = new Set(hd?.map((h: any) => (typeof h.fecha === 'string' ? h.fecha : String(h.fecha)).split('T')[0]) || []);

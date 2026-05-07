@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
+import { getSystemConfig } from '@/lib/config-cache'
 import { redirect } from 'next/navigation'
 import { DashboardNav } from '@/components/dashboard-nav'
 import { SidebarProvider } from '@/components/providers/sidebar-provider'
@@ -26,12 +27,37 @@ export default async function DashboardLayout({
 
   // Use Admin Client to bypass RLS and guarantee we get the user data
   const supabaseAdmin = createAdminClient()
-  
-  const { data: perfil } = await supabaseAdmin
-    .from('perfiles')
-    .select('rol, activo, nombre_completo, avatar_url')
-    .eq('id', user.id)
-    .single()
+
+  // Fecha en Lima (calculada en cliente, no requiere BD)
+  const now = new Date()
+  const limaDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }))
+  const todayStr = `${limaDate.getFullYear()}-${String(limaDate.getMonth() + 1).padStart(2, '0')}-${String(limaDate.getDate()).padStart(2, '0')}`
+  const isSunday = limaDate.getDay() === 0
+
+  // Paralelizar las 4 lecturas: perfil, feriado, asistencia del día, config (cacheada)
+  const [perfilRes, holidayRes, todayAttendanceRes, configMap] = await Promise.all([
+    supabaseAdmin
+      .from('perfiles')
+      .select('rol, activo, nombre_completo, avatar_url')
+      .eq('id', user.id)
+      .single(),
+    supabaseAdmin
+      .from('feriados')
+      .select('id')
+      .eq('fecha', todayStr)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('asistencia_personal')
+      .select('hora_entrada, hora_turno_tarde, hora_cierre')
+      .eq('usuario_id', user.id)
+      .eq('fecha', todayStr)
+      .maybeSingle(),
+    getSystemConfig(),
+  ])
+
+  const perfil = perfilRes.data
+  const holiday = holidayRes.data
+  const todayAttendance = todayAttendanceRes.data
 
   // Business Rule: If user is suspended, block access
   if (perfil && perfil.activo === false) {
@@ -42,50 +68,6 @@ export default async function DashboardLayout({
 
   const userRole = perfil?.rol || 'asesor'
   const userName = perfil?.nombre_completo || 'Usuario'
-
-  // 1. Attendance Logic (Server Side Pre-check)
-  const now = new Date()
-  const limaDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }))
-  const todayStr = `${limaDate.getFullYear()}-${String(limaDate.getMonth() + 1).padStart(2, '0')}-${String(limaDate.getDate()).padStart(2, '0')}`
-  const isSunday = limaDate.getDay() === 0
-
-  // Check Holidays
-  const { data: holiday } = await supabaseAdmin
-    .from('feriados')
-    .select('id')
-    .eq('fecha', todayStr)
-    .maybeSingle()
-
-  // Fetch Attendance Config
-  const { data: attendanceConfigRows } = await supabaseAdmin
-    .from('configuracion_sistema')
-    .select('clave, valor')
-    .in('clave', [
-        'horario_apertura',
-        'horario_fin_turno_1',
-        'horario_cierre',
-        'asistencia_radio_metros',
-        'asistencia_tolerancia_minutos',
-        'asistencia_descuento_por_minuto',
-        'oficina_lat',
-        'oficina_lon',
-        'nombre_sistema',
-        'logo_sistema_url',
-        'asistencia_minutos_permanencia'
-    ])
-
-  const configMap = attendanceConfigRows?.reduce((acc: any, item) => {
-    acc[item.clave] = item.valor
-    return acc
-  }, {})
-
-  // Fetch Today's Attendance Record
-  const { data: todayAttendance } = await supabaseAdmin
-    .from('asistencia_personal')
-    .select('*')
-    .eq('usuario_id', user.id)
-    .eq('fecha', todayStr)
-    .maybeSingle()
 
   // Business Logic: Determine if attendance is MANDATORY right NOW
   const timeToMin = (t: string) => {

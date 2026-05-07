@@ -179,14 +179,17 @@ export async function GET(
 
         // 2. Respetar Límite Global del Cliente, pero permitir al menos su récord histórico
         const clientLimit = parseFloat((loanFull.clientes as any)?.limite_prestamo || 0)
-        
+
         // El límite efectivo es el mayor entre: su límite en ficha, su préstamo anterior o su récord histórico
-        const effectiveLimit = Math.max(clientLimit, loanFull.monto, historicalMax)
-        
+        // SI hay ajuste positivo (mejor score), también considerar el monto sugerido
+        const effectiveLimit = adjustment.totalPotentialPct >= 0
+            ? Math.max(clientLimit, loanFull.monto, historicalMax, adjustment.montoSugerido)
+            : Math.max(clientLimit, loanFull.monto, historicalMax)
+
         if (effectiveLimit > 0 && finalResponse.monto_maximo > effectiveLimit) {
             finalResponse.monto_maximo = effectiveLimit
         }
-        
+
         // Garantizar que el monto_maximo no sea inferior al monto anterior si el ajuste es positivo
         if (adjustment.totalPotentialPct >= 0 && finalResponse.monto_maximo < loanFull.monto) {
             finalResponse.monto_maximo = loanFull.monto

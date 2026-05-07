@@ -119,8 +119,6 @@ export default async function TareasHistoryPage({
             return true
         })
 
-        console.log(`[TareasPage] Supervisor ${user.id} - Team IDs: ${equipoIds.length} - Tasks Evid: ${tareasEvidencia.length} - Audits: ${tareasAuditoria.length} - Visitas: ${tareasVisita.length}`)
-
     } else {
         // Admin: ve todo
         const { data: tareas } = await supabaseAdmin

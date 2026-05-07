@@ -32,7 +32,6 @@ export function DashboardAlerts({ userId, blockInfo, accessInfo }: DashboardAler
               filter: `asesor_id=eq.${userId}`
             },
             (payload) => {
-              console.log('🔄 Sincronizando alertas (DB)...', payload)
               router.refresh()
             }
           )
@@ -41,7 +40,6 @@ export function DashboardAlerts({ userId, blockInfo, accessInfo }: DashboardAler
             { event: 'cuadre_updated' },
             (payload) => {
               if (payload.payload?.asesor_id === userId) {
-                console.log('🚀 Sincronizando alertas (BC)...', payload)
                 router.refresh()
               }
             }

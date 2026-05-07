@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { NextResponse } from 'next/server'
+import { invalidateConfigCache } from '@/lib/config-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,6 +50,9 @@ export async function POST(request: Request) {
             usuario_id: user.id,
             detalles: { accion: `Desbloqueo ${minutos} min`, activo_hasta: desbloqueoHasta, motivo, configurado_por: user.id }
         })
+
+        // Invalidar caché para que el desbloqueo sea efectivo de inmediato
+        invalidateConfigCache()
 
         return NextResponse.json({ success: true, activo_hasta: desbloqueoHasta, minutos, motivo })
     } catch (error: any) {

@@ -132,38 +132,53 @@ export function CuadreHistoryTable({ history }: CuadreHistoryTableProps) {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
                       {/* Breakdown */}
                       <div className="space-y-4">
-                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Desglose</p>
+                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Detalles del Cuadre</p>
                          <div className="space-y-2">
-                             <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-slate-900/50 border border-slate-800">
-                                <div className="flex items-center justify-between">
-                                   <div className="flex items-center gap-2">
-                                      <Landmark className="w-3 h-3 text-emerald-400" />
-                                      <span className="text-xs text-slate-400">Efectivo:</span>
+                             {/* Recaudación */}
+                             <div className="space-y-2">
+                                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">Recaudación</p>
+                                <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-slate-900/50 border border-slate-800">
+                                   <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                         <Landmark className="w-3 h-3 text-emerald-400" />
+                                         <span className="text-xs text-slate-400">Efectivo:</span>
+                                      </div>
+                                      <span className="text-xs font-bold text-white">S/ {item.monto_cobrado_efectivo}</span>
                                    </div>
-                                   <span className="text-xs font-bold text-white">S/ {item.monto_cobrado_efectivo}</span>
+                                   {item.cuenta_caja && (
+                                      <div className="pl-5 flex items-center gap-1.5">
+                                         <div className="w-1 h-1 rounded-full bg-emerald-500/50" />
+                                         <span className="text-[10px] text-slate-500 uppercase font-medium">→ {item.cuenta_caja.nombre}</span>
+                                      </div>
+                                   )}
                                 </div>
-                                {item.cuenta_caja && (
-                                   <div className="pl-5 flex items-center gap-1.5">
-                                      <div className="w-1 h-1 rounded-full bg-emerald-500/50" />
-                                      <span className="text-[10px] text-slate-500 uppercase font-medium">Destino: {item.cuenta_caja.nombre}</span>
+                                <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-slate-900/50 border border-slate-800">
+                                   <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                         <Smartphone className="w-3 h-3 text-blue-400" />
+                                         <span className="text-xs text-slate-400">Digital:</span>
+                                      </div>
+                                      <span className="text-xs font-bold text-white">S/ {item.monto_cobrado_digital}</span>
                                    </div>
-                                )}
-                             </div>
-                             <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-slate-900/50 border border-slate-800">
-                                <div className="flex items-center justify-between">
-                                   <div className="flex items-center gap-2">
-                                      <Smartphone className="w-3 h-3 text-blue-400" />
-                                      <span className="text-xs text-slate-400">Digital:</span>
-                                   </div>
-                                   <span className="text-xs font-bold text-white">S/ {item.monto_cobrado_digital}</span>
+                                   {item.cuenta_digital && (
+                                      <div className="pl-5 flex items-center gap-1.5">
+                                         <div className="w-1 h-1 rounded-full bg-blue-500/50" />
+                                         <span className="text-[10px] text-slate-500 uppercase font-medium">→ {item.cuenta_digital.nombre}</span>
+                                      </div>
+                                   )}
                                 </div>
-                                {item.cuenta_digital && (
-                                   <div className="pl-5 flex items-center gap-1.5">
-                                      <div className="w-1 h-1 rounded-full bg-blue-500/50" />
-                                      <span className="text-[10px] text-slate-500 uppercase font-medium">Destino: {item.cuenta_digital.nombre}</span>
-                                   </div>
-                                )}
                              </div>
+
+                             {/* Gastos */}
+                             {item.total_gastos > 0 && (
+                                <div className="p-2 rounded-lg bg-rose-500/5 border border-rose-500/20">
+                                   <div className="flex items-center justify-between">
+                                      <span className="text-xs text-slate-400">Gastos registrados:</span>
+                                      <span className="text-xs font-bold text-rose-400">- S/ {parseFloat(item.total_gastos).toFixed(2)}</span>
+                                   </div>
+                                </div>
+                             )}
+
                          </div>
                       </div>
 
@@ -182,16 +197,28 @@ export function CuadreHistoryTable({ history }: CuadreHistoryTableProps) {
 
                       {/* Observations or extra info */}
                       <div className="space-y-4">
-                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Información adicional</p>
-                         <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-800">
-                            <div className="flex justify-between items-center mb-1">
-                                <span className="text-xs text-slate-400">Total Entregado:</span>
-                                <span className="text-xs font-bold text-emerald-400">S/ {item.saldo_entregado}</span>
+                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Resumen Final</p>
+                         <div className="space-y-2">
+                            <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                               <div className="flex justify-between items-center">
+                                   <span className="text-xs text-slate-400">Total Entregado:</span>
+                                   <span className="text-xs font-bold text-white">S/ {item.saldo_entregado}</span>
+                               </div>
                             </div>
+                            {(((item.monto_cobrado_efectivo + item.monto_cobrado_digital) - item.saldo_entregado) > 0.05) && (
+                               <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                                  <div className="flex justify-between items-center">
+                                      <span className="text-xs text-slate-400">Saldo Pendiente:</span>
+                                      <span className="text-xs font-bold text-amber-400">
+                                         S/ {((item.monto_cobrado_efectivo + item.monto_cobrado_digital) - item.saldo_entregado).toFixed(2)}
+                                      </span>
+                                  </div>
+                               </div>
+                            )}
                             <div className="h-px bg-slate-800 my-2" />
                             <p className="text-[10px] text-slate-500 leading-relaxed italic">
-                               {isApproved 
-                                 ? "Este cuadre fue validado y los fondos han sido transferidos a las cuentas correspondientes." 
+                               {isApproved
+                                 ? "Este cuadre fue validado y los fondos han sido transferidos a las cuentas correspondientes."
                                  : "Este cuadre fue rechazado por inconsistencias en la información proporcionada."}
                             </p>
                          </div>

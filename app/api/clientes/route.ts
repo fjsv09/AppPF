@@ -7,11 +7,9 @@ import { createFullNotification } from '@/services/notification-service'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
-  console.log('>>> [API CLIENTES] GET REQUEST START')
   try {
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q')
-    console.log(`>>> [API CLIENTES] Searching for: "${query}"`)
 
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -42,7 +40,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Database Error: ' + error.message }, { status: 500 })
     }
 
-    console.log(`>>> [API CLIENTES] Found ${clientes?.length || 0} results`)
     return NextResponse.json(clientes)
 
   } catch (error: any) {

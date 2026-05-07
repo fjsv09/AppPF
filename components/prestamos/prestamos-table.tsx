@@ -437,7 +437,7 @@ export function PrestamosTable({
                         c.estado === 'pagado' ||
                         (parseFloat(c.monto_pagado || 0) >= parseFloat(c.monto_cuota || 0) - 0.01 && parseFloat(c.monto_cuota || 0) > 0)
                     ).length,
-                    valorCuotaPromedio > 0 ? Math.floor(pagadoAcumulado / valorCuotaPromedio) : 0
+                    valorCuotaPromedio > 0 ? Math.floor((pagadoAcumulado + 0.01) / valorCuotaPromedio) : 0
                 )
             )
 

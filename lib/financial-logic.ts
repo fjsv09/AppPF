@@ -105,23 +105,20 @@ export function calculateLoanMetrics(
   // Fuente de verdad para pagos: standalonePagos > loan.pagos > flatMap(cronograma.pagos)
   // [FILTRO SEGURIDAD] Excluir pagos rechazados explícitamente
   const pagosRaw = standalonePagos || loan.pagos || cronograma.flatMap((c: any) => c.pagos || []);
-  const pagos = pagosRaw.filter((p: any) => p.estado_verificacion !== 'rechazado' && p.estado_verificacion !== 'pendiente');
+  const pagos = pagosRaw.filter((p: any) => p.estado_verificacion !== 'rechazado');
 
   const totalPagar = Number(loan.monto) * (1 + (Number(loan.interes) / 100));
 
-  // 0. Cálculo de Pagado Real (Basado en transacciones reales para evitar desincronización con el cronograma)
-  // Si tenemos el array de pagos, sumamos el monto_pagado de cada uno.
+  // 0. Cálculo de Pagado Registrado (Incluye pagos pendientes para reflejar el progreso inmediato en UI)
   const sumCronograma = cronograma.reduce((sum: number, c: any) => sum + (Number(c.monto_pagado) || 0), 0);
-  const sumPagosPendientes = pagosRaw
-    .filter((p: any) => p.estado_verificacion === 'pendiente')
-    .reduce((sum: number, p: any) => sum + (Number(p.monto_pagado) || 0), 0);
-
-  const totalPagadoAcumuladoReal = pagos.reduce((sum: number, p: any) => sum + (Number(p.monto_pagado) || 0), 0);
   
-  // Para evitar perder pagos históricos migrados que solo existen en el cronograma,
-  // tomamos el máximo entre los pagos aprobados reales y el total del cronograma 
-  // (excluyendo lo que esté pendiente para no inflar métricas prematuramente).
-  const totalPagadoAcumulado = Math.max(totalPagadoAcumuladoReal, sumCronograma - sumPagosPendientes);
+  // Incluimos todos los pagos que NO hayan sido rechazados (aprobados + pendientes)
+  const totalPagadoAcumuladoReal = pagosRaw
+    .filter((p: any) => p.estado_verificacion !== 'rechazado')
+    .reduce((sum: number, p: any) => sum + (Number(p.monto_pagado) || 0), 0);
+  
+  // La fuente de verdad acumulada es el máximo entre lo registrado en transacciones y lo aplicado al cronograma
+  const totalPagadoAcumulado = Math.max(totalPagadoAcumuladoReal, sumCronograma);
 
   // Helper para determinar si es hoy
   const getIsToday = (date: string) => {
@@ -182,7 +179,7 @@ export function calculateLoanMetrics(
             c.estado === 'pagado' ||
             (Number(c.monto_pagado || 0) >= Number(c.monto_cuota || 0) - 0.01 && Number(c.monto_cuota || 0) > 0)
           ).length,
-          valorCuotaPromedioNA > 0 ? Math.floor(totalPagadoAcumulado / valorCuotaPromedioNA) : 0
+          valorCuotaPromedioNA > 0 ? Math.floor((totalPagadoAcumulado + 0.01) / valorCuotaPromedioNA) : 0
         )
       ),
       metaTotalHoyYAtrasados: 0,
@@ -351,7 +348,7 @@ export function calculateLoanMetrics(
           c.estado === 'pagado' ||
           (Number(c.monto_pagado || 0) >= Number(c.monto_cuota || 0) - 0.01 && Number(c.monto_cuota || 0) > 0)
         ).length,
-        valorCuotaPromedio > 0 ? Math.floor(totalPagadoAcumulado / valorCuotaPromedio) : 0
+        valorCuotaPromedio > 0 ? Math.floor((totalPagadoAcumulado + 0.01) / valorCuotaPromedio) : 0
       )
     ),
     metaTotalHoyYAtrasados,

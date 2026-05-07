@@ -220,7 +220,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                     <div className={cn(isPrinting ? "space-y-0.5" : "space-y-2.5")}>
                         <div className={cn("flex justify-between items-center", isPrinting ? "text-[9px] leading-none" : "text-xs")}>
                             <span className={theme.textMuted}>Progreso del Crédito</span>
-                            <span className={`${theme.textAccent} font-black`}>{pagadas >= totalCuotas ? totalCuotas : Math.min((pagadas || 0) + 1, totalCuotas)} de {totalCuotas} cuotas</span>
+                            <span className={`${theme.textAccent} font-black`}>{pagadas >= totalCuotas ? totalCuotas : Math.min((pagadas || 0) + (saldoCuotaActual > 0 ? 1 : 0), totalCuotas)} de {totalCuotas} cuotas</span>
                         </div>
                         <div className={`h-1.5 w-full ${isPrinting ? 'bg-white border border-black rounded-none h-2' : 'bg-slate-700/50 rounded-full'} overflow-hidden`}>
                            <div 

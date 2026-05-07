@@ -493,7 +493,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                                     <div className="flex flex-col items-end">
                                                         <span className="text-slate-500 font-black text-[8px] uppercase tracking-tighter">Progreso</span>
                                                         <span className="text-xs font-black text-slate-300 tracking-tighter leading-none">
-                                                            {metrics.cuotasPagadas >= metrics.totalCuotas ? metrics.totalCuotas : Math.min(metrics.cuotasPagadas + 1, metrics.totalCuotas)}/{metrics.totalCuotas}
+                                                            {Math.min(metrics.cuotasPagadas + (metrics.saldoCuotaParcial > 0 ? 1 : 0), metrics.totalCuotas)}/{metrics.totalCuotas}
                                                         </span>
                                                     </div>
                                                 </div>

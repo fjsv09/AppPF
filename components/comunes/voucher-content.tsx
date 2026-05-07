@@ -125,8 +125,8 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
         pagadas = virtualCronograma.filter(c => c.isPagadaVirtual).length
         saldoPendiente = Math.max(0, virtualCronograma.reduce((acc, c) => acc + (Number(c.monto_cuota || 0) - c.monto_pagado_virtual), 0))
         
-        const cuotaActual = virtualCronograma.find(c => !c.isPagadaVirtual)
-        saldoCuotaActual = cuotaActual ? Math.max(0, Number(cuotaActual.monto_cuota || 0) - cuotaActual.monto_pagado_virtual) : 0
+        const cuotaActual = virtualCronograma.find((c: any) => !c.isPagadaVirtual)
+        saldoCuotaActual = (cuotaActual && cuotaActual.monto_pagado_virtual > 0) ? Math.max(0, Number(cuotaActual.monto_cuota || 0) - cuotaActual.monto_pagado_virtual) : 0
         
         cuotasAtrasadas = virtualCronograma.filter(c => {
             const isPending = !c.isPagadaVirtual
@@ -245,7 +245,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                             </div>
                             {(saldoCuotaActual > 0) && (
                                 <div className={cn("flex justify-between items-center text-[11px]", isPrinting ? "mt-0.5 pt-0.5 border-t border-dashed border-black/30" : "mt-1 pt-1 border-t border-slate-700/30")}>
-                                    <span className={cn(theme.textMuted, isPrinting && "text-[9px]")}>Falta Cuota {pagadas + 1}</span>
+                                    <span className={cn(theme.textMuted, isPrinting && "text-[9px]")}>Saldo</span>
                                     <span className={cn("text-blue-500 font-black tabular-nums", isPrinting ? "text-[12px]" : "text-sm")}>
                                         S/ {saldoCuotaActual.toFixed(2)}
                                     </span>

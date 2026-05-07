@@ -530,7 +530,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                                     </div>
                                 )}
                                 <p className="text-xs md:text-2xl font-black text-white leading-none tracking-tight">
-                                    {metrics.cuotasPagadas >= metrics.totalCuotas ? metrics.totalCuotas : Math.min(metrics.cuotasPagadas + 1, metrics.totalCuotas)}/{metrics.totalCuotas}
+                                    {Math.min(metrics.cuotasPagadas + (metrics.saldoCuotaParcial > 0 ? 1 : 0), metrics.totalCuotas)}/{metrics.totalCuotas}
                                 </p>
                             </div>
                         </div>

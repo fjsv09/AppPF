@@ -142,6 +142,23 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
         }
     }
 
+    // Step 2.5: Fetch all payments directly by prestamo_id to avoid missing any unlinked payments
+    let pagosByLoan = new Map<string, any[]>()
+    if (activeLoanIds.length > 0) {
+        const { data: pagosDirectos } = await supabaseAdmin
+            .from('pagos')
+            .select('prestamo_id, monto_pagado, estado_verificacion')
+            .in('prestamo_id', activeLoanIds)
+            
+        pagosDirectos?.forEach(p => {
+            if (p.estado_verificacion !== 'rechazado') {
+                const list = pagosByLoan.get(p.prestamo_id) || []
+                list.push(p)
+                pagosByLoan.set(p.prestamo_id, list)
+            }
+        })
+    }
+
     // Merge cuotas back into clientsRaw
     clientsRaw.forEach(c => {
         c.prestamos?.forEach((p: any) => {
@@ -216,15 +233,22 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
         let totalDebt = 0
         let isRecaptable = false
         activeLoans.forEach((p: any) => {
-            const cuotas = (p.cronograma_cuotas || []) as any[]
+            const metrics = calculateLoanMetrics(p, todayPeru)
             const totalPagar = Number(p.monto) * (1 + Number(p.interes) / 100)
-            const totalPagado = cuotas.reduce((s: number, c: any) => {
-                return s + (c.pagos || [])
-                    .filter((pg: any) => pg.estado_verificacion !== 'rechazado' && pg.estado_verificacion !== 'pendiente')
-                    .reduce((sum: number, pg: any) => sum + Number(pg.monto_pagado || 0), 0)
-            }, 0)
-            totalDebt += Math.max(0, totalPagar - totalPagado)
-            if (calculateLoanMetrics(p, todayPeru).esRenovable) isRecaptable = true
+            const pagosValidos = (p.cronograma_cuotas || []).flatMap((c: any) => c.pagos || [])
+                .filter((pg: any) => pg.estado_verificacion !== 'rechazado')
+                .reduce((sum: number, pg: any) => sum + Number(pg.monto_pagado || 0), 0)
+            const pagadoCronograma = (p.cronograma_cuotas || []).reduce((sum: number, c: any) => sum + Number(c.monto_pagado || 0), 0)
+            const pagadoAcumulado = Number(metrics.totalPagadoAcumulado || 0)
+            const pagosDirectos = pagosByLoan.get(p.id) || []
+            const totalPagadoDirecto = pagosDirectos.reduce((sum: number, pg: any) => sum + Number(pg.monto_pagado || 0), 0)
+            
+            const pagadoReal = Math.max(pagosValidos, pagadoCronograma, pagadoAcumulado, totalPagadoDirecto)
+            
+            const deudaPrestamo = Math.max(0, totalPagar - pagadoReal)
+            
+            totalDebt += deudaPrestamo
+            if (metrics.esRenovable) isRecaptable = true
         })
 
         // Get latest GPS coordinates from solicitudes

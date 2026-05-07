@@ -10,7 +10,7 @@ import { ImageLightbox } from '@/components/ui/image-lightbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ClientDetailDrawer } from '@/components/clientes/client-detail-drawer'
 import { Users, Search, Phone, ChevronLeft, ChevronRight, Calendar, Loader2, Link as LinkIcon, Eye, Download, CheckSquare, Square, ChevronDown, Trash2, CalendarHeart, HandCoins, ExternalLink, ListFilter, MoreVertical, MessageCircle, MapPin, X, Map, ShieldCheck, Receipt, Lock, Unlock } from 'lucide-react'
-import { cn } from "@/lib/utils"
+import { cn, getFrequencyBadgeStyles } from "@/lib/utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import dynamic from 'next/dynamic'
 import { ClientEditModal } from './client-edit-modal'
@@ -994,14 +994,26 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
 
                                 <div className="col-span-1 text-center">
                                     {(() => {
-                                        const freqs = [...new Set(
-                                            (cliente.prestamos || [])
-                                                .filter((p: any) => p.estado === 'activo')
-                                                .map((p: any) => p.frecuencia)
-                                                .filter(Boolean)
-                                        )]
+                                        const prestamosActivos = (cliente.prestamos || []).filter((p: any) => p.estado === 'activo');
+                                        const freqs: string[] = Array.from(new Set(
+                                            prestamosActivos.map((p: any) => p.frecuencia).filter(Boolean) as string[]
+                                        ));
                                         return freqs.length > 0
-                                            ? <span className="text-[10px] text-slate-400">{freqs.join(' / ')}</span>
+                                            ? (
+                                                <div className="flex flex-wrap gap-1 justify-center">
+                                                    {freqs.map((f: string) => (
+                                                        <span 
+                                                            key={f}
+                                                            className={cn(
+                                                                "text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border",
+                                                                getFrequencyBadgeStyles(f)
+                                                            )}
+                                                        >
+                                                            {f}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )
                                             : <span className="text-[10px] text-slate-600">—</span>
                                     })()}
                                 </div>

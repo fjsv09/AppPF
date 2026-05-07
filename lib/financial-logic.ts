@@ -111,14 +111,17 @@ export function calculateLoanMetrics(
 
   // 0. Cálculo de Pagado Real (Basado en transacciones reales para evitar desincronización con el cronograma)
   // Si tenemos el array de pagos, sumamos el monto_pagado de cada uno.
-  const totalPagadoAcumuladoReal = pagos.length > 0
-    ? pagos.reduce((sum: number, p: any) => sum + (Number(p.monto_pagado) || 0), 0)
-    : cronograma.reduce((sum: number, c: any) => sum + (Number(c.monto_pagado) || 0), 0);
-
-  // [SINCRONIZACIÓN] Priorizamos la suma de transacciones reales (pagos) si existen.
-  // Solo usamos la suma del cronograma como fallback para préstamos migrados sin registros de pagos.
   const sumCronograma = cronograma.reduce((sum: number, c: any) => sum + (Number(c.monto_pagado) || 0), 0);
-  const totalPagadoAcumulado = (pagosRaw.length > 0) ? Math.max(totalPagadoAcumuladoReal, sumCronograma) : sumCronograma;
+  const sumPagosPendientes = pagosRaw
+    .filter((p: any) => p.estado_verificacion === 'pendiente')
+    .reduce((sum: number, p: any) => sum + (Number(p.monto_pagado) || 0), 0);
+
+  const totalPagadoAcumuladoReal = pagos.reduce((sum: number, p: any) => sum + (Number(p.monto_pagado) || 0), 0);
+  
+  // Para evitar perder pagos históricos migrados que solo existen en el cronograma,
+  // tomamos el máximo entre los pagos aprobados reales y el total del cronograma 
+  // (excluyendo lo que esté pendiente para no inflar métricas prematuramente).
+  const totalPagadoAcumulado = Math.max(totalPagadoAcumuladoReal, sumCronograma - sumPagosPendientes);
 
   // Helper para determinar si es hoy
   const getIsToday = (date: string) => {
@@ -1305,6 +1308,29 @@ export async function getFinancialConfig(supabase: any) {
     ]);
 
   return (configRows || []).reduce((acc: any, row: any) => ({ ...acc, [row.clave]: row.valor }), {});
+}
+
+/**
+ * Fuente de verdad para el saldo pendiente de un préstamo en contexto de renovación.
+ * Misma lógica que deudaExigibleHoy del listado: cuotas vencidas hasta hoy menos total pagado acumulado.
+ */
+export async function getSaldoPendienteRenovacion(
+  supabase: any,
+  prestamoId: string,
+  todayOverride?: string
+): Promise<number> {
+  const today = todayOverride || getTodayPeru()
+  const { data: cuotas } = await supabase
+    .from('cronograma_cuotas')
+    .select('monto_cuota, monto_pagado, fecha_vencimiento')
+    .eq('prestamo_id', prestamoId)
+  if (!cuotas || cuotas.length === 0) return 0
+  const totalExigibleHastaHoy = cuotas
+    .filter((c: any) => c.fecha_vencimiento <= today)
+    .reduce((sum: number, c: any) => sum + Number(c.monto_cuota), 0)
+  const totalPagadoAcumulado = cuotas
+    .reduce((sum: number, c: any) => sum + Number(c.monto_pagado || 0), 0)
+  return Math.max(0, totalExigibleHastaHoy - totalPagadoAcumulado)
 }
 
 /**

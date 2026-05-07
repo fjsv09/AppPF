@@ -97,10 +97,11 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
     }
 
     // [NUEVO] OBTENER EVALUACIÓN INTEGRAL PARA EL PANEL DE REVISIÓN (Centralizado)
-    const { 
-        getClientReputationAction, 
+    const {
+        getClientReputationAction,
         getLoanHealthScoreAction,
-        getFinancialConfig
+        getFinancialConfig,
+        getSaldoPendienteRenovacion
     } = await import('@/lib/financial-logic')
 
     // [SNAPSHOT TOTAL] Priorizar datos inmutables guardados para evitar cálculos redundantes
@@ -159,7 +160,9 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
     let saldoPendienteOriginal = 0
 
     // Obtener saldo pendiente original del préstamo actual
-    if (!saldoPendienteOriginal) {
+    if (solicitud.estado_solicitud !== 'aprobado') {
+        saldoPendienteOriginal = await getSaldoPendienteRenovacion(supabaseAdmin, solicitud.prestamo_id)
+    } else {
         const { data: renOriginal } = await supabaseAdmin
             .from('renovaciones')
             .select('saldo_pendiente_original')
@@ -207,13 +210,20 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
 
     let cuentasAdmin: any[] = []
     if (perfil?.rol === 'admin' && ['pre_aprobado', 'pendiente_supervision'].includes(solicitud.estado_solicitud)) {
-        // Obtener todas las cuentas financieras disponibles para admin
-        const { data: cuentas, error: errorCuentas } = await supabaseAdmin
-            .from('cuentas_financieras')
-            .select('id, nombre, saldo, tipo, cartera_id')
-            .order('nombre')
-
-        cuentasAdmin = cuentas || []
+        // Solo cuentas en carteras del admin actual
+        const { data: adminCarteras } = await supabaseAdmin
+            .from('carteras')
+            .select('id')
+            .eq('asesor_id', user.id)
+        const adminCarteraIds = adminCarteras?.map((c: any) => c.id) || []
+        if (adminCarteraIds.length > 0) {
+            const { data: cuentas } = await supabaseAdmin
+                .from('cuentas_financieras')
+                .select('id, nombre, saldo, tipo, cartera_id')
+                .in('cartera_id', adminCarteraIds)
+                .order('nombre')
+            cuentasAdmin = cuentas || []
+        }
     }
 
     // Obtener logo del sistema para el ticket

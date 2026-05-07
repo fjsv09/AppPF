@@ -61,7 +61,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
             *,
             cronograma_cuotas (
                 *,
-                pagos (created_at, monto_pagado, metodo_pago, registrado_por)
+                pagos (created_at, monto_pagado, metodo_pago, registrado_por, estado_verificacion)
             )
         `)
         .eq('cliente_id', id)
@@ -487,13 +487,13 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                                     {metrics.cuotasAtrasadas > 0 && !isPaid && (
                                                         <div className="flex items-center gap-1 text-rose-500 font-black text-[9px] bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30 uppercase tracking-tight shadow-[0_0_10px_rgba(244,63,94,0.1)]">
                                                             <AlertTriangle className="w-3 h-3 animate-pulse" />
-                                                            {metrics.cuotasAtrasadas} ATR
+                                                            {metrics.cuotasAtrasadas} DEBE
                                                         </div>
                                                     )}
                                                     <div className="flex flex-col items-end">
                                                         <span className="text-slate-500 font-black text-[8px] uppercase tracking-tighter">Progreso</span>
                                                         <span className="text-xs font-black text-slate-300 tracking-tighter leading-none">
-                                                            {metrics.cuotasPagadas}/{metrics.totalCuotas}
+                                                            {metrics.cuotasPagadas >= metrics.totalCuotas ? metrics.totalCuotas : Math.min(metrics.cuotasPagadas + 1, metrics.totalCuotas)}/{metrics.totalCuotas}
                                                         </span>
                                                     </div>
                                                 </div>

@@ -450,7 +450,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-3 lg:grid-cols-9 gap-y-6 gap-x-2 pt-4 md:pt-6 border-t border-white/10 relative z-10 w-full">
+                    <div className="grid grid-cols-5 lg:grid-cols-10 gap-y-6 gap-x-2 pt-4 md:pt-6 border-t border-white/10 relative z-10 w-full">
                         {/* MONTO */}
                         <div className="flex flex-col items-center justify-between h-full space-y-1.5 text-center">
                             <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black w-full">Monto</p>
@@ -488,6 +488,16 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                             </div>
                         </div>
 
+                        {/* MONTO POR CUOTA */}
+                        <div className="flex flex-col items-center justify-between h-full space-y-1.5 text-center">
+                            <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black w-full">Cuota</p>
+                            <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-center w-full">
+                                <p className="text-xs md:text-2xl font-black text-emerald-400 leading-none tracking-tight">
+                                    ${Number(cronograma?.[0]?.monto_cuota || 0).toLocaleString()}
+                                </p>
+                            </div>
+                        </div>
+
                         {/* SALDO PARCIAL */}
                         <div className="flex flex-col items-center justify-between h-full space-y-1.5 text-center">
                             <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black w-full">Saldo</p>
@@ -514,13 +524,13 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                                                 "text-[7px] md:text-[10px] font-bold whitespace-nowrap",
                                                 metrics.cuotasAtrasadas > 0 ? "text-amber-500" : "text-emerald-500"
                                             )}>
-                                                {metrics.cuotasAtrasadas > 0 ? `⚠️ ${metrics.cuotasAtrasadas} ATR` : '✅ AL DÍA'}
+                                                {metrics.cuotasAtrasadas > 0 ? `⚠️ ${metrics.cuotasAtrasadas} DEBE` : '✅ AL DÍA'}
                                             </span>
                                         )}
                                     </div>
                                 )}
                                 <p className="text-xs md:text-2xl font-black text-white leading-none tracking-tight">
-                                    {metrics.cuotasPagadas}/{metrics.totalCuotas}
+                                    {metrics.cuotasPagadas >= metrics.totalCuotas ? metrics.totalCuotas : Math.min(metrics.cuotasPagadas + 1, metrics.totalCuotas)}/{metrics.totalCuotas}
                                 </p>
                             </div>
                         </div>

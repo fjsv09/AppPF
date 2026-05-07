@@ -55,26 +55,43 @@ export async function checkSystemAccess(
     console.log(`[SYSTEM ACCESS] User: ${userId} (${userRole}) | Time: ${timePart} | Day: ${limaDayOfWeek} (${todayStr}) | Action: ${action}`);
 
 
-    // 3. CHECK SUNDAYS AND HOLIDAYS
+    // 3. CHECK SUNDAYS AND HOLIDAYS — paralelizar feriado + config en una sola pasada
     const isSunday = limaDayOfWeek === 0;
-    const { data: holiday } = await supabase
-        .from('feriados')
-        .select('id, descripcion')
-        .eq('fecha', todayStr)
-        .maybeSingle();
+    const [holidayRes, configRowsRes] = await Promise.all([
+        supabase
+            .from('feriados')
+            .select('id, descripcion')
+            .eq('fecha', todayStr)
+            .maybeSingle(),
+        supabase
+            .from('configuracion_sistema')
+            .select('clave, valor')
+            .in('clave', [
+                'horario_apertura',
+                'horario_cierre',
+                'desbloqueo_hasta',
+                'horario_fin_turno_1',
+                'tiempo_gracia_post_cuadre'
+            ]),
+    ]);
+    const holiday = holidayRes.data;
+    const configRows = configRowsRes.data;
+
+    const config = configRows?.reduce((acc: any, curr: any) => {
+        acc[curr.clave] = curr.valor;
+        return acc;
+    }, {
+        horario_apertura: '10:00',
+        horario_cierre: '19:00',
+        horario_fin_turno_1: '13:00',
+        tiempo_gracia_post_cuadre: '10'
+    });
 
     if (isSunday || holiday) {
         if (userRole === 'admin' || userRole === 'supervisor') {
             console.log(`[SYSTEM ACCESS] Role ${userRole} allowed on ${isSunday ? 'Sunday' : 'Holiday'}`);
         } else {
-            // Check for Temporary Unlock
-            const { data: configUnlock } = await supabase
-                .from('configuracion_sistema')
-                .select('valor')
-                .eq('clave', 'desbloqueo_hasta')
-                .single();
-
-            const unlockedUntil = configUnlock?.valor ? new Date(configUnlock.valor) : null;
+            const unlockedUntil = config?.desbloqueo_hasta ? new Date(config.desbloqueo_hasta) : null;
             if (!unlockedUntil || now >= unlockedUntil) {
                 return {
                     allowed: false,
@@ -84,28 +101,6 @@ export async function checkSystemAccess(
             }
         }
     }
-
-    // 4. GET SYSTEM CONFIG (APERTURA / CIERRE / CUADRES)
-    const { data: configRows } = await supabase
-        .from('configuracion_sistema')
-        .select('clave, valor')
-        .in('clave', [
-            'horario_apertura',
-            'horario_cierre',
-            'desbloqueo_hasta',
-            'horario_fin_turno_1',
-            'tiempo_gracia_post_cuadre'
-        ]);
-
-    const config = configRows?.reduce((acc: any, curr) => {
-        acc[curr.clave] = curr.valor;
-        return acc;
-    }, {
-        horario_apertura: '10:00',
-        horario_cierre: '19:00',
-        horario_fin_turno_1: '13:00',
-        tiempo_gracia_post_cuadre: '10'
-    });
 
     const isUnlockActive = config.desbloqueo_hasta && new Date(config.desbloqueo_hasta) > now;
     if (isUnlockActive && userRole !== 'admin' && userRole !== 'supervisor' && ['solicitud', 'renovacion', 'prestamo'].includes(action)) {

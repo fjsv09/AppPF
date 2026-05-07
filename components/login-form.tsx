@@ -104,8 +104,7 @@ export function LoginFormContent({
             }
 
             toast.success('Bienvenido', { description: 'Iniciando sesión...' })
-            router.refresh()
-            router.push('/dashboard')
+            window.location.href = '/dashboard'
         } catch (err) {
             toast.error('Error inesperado')
         } finally {

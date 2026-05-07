@@ -25,6 +25,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
     let pagadas = 0
     let cuotasAtrasadas = 0
     let saldoPendiente = 0
+    let saldoCuotaActual = 0
     
     if (cronograma && cronograma.length > 0) {
         const formatter = new Intl.DateTimeFormat('en-CA', { 
@@ -124,6 +125,9 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
         pagadas = virtualCronograma.filter(c => c.isPagadaVirtual).length
         saldoPendiente = Math.max(0, virtualCronograma.reduce((acc, c) => acc + (Number(c.monto_cuota || 0) - c.monto_pagado_virtual), 0))
         
+        const cuotaActual = virtualCronograma.find(c => !c.isPagadaVirtual)
+        saldoCuotaActual = cuotaActual ? Math.max(0, Number(cuotaActual.monto_cuota || 0) - cuotaActual.monto_pagado_virtual) : 0
+        
         cuotasAtrasadas = virtualCronograma.filter(c => {
             const isPending = !c.isPagadaVirtual
             const isOverdueAtThatTime = c.fecha_vencimiento < paymentDateStr;
@@ -216,7 +220,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                     <div className={cn(isPrinting ? "space-y-0.5" : "space-y-2.5")}>
                         <div className={cn("flex justify-between items-center", isPrinting ? "text-[9px] leading-none" : "text-xs")}>
                             <span className={theme.textMuted}>Progreso del Crédito</span>
-                            <span className={`${theme.textAccent} font-black`}>{pagadas} de {totalCuotas} cuotas</span>
+                            <span className={`${theme.textAccent} font-black`}>{pagadas >= totalCuotas ? totalCuotas : Math.min((pagadas || 0) + 1, totalCuotas)} de {totalCuotas} cuotas</span>
                         </div>
                         <div className={`h-1.5 w-full ${isPrinting ? 'bg-white border border-black rounded-none h-2' : 'bg-slate-700/50 rounded-full'} overflow-hidden`}>
                            <div 
@@ -229,7 +233,7 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                                  <div className="flex items-center justify-center gap-1.5 text-rose-600 font-black animate-bounce bg-rose-500/5 py-0.5 rounded-sm mb-0.5 border border-rose-500/20 border-dashed">
                                     <span className={cn(isPrinting ? "text-base" : "text-lg")}>{cuotasAtrasadas}</span>
                                     <span className={cn(isPrinting ? "text-[9px]" : "text-[10px]", "uppercase tracking-tighter")}>
-                                        {cuotasAtrasadas === 1 ? 'Cuota Atrasada' : 'Cuotas Atrasadas'}
+                                        DEBE
                                     </span>
                                  </div>
                             )}
@@ -239,6 +243,14 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
                                     S/ {saldoPendiente.toFixed(2)}
                                 </span>
                             </div>
+                            {(saldoCuotaActual > 0) && (
+                                <div className={cn("flex justify-between items-center text-[11px]", isPrinting ? "mt-0.5 pt-0.5 border-t border-dashed border-black/30" : "mt-1 pt-1 border-t border-slate-700/30")}>
+                                    <span className={cn(theme.textMuted, isPrinting && "text-[9px]")}>Falta Cuota {pagadas + 1}</span>
+                                    <span className={cn("text-blue-500 font-black tabular-nums", isPrinting ? "text-[12px]" : "text-sm")}>
+                                        S/ {saldoCuotaActual.toFixed(2)}
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

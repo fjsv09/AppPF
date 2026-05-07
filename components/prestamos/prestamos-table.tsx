@@ -1140,7 +1140,7 @@ export function PrestamosTable({
                                                                     </span>
                                                                     {prestamo.atrasadas > 0 && (
                                                                         <span className="text-[9px] font-black text-rose-400 bg-rose-500/10 px-1 rounded">
-                                                                            {prestamo.atrasadas} ATR
+                                                                            {prestamo.atrasadas} DEBE
                                                                         </span>
                                                                     )}
                                                                     {prestamo.clientes?.sectores?.nombre && (
@@ -1467,17 +1467,17 @@ export function PrestamosTable({
                                                             <div className="flex items-center gap-2">
                                                                 <div className="flex flex-col">
                                                                     <span className="text-[7px] text-slate-500 uppercase font-black tracking-wider mb-0.5">Capital</span>
-                                                                    <span className="font-mono text-slate-300 text-[12px]">S/ {prestamo.monto?.toFixed(0)}</span>
+                                                                    <span className="font-mono text-slate-300 text-[12px] whitespace-nowrap">S/ {prestamo.monto?.toFixed(0)}</span>
                                                                 </div>
                                                                 <div className="flex flex-col">
                                                                     <span className="text-[7px] text-slate-500 uppercase font-black tracking-wider mb-0.5">Cuota</span>
-                                                                    <span className="font-mono text-slate-300 text-[12px]">S/ {prestamo.valorCuota?.toFixed(0)}</span>
+                                                                    <span className="font-mono text-slate-300 text-[12px] whitespace-nowrap">S/ {prestamo.valorCuota?.toFixed(0)}</span>
                                                                 </div>
                                                                 {/* New Saldo/Any Partial Section */}
                                                                 {(prestamo.saldo_cuota_parcial > 0) && (
                                                                     <div className="flex flex-col">
                                                                         <span className="text-[8px] text-blue-400/70 uppercase font-bold tracking-wider mb-0.5">Saldo</span>
-                                                                        <span className="font-mono text-blue-400 text-[11px] font-bold animate-pulse">
+                                                                        <span className="font-mono text-blue-400 text-[11px] font-bold animate-pulse whitespace-nowrap">
                                                                             S/ {prestamo.saldo_cuota_parcial.toFixed(0)}
                                                                         </span>
                                                                     </div>
@@ -1487,7 +1487,7 @@ export function PrestamosTable({
                                                                     <div className="flex flex-col">
                                                                         <span className="text-[8px] text-red-400/70 uppercase font-bold tracking-wider mb-0.5">Mora</span>
                                                                         <span className={cn(
-                                                                            "font-mono text-[11px]",
+                                                                            "font-mono text-[11px] whitespace-nowrap",
                                                                             ['vencido', 'moroso'].includes(prestamo.estado_mora) ? "text-red-500" : "text-amber-500"
                                                                         )}>
                                                                             S/ {prestamo.deudaHoy.toFixed(0)}
@@ -1521,7 +1521,7 @@ export function PrestamosTable({
                                                                         return (
                                                                             <div className="flex items-center gap-1.5 text-amber-500 font-bold text-[9px] bg-amber-500/5 px-2 py-1 rounded-md border border-amber-500/10">
                                                                                 <AlertTriangle className="w-2.5 h-2.5" />
-                                                                                <span>{prestamo.cuotasAtrasadas} ATR</span>
+                                                                                <span>{prestamo.cuotasAtrasadas} DEBE</span>
                                                                             </div>
                                                                         )
                                                                     } else {
@@ -2003,7 +2003,7 @@ export function PrestamosTable({
                                                             {/* Mora */}
                                                             <div className="col-span-1 text-center">
                                                                 {prestamo.atrasadas > 0 ? (
-                                                                    <span className="text-[11px] font-black text-rose-500">{prestamo.atrasadas} ATR</span>
+                                                                    <span className="text-[11px] font-black text-rose-500">{prestamo.atrasadas} DEBE</span>
                                                                 ) : (
                                                                     <span className="text-[10px] font-bold text-emerald-500/40">OK</span>
                                                                 )}
@@ -2304,16 +2304,17 @@ export function PrestamosTable({
                                                                 }
 
                                                                 const cuotasAtrasadas = prestamo.cuotasAtrasadas ?? (prestamo.valorCuota > 0 ? Math.floor(prestamo.deudaHoy / prestamo.valorCuota) : 0)
+                                                                const displayProgreso = Math.min((cuotasPagadas || 0) + 1, totalCuotas)
                                                                 return (
                                                                     <div className="flex flex-col items-center">
                                                                         <span className={cn(
                                                                             "font-bold text-[10px] mb-0.5 whitespace-nowrap",
                                                                             cuotasAtrasadas > 0 ? "text-amber-400" : "text-emerald-500"
                                                                         )}>
-                                                                            {cuotasAtrasadas > 0 ? `⚠️ ${cuotasAtrasadas} ATR` : '✅ Al día'}
+                                                                            {cuotasAtrasadas > 0 ? `⚠️ ${cuotasAtrasadas} DEBE` : '✅ Al día'}
                                                                         </span>
                                                                         <span className="text-xs font-bold text-slate-400">
-                                                                            {cuotasPagadas}/{totalCuotas > 0 ? totalCuotas : '-'}
+                                                                            {displayProgreso}/{totalCuotas > 0 ? totalCuotas : '-'}
                                                                         </span>
                                                                     </div>
                                                                 )

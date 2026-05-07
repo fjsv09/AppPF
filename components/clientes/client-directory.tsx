@@ -627,7 +627,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                 {/* Desktop Header */}
                 <div
                     className="hidden md:grid gap-4 px-6 py-3 bg-slate-950/50 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500 items-center"
-                    style={{ gridTemplateColumns: 'repeat(18, minmax(0, 1fr))' }}
+                    style={{ gridTemplateColumns: 'repeat(19, minmax(0, 1fr))' }}
                 >
                     {(userRol === 'admin') && (
                         <div className="col-span-1 flex justify-center">
@@ -651,6 +651,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                     <div className="col-span-1 text-right">Teléfono</div>
                     <div className="col-span-1 text-right">Deuda Total</div>
                     <div className="col-span-1 text-center">Préstamos</div>
+                    <div className="col-span-1 text-center">Freq.</div>
                     <div className={cn("col-span-1 text-center", userRol === 'asesor' && "col-span-2")}>Estado</div>
                     <div className="col-span-2 text-right">Acciones</div>
                 </div>
@@ -872,7 +873,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                     isSelected && "bg-blue-900/10 border-l-blue-500",
                                     navigatingToId === cliente.id && "opacity-60 pointer-events-none"
                                 )}
-                                style={{ gridTemplateColumns: 'repeat(18, minmax(0, 1fr))' }}
+                                style={{ gridTemplateColumns: 'repeat(19, minmax(0, 1fr))' }}
                             >
                                 {navigatingToId === cliente.id && (
                                     <div className="absolute inset-0 flex items-center justify-center bg-slate-900/40 z-10">
@@ -989,6 +990,20 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
 
                                 <div className="col-span-1 text-center">
                                     <Badge variant="outline" className="bg-slate-800 border-slate-700 text-slate-400">{cliente.stats.activeLoansCount}</Badge>
+                                </div>
+
+                                <div className="col-span-1 text-center">
+                                    {(() => {
+                                        const freqs = [...new Set(
+                                            (cliente.prestamos || [])
+                                                .filter((p: any) => p.estado === 'activo')
+                                                .map((p: any) => p.frecuencia)
+                                                .filter(Boolean)
+                                        )]
+                                        return freqs.length > 0
+                                            ? <span className="text-[10px] text-slate-400">{freqs.join(' / ')}</span>
+                                            : <span className="text-[10px] text-slate-600">—</span>
+                                    })()}
                                 </div>
 
                                 <div className={cn("col-span-1 text-center flex flex-col items-center", userRol === 'asesor' && "col-span-2")}>

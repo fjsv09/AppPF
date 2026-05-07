@@ -83,8 +83,8 @@ export function DashboardNav({
 
     const handleSignOut = async () => {
         await supabase.auth.signOut()
-        router.refresh()
-        router.push('/login')
+        localStorage.removeItem('local_session_id')
+        window.location.href = '/login'
     }
 
     const handleLinkClick = (href: string) => {

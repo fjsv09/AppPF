@@ -213,13 +213,18 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
 
         const situacion = calculateClientSituation(client)
 
-        // Totales básicos
         let totalDebt = 0
         let isRecaptable = false
         activeLoans.forEach((p: any) => {
-            const metrics = calculateLoanMetrics(p, todayPeru)
-            totalDebt += metrics.deudaExigibleTotal
-            if (metrics.esRenovable) isRecaptable = true
+            const cuotas = (p.cronograma_cuotas || []) as any[]
+            const totalPagar = Number(p.monto) * (1 + Number(p.interes) / 100)
+            const totalPagado = cuotas.reduce((s: number, c: any) => {
+                return s + (c.pagos || [])
+                    .filter((pg: any) => pg.estado_verificacion !== 'rechazado' && pg.estado_verificacion !== 'pendiente')
+                    .reduce((sum: number, pg: any) => sum + Number(pg.monto_pagado || 0), 0)
+            }, 0)
+            totalDebt += Math.max(0, totalPagar - totalPagado)
+            if (calculateLoanMetrics(p, todayPeru).esRenovable) isRecaptable = true
         })
 
         // Get latest GPS coordinates from solicitudes

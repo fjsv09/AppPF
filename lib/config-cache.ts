@@ -1,8 +1,21 @@
 import { unstable_cache, revalidateTag } from 'next/cache'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createClient } from '@supabase/supabase-js'
 
 const CONFIG_TAG = 'configuracion_sistema'
-const CONFIG_REVALIDATE_SECONDS = 300 // 5 minutos
+const CONFIG_REVALIDATE_SECONDS = 120 // 2 minutos
+
+/**
+ * Cliente admin local — evita importar @/utils/supabase/admin (que arrastra
+ * next/headers vía server.ts y rompe componentes cliente que dependen
+ * indirectamente de este caché).
+ */
+function getAdminClient() {
+    return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+}
 
 /**
  * Cargar TODA la configuración del sistema una sola vez y cachearla.
@@ -10,7 +23,7 @@ const CONFIG_REVALIDATE_SECONDS = 300 // 5 minutos
  */
 export const getSystemConfig = unstable_cache(
     async (): Promise<Record<string, string>> => {
-        const supabaseAdmin = createAdminClient()
+        const supabaseAdmin = getAdminClient()
         const { data } = await supabaseAdmin
             .from('configuracion_sistema')
             .select('clave, valor')

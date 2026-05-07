@@ -1,18 +1,8 @@
 import { MetadataRoute } from 'next'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { getSystemConfig } from '@/lib/config-cache'
 
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
-  const supabase = createAdminClient()
-  const { data: config } = await supabase
-    .from('configuracion_sistema')
-    .select('clave, valor')
-    .in('clave', ['nombre_sistema', 'logo_sistema_url'])
-
-  const configMap = config?.reduce((acc: any, item) => {
-    acc[item.clave] = item.valor
-    return acc
-  }, {})
-
+  const configMap = await getSystemConfig()
   const systemName = configMap?.nombre_sistema || 'ProFinanzas'
   return {
     name: `App ${systemName}`,

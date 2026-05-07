@@ -3,7 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createFullNotification } from '@/services/notification-service'
-import { generarCronogramaNode } from '@/lib/financial-logic'
+import { generarCronogramaNode, getSaldoPendienteRenovacion } from '@/lib/financial-logic'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,18 +72,15 @@ export async function PATCH(
             return NextResponse.json({ error: 'La cuenta de origen seleccionada no existe.' }, { status: 404 })
         }
 
-        // 1. Obtener cuotas pendientes ANTES de que el RPC las ponga como pagadas
+        // 1. Calcular saldo retenido (misma fuente de verdad que el display de renovación)
+        const saldo_retenido = await getSaldoPendienteRenovacion(supabaseAdmin, solicitud.prestamo_id)
+
+        // También necesitamos las cuotas pendientes para el recibo de liquidación
         const { data: cuotasPendientes } = await supabaseAdmin
             .from('cronograma_cuotas')
             .select('id, monto_cuota, monto_pagado')
             .eq('prestamo_id', solicitud.prestamo_id)
             .neq('estado', 'pagado');
-
-        let saldo_retenido = 0;
-        if (cuotasPendientes && cuotasPendientes.length > 0) {
-            saldo_retenido = cuotasPendientes.reduce((acc: number, c: any) => 
-                acc + (Number(c.monto_cuota) - Number(c.monto_pagado || 0)), 0);
-        }
 
         const desembolso_neto = solicitud.monto_solicitado - saldo_retenido;
         // El monto a descontar de la cuenta es el NETO (lo que efectivamente sale del sistema)

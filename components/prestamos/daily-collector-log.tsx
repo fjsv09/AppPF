@@ -245,7 +245,7 @@ export function DailyCollectorLog({
 
             <div className="flex items-center gap-3 bg-blue-500/5 border border-blue-500/10 p-3 rounded-xl">
                 <div className="p-2 rounded-lg bg-blue-500/10"><Wallet className="w-5 h-5 text-blue-400" /></div>
-                <div><h3 className="text-sm font-black text-blue-400 uppercase tracking-tighter">Bitácora de Recaudación Real</h3><p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Trazabilidad de Activos</p></div>
+                <div><h3 className="text-base md:text-lg font-black text-blue-400 uppercase tracking-tighter">Bitácora de Recaudación Real</h3><p className="text-xs md:text-sm text-slate-500 font-bold uppercase tracking-widest">Trazabilidad de Activos</p></div>
             </div>
 
             {/* Tarjeta de Acción Rápida (Copiada de Cronograma pero para hoy) */}
@@ -300,7 +300,7 @@ export function DailyCollectorLog({
             <div className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden shadow-2xl">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse min-w-[900px]">
-                        <thead className="bg-slate-950/80 uppercase font-black text-slate-500 border-b border-slate-800 text-[9px]">
+                        <thead className="bg-slate-950/80 uppercase font-black text-slate-500 border-b border-slate-800 text-[11px] md:text-xs">
                             <tr>
                                 <th className="px-3 py-4 text-center w-10">#</th>
                                 <th className="px-3 py-4 min-w-[100px]">Calendario</th>
@@ -345,11 +345,11 @@ export function DailyCollectorLog({
                                     } else if (isFuture) st = { l: "PENDIENTE", c: "text-slate-500 bg-slate-800/20", bg: "" }
 
                                     return (
-                                        <tr key={date} className={cn("group transition-colors text-[10px]", st.bg)}>
+                                        <tr key={date} className={cn("group transition-colors text-xs md:text-sm", st.bg)}>
                                             <td className="px-3 py-4 text-center font-black text-slate-700">{cuota?.numero_cuota || 'EXT'}</td>
                                             <td className="px-3 py-4 font-bold uppercase text-slate-400">
                                                 <div className="flex items-center gap-1"><Calendar className="w-3 h-3 text-slate-600" />{format(qDate, "eee d MMM", { locale: es })}</div>
-                                                {isVirtual && <span className="text-[7px] text-blue-500 font-extrabold block mt-0.5 ml-4">COBRO EXTRA</span>}
+                                                {isVirtual && <span className="text-[9px] text-blue-500 font-extrabold block mt-0.5 ml-4">COBRO EXTRA</span>}
                                             </td>
                                             <td className="px-3 py-4 text-center">
                                                 <div className="flex flex-col gap-2 font-bold items-center">
@@ -370,7 +370,7 @@ export function DailyCollectorLog({
                                                 <div className="flex flex-col gap-1 items-center">
                                                     {physical.map((p: any) => (
                                                         <div key={p.id} className="flex items-center gap-1.5 bg-slate-950/40 px-1.5 py-1 rounded border border-slate-800/50 w-full group/v">
-                                                            <span className="text-[10px] font-black text-emerald-400 flex-1 text-left">S/ {Number(p.monto_pagado)}</span>
+                                                            <span className="text-xs font-black text-emerald-400 flex-1 text-left">S/ {Number(p.monto_pagado)}</span>
                                                             <div className="flex items-center gap-0.5">
                                                                 <Button size="sm" variant="ghost" onClick={() => { setSelectedPayment(p); setIsVoucherOpen(true); }} className="h-4 w-4 p-0 text-slate-600 hover:text-emerald-400"><Receipt className="w-2.5 h-2.5" /></Button>
                                                                 {userRole === 'admin' && date === todayStr && !isPaymentLocked(p) && (
@@ -384,7 +384,7 @@ export function DailyCollectorLog({
                                             </td>
                                             <td className="px-3 py-4 text-center">
                                                 <div className="flex flex-col gap-2 items-center">
-                                                    {physical.map((p: any) => <Badge key={p.id} variant="outline" className="text-[7px] font-black h-3.5 px-1 py-0 bg-slate-900 text-slate-500 border-slate-800 uppercase">{p.metodo_pago}</Badge>)}
+                                                    {physical.map((p: any) => <Badge key={p.id} variant="outline" className="text-[9px] font-black h-4 px-1.5 py-0 bg-slate-900 text-slate-500 border-slate-800 uppercase">{p.metodo_pago}</Badge>)}
                                                     {physical.length === 0 && <span className="text-slate-800">---</span>}
                                                 </div>
                                             </td>
@@ -395,15 +395,15 @@ export function DailyCollectorLog({
                                                         const dests = (waterfallData.paymentDestinations[p.id] || [])
                                                         return (
                                                             <div key={p.id} className="pl-1.5 border-l border-emerald-500/30">
-                                                                <div className="flex items-center gap-1 text-emerald-400 font-black text-[10px] uppercase">
+                                                                <div className="flex items-center gap-1 text-emerald-400 font-black text-xs uppercase">
                                                                     <CheckCircle2 className="w-3 h-3" /> Cobro en ruta
                                                                 </div>
                                                                 {dests.map((d: any, i: number) => (
-                                                                    <p key={i} className="text-[9px] text-slate-300 font-bold leading-tight ml-4">
+                                                                    <p key={i} className="text-[11px] text-slate-300 font-bold leading-tight ml-4">
                                                                         → S/ {Math.round(d.amount)} a <span className={cn(d.type === 'advance' && "text-blue-400")}>{d.type === 'arrear' ? 'Atraso' : d.type === 'advance' ? 'Adelanto de Cuota' : 'Cuota'}</span> #{d.quotaNum}
                                                                     </p>
                                                                 ))}
-                                                                {dests.length === 0 && <p className="text-[9px] text-slate-500 ml-4">Dinero en bolsa (Excedente Final)</p>}
+                                                                {dests.length === 0 && <p className="text-[11px] text-slate-500 ml-4">Dinero en bolsa (Excedente Final)</p>}
                                                             </div>
                                                         )
                                                     })}
@@ -412,7 +412,7 @@ export function DailyCollectorLog({
                                                     {cuota && (pVal > 0) && (
                                                         <div className="pl-1.5 border-l border-sky-500/30">
                                                             {waterfallData.quotaSources[cuota.id]?.filter((s: any) => s.paymentDate !== date).map((s: any, i: number) => (
-                                                                <p key={i} className="text-[9px] text-sky-400 font-bold leading-tight flex items-center gap-1">
+                                                                <p key={i} className="text-[11px] text-sky-400 font-bold leading-tight flex items-center gap-1">
                                                                     <ArrowRightCircle className="w-3 h-3" /> 
                                                                     {s.type === 'system' 
                                                                         ? 'Saldada con Excedente Anterior (Sistema)' 
@@ -424,7 +424,7 @@ export function DailyCollectorLog({
                                                             ))}
                                                             {/* Fallback para migración o inconsistencias */}
                                                             {(!waterfallData.quotaSources[cuota.id]?.some((s: any) => s.paymentDate !== date)) && totalDay === 0 && isFull && isMigrado && (
-                                                                <p className="text-[8px] text-sky-400 leading-tight italic flex items-center gap-1 uppercase font-black">
+                                                                <p className="text-[10px] text-sky-400 leading-tight italic flex items-center gap-1 uppercase font-black">
                                                                     <ArrowRightCircle className="w-2.5 h-2.5" /> Saldada (Sistema/Migración)
                                                                 </p>
                                                             )}
@@ -432,18 +432,18 @@ export function DailyCollectorLog({
                                                     )}
 
                                                     {/* 3. Caso Extra (Cobros sin cuota asociada en esa fecha pero que no son pagos físicos hoy) */}
-                                                    {isVirtual && totalDay === 0 && <p className="text-[9px] text-emerald-400/60 leading-tight font-bold">Regularización automática de saldos.</p>}
+                                                    {isVirtual && totalDay === 0 && <p className="text-[11px] text-emerald-400/60 leading-tight font-bold">Regularización automática de saldos.</p>}
 
                                                     {/* 4. Faltantes */}
                                                     {cuota && !isFuture && !isFull && totalDay === 0 && (
-                                                        <p className="text-[9px] text-rose-500 uppercase font-bold flex items-center gap-1">
+                                                        <p className="text-[11px] text-rose-500 uppercase font-bold flex items-center gap-1">
                                                             <XCircle className="w-3 h-3" /> Faltante de cuota
                                                         </p>
                                                     )}
                                                 </div>
                                             </td>
                                             {userRole !== 'asesor' && <td className="px-3 py-4 text-center"><div className="flex flex-col gap-2 items-center">{physical.map((p: any) => <div key={p.id}>{p.voucher_compartido ? <CheckCircle className="w-2.5 h-2.5 text-emerald-500" /> : <ShieldAlert className="w-2.5 h-2.5 text-red-500" />}</div>)}</div></td>}
-                                            <td className="px-3 py-4 text-center"><Badge variant="outline" className={cn("text-[8px] font-black uppercase tracking-tighter h-5", st.c)}>{st.l}</Badge></td>
+                                            <td className="px-3 py-4 text-center"><Badge variant="outline" className={cn("text-[10px] font-black uppercase tracking-tighter h-5", st.c)}>{st.l}</Badge></td>
                                         </tr>
                                     )
                                 })

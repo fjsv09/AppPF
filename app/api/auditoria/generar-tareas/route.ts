@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { createFullNotification } from '@/services/notification-service'
+import { invalidateConfigCache } from '@/lib/config-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -183,6 +184,8 @@ export async function POST(request: Request) {
             .from('configuracion_sistema')
             .update({ valor: new Date().toISOString() })
             .eq('clave', 'last_audit_gen')
+
+        invalidateConfigCache()
 
         return NextResponse.json({
             success: true,

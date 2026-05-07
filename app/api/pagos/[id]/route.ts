@@ -135,18 +135,23 @@ export async function PUT(
             .select('*')
             .eq('pago_id', id)
         
-        if (!distribuciones || distribuciones.length === 0) {
-            return NextResponse.json({ error: 'No se encontró la distribución del pago' }, { status: 404 })
+        let cuotaId = pagoActual.cuota_id;
+        let distribucionId = null;
+
+        if (distribuciones && distribuciones.length > 0) {
+            // Si el pago se distribuyó en varias cuotas, la lógica de edición simple fallaría.
+            // Pero en cobros manuales de asesores suele ser 1 a 1.
+            if (distribuciones.length > 1 && diffMonto !== 0) {
+                return NextResponse.json({ error: 'Este pago se distribuyó en múltiples cuotas. Por seguridad, la edición automática está deshabilitada para pagos complejos.' }, { status: 400 })
+            }
+            const distribucion = distribuciones[0]
+            cuotaId = distribucion.cuota_id || cuotaId;
+            distribucionId = distribucion.id;
         }
 
-        // Si el pago se distribuyó en varias cuotas, la lógica de edición simple fallaría.
-        // Pero en cobros manuales de asesores suele ser 1 a 1.
-        if (distribuciones.length > 1 && diffMonto !== 0) {
-            return NextResponse.json({ error: 'Este pago se distribuyó en múltiples cuotas. Por seguridad, la edición automática está deshabilitada para pagos complejos.' }, { status: 400 })
+        if (!cuotaId) {
+            return NextResponse.json({ error: 'El pago no está asociado a ninguna cuota y no se encontró distribución.' }, { status: 404 })
         }
-
-        const distribucion = distribuciones[0]
-        const cuotaId = distribucion.cuota_id
 
         // 5. PROCESAR AJUSTES (Transacción manual simulada)
         
@@ -159,11 +164,13 @@ export async function PUT(
             })
             .eq('id', id)
 
-        // B. Actualizar Distribución
-        await supabaseAdmin
-            .from('pagos_distribucion')
-            .update({ monto: nuevoMonto })
-            .eq('id', distribucion.id)
+        // B. Actualizar Distribución (Si existe)
+        if (distribucionId) {
+            await supabaseAdmin
+                .from('pagos_distribucion')
+                .update({ monto: nuevoMonto })
+                .eq('id', distribucionId)
+        }
 
         // C. Actualizar Cuota (Incrementar/Decrementar monto_pagado)
         const { data: cuota } = await supabaseAdmin

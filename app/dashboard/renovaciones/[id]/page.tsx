@@ -641,14 +641,14 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                     <div className="grid gap-3 md:gap-6 md:grid-cols-2">
                         <Link
                             href={`/dashboard/prestamos/${solicitud.prestamo_nuevo_id}`}
-                            className="flex flex-col items-center justify-center bg-emerald-900/20 border border-emerald-700/50 rounded-lg md:rounded-xl p-4 md:p-8 hover:bg-emerald-900/30 transition-colors h-full"
+                            className="flex flex-col items-center justify-center bg-emerald-900/20 border border-emerald-700/50 rounded-lg md:rounded-xl p-3 md:p-6 hover:bg-emerald-900/30 transition-colors h-full"
                         >
-                            <CheckCircle2 className="h-10 md:h-12 w-10 md:w-12 text-emerald-500 mb-3 md:mb-4" />
-                            <p className="text-emerald-400 font-bold text-base md:text-lg mb-2">Renovación Exitosa</p>
-                            <p className="text-slate-300 text-center text-xs md:text-sm mb-4 md:mb-6 max-w-xs">
+                            <CheckCircle2 className="h-9 md:h-12 w-9 md:w-12 text-emerald-500 mb-2 md:mb-3" />
+                            <p className="text-emerald-400 font-bold text-sm md:text-lg mb-1.5 md:mb-2">Renovación Exitosa</p>
+                            <p className="text-slate-300 text-center text-xs md:text-sm mb-3 md:mb-4">
                                 El préstamo anterior ha sido liquidado y el nuevo crédito está activo.
                             </p>
-                            <Button variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 text-xs md:text-sm">
+                            <Button variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 text-xs">
                                 Ir al Nuevo Préstamo
                             </Button>
                         </Link>

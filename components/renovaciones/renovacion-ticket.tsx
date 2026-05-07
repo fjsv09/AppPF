@@ -176,7 +176,7 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
             if ((err as Error).name !== 'AbortError') {
                 console.error('Share error:', err)
                 // Último fallback: copiar texto al portapapeles
-                const text = `📄 Comprobante de Renovación #${ticketId}\n👤 ${clienteNombre}\n💰 Nuevo: $${formatMoney(montoNuevo)}\n📉 Saldo: -$${formatMoney(saldoAnterior)}\n✅ Efectivo: $${formatMoney(efectivoEntregar)}`
+                const text = `📄 Comprobante de Renovación #${ticketId}\n👤 ${clienteNombre}\n💰 Nuevo: S/ ${formatMoney(montoNuevo)}\n📉 Saldo: -S/ ${formatMoney(saldoAnterior)}\n✅ Efectivo: S/ ${formatMoney(efectivoEntregar)}`
                 try {
                     await navigator.clipboard.writeText(text)
                     toast.success('Texto copiado al portapapeles', { id: 'share-ticket' })
@@ -233,16 +233,16 @@ export function RenovacionTicket({ solicitud, saldoAnterior, nuevoPrestamoId, cl
                     <div className="space-y-2">
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-slate-500">Nuevo Préstamo</span>
-                            <span className="font-bold">${formatMoney(montoNuevo)}</span>
+                            <span className="font-bold">S/ {formatMoney(montoNuevo)}</span>
                         </div>
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-slate-500">Saldo Anterior Liquidado</span>
-                            <span className="text-red-500 font-medium">-${formatMoney(saldoAnterior)}</span>
+                            <span className="text-red-500 font-medium">-S/ {formatMoney(saldoAnterior)}</span>
                         </div>
                         <div className="border-t border-dashed border-slate-200 my-2" />
                         <div className="flex justify-between items-center text-lg">
                             <span className="font-bold text-slate-700">Efectivo a Entregar</span>
-                            <span className="font-bold text-emerald-600">${formatMoney(efectivoEntregar)}</span>
+                            <span className="font-bold text-emerald-600">S/ {formatMoney(efectivoEntregar)}</span>
                         </div>
                     </div>
 

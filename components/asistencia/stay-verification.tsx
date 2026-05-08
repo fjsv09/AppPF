@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { MapPin, Clock, Loader2, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -17,7 +17,8 @@ export function StayVerification() {
     const [loading, setLoading] = useState(true)
     const [verifying, setVerifying] = useState(false)
     const [lastPosition, setLastPosition] = useState<{ lat: number, lon: number } | null>(null)
-    const [isHovered, setIsHovered] = useState(false)
+    const [isOpen, setIsOpen] = useState(false)
+    const containerRef = useRef<HTMLDivElement>(null)
 
     const checkStatus = useCallback(async (isInitial = false) => {
         try {
@@ -158,7 +159,21 @@ export function StayVerification() {
 
         return () => clearInterval(interval)
     }, [status, requestLocationAndPing])
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false)
+            }
+        }
 
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside)
+        }
+        
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside)
+        }
+    }, [isOpen])
     const progress = useMemo(() => {
         if (!status) return 0
         const completed = status.minutos_permanencia - status.restante
@@ -169,14 +184,13 @@ export function StayVerification() {
 
     return (
         <div 
+            ref={containerRef}
             className="fixed bottom-20 right-6 z-50 flex flex-col items-end gap-3"
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
         >
             {/* Tooltip Detallado */}
             <div className={cn(
                 "bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl transition-all duration-300 transform origin-bottom-right w-64",
-                isHovered ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-90 translate-y-4 pointer-events-none"
+                isOpen ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-90 translate-y-4 pointer-events-none"
             )}>
                 <div className="flex items-center justify-between mb-3">
                     <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
@@ -230,10 +244,11 @@ export function StayVerification() {
 
             {/* Círculo Principal (FAB) */}
             <button 
+                onClick={() => setIsOpen(!isOpen)}
                 className={cn(
                     "group relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-500",
                     "bg-slate-900 border border-white/10 shadow-[0_0_20px_rgba(0,0,0,0.4)]",
-                    isHovered ? "scale-110 border-blue-500/50 ring-4 ring-blue-500/10" : "scale-100"
+                    isOpen ? "scale-110 border-blue-500/50 ring-4 ring-blue-500/10" : "scale-100"
                 )}
             >
                 {/* Progress Ring */}

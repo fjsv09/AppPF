@@ -100,9 +100,24 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
     const userRole = perfil?.rol || 'asesor'
     const exigirGpsCobranza = !!perfil?.exigir_gps_cobranza
 
+    // Redirección por defecto según ROL (si no hay tab activo)
+    if (!activeTab) {
+        if (userRole === 'admin' || userRole === 'supervisor' || userRole === 'secretaria') {
+            redirect('/dashboard/prestamos?tab=en_curso');
+        } else {
+            redirect('/dashboard/prestamos?tab=ruta_hoy');
+        }
+    }
+
     // RESTRICCIÓN POR URL: Solo admin y secretaria pueden ver historial (se mantiene)
     const restrictedTabs = ['finalizados', 'renovados', 'refinanciados', 'anulados', 'pendientes', 'todos'];
-    if (userRole !== 'admin' && userRole !== 'secretaria' && activeTab && restrictedTabs.includes(activeTab)) {
+    if (userRole !== 'admin' && userRole !== 'secretaria' && activeTab && restrictedTabs.includes(activeTab as string)) {
+        redirect('/dashboard/prestamos?tab=ruta_hoy');
+    }
+
+    // Bloqueo estricto de Control Ruta para asesores (solo Admin y Supervisor)
+    const isControlTab = activeTab === 'visitas_control';
+    if (isControlTab && userRole === 'asesor') {
         redirect('/dashboard/prestamos?tab=ruta_hoy');
     }
 

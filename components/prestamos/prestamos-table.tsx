@@ -221,7 +221,8 @@ export function PrestamosTable({
 
 
     // --- URL PARAMETERS & DERIVED STATE ---
-    const activeFilter = (searchParams.get('tab') as FilterTab) || 'ruta_hoy'
+    const defaultTab = (userRol === 'admin' || userRol === 'supervisor' || userRol === 'secretaria') ? 'en_curso' : 'ruta_hoy'
+    const activeFilter = (searchParams.get('tab') as FilterTab) || (defaultTab as FilterTab)
     const searchQuery = searchParams.get('search') || ''
     const filtroSupervisor = searchParams.get('supervisor') || 'todos'
     const filtroAsesor = searchParams.get('asesor') || 'todos'

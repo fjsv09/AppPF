@@ -92,7 +92,7 @@ export function MovementsFilterBar({
       </div>
 
       {/* Main Filter Bar - Sticky & Blurry */}
-      <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-950/40 p-3 rounded-2xl border border-slate-800/50 backdrop-blur-xl mb-4 w-full">
+      <div className="sticky top-[var(--sat)] z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-950/40 p-3 rounded-2xl border border-slate-800/50 backdrop-blur-xl mb-4 w-full">
         {/* Search */}
         <div className="relative w-full md:flex-1 md:max-w-none min-w-[180px]">
           {isPending ? (

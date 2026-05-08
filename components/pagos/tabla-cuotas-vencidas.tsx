@@ -306,7 +306,7 @@ export function TablaCuotasVencidas({ cuotasVencidas, perfiles, userRol, userId,
                     </div>
 
                     {/* Load More & Record Count */}
-                    <div className="mt-8 mb-12 border-t border-slate-800/50 pt-8 flex flex-col items-center gap-6">
+                    <div className="mt-6 mb-4 border-t border-slate-800/50 pt-6 flex flex-col items-center gap-6">
                         {itemsToShow < cuotasFiltradas.length && cuotasFiltradas.length > 0 && (
                             <div className="flex flex-col items-center gap-4">
                                 <Button

@@ -127,9 +127,9 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
     }, [filteredSolicitudes, itemsToShow])
 
     return (
-        <div className="space-y-4 pb-32">
+        <div className="space-y-4 pb-4">
             {/* Filters */}
-            <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-6 shadow-lg shadow-black/20 w-full">
+            <div className="sticky top-[var(--sat)] z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-6 shadow-lg shadow-black/20 w-full">
                 <div className="relative w-full md:flex-1 md:max-w-none min-w-[180px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <Input
@@ -534,7 +534,7 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                 </div>
 
                 {/* Pagination / Load More */}
-                <div className="mt-8 mb-12 border-t border-slate-800/50 pt-8 flex flex-col items-center gap-6">
+                <div className="mt-6 mb-4 border-t border-slate-800/50 pt-6 flex flex-col items-center gap-6">
                     {itemsToShow < filteredSolicitudes.length && filteredSolicitudes.length > 0 && (
                         <div className="flex flex-col items-center gap-4">
                             <Button

@@ -188,7 +188,7 @@ export function ClientesTable({ clientes, perfiles = [], userRol = 'asesor', use
     return (
         <div className="space-y-4">
              {/* Main Filter Bar: Search + Status + Date + Supervisor + Advisor */}
-             <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
+             <div className="sticky top-[var(--sat)] z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
                 {/* Search */}
                 <div className="relative w-full md:flex-1 md:max-w-none min-w-[180px]">
                     {isPending ? (

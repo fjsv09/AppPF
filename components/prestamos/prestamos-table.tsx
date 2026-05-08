@@ -943,7 +943,7 @@ export function PrestamosTable({
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             {/* Main Filter Bar - Responsive & Clean */}
-            <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
+            <div className="sticky top-[var(--sat)] z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
                 
                 {/* Search */}
                 <div className="relative w-full md:flex-1">
@@ -1115,7 +1115,7 @@ export function PrestamosTable({
                 </div>
             </div>
 
-            <div className="relative min-h-[400px]">
+            <div className="relative">
                 {isPending ? (
                     <div className="p-0 animate-in fade-in duration-500">
                         <TableSkeleton />
@@ -1141,7 +1141,7 @@ export function PrestamosTable({
                         <>
                             {/* -------------------- MOBILE CARDS VIEW -------------------- */}
                             <div className={cn(
-                                "space-y-2 pb-32",
+                                "space-y-2 pb-4",
                                 viewType === 'cards' ? "md:hidden" : "hidden"
                             )}>
                                 {filteredPrestamos.slice(0, itemsToShow).map((prestamo, index) => {
@@ -2687,7 +2687,7 @@ export function PrestamosTable({
                                 </div>
 
                             {/* Sentinel y Botón de Carga (Compartido para ambos views) */}
-                            <div className="mt-8 mb-12 border-t border-slate-800/50 pt-8 flex flex-col items-center gap-6">
+                            <div className="mt-6 mb-4 border-t border-slate-800/50 pt-6 flex flex-col items-center gap-6">
                                 {itemsToShow < filteredPrestamos.length && filteredPrestamos.length > 0 && (
                                     <div className="flex flex-col items-center gap-4">
                                         <Button

@@ -71,7 +71,8 @@ export function LightboxModal({ src, alt, isOpen, onClose }: { src: string, alt:
         {/* Close button - Absolute Top Right (DOM Last for top stack) */}
         <button
         onClick={onClose}
-        className="absolute top-6 right-6 z-[100000] flex items-center gap-2 px-6 py-4 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors border border-white/20 backdrop-blur-md cursor-pointer group shadow-2xl pointer-events-auto"
+        className="absolute right-6 z-[100000] flex items-center gap-2 px-6 py-4 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors border border-white/20 backdrop-blur-md cursor-pointer group shadow-2xl pointer-events-auto"
+        style={{ top: 'max(1.5rem, env(safe-area-inset-top, 1.5rem))' }}
         aria-label="Cerrar"
         >
         <span className="text-base font-bold uppercase tracking-wider hidden sm:inline opacity-90 group-hover:opacity-100">Cerrar</span>

@@ -193,7 +193,7 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                 </div>
             </div>
 
-            <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
+            <div className="sticky top-[var(--sat)] z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
                 {isPending && (
                     <div className="absolute inset-0 bg-slate-900/20 rounded-xl flex items-center justify-center z-40 pointer-events-none">
                         <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />
@@ -492,7 +492,7 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                 </div>
 
                 {/* Pagination / Load More */}
-                <div className="mt-8 mb-12 border-t border-slate-800/50 pt-8 flex flex-col items-center gap-6">
+                <div className="mt-6 mb-4 border-t border-slate-800/50 pt-6 flex flex-col items-center gap-6">
                     {itemsToShow < totalRecords && pagos.length > 0 && (
                         <div className="flex flex-col items-center gap-4">
                             <Button

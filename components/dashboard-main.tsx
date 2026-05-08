@@ -14,7 +14,7 @@ export function DashboardMain({ children }: { children: React.ReactNode }) {
       )}
       style={{
         paddingTop: 'calc(3rem + env(safe-area-inset-top, 0px))',
-        paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))',
+        paddingBottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))',
       }}
     >
       {children}

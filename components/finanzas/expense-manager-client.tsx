@@ -128,7 +128,7 @@ export function ExpenseManagerClient({
         )}
 
         {/* Filters Section - Premium Sticky Bar */}
-        <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-800/50 backdrop-blur-xl mb-6 w-full shadow-2xl">
+        <div className="sticky top-[var(--sat)] z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-800/50 backdrop-blur-xl mb-6 w-full shadow-2xl">
           <ExpenseFilters 
             advisors={advisors} 
             categories={categorias || []} 

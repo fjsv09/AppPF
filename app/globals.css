@@ -174,6 +174,20 @@ body {
   }
 }
 
+/*
+ * Modales Radix (Dialog / AlertDialog): en pantallas altas (max-h 96dvh) el
+ * borde superior puede quedar bajo el notch. Limitamos la altura a
+ * (100dvh - 2×sat) para que al centrar con translate-y[-50%] el tope
+ * quede exactamente en el borde inferior del notch.
+ * Solo afecta al modal, no al resto del layout.
+ */
+@supports (padding-top: env(safe-area-inset-top)) {
+  [data-radix-dialog-content],
+  [data-radix-alert-dialog-content] {
+    max-height: calc(100dvh - 2 * env(safe-area-inset-top)) !important;
+  }
+}
+
 /* ── iOS PWA: Anchor mobile nav to viewport bottom ── */
 @supports (-webkit-touch-callout: none) {
   .mobile-bottom-nav {

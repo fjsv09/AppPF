@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ClientDetailDrawer } from '@/components/clientes/client-detail-drawer'
-import { Users, Search, Phone, ChevronLeft, ChevronRight, Calendar, Loader2, Link as LinkIcon, Eye, Download, CheckSquare, Square, ChevronDown, Trash2, CalendarHeart, HandCoins, ExternalLink, ListFilter, MoreVertical, MessageCircle, MapPin, X, Map, ShieldCheck, Receipt, Lock, Unlock, UserCheck, Zap, TrendingUp } from 'lucide-react'
+import { Users, Search, Phone, ChevronLeft, ChevronRight, Calendar, Loader2, Link as LinkIcon, Eye, Download, CheckSquare, Square, ChevronDown, Trash2, CalendarHeart, HandCoins, ExternalLink, ListFilter, MoreVertical, MessageCircle, MapPin, X, Map, ShieldCheck, Receipt, Lock, Unlock, UserCheck, Zap, TrendingUp, Table, LayoutGrid } from 'lucide-react'
 import { cn, getFrequencyBadgeStyles } from "@/lib/utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import dynamic from 'next/dynamic'
@@ -156,6 +156,20 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
 
     // Navigation loading state
     const [navigatingToId, setNavigatingToId] = useState<string | null>(null)
+
+    // View type toggle (cards | table), persisted in localStorage
+    const [viewType, setViewType] = useState<'cards' | 'table'>('cards')
+    const [isMountedView, setIsMountedView] = useState(false)
+
+    useEffect(() => {
+        const savedView = localStorage.getItem('client-view-type')
+        if (savedView === 'cards' || savedView === 'table') setViewType(savedView)
+        setIsMountedView(true)
+    }, [])
+
+    useEffect(() => {
+        if (isMountedView) localStorage.setItem('client-view-type', viewType)
+    }, [viewType, isMountedView])
 
     const handleGoToProfile = (clienteId: string) => {
         setNavigatingToId(clienteId)
@@ -603,7 +617,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     }, [clientes, localSearch, localSupervisor, localAsesor, localSector, localFrecuencia, userRol, perfiles, prestamoIdsProductoRefinanciamiento])
 
     return (
-        <div className="space-y-4 pb-32">
+        <div className="space-y-4 pb-4">
              {/* KPI Grid - Reactive to URL transitions */}
              <div className="kpi-grid lg:grid-cols-5 mb-6">
                  {/* Card 1: Total */}
@@ -787,7 +801,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
              />
 
              {/* Main Filter Bar - Responsive & Clean */}
-             <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
+             <div className="sticky top-[var(--sat)] z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
                 {/* Search */}
                 <div className="relative w-full md:flex-1 md:max-w-none">
                     {isPending ? (
@@ -804,6 +818,21 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+                    {/* View Type Toggle */}
+                    {!showMap && (
+                        <div className="w-auto shrink-0">
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => setViewType(viewType === 'cards' ? 'table' : 'cards')}
+                                className="h-10 w-10 bg-slate-950/50 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-900"
+                                title={viewType === 'cards' ? 'Cambiar a vista tabla' : 'Cambiar a vista tarjetas'}
+                            >
+                                {viewType === 'cards' ? <Table className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+                            </Button>
+                        </div>
+                    )}
+
                     {/* Status Filter */}
                     <div className="w-auto shrink-0">
                         <Select value={activeFilter} onValueChange={handleFilterChange}>
@@ -828,8 +857,8 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                             onClick={() => setShowMap(!showMap)}
                             className={cn(
                                 "h-10 px-3 shrink-0 transition-colors",
-                                showMap 
-                                    ? "bg-blue-600 hover:bg-blue-700 text-white border-transparent" 
+                                showMap
+                                    ? "bg-blue-600 hover:bg-blue-700 text-white border-transparent"
                                     : "bg-slate-950/50 border-slate-700 text-slate-300 hover:bg-slate-900"
                             )}
                             disabled={isPending}
@@ -936,12 +965,12 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                     <ClientesMapa clientes={filteredClientes} />
                 </div>
             ) : (
-            <div className="md:bg-slate-900/50 md:border md:border-slate-800 md:rounded-2xl md:overflow-hidden bg-transparent border-0">
+            <div className={cn(viewType === 'table' ? "bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden" : "md:bg-slate-900/50 md:border md:border-slate-800 md:rounded-2xl md:overflow-hidden bg-transparent border-0")}>
                 <div className="overflow-x-auto">
-                    <div className="w-full md:min-w-[1200px]">
+                    <div className={cn("w-full", viewType === 'table' ? "min-w-[1200px]" : "md:min-w-[1200px]")}>
                 {/* Desktop Header */}
                 <div
-                    className="hidden md:grid gap-4 px-6 py-3 bg-slate-950/50 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500 items-center"
+                    className={cn(viewType === 'table' ? "grid" : "hidden md:grid", "gap-4 px-6 py-3 bg-slate-950/50 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500 items-center")}
                     style={{ gridTemplateColumns: 'repeat(19, minmax(0, 1fr))' }}
                 >
                     {(userRol === 'admin') && (
@@ -986,7 +1015,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                          return (
                         <div key={cliente.id} className="contents group">
                             {/* Mobile Card View (< md) */}
-                            <div className="md:hidden p-4 rounded-xl border border-slate-800 bg-slate-900/40 shadow-sm md:shadow-none hover:bg-slate-800/30 transition-colors border-l-4 border-l-slate-600 data-[debt=true]:border-l-amber-500" data-debt={cliente.stats.totalDebt > 0}>
+                            <div className={cn(viewType === 'cards' ? "md:hidden" : "hidden", "p-4 rounded-xl border border-slate-800 bg-slate-900/40 shadow-sm hover:bg-slate-800/30 transition-colors border-l-4 border-l-slate-600 data-[debt=true]:border-l-amber-500")} data-debt={cliente.stats.totalDebt > 0}>
                                 <div className="flex justify-between items-start mb-3">
                                     <div className="flex items-start gap-3">
                                         {(userRol === 'admin') && (
@@ -1183,7 +1212,8 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                             {/* Desktop Row View (>= md) */}
                             <div
                                 className={cn(
-                                    "hidden md:grid gap-4 px-6 py-4 items-center hover:bg-slate-800/30 transition-colors border-l-4 relative",
+                                    viewType === 'table' ? "grid" : "hidden md:grid",
+                                    "gap-4 px-6 py-4 items-center hover:bg-slate-800/30 transition-colors border-l-4 relative",
                                     cliente.stats.totalDebt > 0 ? "border-l-amber-500" : "border-l-slate-700",
                                     isSelected && "bg-blue-900/10 border-l-blue-500",
                                     navigatingToId === cliente.id && "opacity-60 pointer-events-none"
@@ -1460,7 +1490,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             )}
             
             {/* Pagination / Load More */}
-            <div className="mt-8 mb-12 border-t border-slate-800/50 pt-8 flex flex-col items-center gap-6">
+            <div className="mt-6 mb-4 border-t border-slate-800/50 pt-6 flex flex-col items-center gap-6">
                 {itemsToShow < filteredClientes.length && filteredClientes.length > 0 && (
                     <div className="flex flex-col items-center gap-4">
                         <Button

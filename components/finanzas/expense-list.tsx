@@ -315,7 +315,7 @@ export function ExpenseList({ expenses, onEdit, userRole, isPending, advisors = 
         </div>
 
         {/* Pagination / Load More */}
-        <div className="mt-8 mb-12 border-t border-slate-800/50 pt-8 flex flex-col items-center gap-6">
+        <div className="mt-6 mb-4 border-t border-slate-800/50 pt-6 flex flex-col items-center gap-6">
           {itemsToShow < expenses.length && expenses.length > 0 && (
             <div className="flex flex-col items-center gap-4">
               <button

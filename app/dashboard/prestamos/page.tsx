@@ -100,14 +100,7 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
     const userRole = perfil?.rol || 'asesor'
     const exigirGpsCobranza = !!perfil?.exigir_gps_cobranza
 
-    // Redirección por defecto según ROL (si no hay tab activo)
-    if (!activeTab) {
-        if (userRole === 'admin' || userRole === 'supervisor' || userRole === 'secretaria') {
-            redirect('/dashboard/prestamos?tab=en_curso');
-        } else {
-            redirect('/dashboard/prestamos?tab=ruta_hoy');
-        }
-    }
+
 
     // RESTRICCIÓN POR URL: Solo admin y secretaria pueden ver historial (se mantiene)
     const restrictedTabs = ['finalizados', 'renovados', 'refinanciados', 'anulados', 'pendientes', 'todos'];
@@ -121,26 +114,22 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
         redirect('/dashboard/prestamos?tab=ruta_hoy');
     }
 
-    // [REFORZADO] Lógica de Acceso al Sistema (Centralizada)
+    // [REFORZADO] Lógica de Acceso al Sistema y Bloqueos en paralelo
     const { checkSystemAccess } = await import('@/utils/systemRestrictions')
-    const accessResult = await checkSystemAccess(supabaseAdmin, user?.id || '', userRole || 'asesor', 'prestamo')
+    
+    // Iniciar fetches en paralelo
+    const [accessResult, blockInfo, rpcStatus] = await Promise.all([
+        checkSystemAccess(supabaseAdmin, user?.id || '', userRole || 'asesor', 'prestamo'),
+        (userRole === 'asesor' && user?.id) ? checkAdvisorBlocked(supabaseAdmin, user.id) : Promise.resolve(null),
+        supabaseAdmin.rpc('actualizar_estados_mora')
+    ])
 
     const isBlockedByCuadre = !accessResult.allowed && userRole !== 'admin'
     const blockReasonCierre = accessResult.reason || ''
-    const systemAccess = accessResult // Pasa el objeto completo para saber el 'code'
-
-    // [NUEVO] Obtener información de bloqueos de deuda histórica
-    let blockInfo = null
-    if (userRole === 'asesor' && user?.id) {
-        blockInfo = await checkAdvisorBlocked(supabaseAdmin, user.id)
-    }
-
-    // Build query based on role - USING DIRECT TABLES (Fallback mechanism)
+    const systemAccess = accessResult
     
-    // 0. Auto-update Mora Status (Robot)
-    const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc('actualizar_estados_mora')
-    if (rpcError) console.error('Error running Mora Robot:', rpcError)
-    else console.log('🤖 Mora Robot Result:', rpcResult)
+    if (rpcStatus.error) console.error('Error running Mora Robot:', rpcStatus.error)
+    else console.log('🤖 Mora Robot Result:', rpcStatus.data)
 
     const selectedDate = (sParams.fecha as string) || getTodayPeru()
 
@@ -360,45 +349,64 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
 
     const cuotasByLoan = new Map<string, any[]>()
     const chunkSize = 35
+    const chunkPromises = []
 
     for (let i = 0; i < idsConCronograma.length; i += chunkSize) {
         const chunk = idsConCronograma.slice(i, i + chunkSize)
-        const { data: cuotasChunk, error: cuotasError } = await supabaseAdmin
-            .from('cronograma_cuotas')
-            .select(`
-                *,
-                pagos (id, created_at, monto_pagado, metodo_pago, voucher_compartido, latitud, longitud, registrado_por, estado_verificacion)
-            `)
-            .in('prestamo_id', chunk)
-            .limit(5000)
+        chunkPromises.push(
+            supabaseAdmin
+                .from('cronograma_cuotas')
+                .select(`
+                    *,
+                    pagos (id, created_at, monto_pagado, metodo_pago, voucher_compartido, latitud, longitud, registrado_por, estado_verificacion)
+                `)
+                .in('prestamo_id', chunk)
+                .limit(5000)
+        )
+    }
 
-        if (cuotasError) {
-            console.error(`Error fetching cuotas chunk ${i / chunkSize}:`, cuotasError)
-        } else if (cuotasChunk) {
-            cuotasChunk.forEach((c: any) => {
+    const chunkResults = await Promise.all(chunkPromises)
+    chunkResults.forEach((res, i) => {
+        if (res.error) {
+            console.error(`Error fetching cuotas chunk ${i}:`, res.error)
+        } else if (res.data) {
+            res.data.forEach((c: any) => {
                 const list = cuotasByLoan.get(c.prestamo_id) || []
                 list.push(c)
                 cuotasByLoan.set(c.prestamo_id, list)
             })
         }
-    }
+    })
 
     // Merge cuotas — archivados quedan con [] (sin cronograma, se usan métricas aproximadas)
     prestamosRaw?.forEach(p => {
         p.cronograma_cuotas = cuotasByLoan.get(p.id) || []
     })
 
-    // Una sola query para toda la configuración (era 2 queries secuenciales)
-    const { data: configTodo } = await supabaseAdmin
-        .from('configuracion_sistema')
-        .select('clave, valor')
-        .in('clave', [
+    // Step 2 & Other Metadata in Parallel
+    const [
+        configTodo,
+        cuentasData,
+        feriadosRaw,
+        solicitudesPendientes,
+        renovacionesRefinanciamiento,
+        tareasEvidenciaPendientes
+    ] = await Promise.all([
+        supabaseAdmin.from('configuracion_sistema').select('clave, valor').in('clave', [
             'renovacion_min_pagado', 'refinanciacion_min_mora',
             'umbral_cpp_cuotas', 'umbral_moroso_cuotas', 'umbral_cpp_otros', 'umbral_moroso_otros',
             'horario_apertura', 'horario_cierre', 'horario_fin_turno_1', 'desbloqueo_hasta'
-        ])
+        ]),
+        (userRole === 'admin' || userRole === 'supervisor' || userRole === 'secretaria') 
+            ? supabaseAdmin.from('cuentas_financieras').select('id, nombre, saldo, cartera_id, usuarios_autorizados, tipo').order('nombre')
+            : Promise.resolve({ data: [] }),
+        supabaseAdmin.from('feriados').select('fecha'),
+        supabaseAdmin.from('solicitudes_renovacion').select('prestamo_id').in('estado_solicitud', ['pendiente_supervision', 'en_correccion', 'pre_aprobado']),
+        supabaseAdmin.from('renovaciones').select('prestamo_nuevo_id, prestamo_original:prestamo_original_id(estado)'),
+        supabaseAdmin.from('tareas_evidencia').select('prestamo_id, evidencia_url, tipo').eq('estado', 'pendiente').is('evidencia_url', null).not('prestamo_id', 'is', null).not('tipo', 'in', '(auditoria_dirigida,auditoria)')
+    ])
 
-    const cfg = (k: string) => configTodo?.find(c => c.clave === k)?.valor
+    const cfg = (k: string) => configTodo.data?.find(c => c.clave === k)?.valor
     const renovacionMinPagado = cfg('renovacion_min_pagado') ? parseInt(cfg('renovacion_min_pagado')!) : 60
     const refinanciacionMinMora = cfg('refinanciacion_min_mora') ? parseInt(cfg('refinanciacion_min_mora')!) : 50
     const umbralCpp = parseInt(cfg('umbral_cpp_cuotas') || '4')
@@ -413,78 +421,33 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
         desbloqueo_hasta: cfg('desbloqueo_hasta') || ''
     }
 
-    // --- DATA PARA DESEMBOLSO (Admin & Supervisor) ---
     let cuentasAdmin: any[] = []
-    if (userRole === 'admin' || userRole === 'supervisor' || userRole === 'secretaria') {
-        const { data: qAdmin } = await supabaseAdmin
-            .from('cuentas_financieras')
-            .select('id, nombre, saldo, cartera_id, usuarios_autorizados, tipo')
-            .order('nombre')
-        
-        if (userRole?.toLowerCase() === 'admin') {
-            // El admin solo quiere ver cuentas globales/propias, ocultando las de los asesores
-            cuentasAdmin = (qAdmin || []).filter((c: any) => 
-                !c.nombre.startsWith('Cobranzas - Cartera ')
-            )
-        } else {
-            // Supervisores/Secretarias: Filtrar solo cuentas compartidas y de la cartera global (excluyendo caja/admin)
-            cuentasAdmin = (qAdmin || []).filter((c: any) => {
-                const isAuthorized = c.cartera_id === '00000000-0000-0000-0000-000000000000' || 
-                                     (c.usuarios_autorizados && c.usuarios_autorizados.length > 0)
-                
-                if (!isAuthorized) return false
-                
-                // Restricción: No ver cuentas de caja ni con nombre ADMIN si no es admin
-        if (userRole?.toLowerCase() !== 'admin') {
+    const qAdmin = cuentasData.data
+    if (userRole === 'admin') {
+        cuentasAdmin = (qAdmin || []).filter((c: any) => !c.nombre.startsWith('Cobranzas - Cartera '))
+    } else if (userRole === 'supervisor' || userRole === 'secretaria') {
+        cuentasAdmin = (qAdmin || []).filter((c: any) => {
+            const isAuthorized = c.cartera_id === '00000000-0000-0000-0000-000000000000' || (c.usuarios_autorizados && c.usuarios_autorizados.length > 0)
+            if (!isAuthorized) return false
             if (c.tipo === 'caja') return false
             if (c.nombre.toUpperCase().includes('ADMIN')) return false
-        }
-        
-                return true
-            })
-        }
-
+            return true
+        })
     }
 
-
-    // Fetch Feriados
-    const { data: feriadosRaw } = await supabaseAdmin
-        .from('feriados')
-        .select('fecha')
-    const feriados = (feriadosRaw || []).map(f => {
+    const feriados = (feriadosRaw.data || []).map(f => {
         if (typeof f.fecha === 'string') return f.fecha.split('T')[0]
         if (f.fecha instanceof Date) return f.fecha.toISOString().split('T')[0]
         return String(f.fecha)
     })
 
-    // Obtener IDs de préstamos con solicitudes de renovación pendientes
-    const { data: solicitudesPendientes } = await supabaseAdmin
-        .from('solicitudes_renovacion')
-        .select('prestamo_id')
-        .in('estado_solicitud', ['pendiente_supervision', 'en_correccion', 'pre_aprobado'])
-    const prestamoIdsConSolicitudPendiente = solicitudesPendientes?.map(s => s.prestamo_id) || []
-
-    // Obtener IDs de préstamos que son producto de una refinanciación directa
-    const { data: renovacionesRefinanciamiento } = await supabaseAdmin
-        .from('renovaciones')
-        .select('prestamo_nuevo_id, prestamo_original:prestamo_original_id(estado)')
-    const prestamoIdsProductoRefinanciamiento = (renovacionesRefinanciamiento || [])
+    const prestamoIdsConSolicitudPendiente = solicitudesPendientes.data?.map(s => s.prestamo_id) || []
+    const prestamoIdsProductoRefinanciamiento = (renovacionesRefinanciamiento.data || [])
         .filter((r: any) => (r.prestamo_original as any)?.estado === 'refinanciado')
         .map((r: any) => r.prestamo_nuevo_id as string)
         .filter(Boolean)
-
-    // Obtener IDs de préstamos con tareas de evidencia pendientes (asesor no ha subido la evidencia
-    // del préstamo). Excluimos auditorías dirigidas/auditorías para que el chip solo refleje la
-    // evidencia del préstamo en sí.
-    const { data: tareasEvidenciaPendientes } = await supabaseAdmin
-        .from('tareas_evidencia')
-        .select('prestamo_id, evidencia_url, tipo')
-        .eq('estado', 'pendiente')
-        .is('evidencia_url', null)
-        .not('prestamo_id', 'is', null)
-        .not('tipo', 'in', '(auditoria_dirigida,auditoria)')
     const prestamoIdsConEvidenciaPendiente = Array.from(
-        new Set((tareasEvidenciaPendientes || []).map((t: any) => t.prestamo_id).filter(Boolean))
+        new Set((tareasEvidenciaPendientes.data || []).map((t: any) => t.prestamo_id).filter(Boolean))
     )
 
     // Filtros de role/asesor/sector/frecuencia ya aplicados a nivel DB arriba.
@@ -730,7 +693,17 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
                 </div>
 
                 {/* KPI Cards + Alerts Bar (client component, reactive to filters) */}
-                <Suspense fallback={<div className="h-52 mb-6 animate-pulse rounded-xl bg-slate-900/20" />}>
+                <Suspense fallback={
+                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                        {[1, 2, 3, 4, 5].map(i => (
+                            <div key={i} className="h-[120px] bg-slate-900/40 border border-slate-800/60 rounded-2xl animate-pulse flex flex-col p-4">
+                                <div className="h-2 w-16 bg-slate-800 rounded-full mb-3" />
+                                <div className="h-6 w-24 bg-slate-800 rounded-lg mb-auto" />
+                                <div className="h-1.5 w-full bg-slate-800/50 rounded-full" />
+                            </div>
+                        ))}
+                    </div>
+                }>
                     <KpiCards
                         prestamos={prestamos}
                         prestamosGlobal={prestamosGlobal}

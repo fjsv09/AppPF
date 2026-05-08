@@ -113,50 +113,57 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
 
     let cuotasByLoan = new Map<string, any[]>()
     if (activeLoanIds.length > 0) {
-        // Fetch in chunks if more than 1000 to be extra safe with Supabase limits, 
-        // but 265 (found in test) is fine for a single .in()
-        const { data: cuotasRaw, error: cuotasError } = await supabaseAdmin
-            .from('cronograma_cuotas')
-            .select(`
-                prestamo_id,
-                monto_cuota,
-                monto_pagado,
-                fecha_vencimiento,
-                estado,
-                pagos (
-                    created_at,
+        // [FIX] Fetch in chunks to avoid Supabase 1000 row limit
+        const chunkSize = 50
+        for (let i = 0; i < activeLoanIds.length; i += chunkSize) {
+            const chunkIds = activeLoanIds.slice(i, i + chunkSize)
+            const { data: cuotasRaw, error: cuotasError } = await supabaseAdmin
+                .from('cronograma_cuotas')
+                .select(`
+                    prestamo_id,
+                    monto_cuota,
                     monto_pagado,
-                    estado_verificacion
-                )
-            `)
-            .in('prestamo_id', activeLoanIds)
-        
-        if (cuotasError) {
-            console.error('Error cargando cuotas:', cuotasError)
-        } else {
-            cuotasRaw?.forEach(c => {
-                const list = cuotasByLoan.get(c.prestamo_id) || []
-                list.push(c)
-                cuotasByLoan.set(c.prestamo_id, list)
-            })
+                    fecha_vencimiento,
+                    estado,
+                    pagos (
+                        created_at,
+                        monto_pagado,
+                        estado_verificacion
+                    )
+                `)
+                .in('prestamo_id', chunkIds)
+            
+            if (cuotasError) {
+                console.error(`Error cargando cuotas chunk ${i}:`, cuotasError)
+            } else {
+                cuotasRaw?.forEach(c => {
+                    const list = cuotasByLoan.get(c.prestamo_id) || []
+                    list.push(c)
+                    cuotasByLoan.set(c.prestamo_id, list)
+                })
+            }
         }
     }
 
-    // Step 2.5: Fetch all payments directly by prestamo_id to avoid missing any unlinked payments
+    // Step 2.5: Fetch all payments directly by prestamo_id
     let pagosByLoan = new Map<string, any[]>()
     if (activeLoanIds.length > 0) {
-        const { data: pagosDirectos } = await supabaseAdmin
-            .from('pagos')
-            .select('prestamo_id, monto_pagado, estado_verificacion')
-            .in('prestamo_id', activeLoanIds)
-            
-        pagosDirectos?.forEach(p => {
-            if (p.estado_verificacion !== 'rechazado') {
-                const list = pagosByLoan.get(p.prestamo_id) || []
-                list.push(p)
-                pagosByLoan.set(p.prestamo_id, list)
-            }
-        })
+        const chunkSize = 100
+        for (let i = 0; i < activeLoanIds.length; i += chunkSize) {
+            const chunkIds = activeLoanIds.slice(i, i + chunkSize)
+            const { data: pagosDirectos } = await supabaseAdmin
+                .from('pagos')
+                .select('prestamo_id, monto_pagado, estado_verificacion')
+                .in('prestamo_id', chunkIds)
+                
+            pagosDirectos?.forEach(p => {
+                if (p.estado_verificacion !== 'rechazado') {
+                    const list = pagosByLoan.get(p.prestamo_id) || []
+                    list.push(p)
+                    pagosByLoan.set(p.prestamo_id, list)
+                }
+            })
+        }
     }
 
     // Merge cuotas back into clientsRaw
@@ -199,12 +206,21 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
             const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado') || (p.observacion_supervisor || '').includes('[MIGRACIÓN]')
             
             // Calculate balance if not present or check against known payments
-            let saldo = 0
+            let saldoCuotas = 0
             if (p.cronograma_cuotas) {
-                saldo = p.cronograma_cuotas.reduce((acc: number, c: any) => acc + (c.monto_cuota - (c.monto_pagado || 0)), 0)
+                saldoCuotas = p.cronograma_cuotas.reduce((acc: number, c: any) => acc + (c.monto_cuota - (c.monto_pagado || 0)), 0)
             }
 
-            const isEffectivelyFinalized = isMigrado && (p.cronograma_cuotas?.length ?? 0) > 0 && saldo <= 0.01
+            // Calcular saldo global (monto + interes - pagos)
+            const totalPagar = Number(p.monto) * (1 + (Number(p.interes) / 100))
+            const totalPagado = (p.cronograma_cuotas || []).reduce((acc: number, c: any) => acc + (Number(c.monto_pagado) || 0), 0)
+            const saldoGlobal = Math.max(0, totalPagar - totalPagado)
+
+            // Se considera finalizado SOLO si ambos saldos son cero
+            const isEffectivelyFinalized = isMigrado && (p.cronograma_cuotas?.length ?? 0) > 0 && 
+                                           saldoCuotas <= 0.01 && 
+                                           saldoGlobal <= 0.01
+
             return p.estado === 'activo' && !isEffectivelyFinalized
         }) || []
         
@@ -233,21 +249,9 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
         let totalDebt = 0
         let isRecaptable = false
         activeLoans.forEach((p: any) => {
-            const metrics = calculateLoanMetrics(p, todayPeru)
-            const totalPagar = Number(p.monto) * (1 + Number(p.interes) / 100)
-            const pagosValidos = (p.cronograma_cuotas || []).flatMap((c: any) => c.pagos || [])
-                .filter((pg: any) => pg.estado_verificacion !== 'rechazado')
-                .reduce((sum: number, pg: any) => sum + Number(pg.monto_pagado || 0), 0)
-            const pagadoCronograma = (p.cronograma_cuotas || []).reduce((sum: number, c: any) => sum + Number(c.monto_pagado || 0), 0)
-            const pagadoAcumulado = Number(metrics.totalPagadoAcumulado || 0)
             const pagosDirectos = pagosByLoan.get(p.id) || []
-            const totalPagadoDirecto = pagosDirectos.reduce((sum: number, pg: any) => sum + Number(pg.monto_pagado || 0), 0)
-            
-            const pagadoReal = Math.max(pagosValidos, pagadoCronograma, pagadoAcumulado, totalPagadoDirecto)
-            
-            const deudaPrestamo = Math.max(0, totalPagar - pagadoReal)
-            
-            totalDebt += deudaPrestamo
+            const metrics = calculateLoanMetrics(p, todayPeru, {}, pagosDirectos)
+            totalDebt += metrics.saldoPendiente
             if (metrics.esRenovable) isRecaptable = true
         })
 

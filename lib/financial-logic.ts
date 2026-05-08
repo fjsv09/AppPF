@@ -59,7 +59,8 @@ interface LoanMetrics {
   cuotasPagadas: number;
   metaTotalHoyYAtrasados: number;
   cobradoTotalHoyYAtrasados: number;
-  loanScore?: LoanScore; // Nuevo
+  totalPagar: number;
+  loanScore?: LoanScore;
 }
 
 /**
@@ -96,6 +97,7 @@ export function calculateLoanMetrics(
       cuotasPagadas: 0,
       metaTotalHoyYAtrasados: 0,
       cobradoTotalHoyYAtrasados: 0,
+      totalPagar: 0,
       loanScore: { score: 100, increases: 0, penalties: 0, details: [], pagos_puntuales: 0, pagos_tardios: 0 }
     };
   }
@@ -107,7 +109,11 @@ export function calculateLoanMetrics(
   const pagosRaw = standalonePagos || loan.pagos || cronograma.flatMap((c: any) => c.pagos || []);
   const pagos = pagosRaw.filter((p: any) => p.estado_verificacion !== 'rechazado');
 
-  const totalPagar = Number(loan.monto) * (1 + (Number(loan.interes) / 100));
+  const sumCuotasCronograma = cronograma.reduce((sum: number, c: any) => sum + (Number(c.monto_cuota) || 0), 0);
+  const totalPagar = Math.max(
+    Number(loan.monto) * (1 + (Number(loan.interes) / 100)),
+    sumCuotasCronograma
+  );
 
   // 0. Cálculo de Pagado Registrado (Incluye pagos pendientes para reflejar el progreso inmediato en UI)
   const sumCronograma = cronograma.reduce((sum: number, c: any) => sum + (Number(c.monto_pagado) || 0), 0);
@@ -184,6 +190,7 @@ export function calculateLoanMetrics(
       ),
       metaTotalHoyYAtrasados: 0,
       cobradoTotalHoyYAtrasados: 0,
+      totalPagar: totalPagar,
       loanScore: calculateLoanScore(loan, pagos, today, config)
     };
   }
@@ -341,6 +348,7 @@ export function calculateLoanMetrics(
     valorCuotaPromedio,
     saldoCuotaParcial,
     totalCuotas: cronograma.length || loan.numero_cuotas || loan.cuotas || (valorCuotaPromedio > 0 ? Math.round(totalPagar / valorCuotaPromedio) : 0),
+    totalPagar,
     cuotasPagadas: Math.min(
       cronograma.length || loan.numero_cuotas || loan.cuotas || 0,
       Math.max(
@@ -810,20 +818,25 @@ export function calculateClientSituation(client: any) {
     // Si ya está finalizado en BD, descartar
     if (p.estado !== 'activo') return false
 
-    // Si es una migración, verificar saldo
     const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado') || (p.observacion_supervisor || '').includes('[MIGRACIÓN]')
     if (isMigrado) {
-      // Calcular saldo (Redundante pero seguro)
-      let saldo = 0
+      // Calcular saldo de cuotas
+      let saldoCuotas = 0
       if (p.cronograma_cuotas) {
-        saldo = p.cronograma_cuotas.reduce((acc: number, c: any) => acc + (c.monto_cuota - (c.monto_pagado || 0)), 0)
-      } else if (p.monto !== undefined && p.interes !== undefined) {
-        // Fallback a cálculo de capital + interés si no hay cronograma cargado
-        const totalPagar = Number(p.monto) * (1 + (Number(p.interes) / 100))
-        // Aquí no tenemos total_pagado_acumulado fácilmente, así que confiamos en el cronograma
-        // o dejamos que pase como activo. Por suerte en las vistas de lista SÍ traemos cronograma.
+        saldoCuotas = p.cronograma_cuotas.reduce((acc: number, c: any) => acc + (c.monto_cuota - (c.monto_pagado || 0)), 0)
       }
-      if ((p.cronograma_cuotas?.length ?? 0) > 0 && saldo <= 0.01) return false
+
+      // Calcular saldo global (monto + interes - pagos)
+      const totalPagar = Number(p.monto) * (1 + (Number(p.interes) / 100))
+      const totalPagado = (p.cronograma_cuotas || []).reduce((acc: number, c: any) => acc + (Number(c.monto_pagado) || 0), 0)
+      const saldoGlobal = Math.max(0, totalPagar - totalPagado)
+
+      // Se considera finalizado SOLO si ambos saldos son cero
+      const isEffectivelyFinalized = (p.cronograma_cuotas?.length ?? 0) > 0 && 
+                                     saldoCuotas <= 0.01 && 
+                                     saldoGlobal <= 0.01
+
+      if (isEffectivelyFinalized) return false
     }
 
     return true
@@ -1319,14 +1332,32 @@ export async function getSaldoPendienteRenovacion(
   const today = todayOverride || getTodayPeru()
   const { data: cuotas } = await supabase
     .from('cronograma_cuotas')
-    .select('monto_cuota, monto_pagado, fecha_vencimiento')
+    .select('id, monto_cuota, monto_pagado, fecha_vencimiento')
     .eq('prestamo_id', prestamoId)
   if (!cuotas || cuotas.length === 0) return 0
+
+  // Leer también la tabla pagos para paridad exacta con calculateLoanMetrics
+  // (el cronograma puede tener monto_pagado desincronizado vs pagos reales)
+  const cuotaIds = cuotas.map((c: any) => c.id)
+  const { data: pagosData } = await supabase
+    .from('pagos')
+    .select('monto_pagado, estado_verificacion')
+    .in('cuota_id', cuotaIds)
+
+  const totalPagadoEnPagos = (pagosData || [])
+    .filter((p: any) => p.estado_verificacion !== 'rechazado')
+    .reduce((sum: number, p: any) => sum + Number(p.monto_pagado || 0), 0)
+
+  const totalPagadoEnCronograma = cuotas
+    .reduce((sum: number, c: any) => sum + Number(c.monto_pagado || 0), 0)
+
+  // Igual que calculateLoanMetrics: tomar el máximo entre ambas fuentes
+  const totalPagadoAcumulado = Math.max(totalPagadoEnPagos, totalPagadoEnCronograma)
+
   const totalExigibleHastaHoy = cuotas
     .filter((c: any) => c.fecha_vencimiento <= today)
     .reduce((sum: number, c: any) => sum + Number(c.monto_cuota), 0)
-  const totalPagadoAcumulado = cuotas
-    .reduce((sum: number, c: any) => sum + Number(c.monto_pagado || 0), 0)
+
   return Math.max(0, totalExigibleHastaHoy - totalPagadoAcumulado)
 }
 

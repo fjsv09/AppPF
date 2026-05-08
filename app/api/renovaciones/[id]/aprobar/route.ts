@@ -3,7 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createFullNotification } from '@/services/notification-service'
-import { generarCronogramaNode, getSaldoPendienteRenovacion } from '@/lib/financial-logic'
+import { generarCronogramaNode } from '@/lib/financial-logic'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,15 +72,18 @@ export async function PATCH(
             return NextResponse.json({ error: 'La cuenta de origen seleccionada no existe.' }, { status: 404 })
         }
 
-        // 1. Calcular saldo retenido (misma fuente de verdad que el display de renovación)
-        const saldo_retenido = await getSaldoPendienteRenovacion(supabaseAdmin, solicitud.prestamo_id)
-
-        // También necesitamos las cuotas pendientes para el recibo de liquidación
+        // Obtener cuotas pendientes: necesarias para saldo_retenido y para el recibo de liquidación
         const { data: cuotasPendientes } = await supabaseAdmin
             .from('cronograma_cuotas')
             .select('id, monto_cuota, monto_pagado')
             .eq('prestamo_id', solicitud.prestamo_id)
             .neq('estado', 'pagado');
+
+        // Saldo retenido = toda la deuda restante (vencida + futura), porque la renovación
+        // liquida el préstamo anterior completamente sin importar la fecha de vencimiento.
+        const saldo_retenido = (cuotasPendientes || []).reduce((acc: number, c: any) => {
+            return acc + (Number(c.monto_cuota) - Number(c.monto_pagado || 0));
+        }, 0);
 
         const desembolso_neto = solicitud.monto_solicitado - saldo_retenido;
         // El monto a descontar de la cuenta es el NETO (lo que efectivamente sale del sistema)
@@ -150,14 +153,12 @@ export async function PATCH(
             if (moveError) throw new Error(`Error registrando movimientos: ${moveError.message}`);
 
             // 3. Generar UN SOLO recibo de pago consolidado para el historial
-            // Marcado como autopago para que NO aparezca en auditoría de vouchers
-            if (cuotasPendientes && cuotasPendientes.length > 0) {
-                const montoTotalLiquidado = cuotasPendientes.reduce((acc: number, c: any) => 
-                    acc + (Number(c.monto_cuota) - Number(c.monto_pagado || 0)), 0);
-
+            // Solo se registra el saldo_retenido (deuda exigible hoy), no el total de cuotas pendientes
+            // que puede incluir cuotas futuras aún no vencidas.
+            if (saldo_retenido > 0 && cuotasPendientes && cuotasPendientes.length > 0) {
                 const { error: pagosError } = await supabaseAdmin.from('pagos').insert({
-                    cuota_id: cuotasPendientes[0].id, // Referencia a la primera cuota
-                    monto_pagado: montoTotalLiquidado,
+                    cuota_id: cuotasPendientes[0].id,
+                    monto_pagado: saldo_retenido,
                     registrado_por: user.id,
                     es_autopago_renovacion: true,
                     voucher_compartido: true,

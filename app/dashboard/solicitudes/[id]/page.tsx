@@ -152,13 +152,23 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
                     <div className="flex items-center gap-3">
                         <BackButton />
                         <div>
-                            <div className="flex items-center gap-3">
-                                <h1 className="page-title">Solicitud de Crédito</h1>
-                                <Badge className={`${config.color} border flex items-center gap-1`}>
-                                    <IconComponent className="w-3 h-3" />
-                                    {config.label}
-                                </Badge>
-                            </div>
+                                <div className="flex items-center gap-3">
+                                    <h1 className="page-title">Solicitud de Crédito</h1>
+                                    <div className="flex flex-col md:flex-row md:items-center gap-1.5 md:gap-3">
+                                        <Badge className={`${config.color} border flex items-center gap-1`}>
+                                            <IconComponent className="w-3 h-3" />
+                                            {config.label}
+                                        </Badge>
+                                        {solicitud.asesor && (
+                                            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 w-fit">
+                                                <User className="w-3 h-3 text-blue-400" />
+                                                <span className="text-[10px] md:text-xs font-bold text-blue-300">
+                                                    Asesor: {solicitud.asesor.nombre_completo?.split(' ')[0] || 'Asesor'}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             <p className="page-subtitle">
                                 Creada el {format(new Date(solicitud.created_at), "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}
                             </p>

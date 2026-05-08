@@ -250,7 +250,8 @@ export async function POST(request: Request) {
                 health_evaluation: detalles_score || elegibilidad.score_detalle || {},
                 reputation_evaluation: reputation_data || {},
                 health_score: health_score || elegibilidad.score,
-                reputation_score: reputation_score || 0
+                reputation_score: reputation_score || 0,
+                cuotas_pendientes: body.cuotas_pendientes || 0
             },
             monto_maximo_permitido: monto_maximo_permitido || elegibilidad.monto_maximo,
             monto_minimo_permitido: monto_minimo_permitido || elegibilidad.monto_minimo,
@@ -319,7 +320,8 @@ export async function POST(request: Request) {
                     health_evaluation: detalles_score,
                     reputation_evaluation: reputation_data,
                     health_score: health_score || elegibilidad.score,
-                    reputation_score: reputation_score || 0
+                    reputation_score: reputation_score || 0,
+                    cuotas_pendientes: body.cuotas_pendientes || 0
                 },
                 requiere_excepcion: elegibilidad.requiere_excepcion,
                 tipo_excepcion: elegibilidad.tipo_excepcion

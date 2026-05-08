@@ -242,7 +242,8 @@ export function SolicitudRenovacionModal({
             health_score: elegibilidad?.healthScore || elegibilidad?.score || 0,
             reputation_score: elegibilidad?.reputationScore || 0,
             detalles_score: elegibilidad?.loanScoreData || elegibilidad?.score_detalle || {},
-            reputation_data: elegibilidad?.reputationScoreData || {}
+            reputation_data: elegibilidad?.reputationScoreData || {},
+            cuotas_pendientes: elegibilidad?.cuotas_pendientes || 0
         }
 
         try {

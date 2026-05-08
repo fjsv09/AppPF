@@ -60,7 +60,7 @@ interface ClientGestionesProps {
     loans: any[]
     clienteId?: string
     clienteNombre?: string
-    userRol: "admin" | "supervisor" | "asesor"
+    userRol: "admin" | "supervisor" | "asesor" | "secretaria"
 }
 
 export function ClientGestiones({ loans = [], clienteId, clienteNombre = 'Cliente', userRol }: ClientGestionesProps) {

@@ -169,6 +169,7 @@ export async function GET(
             ajuste_recomendado_pct: adjustment.totalPotentialPct,
             ajuste_detalles: adjustment.detalles,
             score: atomicHealthScore.score,
+            cuotas_pendientes: (loanFull.cronograma_cuotas || []).filter((c: any) => c.estado !== 'pagado').length,
             config: systemConfig
         }
 

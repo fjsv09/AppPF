@@ -12,7 +12,7 @@ import { ScoreIndicator, BehaviorSummary, ScoreBreakdown, ScoreLimitRules, Reput
 import { 
     User, DollarSign, Calendar, AlertTriangle, 
     CheckCircle2, XCircle, Clock, MessageSquare,
-    Activity, Files
+    Activity, Files, ArrowUpRight
 } from 'lucide-react'
 import { calculateRenovationAdjustment } from '@/lib/financial-logic'
 import { BackButton } from '@/components/ui/back-button'
@@ -161,16 +161,37 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
 
     // Obtener saldo pendiente original del préstamo actual
     // Usa todas las cuotas pendientes (vencidas + futuras) para ser consistente con el route de aprobación.
-    if (solicitud.estado_solicitud !== 'aprobado') {
-        const { data: cuotasPendientesDisplay } = await supabaseAdmin
+    // Obtener cuotas pendientes para el resumen (Preferir snapshot congelado)
+    let numCuotasPendientes = resumenData.cuotas_pendientes ?? null
+
+    if (solicitud.prestamo_id && numCuotasPendientes === null) {
+        const { data: cuotasPendientesData } = await supabaseAdmin
             .from('cronograma_cuotas')
             .select('monto_cuota, monto_pagado')
             .eq('prestamo_id', solicitud.prestamo_id)
             .neq('estado', 'pagado')
-        saldoPendienteOriginal = (cuotasPendientesDisplay || []).reduce((acc: number, c: any) => {
+        
+        numCuotasPendientes = cuotasPendientesData?.length || 0
+
+        if (solicitud.estado_solicitud !== 'aprobado') {
+            saldoPendienteOriginal = (cuotasPendientesData || []).reduce((acc: number, c: any) => {
+                return acc + (Number(c.monto_cuota) - Number(c.monto_pagado || 0))
+            }, 0)
+        }
+    } else if (solicitud.prestamo_id && numCuotasPendientes !== null && solicitud.estado_solicitud !== 'aprobado') {
+        // Si tenemos el snapshot pero aún necesitamos el saldoPendienteOriginal para cálculos
+        const { data: cuotasPendientesData } = await supabaseAdmin
+            .from('cronograma_cuotas')
+            .select('monto_cuota, monto_pagado')
+            .eq('prestamo_id', solicitud.prestamo_id)
+            .neq('estado', 'pagado')
+        
+        saldoPendienteOriginal = (cuotasPendientesData || []).reduce((acc: number, c: any) => {
             return acc + (Number(c.monto_cuota) - Number(c.monto_pagado || 0))
         }, 0)
-    } else {
+    }
+
+    if (solicitud.estado_solicitud === 'aprobado' && !saldoPendienteOriginal) {
         const { data: renOriginal } = await supabaseAdmin
             .from('renovaciones')
             .select('saldo_pendiente_original')
@@ -285,9 +306,19 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                                 #{id.split('-')[0]} • {formatDate(solicitud.created_at)}
                             </p>
                         </div>
-                        <Badge className={`${estado.bg} ${estado.color} text-xs flex-shrink-0`}>
-                            {estado.label}
-                        </Badge>
+                        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                            <Badge className={`${estado.bg} ${estado.color} text-xs`}>
+                                {estado.label}
+                            </Badge>
+                            {solicitud.asesor && (
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20">
+                                    <User className="w-3 h-3 text-blue-400" />
+                                    <span className="text-[10px] md:text-xs font-bold text-blue-300">
+                                        Asesor: {solicitud.asesor.nombre_completo?.split(' ')[0] || 'Asesor'}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-2 md:gap-3">
@@ -386,7 +417,8 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                                         meses_cliente: 0,
                                         historial_mora: 0,
                                         historial_cpp: 0,
-                                        refinanciamientos: 0
+                                        refinanciamientos: 0,
+                                        cuotas_pendientes: numCuotasPendientes
                                     } as any}
                                 />
                             </CardContent>
@@ -447,8 +479,17 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                 <div className="grid md:grid-cols-2 gap-3 md:gap-4">
                     {/* Préstamo Original */}
                     <Card className="bg-slate-900/50 border-slate-800">
-                        <CardHeader className="pb-2">
+                        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                             <CardTitle className="text-base md:text-lg text-slate-300 font-bold">Préstamo Actual</CardTitle>
+                            {solicitud.prestamo_id && (
+                                <Link 
+                                    href={`/dashboard/prestamos/${solicitud.prestamo_id}`}
+                                    className="text-[10px] md:text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-500/10 px-2 py-1 rounded-lg transition-colors border border-blue-500/20"
+                                >
+                                    Ver Préstamo
+                                    <ArrowUpRight className="w-3 h-3" />
+                                </Link>
+                            )}
                         </CardHeader>
                         <CardContent className="space-y-2 md:space-y-4 text-sm md:text-base">
                             <div className="flex justify-between items-center">

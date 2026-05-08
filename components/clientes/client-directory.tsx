@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { ImageLightbox } from '@/components/ui/image-lightbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ClientDetailDrawer } from '@/components/clientes/client-detail-drawer'
-import { Users, Search, Phone, ChevronLeft, ChevronRight, Calendar, Loader2, Link as LinkIcon, Eye, Download, CheckSquare, Square, ChevronDown, Trash2, CalendarHeart, HandCoins, ExternalLink, ListFilter, MoreVertical, MessageCircle, MapPin, X, Map, ShieldCheck, Receipt, Lock, Unlock } from 'lucide-react'
+import { Users, Search, Phone, ChevronLeft, ChevronRight, Calendar, Loader2, Link as LinkIcon, Eye, Download, CheckSquare, Square, ChevronDown, Trash2, CalendarHeart, HandCoins, ExternalLink, ListFilter, MoreVertical, MessageCircle, MapPin, X, Map, ShieldCheck, Receipt, Lock, Unlock, UserCheck, Zap, TrendingUp } from 'lucide-react'
 import { cn, getFrequencyBadgeStyles } from "@/lib/utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import dynamic from 'next/dynamic'
@@ -80,7 +80,7 @@ const TableSkeleton = () => (
 interface ClientDirectoryProps {
     clientes: any[]
     perfiles?: any[] 
-    userRol?: 'admin' | 'supervisor' | 'asesor'
+    userRol?: 'admin' | 'supervisor' | 'asesor' | 'secretaria'
     userId?: string
     prestamoIdsProductoRefinanciamiento?: string[]
 }
@@ -105,11 +105,16 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     const filtroSupervisor = searchParams.get('supervisor') || 'todos'
     const filtroAsesor = searchParams.get('asesor') || 'todos'
     const filtroSector = searchParams.get('sector') || 'todos'
+    const filtroFrecuencia = searchParams.get('frecuencia') || 'todos'
     
     const [itemsToShow, setItemsToShow] = useState(ITEMS_PER_LOAD)
 
     // 2. Local state
     const [localSearch, setLocalSearch] = useState(searchQuery)
+    const [localSupervisor, setLocalSupervisor] = useState(filtroSupervisor)
+    const [localAsesor, setLocalAsesor] = useState(filtroAsesor)
+    const [localSector, setLocalSector] = useState(filtroSector)
+    const [localFrecuencia, setLocalFrecuencia] = useState(filtroFrecuencia)
     const [fechaFiltro, setFechaFiltro] = useState<string>('')
     const [selectedClients, setSelectedClients] = useState<string[]>([]) // For bulk actions
     const [showMap, setShowMap] = useState<boolean>(false)
@@ -245,10 +250,64 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         })
     }
 
-    // 4. Sync local search with URL
+    // 4. Sync local search and filters with URL (for external changes like KPI cards or Back button)
     useEffect(() => {
         setLocalSearch(searchQuery)
-    }, [searchQuery])
+        setLocalSupervisor(filtroSupervisor)
+        setLocalAsesor(filtroAsesor)
+        setLocalSector(filtroSector)
+        setLocalFrecuencia(filtroFrecuencia)
+    }, [searchQuery, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia])
+
+    // Derived: check if any filter is active
+    const hasActiveFilters = useMemo(() => {
+        return (localSearch !== '') || 
+               (localSupervisor !== 'todos') || 
+               (localAsesor !== 'todos') || 
+               (localSector !== 'todos') || 
+               (localFrecuencia !== 'todos')
+    }, [localSearch, localSupervisor, localAsesor, localSector, localFrecuencia])
+
+    // Handlers for instant UI feedback
+    const handleSearch = (val: string) => {
+        setLocalSearch(val)
+    }
+
+    const handleSupervisorFilter = (val: string) => {
+        setLocalSupervisor(val)
+        updateParams({ supervisor: val, asesor: 'todos', sector: 'todos', page: '1' })
+    }
+
+    const handleAsesorFilter = (val: string) => {
+        setLocalAsesor(val)
+        updateParams({ asesor: val, sector: 'todos', page: '1' })
+    }
+
+    const handleSectorFilter = (val: string) => {
+        setLocalSector(val)
+        updateParams({ sector: val, page: '1' })
+    }
+
+    const handleFrequencyFilter = (val: string) => {
+        setLocalFrecuencia(val)
+        updateParams({ frecuencia: val, page: '1' })
+    }
+
+    const handleClearFilters = () => {
+        setLocalSearch('')
+        setLocalSupervisor('todos')
+        setLocalAsesor('todos')
+        setLocalSector('todos')
+        setLocalFrecuencia('todos')
+        updateParams({ 
+            q: null, 
+            supervisor: 'todos', 
+            asesor: 'todos', 
+            sector: 'todos', 
+            frecuencia: 'todos',
+            page: '1' 
+        })
+    }
 
     // Debounce Search Effect
     useEffect(() => {
@@ -263,7 +322,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     // Reset itemsToShow on filter changes
     useEffect(() => {
         setItemsToShow(ITEMS_PER_LOAD)
-    }, [activeFilter, searchQuery, filtroSupervisor, filtroAsesor, filtroSector])
+    }, [activeFilter, searchQuery, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia])
 
     // Supervisores for Admin
     const supervisores = useMemo(() => {
@@ -272,19 +331,36 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
 
     // Asesores Filtered
     const asesores = useMemo(() => {
-        if (filtroSupervisor !== 'todos') {
-            return perfiles.filter(p => p.rol === 'asesor' && p.supervisor_id === filtroSupervisor)
+        if (localSupervisor !== 'todos') {
+            return perfiles.filter(p => p.rol === 'asesor' && p.supervisor_id === localSupervisor)
         }
         if (userRol === 'supervisor') {
             return perfiles.filter(p => p.rol === 'asesor' && p.supervisor_id === userId)
         }
         return perfiles.filter(p => p.rol === 'asesor')
-    }, [perfiles, filtroSupervisor, userRol, userId])
+    }, [perfiles, localSupervisor, userRol, userId])
 
-    // Unique Sectors
+    // Unique Sectors - Dynamically filtered by Advisor/Supervisor
     const sectoresList = useMemo(() => {
+        let relevantClients = clientes
+        
+        // Apply Supervisor filter if active
+        if (localSupervisor !== 'todos') {
+            const advisorIds = perfiles.filter(p => p.supervisor_id === localSupervisor).map(p => p.id)
+            relevantClients = relevantClients.filter(c => advisorIds.includes(c.asesor_id))
+        } else if (userRol === 'supervisor') {
+            // If user is supervisor, default to their advisors
+            const advisorIds = perfiles.filter(p => p.supervisor_id === userId).map(p => p.id)
+            relevantClients = relevantClients.filter(c => advisorIds.includes(c.asesor_id))
+        }
+        
+        // Apply Advisor filter if active
+        if (localAsesor !== 'todos') {
+            relevantClients = relevantClients.filter(c => c.asesor_id === localAsesor)
+        }
+
         const unique = new globalThis.Map<string, string>()
-        clientes.forEach(c => {
+        relevantClients.forEach(c => {
             if (c.sector_id && c.sectores?.nombre) {
                 unique.set(c.sector_id, c.sectores.nombre)
             }
@@ -293,6 +369,18 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             const [id, nombre] = entry as [string, string]
             return { id, nombre }
         }).sort((a, b) => a.nombre.localeCompare(b.nombre))
+    }, [clientes, localAsesor, localSupervisor, perfiles, userRol, userId])
+
+    // Frecuencias List
+    const frecuenciasList = useMemo(() => {
+        const unique = new Set<string>()
+        clientes.forEach(c => {
+            const loans = c.prestamos || []
+            loans.forEach((p: any) => {
+                if (p.frecuencia) unique.add(p.frecuencia)
+            })
+        })
+        return Array.from(unique).sort()
     }, [clientes])
 
     // Tabs logic
@@ -333,21 +421,21 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         let result = clientes
 
         // Supervisor
-        if (userRol === 'admin' && filtroSupervisor !== 'todos') {
+        if (userRol === 'admin' && localSupervisor !== 'todos') {
              const advisorIds = perfiles
-                .filter(p => p.supervisor_id === filtroSupervisor)
+                .filter(p => p.supervisor_id === localSupervisor)
                 .map(p => p.id)
              result = result.filter(c => advisorIds.includes(c.asesor_id))
         }
 
         // Asesor
-        if (filtroAsesor !== 'todos') {
-            result = result.filter(c => c.asesor_id === filtroAsesor)
+        if (localAsesor !== 'todos') {
+            result = result.filter(c => c.asesor_id === localAsesor)
         }
 
         // Sector
-        if (filtroSector !== 'todos') {
-            result = result.filter(c => c.sector_id === filtroSector)
+        if (localSector !== 'todos') {
+            result = result.filter(c => c.sector_id === localSector)
         }
 
         // Tabs
@@ -394,7 +482,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         }
 
         return result
-    }, [clientes, activeFilter, localSearch, filtroSupervisor, filtroAsesor, filtroSector, userRol, perfiles])
+    }, [clientes, activeFilter, localSearch, localSupervisor, localAsesor, localSector, localFrecuencia, userRol, perfiles])
 
     // Pagination
     const paginatedClientes = useMemo(() => {
@@ -468,8 +556,200 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         }
     }
 
+    // Helper counts for KPI cards based on CURRENT filters (except tab)
+    const kpiCounts = useMemo(() => {
+        // We filter by Search, Supervisor, Asesor, Sector but NOT by Tab
+        let base = clientes
+        if (userRol === 'admin' && localSupervisor !== 'todos') {
+            const advisorIds = perfiles.filter(p => p.supervisor_id === localSupervisor).map(p => p.id)
+            base = base.filter(c => advisorIds.includes(c.asesor_id))
+        }
+        if (localAsesor !== 'todos') base = base.filter(c => c.asesor_id === localAsesor)
+        if (localSector !== 'todos') base = base.filter(c => c.sector_id === localSector)
+        if (localFrecuencia !== 'todos') {
+            base = base.filter(c => {
+                const loans = c.prestamos || []
+                return loans.some((p: any) => p.frecuencia === localFrecuencia && p.estado === 'activo')
+            })
+        }
+        if (localSearch.trim()) {
+            const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+            const words = norm(localSearch).split(/\s+/).filter(Boolean)
+            base = base.filter(c => {
+                const nombre = norm(c.nombres || ''), sector = norm(c.sectores?.nombre || ''), dni = c.dni || '', tel = c.telefono || ''
+                if (dni.includes(localSearch.toLowerCase()) || tel.includes(localSearch.toLowerCase())) return true
+                return words.every(w => nombre.includes(w) || sector.includes(w))
+            })
+        }
+
+        const total = base.length
+        const conDeuda = base.filter(c => c.stats.totalDebt > 0).length
+        const sinPrestamos = base.filter(c => c.stats.activeLoansCount === 0).length
+        const reasignados = base.filter(c => c.wasReassigned).length
+        const bloqueados = base.filter(c => !!c.bloqueado_renovacion).length
+        const activos = base.filter(c => {
+            if (!!c.bloqueado_renovacion) return false
+            const loans = c.prestamos || []
+            const mainActiveLoan = loans.find((p: any) => {
+                const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado') || (p.observacion_supervisor || '').includes('[MIGRACIÓN]')
+                const saldo = p.cronograma_cuotas?.reduce((acc: number, cuota: any) => acc + (cuota.monto_cuota - (cuota.monto_pagado || 0)), 0) || 0
+                return p.estado === 'activo' && !(isMigrado && saldo <= 0.01) && !p.es_paralelo && p.estado !== 'refinanciado' && !prestamoIdsProductoRefinanciamiento.includes(p.id)
+            })
+            if (!mainActiveLoan || mainActiveLoan.estado_mora === 'vencido') return false
+            return calculateLoanMetrics(mainActiveLoan, getTodayPeru()).saldoPendiente > 0.01
+        }).length
+
+        return { total, conDeuda, sinPrestamos, reasignados, bloqueados, activos }
+    }, [clientes, localSearch, localSupervisor, localAsesor, localSector, localFrecuencia, userRol, perfiles, prestamoIdsProductoRefinanciamiento])
+
     return (
         <div className="space-y-4 pb-32">
+             {/* KPI Grid - Reactive to URL transitions */}
+             <div className="kpi-grid lg:grid-cols-5 mb-6">
+                 {/* Card 1: Total */}
+                 <div 
+                    onClick={() => handleFilterChange('todos')}
+                    className={cn(
+                        "kpi-card group cursor-pointer h-full transition-all duration-300",
+                        activeFilter === 'todos' ? "border-blue-500/50 bg-blue-950/20 shadow-[0_0_15px_-5px_rgba(59,130,246,0.2)]" : "hover:border-blue-500/30 hover:scale-[1.02]",
+                        isPending && "opacity-80"
+                    )}
+                >
+                    <div className="kpi-card-icon">
+                        <Users className="w-16 h-16 text-blue-500" />
+                    </div>
+                    <p className="kpi-label">Total Clientes</p>
+                    <h2 className="kpi-value">{kpiCounts.total}</h2>
+                    <div className="mt-2 flex items-center text-blue-400">
+                         <span className="kpi-badge bg-blue-950/50 text-blue-400 border border-blue-900/50">REGISTRADOS</span>
+                    </div>
+                    {activeFilter === 'todos' && <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-500/50" />}
+                 </div>
+
+                 {/* Card 2: Con Deuda */}
+                 <div 
+                    onClick={() => handleFilterChange('con_deuda')}
+                    className={cn(
+                        "kpi-card group cursor-pointer h-full transition-all duration-300",
+                        activeFilter === 'con_deuda' ? "border-amber-500/50 bg-amber-950/20 shadow-[0_0_15px_-5px_rgba(245,158,11,0.2)]" : "hover:border-amber-500/30 hover:scale-[1.02]",
+                        isPending && "opacity-80"
+                    )}
+                >
+                    <div className="kpi-card-icon">
+                        <HandCoins className="w-16 h-16 text-amber-500" />
+                    </div>
+                    <p className="kpi-label">Con Deuda</p>
+                    <h2 className="kpi-value">{kpiCounts.conDeuda}</h2>
+                    <div className="mt-2 text-amber-400 flex items-center gap-1">
+                        <span className="kpi-badge bg-amber-950/50 text-amber-400 border border-amber-900/50">SALDO PENDIENTE</span>
+                    </div>
+                    {activeFilter === 'con_deuda' && <div className="absolute bottom-0 left-0 w-full h-1 bg-amber-500/50" />}
+                 </div>
+
+                 {/* Card 3: Activos con Deuda */}
+                 <div 
+                    onClick={() => handleFilterChange('activos_deuda')}
+                    className={cn(
+                        "kpi-card group cursor-pointer h-full relative overflow-hidden transition-all duration-300",
+                        activeFilter === 'activos_deuda' 
+                            ? "border-emerald-500/60 bg-emerald-950/20 shadow-[0_0_20px_-5px_rgba(16,185,129,0.3)]" 
+                            : "border-emerald-500/10 hover:border-emerald-500/40 hover:scale-[1.02]",
+                        isPending && "opacity-80"
+                    )}
+                >
+                    <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/5 blur-3xl group-hover:bg-emerald-500/10 transition-colors" />
+                    <div className="kpi-card-icon">
+                        <UserCheck className="w-16 h-16 text-emerald-500 group-hover:scale-110 transition-transform" />
+                    </div>
+                    <p className="kpi-label">ACTIVOS</p>
+                    <h2 className="kpi-value text-emerald-50">{kpiCounts.activos}</h2>
+                    <div className="mt-2 text-emerald-400 flex items-center gap-1">
+                         <span className="kpi-badge bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">ACTIVOS</span>
+                    </div>
+                    {activeFilter === 'activos_deuda' && <div className="absolute bottom-0 left-0 w-full h-1 bg-emerald-500/50" />}
+                 </div>
+
+                 {/* Card 4: Sin Préstamos */}
+                 <div 
+                    onClick={() => handleFilterChange('sin_prestamos')}
+                    className={cn(
+                        "kpi-card group cursor-pointer h-full transition-all duration-300",
+                        activeFilter === 'sin_prestamos' ? "border-slate-500/50 bg-slate-900/40 shadow-[0_0_15px_-5px_rgba(100,116,139,0.2)]" : "hover:border-slate-500/30 hover:scale-[1.02]",
+                        isPending && "opacity-80"
+                    )}
+                >
+                    <div className="kpi-card-icon">
+                        <Zap className="w-16 h-16 text-slate-500 opacity-50" />
+                    </div>
+                    <p className="kpi-label">Sin Préstamos</p>
+                    <h2 className="kpi-value">{kpiCounts.sinPrestamos}</h2>
+                    <div className="mt-2 text-slate-400 flex items-center gap-1">
+                         <span className="kpi-badge bg-slate-900/50 text-slate-500 border border-slate-800">SIN ACTIVIDAD</span>
+                    </div>
+                    {activeFilter === 'sin_prestamos' && <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-500/50" />}
+                 </div>
+
+                 {/* Card 5: Control / Reasignados / Bloqueados */}
+                 {((userRol === 'admin' || userRol === 'secretaria') ? (
+                     <div 
+                        onClick={() => handleFilterChange('reasignados')}
+                        className={cn(
+                            "kpi-card group cursor-pointer h-full transition-all duration-300",
+                            activeFilter === 'reasignados' ? "border-purple-500/50 bg-purple-950/20 shadow-[0_0_15px_-5px_rgba(168,85,247,0.2)]" : "hover:border-purple-500/30 hover:scale-[1.02]",
+                            isPending && "opacity-80"
+                        )}
+                    >
+                         <div className="kpi-card-icon">
+                             <Users className="w-16 h-16 text-purple-500" />
+                         </div>
+                         <p className="kpi-label">Reasignados</p>
+                         <h2 className="kpi-value">{kpiCounts.reasignados}</h2>
+                         <div className="mt-2 text-purple-400 flex items-center gap-1">
+                              <span className="kpi-badge bg-purple-950/50 text-purple-400 border border-purple-900/50">CAMBIO ASESOR</span>
+                         </div>
+                         {activeFilter === 'reasignados' && <div className="absolute bottom-0 left-0 w-full h-1 bg-purple-500/50" />}
+                      </div>
+                  ) : (userRol === 'supervisor' ? (
+                     <div 
+                        onClick={() => handleFilterChange('bloqueados')}
+                        className={cn(
+                            "kpi-card group cursor-pointer h-full transition-all duration-300",
+                            activeFilter === 'bloqueados' ? "border-rose-500/50 bg-rose-950/20 shadow-[0_0_15px_-5px_rgba(244,63,94,0.2)]" : "hover:border-rose-500/30 hover:scale-[1.02]",
+                            isPending && "opacity-80"
+                        )}
+                    >
+                         <div className="kpi-card-icon">
+                             <Lock className="w-16 h-16 text-rose-500" />
+                         </div>
+                         <p className="kpi-label">Bloqueados</p>
+                         <h2 className="kpi-value">{kpiCounts.bloqueados}</h2>
+                         <div className="mt-2 text-rose-400 flex items-center gap-1">
+                              <span className="kpi-badge bg-rose-950/50 text-rose-400 border border-rose-900/50">RESTRICCIÓN</span>
+                         </div>
+                         {activeFilter === 'bloqueados' && <div className="absolute bottom-0 left-0 w-full h-1 bg-rose-500/50" />}
+                      </div>
+                  ) : (
+                     <div 
+                        onClick={() => handleFilterChange('todos')}
+                        className={cn(
+                            "kpi-card group cursor-pointer h-full transition-all duration-300",
+                            activeFilter === 'todos' ? "border-blue-500/50 bg-blue-950/20 shadow-[0_0_15px_-5px_rgba(59,130,246,0.2)]" : "hover:border-blue-500/30 hover:scale-[1.02]",
+                            isPending && "opacity-80"
+                        )}
+                    >
+                         <div className="kpi-card-icon">
+                             <TrendingUp className="w-16 h-16 text-blue-500" />
+                         </div>
+                         <p className="kpi-label">Crecimiento</p>
+                         <h2 className="kpi-value">{kpiCounts.total}</h2>
+                         <div className="mt-2 text-blue-400 flex items-center gap-1">
+                              <span className="kpi-badge bg-blue-950/50 text-blue-400 border border-blue-900/50">CLIENTES TOTAL</span>
+                         </div>
+                         {activeFilter === 'todos' && <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-500/50" />}
+                      </div>
+                  )))}
+             </div>
+
              {/* Header Actions (Export CSV, Bulk Reassign) - Only Admin */}
              {userRol === 'admin' && (
                 <div className="flex justify-end gap-2 mb-2">
@@ -559,59 +839,94 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                         </Button>
                     </div>
 
-                    {/* Supervisor Filter (Admin) */}
-                    {userRol === 'admin' && supervisores.length > 0 && (
-                        <div className="w-auto shrink-0">
-                            <Select value={filtroSupervisor} onValueChange={handleSupervisorChange} disabled={isPending}>
-                                <SelectTrigger className={cn("h-10 w-auto min-w-[150px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
-                                    {isPending ? <Loader2 className="w-3 h-3 mr-2 animate-spin text-purple-400" /> : <Users className="w-3 h-3 mr-2 text-purple-400 shrink-0" />}
-                                    <SelectValue placeholder="Supervisor" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-slate-900 border-slate-700">
-                                    <SelectItem value="todos">Todos Supervisores</SelectItem>
-                                    {supervisores.map(s => (
-                                        <SelectItem key={s.id} value={s.id}>{s.nombre_completo}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                    {/* Filter Action: Clear All */}
+                    {hasActiveFilters && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleClearFilters}
+                            className="h-10 px-3 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 rounded-xl transition-all flex items-center gap-2 group animate-in fade-in slide-in-from-right-2"
+                        >
+                            <X className="w-4 h-4 group-hover:rotate-90 transition-transform" />
+                            <span className="text-xs font-bold uppercase tracking-wider">Limpiar</span>
+                        </Button>
+                    )}
+
+                    {/* Supervisor Filter */}
+                    {(userRol === 'admin' || userRol === 'secretaria') && (
+                        <Select value={localSupervisor} onValueChange={handleSupervisorFilter}>
+                            <SelectTrigger className={cn(
+                                "h-10 w-auto min-w-[140px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
+                                localSupervisor !== 'todos' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
+                                isPending && "opacity-70"
+                            )}>
+                                <Users className={cn("w-3 h-3 mr-2 shrink-0", localSupervisor !== 'todos' ? "text-blue-400" : "text-purple-400")} />
+                                <SelectValue placeholder="Supervisor" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-slate-700">
+                                <SelectItem value="todos">Todos Supervisores</SelectItem>
+                                {supervisores.map((s: any) => (
+                                    <SelectItem key={s.id} value={s.id}>{s.nombre_completo}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     )}
 
                     {/* Asesor Filter */}
-                    {(userRol === 'admin' || userRol === 'supervisor') && asesores.length > 0 && (
-                        <div className="w-auto shrink-0">
-                            <Select value={filtroAsesor} onValueChange={handleAsesorChange} disabled={isPending}>
-                                <SelectTrigger className={cn("h-10 w-auto min-w-[150px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
-                                    {isPending ? <Loader2 className="w-3 h-3 mr-2 animate-spin text-blue-400" /> : <Users className="w-3 h-3 mr-2 text-blue-400 shrink-0" />}
-                                    <SelectValue placeholder="Asesor" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-slate-900 border-slate-700">
-                                    <SelectItem value="todos">Todos Asesores</SelectItem>
-                                    {asesores.map(a => (
-                                        <SelectItem key={a.id} value={a.id}>{a.nombre_completo}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                    {(userRol === 'admin' || userRol === 'supervisor' || userRol === 'secretaria') && (
+                        <Select value={localAsesor} onValueChange={handleAsesorFilter}>
+                            <SelectTrigger className={cn(
+                                "h-10 w-auto min-w-[140px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
+                                localAsesor !== 'todos' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
+                                isPending && "opacity-70"
+                            )}>
+                                <Users className={cn("w-3 h-3 mr-2 shrink-0", localAsesor !== 'todos' ? "text-blue-400" : "text-blue-400")} />
+                                <SelectValue placeholder="Asesor" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-slate-700">
+                                <SelectItem value="todos">Todos Asesores</SelectItem>
+                                {asesores.map((asesor) => (
+                                    <SelectItem key={asesor.id} value={asesor.id}>{asesor.nombre_completo}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     )}
 
                     {/* Sector Filter */}
-                    {sectoresList.length > 0 && (
-                        <div className="w-auto shrink-0">
-                            <Select value={filtroSector} onValueChange={handleSectorChange} disabled={isPending}>
-                                <SelectTrigger className={cn("h-10 w-auto min-w-[150px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
-                                    {isPending ? <Loader2 className="w-3 h-3 mr-2 animate-spin text-emerald-400" /> : <MapPin className="w-3 h-3 mr-2 text-emerald-400 shrink-0" />}
-                                    <SelectValue placeholder="Sector" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-slate-900 border-slate-700">
-                                    <SelectItem value="todos">Todos Sectores</SelectItem>
-                                    {sectoresList.map((s: {id: string, nombre: string}) => (
-                                        <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    )}
+                    <Select value={localSector} onValueChange={handleSectorFilter}>
+                        <SelectTrigger className={cn(
+                            "h-10 w-auto min-w-[150px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
+                            localSector !== 'todos' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
+                            isPending && "opacity-70"
+                        )}>
+                            <MapPin className={cn("w-3 h-3 mr-2 shrink-0", localSector !== 'todos' ? "text-blue-400" : "text-emerald-400")} />
+                            <SelectValue placeholder="Sector" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-800">
+                            <SelectItem value="todos">Todos Sectores</SelectItem>
+                            {sectoresList.map((s: any) => (
+                                <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    {/* Frecuencia Filter */}
+                    <Select value={localFrecuencia} onValueChange={handleFrequencyFilter}>
+                        <SelectTrigger className={cn(
+                            "h-10 w-auto min-w-[150px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
+                            localFrecuencia !== 'todos' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
+                            isPending && "opacity-70"
+                        )}>
+                            <Calendar className={cn("w-3 h-3 mr-2 shrink-0", localFrecuencia !== 'todos' ? "text-blue-400" : "text-amber-400")} />
+                            <SelectValue placeholder="Frecuencia" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-800">
+                            <SelectItem value="todos">Todas Frecuencias</SelectItem>
+                            {frecuenciasList.map((f: string) => (
+                                <SelectItem key={f} value={f} className="capitalize">{f}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
 

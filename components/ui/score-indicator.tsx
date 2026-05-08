@@ -167,6 +167,7 @@ interface BehaviorSummaryProps {
         historial_mora: number
         historial_cpp: number
         refinanciamientos?: number  // Nuevo campo: refinanciamientos directos
+        cuotas_pendientes?: number // Nuevo campo: cuotas que debe actualmente
     }
     loanView?: boolean // Si es true, oculta campos globales como finalizados, renovaciones y antigüedad
 }
@@ -183,7 +184,8 @@ export function BehaviorSummary({ data, loanView = false }: BehaviorSummaryProps
         meses_cliente = 0,
         historial_mora = 0,
         historial_cpp = 0,
-        refinanciamientos = 0
+        refinanciamientos = 0,
+        cuotas_pendientes = 0
     } = data;
 
     const totalPagos = pagos_puntuales + pagos_tardios
@@ -192,7 +194,7 @@ export function BehaviorSummary({ data, loanView = false }: BehaviorSummaryProps
         : 0
 
     return (
-        <div className={cn("grid gap-3 text-sm", loanView ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2")}>
+        <div className={cn("grid grid-cols-2 gap-3 text-sm")}>
             <div className="bg-slate-800/50 rounded-lg p-3">
                 <div className="text-slate-400 text-xs mb-1">Pagos Puntuales</div>
                 <div className="flex items-baseline gap-1">
@@ -225,6 +227,18 @@ export function BehaviorSummary({ data, loanView = false }: BehaviorSummaryProps
                 </div>
             </div>
 
+            <div className="bg-slate-800/50 rounded-lg p-3">
+                <div className="text-slate-400 text-xs mb-1">Cuotas Pendientes</div>
+                <div className="flex items-baseline gap-1">
+                    <span className={cn(
+                        "text-lg font-bold",
+                        cuotas_pendientes > 0 ? "text-blue-400" : "text-emerald-400"
+                    )}>
+                        {cuotas_pendientes}
+                    </span>
+                </div>
+            </div>
+
             {!loanView && (
                 <>
                     <div className="bg-slate-800/50 rounded-lg p-3">
@@ -252,7 +266,7 @@ export function BehaviorSummary({ data, loanView = false }: BehaviorSummaryProps
             )}
 
             {(historial_mora > 0 || historial_cpp > 0 || (refinanciamientos ?? 0) > 0) && (
-                <div className={cn("bg-red-900/20 border border-red-800/50 rounded-lg p-3", loanView ? "col-span-1 sm:col-span-3" : "col-span-2")}>
+                <div className={cn("bg-red-900/20 border border-red-800/50 rounded-lg p-3 col-span-2")}>
                     <div className="text-red-400 text-xs mb-1">⚠️ Historial de Riesgo</div>
                     <div className="flex flex-col gap-1">
                         <div className="flex gap-4">

@@ -19,7 +19,7 @@ interface ClientDetailDrawerProps {
   cliente: any | null
   isOpen: boolean
   onClose: () => void
-  userRol?: "admin" | "supervisor" | "asesor"
+  userRol?: "admin" | "supervisor" | "asesor" | "secretaria"
   onUpdate?: (updatedClient: any) => void
 }
 

@@ -92,6 +92,41 @@ type SortOrder = 'asc' | 'desc'
 const ITEMS_PER_LOAD = 20
 
 
+const TableSkeleton = () => (
+    <div className="animate-pulse space-y-4 p-4">
+        {/* Mobile Skeleton */}
+        <div className="md:hidden space-y-4">
+            {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-slate-900 border border-slate-800 rounded-xl p-4 h-32 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-800/10 to-transparent skew-x-12 animate-shimmer" />
+                    <div className="flex gap-4">
+                        <div className="h-10 w-10 bg-slate-800 rounded-xl" />
+                        <div className="space-y-2 flex-1">
+                            <div className="h-4 w-3/4 bg-slate-800 rounded" />
+                            <div className="h-3 w-1/2 bg-slate-800 rounded" />
+                        </div>
+                    </div>
+                </div>
+            ))}
+        </div>
+        
+        {/* Desktop Skeleton */}
+        <div className="hidden md:block space-y-4">
+             <div className="flex gap-4 border-b border-slate-800/50 pb-4">
+                {[1,2,3,4,5,6].map(i => <div key={i} className="h-4 bg-slate-800 rounded flex-1 opacity-50" />)}
+             </div>
+             {[1,2,3,4,5,6,7,8].map((i) => (
+                <div key={i} className="flex gap-4 items-center py-3 border-b border-slate-800/30">
+                    <div className="h-10 w-10 rounded-xl bg-slate-800" />
+                    <div className="h-4 w-48 bg-slate-800 rounded" />
+                    <div className="h-4 flex-1 bg-slate-800 rounded opacity-50" />
+                    <div className="h-6 w-20 bg-slate-800 rounded-full" />
+                </div>
+             ))}
+        </div>
+    </div>
+)
+
 export function PrestamosTable({
     prestamos,
     today,
@@ -136,6 +171,10 @@ export function PrestamosTable({
     const [isMountedView, setIsMountedView] = useState(false)
     const [showMap, setShowMap] = useState(false)
     const [localSearch, setLocalSearch] = useState(searchParams.get('search') || '')
+    const [localSupervisor, setLocalSupervisor] = useState(searchParams.get('supervisor') || 'todos')
+    const [localAsesor, setLocalAsesor] = useState(searchParams.get('asesor') || 'todos')
+    const [localSector, setLocalSector] = useState(searchParams.get('sector') || 'todos')
+    const [localFrecuencia, setLocalFrecuencia] = useState(searchParams.get('frecuencia') || 'todos')
     const [canRequestDueToTime, setCanRequestDueToTime] = useState(true)
 
     // Admin/Mgmt states
@@ -229,6 +268,15 @@ export function PrestamosTable({
     const filtroSector = searchParams.get('sector') || 'todos'
     const filtroFrecuencia = searchParams.get('frecuencia') || 'todos'
 
+    // Sync local state with URL for external changes (back/forward, kpi cards)
+    useEffect(() => {
+        setLocalSearch(searchQuery)
+        setLocalSupervisor(filtroSupervisor)
+        setLocalAsesor(filtroAsesor)
+        setLocalSector(filtroSector)
+        setLocalFrecuencia(filtroFrecuencia)
+    }, [searchQuery, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia])
+
     useEffect(() => {
         setItemsToShow(ITEMS_PER_LOAD)
     }, [activeFilter, localSearch, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia])
@@ -250,6 +298,59 @@ export function PrestamosTable({
     // Helper to update URL params
     const updateParams = (updates: Record<string, string | null>) => {
         updateParamsContext(updates)
+    }
+
+    // Derived: check if any filter is active
+    const hasActiveFilters = useMemo(() => {
+        return (localSearch !== '') || 
+               (localSupervisor !== 'todos') || 
+               (localAsesor !== 'todos') || 
+               (localSector !== 'todos') || 
+               (localFrecuencia !== 'todos')
+    }, [localSearch, localSupervisor, localAsesor, localSector, localFrecuencia])
+
+    const handleTabChange = (val: FilterTab) => {
+        updateParams({ tab: val, page: '1' })
+    }
+
+    // Handlers for instant UI feedback
+    const handleSearch = (val: string) => {
+        setLocalSearch(val)
+    }
+
+    const handleSupervisorFilter = (val: string) => {
+        setLocalSupervisor(val)
+        updateParams({ supervisor: val, asesor: 'todos', sector: 'todos' })
+    }
+
+    const handleAsesorFilter = (val: string) => {
+        setLocalAsesor(val)
+        updateParams({ asesor: val, sector: 'todos' })
+    }
+
+    const handleSectorFilter = (val: string) => {
+        setLocalSector(val)
+        updateParams({ sector: val })
+    }
+
+    const handleFrequencyFilter = (val: string) => {
+        setLocalFrecuencia(val)
+        updateParams({ frecuencia: val })
+    }
+
+    const handleClearFilters = () => {
+        setLocalSearch('')
+        setLocalSupervisor('todos')
+        setLocalAsesor('todos')
+        setLocalSector('todos')
+        setLocalFrecuencia('todos')
+        updateParams({ 
+            search: null, 
+            supervisor: 'todos', 
+            asesor: 'todos', 
+            sector: 'todos', 
+            frecuencia: 'todos'
+        })
     }
 
 
@@ -378,10 +479,19 @@ export function PrestamosTable({
 
 
 
-    // Sectores Logic
+    // Sectores Logic - Dynamically filtered by Advisor/Supervisor
     const sectoresList = useMemo(() => {
+        let relevantPrestamos = prestamos
+        
+        if (localAsesor !== 'todos') {
+            relevantPrestamos = relevantPrestamos.filter((p: any) => p.clientes?.asesor_id === localAsesor)
+        } else if (localSupervisor !== 'todos') {
+            const advisorIds = perfiles.filter(p => p.supervisor_id === localSupervisor).map(p => p.id)
+            relevantPrestamos = relevantPrestamos.filter((p: any) => advisorIds.includes(p.clientes?.asesor_id))
+        }
+
         const unique = new Map<string, string>()
-        prestamos.forEach((p: any) => {
+        relevantPrestamos.forEach((p: any) => {
             const cliente = p.clientes;
             if (cliente?.sector_id && cliente?.sectores?.nombre) {
                 unique.set(cliente.sector_id, cliente.sectores.nombre)
@@ -389,7 +499,7 @@ export function PrestamosTable({
         })
         return Array.from(unique.entries()).map(([id, nombre]) => ({ id, nombre }))
             .sort((a, b) => a.nombre.localeCompare(b.nombre))
-    }, [prestamos])
+    }, [prestamos, localAsesor, localSupervisor, perfiles])
 
     // Frecuencias Logic
     const frecuenciasList = useMemo(() => {
@@ -740,7 +850,7 @@ export function PrestamosTable({
         })
 
         return filtered
-    }, [processedPrestamos, activeFilter, localSearch, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia, userRol, perfiles, sortBy, sortOrder])
+    }, [processedPrestamos, activeFilter, localSearch, localSupervisor, localAsesor, localSector, localFrecuencia, userRol, perfiles, sortBy, sortOrder])
 
 
 
@@ -813,17 +923,8 @@ export function PrestamosTable({
         return counts
     }, [processedPrestamos]);
 
-    const handleTabChange = (tab: FilterTab) => updateParams({ tab });
-    const handleSearch = (term: string) => updateParams({ search: term });
-    const handleSupervisorFilter = (val: string) => updateParams({ supervisor: val });
-    const handleAsesorFilter = (val: string) => updateParams({ asesor: val });
-    const handleSectorFilter = (val: string) => updateParams({ sector: val });
-    const handleFrequencyFilter = (val: string) => updateParams({ frecuencia: val });
     const handleSortBy = (val: SortBy) => updateParams({ sortBy: val });
     const handleSortOrder = (val: SortOrder) => updateParams({ sortOrder: val });
-    const handleClearFilters = () => { setLocalSearch(''); router.push(pathname); };
-
-    const hasActiveFilters = localSearch || filtroSupervisor !== 'todos' || filtroAsesor !== 'todos' || filtroSector !== 'todos' || filtroFrecuencia !== 'todos' || activeFilter !== 'ruta_hoy';
 
     const supervisores = useMemo(() => {
         return perfiles.filter(p => p.rol === 'supervisor');
@@ -843,202 +944,164 @@ export function PrestamosTable({
         <div className="space-y-6 animate-in fade-in duration-500">
             {/* Main Filter Bar - Responsive & Clean */}
             <div className="sticky top-0 z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
-
-                {/* Search (Flexible but robust) */}
-                <div className="relative w-full md:flex-1 md:max-w-none">
+                
+                {/* Search */}
+                <div className="relative w-full md:flex-1">
                     {isPending ? (
                         <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 animate-spin" />
                     ) : (
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                        <Search className={cn("absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors", localSearch ? "text-blue-400" : "text-slate-500")} />
                     )}
                     <Input
                         placeholder="Buscar cliente, DNI..."
                         value={localSearch}
-                        onChange={(e) => setLocalSearch(e.target.value)}
-                        className="h-10 pl-9 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:bg-slate-900 transition-colors pr-8"
+                        onChange={(e) => handleSearch(e.target.value)}
+                        className={cn(
+                            "h-10 pl-9 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:bg-slate-900 transition-all pr-8",
+                            localSearch && "border-blue-500/50 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]"
+                        )}
                     />
-                    {hasActiveFilters && (
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={handleClearFilters}
-                            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-slate-500 hover:text-white hover:bg-slate-800 rounded-full"
-                            title="Restablecer Filtros"
-                        >
-                            <X className="h-3.5 w-3.5" />
-                        </Button>
-                    )}
                 </div>
 
-                {false && (
-                    <div className="flex items-center gap-2 bg-slate-950/30 border border-slate-800/60 p-1.5 rounded-lg animate-in slide-in-from-left-2 duration-300">
-                        <CalendarDays className="w-3.5 h-3.5 text-blue-400 ml-1.5" />
-                        <Input
-                            type="date"
-                            value={propSelectedDate || today}
-                            onChange={(e) => updateParams({ fecha: e.target.value })}
-                            className="h-8 w-auto min-w-[130px] bg-transparent border-0 text-slate-200 text-xs focus-visible:ring-0 focus-visible:ring-offset-0 px-1"
-                        />
-                    </div>
-                )}
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                    {/* View Toggle */}
+                    {/* View Toggle (Mobile Only) */}
                     <div className="shrink-0 md:hidden">
                         <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => setViewType(viewType === 'cards' ? 'table' : 'cards')}
-                            className="h-10 w-10 bg-slate-950/50 border border-slate-700 text-slate-400 hover:text-white"
-                            title={viewType === 'cards' ? 'Vista Tabla' : 'Vista Tarjetas'}
+                            className="h-10 w-10 bg-slate-950/50 border border-slate-700 text-slate-400"
                         >
                             {viewType === 'cards' ? <Table className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
                         </Button>
                     </div>
-                    {/* View Filter (Auto Width) */}
+
+                    {/* View Filter */}
                     <Select value={activeFilter} onValueChange={(val) => handleTabChange(val as FilterTab)}>
-                        <SelectTrigger className={cn("h-10 w-auto min-w-[150px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
-                            {isPending ? <Loader2 className="w-3 h-3 mr-2 animate-spin text-emerald-400" /> : <ListFilter className="w-3 h-3 mr-2 text-emerald-400 shrink-0" />}
+                        <SelectTrigger className={cn(
+                            "h-10 w-auto min-w-[150px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
+                            activeFilter !== 'ruta_hoy' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
+                            isPending && "opacity-70"
+                        )}>
+                            <ListFilter className={cn("w-3 h-3 mr-2 shrink-0", activeFilter !== 'ruta_hoy' ? "text-blue-400" : "text-emerald-400")} />
                             <SelectValue placeholder="Préstamos" />
                         </SelectTrigger>
                         <SelectContent className="bg-slate-900 border-slate-800">
                             <SelectGroup>
                                 <SelectLabel className="text-[10px] uppercase text-slate-500">Operativas</SelectLabel>
-                                <SelectItem value="ruta_hoy" className="focus:bg-slate-800 focus:text-white">
-                                    <span className="text-emerald-400">Ruta de Hoy</span>
-                                </SelectItem>
+                                <SelectItem value="ruta_hoy">Ruta de Hoy</SelectItem>
                                 {(userRol === 'admin' || userRol === 'supervisor') && (
-                                    <SelectItem value="visitas_control" className="focus:bg-slate-800 focus:text-white">
-                                        <span className="text-blue-400">Control Ruta</span>
-                                    </SelectItem>
+                                    <SelectItem value="visitas_control">Control Ruta</SelectItem>
                                 )}
-                                <SelectItem value="cobranza" className="focus:bg-slate-800 focus:text-white">
-                                    <span className="text-amber-400">Cobranza</span>
-                                </SelectItem>
-                                <SelectItem value="morosos" className="focus:bg-slate-800 focus:text-white">
-                                    <span className="text-amber-400">Advertencia</span>
-                                </SelectItem>
-                                <SelectItem value="notificar" className="focus:bg-slate-800 focus:text-white">
-                                    <span className="text-rose-400">Alerta Crítica</span>
-                                </SelectItem>
+                                <SelectItem value="cobranza">Cobranza</SelectItem>
+                                <SelectItem value="morosos">Advertencia</SelectItem>
+                                <SelectItem value="notificar">Alerta Crítica</SelectItem>
                             </SelectGroup>
-
                             <SelectGroup>
                                 <SelectLabel className="text-[10px] uppercase text-slate-500 mt-2">Gestión</SelectLabel>
-                                <SelectItem value="semana" className="focus:bg-slate-800 focus:text-white">
-                                    <span>Esta Semana</span>
-                                </SelectItem>
-                                <SelectItem value="en_curso" className="focus:bg-slate-800 focus:text-white">
-                                    <span>En Proceso</span>
-                                </SelectItem>
-                                <SelectItem value="renovaciones" className="focus:bg-slate-800 focus:text-white">
-                                    <span className="text-yellow-400">Renovaciones</span>
-                                </SelectItem>
+                                <SelectItem value="semana">Esta Semana</SelectItem>
+                                <SelectItem value="en_curso">En Proceso</SelectItem>
+                                <SelectItem value="renovaciones">Renovaciones</SelectItem>
                             </SelectGroup>
-
                             {userRol === 'admin' && (
                                 <SelectGroup>
                                     <SelectLabel className="text-[10px] uppercase text-slate-500 mt-2">Historial</SelectLabel>
-                                    <SelectItem value="finalizados" className="focus:bg-slate-800 focus:text-white">
-                                        <span>Finalizados</span>
-                                    </SelectItem>
-                                    <SelectItem value="renovados" className="focus:bg-slate-800 focus:text-white">
-                                        <span>Renovados</span>
-                                    </SelectItem>
-                                    <SelectItem value="refinanciados" className="focus:bg-slate-800 focus:text-white">
-                                        <span>Refinanciados</span>
-                                    </SelectItem>
-                                    <SelectItem value="anulados" className="focus:bg-slate-800 focus:text-white">
-                                        <span>Anulados</span>
-                                    </SelectItem>
-                                    <SelectItem value="pendientes" className="focus:bg-slate-800 focus:text-white">
-                                        <span>Pendientes</span>
-                                    </SelectItem>
-                                    <SelectItem value="todos" className="focus:bg-slate-800 focus:text-white">
-                                        <span>Todos</span>
-                                    </SelectItem>
+                                    <SelectItem value="finalizados">Finalizados</SelectItem>
+                                    <SelectItem value="todos">Ver Todos</SelectItem>
                                 </SelectGroup>
                             )}
                         </SelectContent>
                     </Select>
 
-                    {/* Map Toggle (Global) */}
+                    {/* Map Toggle */}
                     <Button
                         variant={showMap ? "default" : "outline"}
                         onClick={() => setShowMap(!showMap)}
                         className={cn(
-                            "h-10 px-3 w-auto shrink-0 transition-colors",
-                            showMap
-                                ? "bg-emerald-600/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-600/30 hover:text-emerald-300"
-                                : "bg-slate-950/50 border-slate-700 text-slate-300 hover:bg-slate-900"
+                            "h-10 px-3 shrink-0 transition-colors",
+                            showMap ? "bg-emerald-600/20 border-emerald-500/50 text-emerald-400" : "bg-slate-950/50 border-slate-700 text-slate-300"
                         )}
-                        disabled={isPending}
                     >
                         <MapPin className={cn("w-4 h-4 mr-2", showMap ? "text-emerald-300 animate-bounce" : "text-emerald-400")} />
-                        {showMap ? "Ver Lista" : "Ver Mapa"}
+                        {showMap ? "Lista" : "Mapa"}
                     </Button>
 
-                    {/* Frequency Filter (Auto Width) */}
-                    <Select value={filtroFrecuencia} onValueChange={handleFrequencyFilter} disabled={isPending}>
-                        <SelectTrigger className={cn("h-10 w-auto min-w-[140px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
-                            {isPending ? <Loader2 className="w-3 h-3 mr-2 animate-spin text-emerald-400" /> : <CalendarDays className="w-3 h-3 mr-2 text-emerald-400 shrink-0" />}
+                    {/* Filter Action: Clear All */}
+                    {hasActiveFilters && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleClearFilters}
+                            className="h-10 px-3 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 rounded-xl transition-all flex items-center gap-2 group"
+                        >
+                            <X className="w-4 h-4 group-hover:rotate-90 transition-transform" />
+                            <span className="text-xs font-bold uppercase tracking-wider">Limpiar</span>
+                        </Button>
+                    )}
+
+                    {/* Frecuencia Filter */}
+                    <Select value={localFrecuencia} onValueChange={handleFrequencyFilter}>
+                        <SelectTrigger className={cn(
+                            "h-10 w-auto min-w-[140px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
+                            localFrecuencia !== 'todos' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]"
+                        )}>
+                            <Calendar className={cn("w-3 h-3 mr-2 shrink-0", localFrecuencia !== 'todos' ? "text-blue-400" : "text-amber-400")} />
                             <SelectValue placeholder="Frecuencia" />
                         </SelectTrigger>
                         <SelectContent className="bg-slate-900 border-slate-800">
                             <SelectItem value="todos">Todas Frecuencias</SelectItem>
                             {frecuenciasList.map((f: string) => (
-                                <SelectItem key={f} value={f.toLowerCase()} className="focus:bg-slate-800 focus:text-white">
-                                    <div className="flex items-center gap-2">
-                                        <div className={cn("w-2 h-2 rounded-full", f.toLowerCase() === 'diario' ? 'bg-emerald-500' : f.toLowerCase() === 'semanal' ? 'bg-purple-500' : f.toLowerCase() === 'quincenal' ? 'bg-amber-500' : f.toLowerCase() === 'mensual' ? 'bg-rose-500' : 'bg-slate-500')} />
-                                        <span>{f}</span>
-                                    </div>
-                                </SelectItem>
+                                <SelectItem key={f} value={f} className="capitalize">{f}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
 
-                    {/* Supervisor Filter (Auto Width) */}
-                    {userRol === 'admin' && (
-                        <Select value={filtroSupervisor} onValueChange={handleSupervisorFilter} disabled={isPending}>
-                            <SelectTrigger className={cn("h-10 w-auto min-w-[140px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
-                                {isPending ? <Loader2 className="w-3 h-3 mr-2 animate-spin text-purple-400" /> : <Users className="w-3 h-3 mr-2 text-purple-400 shrink-0" />}
+                    {/* Supervisor Filter */}
+                    {(userRol === 'admin' || userRol === 'secretaria') && (
+                        <Select value={localSupervisor} onValueChange={handleSupervisorFilter}>
+                            <SelectTrigger className={cn(
+                                "h-10 w-auto min-w-[140px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
+                                localSupervisor !== 'todos' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]"
+                            )}>
+                                <Users className={cn("w-3 h-3 mr-2 shrink-0", localSupervisor !== 'todos' ? "text-blue-400" : "text-purple-400")} />
                                 <SelectValue placeholder="Supervisor" />
                             </SelectTrigger>
                             <SelectContent className="bg-slate-900 border-slate-700">
                                 <SelectItem value="todos">Todos Supervisores</SelectItem>
-                                {Array.from(new Set(perfiles.map(p => p.supervisor_id).filter(Boolean))).map((supId: any) => (
-                                    <SelectItem key={supId} value={supId}>Sup. {perfiles.find(p => p.id === supId)?.nombre_completo || supId.split('-')[0]}</SelectItem>
+                                {supervisores.map((s: any) => (
+                                    <SelectItem key={s.id} value={s.id}>{s.nombre_completo}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
                     )}
 
-                    {/* Asesor Filter (Auto Width) */}
-                    {(userRol === 'admin' || userRol === 'supervisor') && (
-                        <Select value={filtroAsesor} onValueChange={handleAsesorFilter}>
-                            <SelectTrigger className={cn("h-10 w-auto min-w-[140px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
-                                {isPending ? <Loader2 className="w-3 h-3 mr-2 text-blue-400 animate-spin" /> : <Users className="w-3 h-3 mr-2 text-blue-400 shrink-0" />}
+                    {/* Asesor Filter */}
+                    {(userRol === 'admin' || userRol === 'supervisor' || userRol === 'secretaria') && (
+                        <Select value={localAsesor} onValueChange={handleAsesorFilter}>
+                            <SelectTrigger className={cn(
+                                "h-10 w-auto min-w-[140px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
+                                localAsesor !== 'todos' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]"
+                            )}>
+                                <Users className="w-3 h-3 mr-2 shrink-0 text-blue-400" />
                                 <SelectValue placeholder="Asesor" />
                             </SelectTrigger>
                             <SelectContent className="bg-slate-900 border-slate-700">
                                 <SelectItem value="todos">Todos Asesores</SelectItem>
-                                {perfiles
-                                    .filter(p => {
-                                        if (p.rol !== 'asesor') return false
-                                        if (userRol === 'supervisor') return p.supervisor_id === userId
-                                        return filtroSupervisor === 'todos' || p.supervisor_id === filtroSupervisor
-                                    })
-                                    .map((asesor) => (
-                                        <SelectItem key={asesor.id} value={asesor.id}>{asesor.nombre_completo}</SelectItem>
-                                    ))}
+                                {asesores.map((asesor) => (
+                                    <SelectItem key={asesor.id} value={asesor.id}>{asesor.nombre_completo}</SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                     )}
 
                     {/* Sector Filter */}
                     {sectoresList.length > 0 && (
-                        <Select value={filtroSector} onValueChange={handleSectorFilter} disabled={isPending}>
-                            <SelectTrigger className={cn("h-10 w-auto min-w-[150px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
-                                {isPending ? <Loader2 className="w-3 h-3 mr-2 animate-spin text-emerald-400" /> : <MapPin className="w-3 h-3 mr-2 text-emerald-400 shrink-0" />}
+                        <Select value={localSector} onValueChange={handleSectorFilter}>
+                            <SelectTrigger className={cn(
+                                "h-10 w-auto min-w-[150px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
+                                localSector !== 'todos' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]"
+                            )}>
+                                <MapPin className={cn("w-3 h-3 mr-2 shrink-0", localSector !== 'todos' ? "text-blue-400" : "text-emerald-400")} />
                                 <SelectValue placeholder="Sector" />
                             </SelectTrigger>
                             <SelectContent className="bg-slate-900 border-slate-800">
@@ -1053,23 +1116,16 @@ export function PrestamosTable({
             </div>
 
             <div className="relative min-h-[400px]">
-                {/* Loader centralizado (basado en feedback de usuario) */}
-                {(isPending || isFiltering) && (
-                    <div className="absolute inset-x-0 top-32 z-50 flex items-center justify-center animate-in zoom-in-95 duration-300">
-                        <div className="bg-[#090e16]/80 backdrop-blur-xl p-8 rounded-full border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] ring-1 ring-white/5">
-                            <div className="relative">
-                                <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
-                                <div className="absolute inset-0 bg-blue-500/20 blur-[20px] rounded-full animate-pulse" />
-                            </div>
-                        </div>
+                {isPending ? (
+                    <div className="p-0 animate-in fade-in duration-500">
+                        <TableSkeleton />
                     </div>
-                )}
-
-                <div className={cn(
-                    "transition-all duration-300",
-                    (isPending || isFiltering) ? "opacity-40 grayscale-[0.5] pointer-events-none blur-[1px]" : "opacity-100"
-                )}>
-                    {showMap ? (
+                ) : (
+                    <div className={cn(
+                        "transition-all duration-300",
+                        isFiltering ? "opacity-40 grayscale-[0.5] blur-[1px]" : "opacity-100"
+                    )}>
+                        {showMap ? (
                         <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500 mb-6">
                             <RutaMapa
                                 prestamos={filteredPrestamos}
@@ -2653,8 +2709,9 @@ export function PrestamosTable({
                             </div>
                         </>
                     )}
-                </div> {/* transition wrapper */}
-            </div> {/* relative container */}
+                </div>
+            )}
+        </div> {/* relative container */}
 
             {/* Modals outside the main list container but inside the main layout div */}
             <QuickPayModal

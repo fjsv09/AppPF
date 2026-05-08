@@ -45,7 +45,7 @@ const clientSchema = z.object({
 interface ClientEditModalProps {
   cliente: any
   isOpen: boolean
-  userRol?: 'admin' | 'supervisor' | 'asesor'
+  userRol?: 'admin' | 'supervisor' | 'asesor' | 'secretaria'
   onClose: () => void
   onSuccess: (updatedClient: any) => void
 }

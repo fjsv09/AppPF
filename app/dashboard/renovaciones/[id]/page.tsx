@@ -160,8 +160,16 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
     let saldoPendienteOriginal = 0
 
     // Obtener saldo pendiente original del préstamo actual
+    // Usa todas las cuotas pendientes (vencidas + futuras) para ser consistente con el route de aprobación.
     if (solicitud.estado_solicitud !== 'aprobado') {
-        saldoPendienteOriginal = await getSaldoPendienteRenovacion(supabaseAdmin, solicitud.prestamo_id)
+        const { data: cuotasPendientesDisplay } = await supabaseAdmin
+            .from('cronograma_cuotas')
+            .select('monto_cuota, monto_pagado')
+            .eq('prestamo_id', solicitud.prestamo_id)
+            .neq('estado', 'pagado')
+        saldoPendienteOriginal = (cuotasPendientesDisplay || []).reduce((acc: number, c: any) => {
+            return acc + (Number(c.monto_cuota) - Number(c.monto_pagado || 0))
+        }, 0)
     } else {
         const { data: renOriginal } = await supabaseAdmin
             .from('renovaciones')
@@ -543,9 +551,16 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
                                 <span className="text-slate-400 text-xs md:text-sm font-semibold">−</span>
                             </div>
 
-                            <div className="flex justify-between items-center px-2 py-1.5 md:p-3 bg-amber-950/30 rounded border border-amber-700/30 text-[11px] md:text-sm">
-                                <span className="text-amber-200 font-semibold">Saldo Pendiente</span>
-                                <span className="text-amber-300 font-bold">
+                            <div className={`flex justify-between items-center px-2 py-1.5 md:p-3 rounded border text-[11px] md:text-sm ${saldoPendienteOriginal > 0 ? 'bg-amber-950/30 border-amber-700/30' : 'bg-slate-950/30 border-slate-700/30'}`}>
+                                <div className="flex flex-col gap-0.5">
+                                    <span className={`font-semibold ${saldoPendienteOriginal > 0 ? 'text-amber-200' : 'text-slate-400'}`}>Saldo Pendiente</span>
+                                    <span className={`text-[9px] md:text-[11px] ${saldoPendienteOriginal > 0 ? 'text-amber-400/70' : 'text-emerald-500/70'}`}>
+                                        {saldoPendienteOriginal > 0
+                                            ? 'Se descontará del efectivo a entregar'
+                                            : 'Préstamo anterior completamente saldado'}
+                                    </span>
+                                </div>
+                                <span className={`font-bold ${saldoPendienteOriginal > 0 ? 'text-amber-300' : 'text-slate-500'}`}>
                                     S/ {formatMoney(Math.max(0, saldoPendienteOriginal))}
                                 </span>
                             </div>

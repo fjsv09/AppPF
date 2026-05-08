@@ -3,6 +3,7 @@
 import React from 'react'
 import { CheckCircle, ArrowRight, Clock } from 'lucide-react'
 import { formatDatePeru, cn } from '@/lib/utils'
+import { computeVirtualCronograma } from '@/lib/financial-logic'
 
 interface VoucherContentProps {
     payment: any
@@ -20,120 +21,28 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
     // Asegurar compatibilidad de nombres de campos entre RPC y Componente
     const monto = Number(payment.monto_pagado || payment.pago_monto || 0);
 
-    // Lógica de cálculo de progreso (Idem PaymentVoucher original)
+    // Cálculo de progreso centralizado via cascade FIFO canónico
     const totalCuotas = Number(cronograma?.length || loan?.cuotas || 0)
-    let pagadas = 0
-    let cuotasAtrasadas = 0
-    let saldoPendiente = 0
-    let saldoCuotaActual = 0
-    
-    if (cronograma && cronograma.length > 0) {
-        const formatter = new Intl.DateTimeFormat('en-CA', { 
-            timeZone: 'America/Lima',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit'
-        });
-        const paymentDateStr = formatter.format(new Date(payment.created_at || new Date()))
-        
-        // 1. Obtener todos los pagos realizados hasta este momento (inclusive)
-        // Si no tenemos allPayments, usamos solo el pago actual como fallback
-        const currentId = payment.id || 'current';
-        const sortedPayments = (allPayments || []).filter(p => p.estado_verificacion !== 'rechazado');
-        
-        // Si el pago actual no está en la lista (pasa en registros nuevos), lo añadimos para el cálculo
-        if (!sortedPayments.find(p => p.id === currentId)) {
-            sortedPayments.push(payment);
-        }
 
-        // Ordenar por fecha y luego ID para consistencia
-        sortedPayments.sort((a, b) => {
-            const timeA = new Date(a.created_at || 0).getTime()
-            const timeB = new Date(b.created_at || 0).getTime()
-            if (timeA !== timeB) return timeA - timeB
-            return (a.id || '').toString().localeCompare((b.id || '').toString())
-        })
-        
-        const paymentIndex = sortedPayments.findIndex(p => p.id === currentId)
-        const paymentsAtThatTime = paymentIndex >= 0 ? sortedPayments.slice(0, paymentIndex + 1) : [payment]
-        const totalPaidAtThatTime = paymentsAtThatTime.reduce((acc, p) => acc + Number(p.monto_pagado || p.pago_monto || 0), 0)
-
-        const cronogramaOrdenado = [...cronograma].sort((a, b) => a.numero_cuota - b.numero_cuota)
-        const remainingNeeded = {} as any
-        cronogramaOrdenado.forEach(q => { remainingNeeded[q.id] = Number(q.monto_cuota) })
-
-        // Saldo de Sistema (excedente anterior por migración): diferencia entre lo
-        // acreditado en el cronograma y la suma total de pagos físicos no rechazados.
-        // Se calcula sobre TODOS los pagos (no solo los previos a este voucher) porque
-        // representa un crédito legado que precede a cualquier pago físico.
-        const totalPagadoEnCronograma = cronogramaOrdenado.reduce((s, c) => s + (Number(c.monto_pagado) || 0), 0)
-        const totalPagadoEnPagosAll = sortedPayments.reduce((s, p) => s + (Number(p.monto_pagado || p.pago_monto) || 0), 0)
-        let systemMoney = Math.max(0, totalPagadoEnCronograma - totalPagadoEnPagosAll)
-
-        const formatDateISO = (d: any) => {
-            try {
-                return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date(d))
-            } catch(e) { return '' }
-        }
-
-        const pool = paymentsAtThatTime.map(p => ({
-            ...p,
-            rem: Number(p.monto_pagado || p.pago_monto || 0),
-            date: formatDateISO(p.created_at)
-        }))
-
-        // FASE 1: Saldo de Sistema (prioridad histórica 0)
-        if (systemMoney > 0.01) {
-            cronogramaOrdenado.forEach(q => {
-                if (systemMoney <= 0.01 || remainingNeeded[q.id] <= 0.01) return
-                const take = Math.min(systemMoney, remainingNeeded[q.id])
-                remainingNeeded[q.id] -= take
-                systemMoney -= take
-            })
-        }
-
-        // FASE 2: Prioridad Día (Mismo día del pago cubre su cuota primero)
-        pool.forEach(p => {
-             const sameDayQuota = cronogramaOrdenado.find(q => q.fecha_vencimiento === p.date);
-             if (sameDayQuota && remainingNeeded[sameDayQuota.id] > 0.01) {
-                 const take = Math.min(p.rem, remainingNeeded[sameDayQuota.id]);
-                 remainingNeeded[sameDayQuota.id] -= take;
-                 p.rem -= take;
-             }
-        });
-
-        // FASE 3: Cascada FIFO Residual
-        cronogramaOrdenado.forEach(q => {
-            pool.forEach(p => {
-                if (remainingNeeded[q.id] <= 0.01 || p.rem <= 0.01) return;
-                const take = Math.min(p.rem, remainingNeeded[q.id]);
-                remainingNeeded[q.id] -= take;
-                p.rem -= take;
-            });
-        });
-        
-        const virtualCronograma = cronogramaOrdenado.map(c => {
-            const montoCuota = Number(c.monto_cuota || 0)
-            const pagadoVirtual = montoCuota - remainingNeeded[c.id]
-            return {
-                ...c,
-                monto_pagado_virtual: pagadoVirtual,
-                isPagadaVirtual: pagadoVirtual >= (montoCuota - 0.01)
-            }
-        })
-        
-        pagadas = virtualCronograma.filter(c => c.isPagadaVirtual).length
-        saldoPendiente = Math.max(0, virtualCronograma.reduce((acc, c) => acc + (Number(c.monto_cuota || 0) - c.monto_pagado_virtual), 0))
-        
-        const cuotaActual = virtualCronograma.find((c: any) => !c.isPagadaVirtual)
-        saldoCuotaActual = (cuotaActual && cuotaActual.monto_pagado_virtual > 0) ? Math.max(0, Number(cuotaActual.monto_cuota || 0) - cuotaActual.monto_pagado_virtual) : 0
-        
-        cuotasAtrasadas = virtualCronograma.filter(c => {
-            const isPending = !c.isPagadaVirtual
-            const isOverdueAtThatTime = c.fecha_vencimiento < paymentDateStr;
-            return isPending && isOverdueAtThatTime;
-        }).length
+    // Incluir el pago actual en la lista si no está ya (caso de voucher recién generado)
+    const currentId = payment.id || 'current'
+    const allPaymentsFiltered = (allPayments || []).filter(p => p.estado_verificacion !== 'rechazado')
+    if (!allPaymentsFiltered.find(p => p.id === currentId)) {
+        allPaymentsFiltered.push(payment)
     }
+
+    const { cuotasPagadasVirtual: pagadas, saldoCuotaEnCurso: saldoCuotaActual, saldoTotalPendiente: saldoPendiente } =
+        computeVirtualCronograma(cronograma ?? [], allPaymentsFiltered)
+
+    // Cuotas atrasadas: cuotas vencidas antes de la fecha del pago que aún tienen saldo
+    const paymentDateStr = (() => {
+        try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date(payment.created_at || new Date())) }
+        catch { return '' }
+    })()
+    const cuotasAtrasadas = (cronograma ?? []).filter(c => {
+        const pagadoVirtual = Number(c.monto_pagado || 0)
+        return c.fecha_vencimiento < paymentDateStr && pagadoVirtual < (Number(c.monto_cuota || 0) - 0.01)
+    }).length
 
     const progressPct = totalCuotas > 0 ? (pagadas / totalCuotas) * 100 : 0;
 

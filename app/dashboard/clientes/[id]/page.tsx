@@ -475,9 +475,9 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                                             <span className="text-[8px] text-blue-500/60 uppercase font-black tracking-tighter">Saldo</span>
                                                             <span className={cn(
                                                                 "font-mono text-xs font-extrabold leading-none",
-                                                                metrics.saldoCuotaParcial > 0 ? "text-blue-400" : "text-slate-600"
+                                                                metrics.saldoCuotaEnCurso > 0 ? "text-blue-400" : "text-slate-600"
                                                             )}>
-                                                                ${metrics.saldoCuotaParcial.toFixed(0)}
+                                                                ${metrics.saldoCuotaEnCurso.toFixed(0)}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -493,7 +493,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                                                     <div className="flex flex-col items-end">
                                                         <span className="text-slate-500 font-black text-[8px] uppercase tracking-tighter">Progreso</span>
                                                         <span className="text-xs font-black text-slate-300 tracking-tighter leading-none">
-                                                            {Math.min(metrics.cuotasPagadas + (metrics.saldoCuotaParcial > 0 ? 1 : 0), metrics.totalCuotas)}/{metrics.totalCuotas}
+                                                            {Math.min(metrics.cuotasPagadasVirtual + (metrics.saldoCuotaEnCurso > 0 ? 1 : 0), metrics.totalCuotas)}/{metrics.totalCuotas}
                                                         </span>
                                                     </div>
                                                 </div>

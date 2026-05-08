@@ -155,14 +155,14 @@ export function DailyCollectorLog({
             });
         }
 
-        // FASE 2: Prioridad Día (Intent - Misma Fecha)
+        // FASE 2: Prioridad del mismo día (solo si el pago cubre completamente la cuota del día)
         pool.forEach(p => {
-             const sameDayQuota = sortedQuotas.find(q => q.fecha_vencimiento === p.date);
-             if (sameDayQuota && remainingNeeded[sameDayQuota.id] > 0.01) {
-                 const take = Math.min(p.rem, remainingNeeded[sameDayQuota.id]);
-                 assign(p, sameDayQuota, take, 'direct');
-                 p.rem -= take;
-             }
+            const sameDayQuota = sortedQuotas.find(q => q.fecha_vencimiento === p.date);
+            if (sameDayQuota && remainingNeeded[sameDayQuota.id] > 0.01 && p.rem >= remainingNeeded[sameDayQuota.id] - 0.01) {
+                const take = Math.min(p.rem, remainingNeeded[sameDayQuota.id]);
+                assign(p, sameDayQuota, take, 'direct');
+                p.rem -= take;
+            }
         });
 
         // FASE 3: Cascada FIFO Residual (Cubrir deudas antiguas o adelantar futuras)

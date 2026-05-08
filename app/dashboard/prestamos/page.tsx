@@ -563,6 +563,7 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
             valor_cuota_promedio: metrics.valorCuotaPromedio,
             cuotas_mora_real: metrics.cuotasAtrasadas,
             saldo_cuota_parcial: metrics.saldoCuotaParcial,
+            saldo_cuota_en_curso: metrics.saldoCuotaEnCurso,
             
             es_renovable: metrics.esRenovable,
             isFinalizado: p.estado === 'finalizado',

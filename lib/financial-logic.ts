@@ -57,10 +57,73 @@ interface LoanMetrics {
   saldoCuotaParcial: number; // Balance restante de la primera cuota que tenga pago parcial (>0 y <total)
   totalCuotas: number;
   cuotasPagadas: number;
+  cuotasPagadasVirtual: number; // Cuotas completamente cubiertas via cascade FIFO (fuente canónica de display)
+  saldoCuotaEnCurso: number;    // Balance pendiente en la cuota parcialmente pagada actualmente en curso
   metaTotalHoyYAtrasados: number;
   cobradoTotalHoyYAtrasados: number;
   totalPagar: number;
   loanScore?: LoanScore;
+}
+
+/**
+ * Cascade FIFO centralizado: distribuye pagos virtuales sobre el cronograma y retorna
+ * cuántas cuotas quedan completamente cubiertas y el saldo de la cuota en curso.
+ * Esta es la única fuente de verdad para el display de progreso y saldo en todos los módulos.
+ */
+export function computeVirtualCronograma(
+  cronograma: any[],
+  pagos: any[]
+): { cuotasPagadasVirtual: number; saldoCuotaEnCurso: number; saldoTotalPendiente: number } {
+  if (!cronograma || cronograma.length === 0) {
+    return { cuotasPagadasVirtual: 0, saldoCuotaEnCurso: 0, saldoTotalPendiente: 0 };
+  }
+
+  const sorted = [...cronograma].sort((a, b) => (a.numero_cuota || 0) - (b.numero_cuota || 0));
+  const remaining: Record<string, number> = {};
+  sorted.forEach(c => { remaining[c.id] = Number(c.monto_cuota) || 0; });
+
+  const filtered = (pagos || []).filter((p: any) => p.estado_verificacion !== 'rechazado');
+
+  // Saldo de sistema: lo que figura en cronograma pero no existe como pago físico (migración/excedentes)
+  const totalEnCronograma = sorted.reduce((s, c) => s + (Number(c.monto_pagado) || 0), 0);
+  const totalEnPagos = filtered.reduce((s: number, p: any) => s + (Number(p.monto_pagado || p.pago_monto) || 0), 0);
+  let systemMoney = Math.max(0, totalEnCronograma - totalEnPagos);
+
+  const pool = filtered.map((p: any) => ({
+    rem: Number(p.monto_pagado || p.pago_monto || 0),
+    date: (() => {
+      try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date(p.created_at || p.fecha_pago)); }
+      catch { return ''; }
+    })()
+  }));
+
+  // Fase 1: Saldo de sistema (prioridad histórica — préstamos migrados)
+  for (const q of sorted) {
+    if (systemMoney <= 0.01 || remaining[q.id] <= 0.01) continue;
+    const take = Math.min(systemMoney, remaining[q.id]);
+    remaining[q.id] -= take;
+    systemMoney -= take;
+  }
+
+  // Fase 2: Cascada FIFO residual
+  for (const q of sorted) {
+    for (const p of pool) {
+      if (remaining[q.id] <= 0.01 || p.rem <= 0.01) continue;
+      const take = Math.min(p.rem, remaining[q.id]);
+      remaining[q.id] -= take;
+      p.rem -= take;
+    }
+  }
+
+  const cuotasPagadasVirtual = sorted.filter(c => remaining[c.id] <= 0.01).length;
+  const saldoTotalPendiente = sorted.reduce((s, c) => s + remaining[c.id], 0);
+  const cuotaEnCurso = sorted.find(c => {
+    const pagadoVirtual = (Number(c.monto_cuota) || 0) - remaining[c.id];
+    return remaining[c.id] > 0.01 && pagadoVirtual > 0.01;
+  });
+  const saldoCuotaEnCurso = cuotaEnCurso ? remaining[cuotaEnCurso.id] : 0;
+
+  return { cuotasPagadasVirtual, saldoCuotaEnCurso, saldoTotalPendiente };
 }
 
 /**
@@ -95,6 +158,8 @@ export function calculateLoanMetrics(
       saldoCuotaParcial: 0,
       totalCuotas: 0,
       cuotasPagadas: 0,
+      cuotasPagadasVirtual: 0,
+      saldoCuotaEnCurso: 0,
       metaTotalHoyYAtrasados: 0,
       cobradoTotalHoyYAtrasados: 0,
       totalPagar: 0,
@@ -156,7 +221,7 @@ export function calculateLoanMetrics(
       : 0;
     const cuotasAtrasadasNA = valorCuotaPromedioNA > 0 ? Math.floor(deudaExigibleHoyNA / valorCuotaPromedioNA) : 0;
     const saldoPendienteNA = Math.max(0, totalPagar - totalPagadoAcumulado);
-
+    const { cuotasPagadasVirtual: cpvNA, saldoCuotaEnCurso: sceNA } = computeVirtualCronograma(cronograma, pagos);
 
     return {
       cuotasAtrasadas: cuotasAtrasadasNA,
@@ -188,6 +253,8 @@ export function calculateLoanMetrics(
           valorCuotaPromedioNA > 0 ? Math.floor((totalPagadoAcumulado + 0.01) / valorCuotaPromedioNA) : 0
         )
       ),
+      cuotasPagadasVirtual: cpvNA,
+      saldoCuotaEnCurso: sceNA,
       metaTotalHoyYAtrasados: 0,
       cobradoTotalHoyYAtrasados: 0,
       totalPagar: totalPagar,
@@ -285,6 +352,9 @@ export function calculateLoanMetrics(
     ? (Number(partialPaidQuota.monto_cuota) - (Number(partialPaidQuota.monto_pagado) || 0))
     : 0;
 
+  // 4.7. Cascade FIFO virtual — fuente canónica para display de progreso y saldo
+  const { cuotasPagadasVirtual, saldoCuotaEnCurso } = computeVirtualCronograma(cronograma, pagos);
+
   // 5. Acumulados
   const saldoPendiente = Math.max(0, totalPagar - totalPagadoAcumulado);
 
@@ -359,6 +429,8 @@ export function calculateLoanMetrics(
         valorCuotaPromedio > 0 ? Math.floor((totalPagadoAcumulado + 0.01) / valorCuotaPromedio) : 0
       )
     ),
+    cuotasPagadasVirtual,
+    saldoCuotaEnCurso,
     metaTotalHoyYAtrasados,
     cobradoTotalHoyYAtrasados,
     loanScore: calculateLoanScore(loan, pagos, today, config) // Integración del nuevo score

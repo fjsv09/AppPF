@@ -498,15 +498,15 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                             </div>
                         </div>
 
-                        {/* SALDO PARCIAL */}
+                        {/* SALDO PENDIENTE TOTAL */}
                         <div className="flex flex-col items-center justify-between h-full space-y-1.5 text-center">
                             <p className="text-blue-200/40 text-[7px] md:text-[9px] uppercase tracking-[0.15em] font-black w-full">Saldo</p>
                             <div className="min-h-[2.2rem] md:min-h-[2.5rem] flex items-end justify-center w-full">
                                 <p className={cn(
                                     "text-xs md:text-2xl font-black leading-none tracking-tight",
-                                    metrics.saldoCuotaParcial > 0 ? "text-blue-400" : "text-white/30"
+                                    metrics.saldoCuotaEnCurso > 0 ? "text-blue-400" : "text-white/30"
                                 )}>
-                                    ${metrics.saldoCuotaParcial.toFixed(2)}
+                                    ${metrics.saldoCuotaEnCurso.toFixed(2)}
                                 </p>
                             </div>
                         </div>
@@ -530,7 +530,7 @@ export default async function LoanDetailPage({ params, searchParams }: { params:
                                     </div>
                                 )}
                                 <p className="text-xs md:text-2xl font-black text-white leading-none tracking-tight">
-                                    {Math.min(metrics.cuotasPagadas + (metrics.saldoCuotaParcial > 0 ? 1 : 0), metrics.totalCuotas)}/{metrics.totalCuotas}
+                                    {Math.min(metrics.cuotasPagadasVirtual + (metrics.saldoCuotaEnCurso > 0 ? 1 : 0), metrics.totalCuotas)}/{metrics.totalCuotas}
                                 </p>
                             </div>
                         </div>

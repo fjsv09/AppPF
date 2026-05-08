@@ -176,157 +176,103 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: rpcError?.message || resultado?.error || 'Error al procesar en base de datos' }, { status: 400 })
         }
 
-        // --- INICIO DE BLOQUE TRANSACCIONAL (CONTABLE) ---
-        let rollbackInfo = {
-            prestamo_nuevo_id: resultado.prestamo_nuevo_id,
-            solicitud_id: solicitud.id,
-            prestamo_original_id: prestamo_id
-        };
+        const prestamo_nuevo_id = resultado.prestamo_nuevo_id
 
-        try {
-            await supabaseAdmin
-                .from('prestamos')
-                .update({ 
-                    estado: 'refinanciado',
-                    estado_mora: 'castigado'
-                })
-                .eq('id', prestamo_id)
+        // Estado del préstamo original (fuera del bloque atómico, el rollback lo revierte si falla)
+        await supabaseAdmin
+            .from('prestamos')
+            .update({ estado: 'refinanciado', estado_mora: 'castigado' })
+            .eq('id', prestamo_id)
 
-            await supabaseAdmin
-                .from('historial_prestamos')
-                .update({ estado_nuevo: 'refinanciado' })
-                .eq('prestamo_id', prestamo_id)
-                .eq('estado_nuevo', 'renovado')
+        await supabaseAdmin
+            .from('historial_prestamos')
+            .update({ estado_nuevo: 'refinanciado' })
+            .eq('prestamo_id', prestamo_id)
+            .eq('estado_nuevo', 'renovado')
 
-            // 3. Liquidar cuotas pendientes y actualizar saldo
-            // Actualizar el saldo de la cartera
-            const { error: saldoError } = await supabaseAdmin
-                .from('cuentas_financieras')
-                .update({ saldo: cuenta.saldo - monto_a_descontar })
-                .eq('id', cuenta_id)
-            if (saldoError) throw new Error(`Error actualizando saldo: ${saldoError.message}`);
+        const nombreC = (await supabaseAdmin.from('clientes').select('nombres').eq('id', prestamoInfo.cliente_id).single()).data?.nombres || 'Cliente';
 
-            // 4. Trazabilidad del dinero (DOS REGISTROS EXPLICITOS)
-            const nombreC = (await supabaseAdmin.from('clientes').select('nombres').eq('id', prestamoInfo.cliente_id).single()).data?.nombres || 'Cliente';
-            const movimientos = [];
-            if (saldo_retenido > 0) {
-                movimientos.push({
-                    cartera_id: cuenta.cartera_id,
-                    cuenta_origen_id: cuenta_id,
-                    monto: saldo_retenido,
-                    tipo: 'ingreso',
-                    descripcion: `Liquidación deuda por refinanciamiento directo (Préstamo #${prestamo_id.split('-')[0]}) - Cliente: ${nombreC}`,
-                    registrado_por: user.id
-                });
-            }
-            movimientos.push({
-                cartera_id: cuenta.cartera_id,
-                cuenta_origen_id: cuenta_id,
-                monto: monto_solicitado,
-                tipo: 'egreso',
-                descripcion: `Desembolso total refinanciamiento directo #${resultado.prestamo_nuevo_id?.split('-')[0]} - Cliente: ${nombreC}`,
-                registrado_por: user.id
-            });
-            const { error: moveError } = await supabaseAdmin.from('movimientos_financieros').insert(movimientos);
-            if (moveError) throw new Error(`Error registrando movimientos: ${moveError.message}`);
-
-            // 5. Historial de Pagos - UN SOLO registro consolidado
-            if (cuotasPendientes && cuotasPendientes.length > 0) {
-                const montoTotalLiquidado = cuotasPendientes.reduce((acc: number, c: any) => 
-                    acc + (Number(c.monto_cuota) - Number(c.monto_pagado || 0)), 0);
-
-                const { error: pagosError } = await supabaseAdmin.from('pagos').insert({
-                    cuota_id: cuotasPendientes[0].id,
-                    monto_pagado: montoTotalLiquidado,
-                    registrado_por: user.id,
-                    es_autopago_renovacion: true,
-                    voucher_compartido: true,
-                    metodo_pago: 'Refinanciamiento'
-                });
-                if (pagosError) throw new Error(`Error generando recibo: ${pagosError.message}`);
-
-                // El RPC ya debería haber marcado las cuotas como pagadas, pero nos aseguramos del saldo pagado
-                const updatePromises = cuotasPendientes.map(cuota => 
-                    supabaseAdmin.from('cronograma_cuotas').update({ 
-                        monto_pagado: cuota.monto_cuota,
-                        fecha_pago: new Date().toISOString()
-                    }).eq('id', cuota.id)
-                )
-                await Promise.all(updatePromises)
-            }
-
-            // 6. Generar cronograma nuevo (Centralizado en Node)
-            const { error: cronogramaError } = await generarCronogramaNode(supabaseAdmin, resultado.prestamo_nuevo_id)
-                .then(() => ({ error: null }))
-                .catch(err => ({ error: err }));
-            if (cronogramaError) throw new Error(`Error generando cronograma: ${cronogramaError.message}`);
-
-            // 6.b Bloquear cronograma: refinanciamiento directo admin oficializa el préstamo
-            await supabaseAdmin
-                .from('prestamos')
-                .update({ bloqueo_cronograma: true })
-                .eq('id', resultado.prestamo_nuevo_id);
-
-            // 7. Auditoría y Tareas
-            await supabaseAdmin.from('auditoria').insert({
-                usuario_id: user.id,
-                accion: tipoExcepcionFinal === 'mora_critica_excepcion'
-                    ? 'refinanciar_excepcion_admin'
-                    : 'refinanciar_directo_admin',
-                tabla_afectada: 'prestamos',
-                registro_id: resultado.prestamo_nuevo_id,
-                detalle: { prestamo_original: prestamo_id, monto: monto_solicitado, tipo_excepcion: tipoExcepcionFinal }
+        // PASO CONTABLE ATÓMICO: saldo + movimientos + autopago + cuotas en una sola transacción DB
+        const { data: contabilidad, error: contabilidadError } = await supabaseAdmin
+            .rpc('registrar_contabilidad_refinanciamiento_directo', {
+                p_cuenta_id:            cuenta_id,
+                p_cartera_id:           cuenta.cartera_id,
+                p_monto_a_descontar:    monto_a_descontar,
+                p_saldo_retenido:       saldo_retenido,
+                p_monto_solicitado:     monto_solicitado,
+                p_prestamo_original_id: prestamo_id,
+                p_prestamo_nuevo_id:    prestamo_nuevo_id,
+                p_nombre_cliente:       nombreC,
+                p_registrado_por:       user.id
             })
 
-            // Obtener el asesor del cliente para la tarea
-            const { data: clienteInfo } = await supabaseAdmin
-                .from('clientes')
-                .select('asesor_id')
-                .eq('id', prestamoInfo!.cliente_id)
-                .single()
-
-            const asesorResponsable = clienteInfo?.asesor_id || prestamoInfo?.created_by || user.id;
-
-            const { error: errorTarea } = await supabaseAdmin.from('tareas_evidencia').insert({
-                asesor_id: asesorResponsable,
-                prestamo_id: resultado.prestamo_nuevo_id,
-                tipo: 'refinanciacion'
-            })
-
-            if (errorTarea) {
-                console.error('Error creando tarea de evidencia:', errorTarea)
-            }
-
-            if (asesorResponsable) {
-                await createFullNotification(asesorResponsable, {
-                    titulo: '📷 Evidencia Requerida',
-                    mensaje: `Se requiere foto de evidencia para el refinanciamiento de ${nombreC}.`,
-                    link: '/dashboard/tareas?tab=evidencia',
-                    tipo: 'warning'
-                }).catch(() => {});
-            }
-
-            revalidatePath('/dashboard/prestamos')
-            revalidatePath('/dashboard/renovaciones')
-
-            return NextResponse.json({ 
-                success: true,
-                prestamo_nuevo_id: resultado.prestamo_nuevo_id,
-                message: 'Refinanciación administrativa completada' 
-            }, { status: 200 })
-
-        } catch (errorOperacion: any) {
-            console.error('CRITICAL: Rollback triggered during direct refinancing:', errorOperacion);
-            // ROLLBACK MANUAL
-            if (rollbackInfo.prestamo_nuevo_id) {
-                await supabaseAdmin.from('prestamos').delete().eq('id', rollbackInfo.prestamo_nuevo_id);
-                await supabaseAdmin.from('cronograma_cuotas').delete().eq('prestamo_id', rollbackInfo.prestamo_nuevo_id);
-            }
-            await supabaseAdmin.from('prestamos').update({ estado: 'activo' }).eq('id', prestamo_id);
-            await supabaseAdmin.from('solicitudes_renovacion').delete().eq('id', rollbackInfo.solicitud_id);
-
-            return NextResponse.json({ error: `Error durante el proceso contable. Rollback ejecutado: ${errorOperacion.message}` }, { status: 500 });
+        if (contabilidadError || !contabilidad?.success) {
+            console.error('CRITICAL: Contabilidad RPC failed, rolling back:', contabilidadError, contabilidad)
+            await supabaseAdmin.from('prestamos').delete().eq('id', prestamo_nuevo_id)
+            await supabaseAdmin.from('cronograma_cuotas').delete().eq('prestamo_id', prestamo_nuevo_id)
+            await supabaseAdmin.from('prestamos').update({ estado: 'activo' }).eq('id', prestamo_id)
+            await supabaseAdmin.from('solicitudes_renovacion').delete().eq('id', solicitud.id)
+            return NextResponse.json({
+                error: `Error contable: ${contabilidad?.error || contabilidadError?.message || 'Error desconocido'}. La operación fue revertida.`
+            }, { status: 500 })
         }
+
+        // Cronograma nuevo (lógica Node, fuera de la transacción DB)
+        const { error: cronogramaError } = await generarCronogramaNode(supabaseAdmin, prestamo_nuevo_id)
+            .then(() => ({ error: null }))
+            .catch(err => ({ error: err }));
+        if (cronogramaError) {
+            console.error('Error generando cronograma (contabilidad ya commiteada):', cronogramaError)
+        }
+
+        await supabaseAdmin
+            .from('prestamos')
+            .update({ bloqueo_cronograma: true })
+            .eq('id', prestamo_nuevo_id)
+
+        await supabaseAdmin.from('auditoria').insert({
+            usuario_id: user.id,
+            accion: tipoExcepcionFinal === 'mora_critica_excepcion'
+                ? 'refinanciar_excepcion_admin'
+                : 'refinanciar_directo_admin',
+            tabla_afectada: 'prestamos',
+            registro_id: prestamo_nuevo_id,
+            detalle: { prestamo_original: prestamo_id, monto: monto_solicitado, tipo_excepcion: tipoExcepcionFinal }
+        })
+
+        const { data: clienteInfo } = await supabaseAdmin
+            .from('clientes')
+            .select('asesor_id')
+            .eq('id', prestamoInfo!.cliente_id)
+            .single()
+
+        const asesorResponsable = clienteInfo?.asesor_id || prestamoInfo?.created_by || user.id
+
+        await supabaseAdmin.from('tareas_evidencia').insert({
+            asesor_id: asesorResponsable,
+            prestamo_id: prestamo_nuevo_id,
+            tipo: 'refinanciacion'
+        }).then(({ error }) => {
+            if (error) console.error('Error creando tarea de evidencia:', error)
+        })
+
+        if (asesorResponsable) {
+            await createFullNotification(asesorResponsable, {
+                titulo: '📷 Evidencia Requerida',
+                mensaje: `Se requiere foto de evidencia para el refinanciamiento de ${nombreC}.`,
+                link: '/dashboard/tareas?tab=evidencia',
+                tipo: 'warning'
+            }).catch(() => {})
+        }
+
+        revalidatePath('/dashboard/prestamos')
+        revalidatePath('/dashboard/renovaciones')
+
+        return NextResponse.json({
+            success: true,
+            prestamo_nuevo_id: prestamo_nuevo_id,
+            message: 'Refinanciación administrativa completada'
+        }, { status: 200 })
 
     } catch (e: any) {
         console.error('Unexpected error:', e)

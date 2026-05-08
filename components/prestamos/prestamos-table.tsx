@@ -1473,12 +1473,12 @@ export function PrestamosTable({
                                                                     <span className="text-[7px] text-slate-500 uppercase font-black tracking-wider mb-0.5">Cuota</span>
                                                                     <span className="font-mono text-slate-300 text-[12px] whitespace-nowrap">S/ {prestamo.valorCuota?.toFixed(0)}</span>
                                                                 </div>
-                                                                {/* New Saldo/Any Partial Section */}
-                                                                {(prestamo.saldo_cuota_parcial > 0) && (
+                                                                {/* Saldo Cuota En Curso */}
+                                                                {((prestamo.metrics?.saldoCuotaEnCurso || 0) > 0) && (
                                                                     <div className="flex flex-col">
                                                                         <span className="text-[8px] text-blue-400/70 uppercase font-bold tracking-wider mb-0.5">Saldo</span>
-                                                                        <span className="font-mono text-blue-400 text-[11px] font-bold animate-pulse whitespace-nowrap">
-                                                                            S/ {prestamo.saldo_cuota_parcial.toFixed(0)}
+                                                                        <span className="font-mono text-blue-400 text-[11px] font-bold whitespace-nowrap">
+                                                                            S/ {(prestamo.metrics?.saldoCuotaEnCurso || 0).toFixed(0)}
                                                                         </span>
                                                                     </div>
                                                                 )}
@@ -1535,7 +1535,7 @@ export function PrestamosTable({
                                                                 })()}
                                                                 {!prestamo.isFinalizado && (
                                                                     <span className="text-slate-400 text-[11px] font-bold px-1">
-                                                                        {Math.min(prestamo.cuotasPagadas + ((prestamo.saldo_cuota_parcial || prestamo.metrics?.saldoCuotaParcial || 0) > 0 ? 1 : 0), prestamo.totalCuotas)}/{prestamo.totalCuotas}
+                                                                        {Math.min((prestamo.metrics?.cuotasPagadasVirtual ?? prestamo.cuotasPagadas) + ((prestamo.metrics?.saldoCuotaEnCurso || 0) > 0 ? 1 : 0), prestamo.totalCuotas)}/{prestamo.totalCuotas}
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -2276,13 +2276,13 @@ export function PrestamosTable({
                                                             </span>
                                                         </div>
 
-                                                        {/* Saldo (Any Partial Balance) */}
+                                                        {/* Saldo Cuota En Curso */}
                                                         <div className="col-span-1 text-right">
                                                             <span className={cn(
                                                                 "font-bold font-mono tracking-tight text-sm",
-                                                                (prestamo.saldo_cuota_parcial > 0) ? "text-blue-400" : "text-slate-500"
+                                                                (prestamo.metrics?.saldoCuotaEnCurso || 0) > 0 ? "text-blue-400" : "text-slate-500"
                                                             )}>
-                                                                S/ {(prestamo.saldo_cuota_parcial || 0).toFixed(2)}
+                                                                S/ {(prestamo.metrics?.saldoCuotaEnCurso || 0).toFixed(2)}
                                                             </span>
                                                         </div>
 
@@ -2304,8 +2304,9 @@ export function PrestamosTable({
                                                                 }
 
                                                                 const cuotasAtrasadas = prestamo.cuotasAtrasadas ?? (prestamo.valorCuota > 0 ? Math.floor(prestamo.deudaHoy / prestamo.valorCuota) : 0)
-                                                                const tieneAbonoParcial = (prestamo.saldo_cuota_parcial || prestamo.metrics?.saldoCuotaParcial || 0) > 0;
-                                                                const displayProgreso = Math.min((cuotasPagadas || 0) + (tieneAbonoParcial ? 1 : 0), totalCuotas)
+                                                                const cpv = prestamo.metrics?.cuotasPagadasVirtual ?? cuotasPagadas;
+                                                                const tieneSaldoEnCurso = (prestamo.metrics?.saldoCuotaEnCurso || 0) > 0.01;
+                                                                const displayProgreso = Math.min(cpv + (tieneSaldoEnCurso ? 1 : 0), totalCuotas)
                                                                 return (
                                                                     <div className="flex flex-col items-center">
                                                                         <span className={cn(

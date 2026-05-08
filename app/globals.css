@@ -46,6 +46,12 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
+  /* ── 📱 SAFE AREA INSETS — fallback 0px para navegadores sin soporte ── */
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+
   /* ── 📐 SPACING SCALE (múltiplos de 4px) ── */
   --space-1:  4px;
   --space-2:  8px;
@@ -152,6 +158,20 @@ body {
   background-attachment: fixed;
   min-height: 100vh;
   min-height: 100dvh;
+}
+
+/*
+ * Extiende el fondo del header hasta el borde superior del viewport (behind status bar),
+ * pero empuja el CONTENIDO interno hacia abajo usando el safe area inset.
+ * Aplicar SOLO al contenedor superior (nav/header fixed). No propagar al resto del layout.
+ */
+.safe-top {
+  padding-top: 0px; /* fallback: navegadores sin soporte */
+}
+@supports (padding-top: env(safe-area-inset-top)) {
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
 }
 
 /* ── iOS PWA: Anchor mobile nav to viewport bottom ── */

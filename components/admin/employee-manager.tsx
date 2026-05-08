@@ -361,22 +361,31 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
               <div key={emp.id} className="p-4 space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center">
-                      <User className="w-5 h-5 text-slate-400" />
+                    <div className="relative">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center border border-slate-700/50 shadow-inner">
+                        <User className="w-6 h-6 text-slate-400" />
+                      </div>
+                      <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 ${emp.activo ? 'bg-emerald-500' : 'bg-rose-500'} shadow-lg`} />
                     </div>
-                    <div>
-                      <p className="font-bold text-slate-100 text-sm uppercase">{emp.nombre_completo}</p>
-                      <p className="text-[10px] text-slate-500 uppercase">{emp.rol}</p>
+                    <div className="min-w-0">
+                      <p className="font-black text-slate-100 text-sm uppercase tracking-tight truncate">
+                        {emp.nombre_completo}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <Badge variant="outline" className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0 border-0 ${
+                          emp.rol === 'admin' ? 'bg-rose-500/20 text-rose-400' :
+                          emp.rol === 'supervisor' ? 'bg-purple-500/20 text-purple-400' :
+                          emp.rol === 'secretaria' ? 'bg-amber-500/20 text-amber-400' :
+                          'bg-blue-500/20 text-blue-400'
+                        }`}>
+                          {emp.rol}
+                        </Badge>
+                        <span className="text-[10px] text-slate-500 font-medium truncate max-w-[100px]">
+                          {emp.email}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <Badge variant="outline" className={`text-[10px] font-bold uppercase tracking-widest ${
-                    emp.rol === 'admin' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
-                    emp.rol === 'supervisor' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                    emp.rol === 'secretaria' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                    'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                  }`}>
-                    {emp.rol}
-                  </Badge>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 bg-slate-950/30 p-3 rounded-xl border border-slate-800/50">
@@ -394,26 +403,33 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2">
-                  <span className={`flex items-center gap-1.5 text-[10px] font-black uppercase ${emp.activo ? 'text-emerald-400' : 'text-rose-500'}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${emp.activo ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]' : 'bg-rose-500'}`} />
-                    {emp.activo ? 'Contrato Activo' : 'Acceso Suspendido'}
-                  </span>
+                <div className="space-y-4 pt-2 border-t border-slate-800/30">
+                  <div className="flex items-center justify-between">
+                    <span className={`flex items-center gap-1.5 text-[10px] font-black uppercase ${emp.activo ? 'text-emerald-400' : 'text-rose-500'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${emp.activo ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]' : 'bg-rose-500'}`} />
+                      {emp.activo ? 'Contrato Activo' : 'Acceso Suspendido'}
+                    </span>
+                    {emp.pagos_bloqueados && (
+                      <Badge variant="outline" className="bg-rose-500/10 text-rose-400 border-rose-500/20 text-[8px] font-bold">
+                        PAGOS BLOQUEADOS
+                      </Badge>
+                    )}
+                  </div>
                   
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="h-9 px-3 bg-slate-800 border-slate-700 text-slate-400 flex items-center gap-2"
+                      className="h-10 px-2 bg-slate-800 border-slate-700 text-slate-400 flex flex-col items-center justify-center gap-1 hover:bg-slate-700 transition-colors"
                       onClick={() => setEditingEmployee(emp)}
                     >
                       <Edit className="w-3.5 h-3.5" />
-                      <span className="text-[10px] font-bold uppercase">Editar</span>
+                      <span className="text-[9px] font-bold uppercase">Editar</span>
                     </Button>
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className={`h-9 px-3 bg-slate-800 border-slate-700 flex items-center gap-2 ${emp.pagos_bloqueados ? 'text-emerald-500' : 'text-rose-500'}`}
+                      className={`h-10 px-2 bg-slate-800 border-slate-700 flex flex-col items-center justify-center gap-1 transition-colors ${emp.pagos_bloqueados ? 'text-emerald-500 hover:bg-emerald-500/10' : 'text-rose-500 hover:bg-rose-500/10'}`}
                       onClick={() => handleToggleBloqueo(emp.id, !!emp.pagos_bloqueados, emp.nombre_completo)}
                       disabled={togglingBloqueo === emp.id}
                     >
@@ -424,17 +440,17 @@ export function EmployeeManager({ employees: initialEmployees, supervisors }: Em
                       ) : (
                         <ShieldOff className="w-3.5 h-3.5" />
                       )}
-                      <span className="text-[10px] font-bold uppercase">{emp.pagos_bloqueados ? 'Desbloquear' : 'Bloquear'}</span>
+                      <span className="text-[9px] font-bold uppercase line-clamp-1">{emp.pagos_bloqueados ? 'Liberar' : 'Bloquear'}</span>
                     </Button>
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className={`h-9 px-3 bg-slate-800 border-slate-700 flex items-center gap-2 ${emp.activo ? 'text-rose-500' : 'text-emerald-500'}`}
+                      className={`h-10 px-2 bg-slate-800 border-slate-700 flex flex-col items-center justify-center gap-1 transition-colors ${emp.activo ? 'text-rose-500 hover:bg-rose-500/10' : 'text-emerald-500 hover:bg-emerald-500/10'}`}
                       onClick={() => toggleStatus(emp.id, emp.activo)}
                       disabled={loading === emp.id || (emp.rol === 'admin' && emp.activo)}
                     >
                       <Power className="w-3.5 h-3.5" />
-                      <span className="text-[10px] font-bold uppercase">{emp.activo ? 'Suspender' : 'Activar'}</span>
+                      <span className="text-[9px] font-bold uppercase">{emp.activo ? 'Baja' : 'Alta'}</span>
                     </Button>
                   </div>
                 </div>

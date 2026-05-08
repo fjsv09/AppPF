@@ -65,6 +65,9 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="mobile-web-app-capable" content="yes" />
+        {/* Android Chrome: color de marca para la barra de estado */}
+        <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
+        <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: light)" />
       </head>
       <body
         className={`${inter.variable} antialiased bg-background text-foreground font-sans`}

@@ -147,10 +147,13 @@ export function DashboardNav({
             )}
 
             {/* Desktop Sidebar */}
-            <nav className={cn(
-                "hidden md:flex flex-col border-r border-white/5 bg-slate-950/40 backdrop-blur-xl h-full fixed left-0 top-0 z-[100] transition-all duration-300",
-                isCollapsed ? "w-16 p-2" : "w-64 p-4"
-            )}>
+            <nav
+                className={cn(
+                    "hidden md:flex flex-col border-r border-white/5 bg-slate-950/40 backdrop-blur-xl h-full fixed left-0 top-0 z-[100] transition-all duration-300",
+                    isCollapsed ? "w-16 p-2" : "w-64 p-4"
+                )}
+                style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top, 0.5rem))' }}
+            >
                 {/* Brand / Logo */}
                 <div className={cn(
                     "mb-10 flex items-center px-2",

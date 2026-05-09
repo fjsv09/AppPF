@@ -171,7 +171,7 @@ export async function GET(request: Request) {
     }
 
     // Pagos y Cobros
-    const pagosQuery = supabaseAdmin
+    let pagosQuery = supabaseAdmin
         .from('pagos')
         .select(`
             id,
@@ -216,7 +216,7 @@ export async function GET(request: Request) {
     })
 
     // Gastos del Mes y Salidas por Préstamos
-    const gastosQuery = supabaseAdmin
+    let gastosQuery = supabaseAdmin
         .from('movimientos_financieros')
         .select('monto, categoria_id, descripcion, registrado_por, cartera_id')
         .eq('tipo', 'egreso')
@@ -237,7 +237,7 @@ export async function GET(request: Request) {
         if (carteraIds.length > 0) {
             orFilter += `,cartera_id.in.(${carteraIds.join(',')})`
         }
-        gastosQuery.or(orFilter)
+        gastosQuery = gastosQuery.or(orFilter)
     }
 
     const { data: gastosMesRaw } = await gastosQuery

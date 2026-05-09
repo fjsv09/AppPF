@@ -392,7 +392,7 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                 <div className="flex items-center gap-2 overflow-x-auto pb-2 -mb-2 w-full custom-scrollbar">
                     
                 <div className={cn(
-                    "flex items-center bg-slate-950/50 border border-slate-700 rounded-2xl p-1 gap-1 pr-3 transition-all",
+                    "flex items-center bg-slate-950/50 border border-slate-700 rounded-2xl p-1 gap-1 pr-3 transition-all shrink-0",
                     ((isRangeMode && (localFechaInicio !== today || localFechaFin !== today)) || (!isRangeMode && localFecha !== today)) && "border-blue-500/50 bg-blue-500/5 shadow-[0_0_10px_rgba(59,130,246,0.1)]"
                 )}>
                     {userRol === 'admin' && (
@@ -400,7 +400,7 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                             onClick={toggleDateMode}
                             title={isRangeMode ? "Cambiar a fecha única" : "Cambiar a rango de fechas"}
                             className={cn(
-                                "h-9 w-9 shrink-0 flex items-center justify-center rounded-xl transition-all border",
+                                "h-10 w-10 shrink-0 flex items-center justify-center rounded-xl transition-all border",
                                 isRangeMode 
                                     ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20 border-blue-400" 
                                     : "bg-slate-800/50 border-slate-700 text-slate-400 hover:text-white"
@@ -411,35 +411,41 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                     )}
 
                     {isRangeMode ? (
-                        <div className="flex items-center gap-0.5">
-                            <div className="relative">
-                                <CalendarDays className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+                        <div className="flex flex-1 items-center gap-1 min-w-0">
+                            <div className="relative flex-1 min-w-0 group/date">
+                                <span className="absolute left-8 top-1.5 text-[7px] font-black text-slate-500 uppercase tracking-tighter pointer-events-none">Desde</span>
+                                <CalendarDays className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500 group-hover/date:text-blue-400 transition-colors pointer-events-none" />
                                 <Input
                                     type="date"
                                     value={localFechaInicio}
                                     onChange={(e) => setLocalFechaInicio(e.target.value)}
-                                    className="h-9 pl-8 pr-2 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[135px] focus-visible:ring-0 [color-scheme:dark]"
+                                    onClick={(e) => e.currentTarget.showPicker()}
+                                    className="h-10 pl-8 pr-8 pt-3 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[125px] focus-visible:ring-0 [color-scheme:dark] cursor-pointer"
                                 />
                             </div>
-                            <span className="text-slate-700 font-bold px-1">/</span>
-                            <div className="relative">
-                                <CalendarDays className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+                            <div className="h-4 w-[1px] bg-slate-800 shrink-0" />
+                            <div className="relative flex-1 min-w-0 group/date">
+                                <span className="absolute left-8 top-1.5 text-[7px] font-black text-slate-500 uppercase tracking-tighter pointer-events-none">Hasta</span>
+                                <CalendarDays className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500 group-hover/date:text-blue-400 transition-colors pointer-events-none" />
                                 <Input
                                     type="date"
                                     value={localFechaFin}
                                     onChange={(e) => setLocalFechaFin(e.target.value)}
-                                    className="h-9 pl-8 pr-2 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[135px] focus-visible:ring-0 [color-scheme:dark]"
+                                    onClick={(e) => e.currentTarget.showPicker()}
+                                    className="h-10 pl-8 pr-8 pt-3 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[125px] focus-visible:ring-0 [color-scheme:dark] cursor-pointer"
                                 />
                             </div>
                         </div>
                     ) : (
-                        <div className="relative">
-                            <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                        <div className="relative flex-1 min-w-0 group/date">
+                            <span className="absolute left-9 top-1.5 text-[7px] font-black text-slate-500 uppercase tracking-tighter pointer-events-none">Fecha de Consulta</span>
+                            <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-hover/date:text-blue-400 transition-colors pointer-events-none" />
                             <Input
                                 type="date"
                                 value={localFecha}
                                 onChange={(e) => setLocalFecha(e.target.value)}
-                                className="h-9 pl-9 pr-2 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[160px] focus-visible:ring-0 [color-scheme:dark]"
+                                onClick={(e) => e.currentTarget.showPicker()}
+                                className="h-10 pl-9 pr-8 pt-3 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[160px] focus-visible:ring-0 [color-scheme:dark] cursor-pointer"
                             />
                         </div>
                     )}

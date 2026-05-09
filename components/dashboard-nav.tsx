@@ -70,7 +70,8 @@ export function DashboardNav({
 
         const channel = supabase
             .channel('pending-bonos')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'bonos_pagados' }, fetchCount)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bonos_pagados' }, fetchCount)
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bonos_pagados' }, fetchCount)
             .subscribe()
 
         return () => { supabase.removeChannel(channel) }

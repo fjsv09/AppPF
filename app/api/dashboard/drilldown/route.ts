@@ -69,12 +69,11 @@ export async function GET(request: Request) {
         if (type === 'vencidos' || type === 'critica' || type === 'advert') {
             const { data: loans } = await supabaseAdmin
                 .from('prestamos')
-                .select('*, clientes(nombres, asesor_id), cronograma_cuotas(*, pagos(*))')
+                .select('id, monto, interes, estado, estado_mora, fecha_inicio, frecuencia, numero_cuotas, cuotas, es_paralelo, clientes(nombres, asesor_id), cronograma_cuotas(id, numero_cuota, monto_cuota, monto_pagado, fecha_vencimiento, estado, pagos(id, monto_pagado, pago_monto, estado_verificacion, created_at, fecha_pago))')
                 .in('estado', ['activo', 'legal'])
+                .in('clientes.asesor_id', targetAsesorIds)
 
-            const filteredLoans = (loans || []).filter(p => targetAsesorIds.includes(p.clientes?.asesor_id))
-
-            filteredLoans.forEach(p => {
+            ;(loans || []).forEach((p: any) => {
                 const metrics = calculateLoanMetrics(p, today, config)
                 const cronograma = p.cronograma_cuotas || []
                 const sorted = [...cronograma].sort((a, b) => new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime())
@@ -141,13 +140,13 @@ export async function GET(request: Request) {
         } else if (type === 'aptos') {
             const { data: loans } = await supabaseAdmin
                 .from('prestamos')
-                .select('*, clientes(id, nombres, asesor_id, telefono, bloqueado_renovacion), cronograma_cuotas(*, pagos(*))')
+                .select('id, monto, interes, estado, estado_mora, fecha_inicio, frecuencia, numero_cuotas, cuotas, es_paralelo, created_at, clientes(id, nombres, asesor_id, telefono, bloqueado_renovacion), cronograma_cuotas(id, numero_cuota, monto_cuota, monto_pagado, fecha_vencimiento, estado, pagos(id, monto_pagado, pago_monto, estado_verificacion, created_at, fecha_pago))')
                 .in('estado', ['activo', 'legal', 'finalizado', 'completado'])
+                .in('clientes.asesor_id', targetAsesorIds)
 
-            const filteredLoans = (loans || []).filter(p => targetAsesorIds.includes(p.clientes?.asesor_id))
             const loansByClient = new Map<string, any[]>()
-            
-            filteredLoans.forEach(p => {
+
+            ;(loans || []).forEach((p: any) => {
                 const list = loansByClient.get(p.clientes.id) || []
                 list.push(p)
                 loansByClient.set(p.clientes.id, list)
@@ -190,15 +189,14 @@ export async function GET(request: Request) {
                 }
             })
             results = Array.from(aptosMap.values())
-        }
- else if (type === 'vigente') {
+        } else if (type === 'vigente') {
             const { data: loans } = await supabaseAdmin
                 .from('prestamos')
-                .select('*, clientes(nombres, asesor_id, bloqueado_renovacion), cronograma_cuotas(*, pagos(*))')
+                .select('id, monto, interes, estado, estado_mora, fecha_inicio, frecuencia, numero_cuotas, cuotas, es_paralelo, clientes(nombres, asesor_id, bloqueado_renovacion), cronograma_cuotas(id, numero_cuota, monto_cuota, monto_pagado, fecha_vencimiento, estado, pagos(id, monto_pagado, pago_monto, estado_verificacion, created_at, fecha_pago))')
                 .in('estado', ['activo', 'legal'])
+                .in('clientes.asesor_id', targetAsesorIds)
 
-            const filteredLoans = (loans || []).filter(p => targetAsesorIds.includes(p.clientes?.asesor_id))
-            filteredLoans.forEach(p => {
+            ;(loans || []).forEach((p: any) => {
                 const metrics = calculateLoanMetrics(p, today, config)
                 const crono = p.cronograma_cuotas || []
                 const sorted = [...crono].sort((a,b) => new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime())

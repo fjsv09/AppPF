@@ -176,7 +176,14 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
         .select(`
             *,
             clientes!inner (
-                *,
+                id,
+                nombres,
+                dni,
+                sector_id,
+                asesor_id,
+                telefono,
+                foto_perfil,
+                bloqueado_renovacion,
                 sectores (id, nombre),
                 solicitudes (gps_coordenadas, created_at),
                 asesor_data:asesor_id(nombre_completo)
@@ -196,8 +203,7 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
                 notas,
                 fecha_inicio,
                 asesor_id
-            ),
-            observacion_supervisor
+            )
         `)
         .order('fecha_inicio', { ascending: false })
         .order('created_at', { ascending: false })

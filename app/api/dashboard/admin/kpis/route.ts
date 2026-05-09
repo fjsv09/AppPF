@@ -68,7 +68,7 @@ export async function GET(request: Request) {
         .in('estado', ['activo', 'vencido', 'moroso', 'cpp', 'legal'])
 
     if (targetAsesorIds) {
-        loansQuery.in('clientes.asesor_id', targetAsesorIds)
+        loansQuery = loansQuery.in('clientes.asesor_id', targetAsesorIds)
     }
 
     const { data: loansRaw, error: loansError } = await loansQuery
@@ -99,6 +99,8 @@ export async function GET(request: Request) {
         umbralMorosoOtros: parseInt(configSistema?.find(c => c.clave === 'umbral_moroso_otros')?.valor || '2')
     }
 
+    const metricsMap = new Map<string, any>()
+
     if (loanIds.length > 0) {
         // 2. Fetch installments for these loans
         const { data: allCuotas } = await supabaseAdmin
@@ -125,6 +127,7 @@ export async function GET(request: Request) {
             p.cronograma_cuotas = cuotas
 
             const metrics = calculateLoanMetrics(p, today, config)
+            metricsMap.set(p.id, metrics)
             if (metrics.esRenovable) total_renovables++
 
             // --- LÓGICA DE RIESGO (Sincronizada con Supervisor Dashboard) ---
@@ -187,7 +190,7 @@ export async function GET(request: Request) {
         .neq('estado_verificacion', 'rechazado')
 
     if (targetAsesorIds) {
-        pagosQuery.in('cronograma_cuotas.prestamos.clientes.asesor_id', targetAsesorIds)
+        pagosQuery = pagosQuery.in('cronograma_cuotas.prestamos.clientes.asesor_id', targetAsesorIds)
     }
 
     const { data: todosLosPagos, error: pagosError } = await pagosQuery
@@ -293,7 +296,7 @@ export async function GET(request: Request) {
         .gte('fecha_renovacion', startOfMonthISO)
 
     if (targetAsesorIds) {
-        renovQuery.in('prestamo_nuevo.clientes.asesor_id', targetAsesorIds)
+        renovQuery = renovQuery.in('prestamo_nuevo.clientes.asesor_id', targetAsesorIds)
     }
 
     const { data: renovacionesMes, count: renovaciones_cantidad } = await renovQuery
@@ -318,9 +321,9 @@ export async function GET(request: Request) {
     const clientesConActivoVigente = new Set()
     const clientesConDeudaCualquiera = new Set() // Para filtrar recaptables
     
-    // Usamos 'loans' y 'cuotasByLoan' que ya tenemos cargados al inicio del API
+    // Usamos 'loans' y métricas ya calculadas al inicio del API
     loans?.forEach(p => {
-        const metrics = calculateLoanMetrics(p, today, config)
+        const metrics = metricsMap.get(p.id) || calculateLoanMetrics(p, today, config)
         
         const isMainLoan = !p.es_paralelo
         const isNotRefinancedProduct = !prestamoIdsProductoRefinanciamiento.has(p.id)
@@ -353,6 +356,7 @@ export async function GET(request: Request) {
         `)
         .eq('estado', 'finalizado')
         .order('created_at', { ascending: false })
+        .limit(300)
 
     // Filtrar clientes que NO tienen ningún préstamo activo (usando el set que poblamos arriba)
     const recaptablesMap = new Map<string, any>()

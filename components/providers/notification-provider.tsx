@@ -95,60 +95,42 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
 
     useEffect(() => {
-        // Cargar usuario inicial y persistir en Ref
-        const initUser = async () => {
+        let channel: ReturnType<typeof supabase.channel> | null = null
+
+        const init = async () => {
             const { data: { user } } = await supabase.auth.getUser()
             userIdRef.current = user?.id || null
-        }
-        
-        initUser()
-        fetchUnread()
-        
-        // Registro proactivo de permisos (Solo si el navegador lo permite sin gesto de usuario)
-        // En iOS Safari, esto puede fallar o no hacer nada si no es PWA.
-        const checkNotificationInit = async () => {
+
+            fetchUnread()
+
+            // Pedir permiso de notificaciones nativas si es posible
             if (typeof window !== 'undefined' && "Notification" in window) {
-                // Verificamos si es iOS Safari (donde Notification solo existe si es PWA)
                 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
                 const isStandalone = (window as any).navigator.standalone || window.matchMedia('(display-mode: standalone)').matches
-                
-                if (isIOS && !isStandalone) {
-                    console.info('Notificaciones nativas no disponibles en Safari móvil (requiere instalar en inicio)')
-                    return
-                }
-
-                try {
-                    if (Notification.permission === "default") {
-                        // Intentamos pedir permiso, pero lo envolvemos en un try-catch
-                        // porque algunos navegadores requieren gesto de usuario obligatorio
-                        await Notification.requestPermission()
+                if (!isIOS || isStandalone) {
+                    try {
+                        if (Notification.permission === "default") await Notification.requestPermission()
+                    } catch (err) {
+                        console.warn('No se pudo solicitar permiso de notificación automáticamente:', err)
                     }
-                } catch (err) {
-                    console.warn('No se pudo solicitar permiso de notificación automáticamente:', err)
                 }
             }
-        }
-        
-        checkNotificationInit()
 
-        const channel = supabase
-            .channel('notificaciones-globales')
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'notificaciones'
-                },
-                (payload) => {
-                    const newNotif = payload.new as any
-                    console.log('Recibida nueva notificación DB:', newNotif)
-                    
-                    // Solo si es para mí
-                    if (userIdRef.current && newNotif.usuario_destino_id === userIdRef.current) {
+            if (!user?.id) return
+
+            channel = supabase
+                .channel('notificaciones-globales')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: 'INSERT',
+                        schema: 'public',
+                        table: 'notificaciones',
+                        filter: `usuario_destino_id=eq.${user.id}`
+                    },
+                    (payload) => {
+                        const newNotif = payload.new as any
                         setUnreadCount(prev => prev + 1)
-                        
-                        // 1. Toast de Sonner (UI interna)
                         toast.success(newNotif.titulo, {
                             description: newNotif.mensaje,
                             duration: 8000,
@@ -157,21 +139,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                                 onClick: () => window.location.href = newNotif.link_accion
                             } : undefined
                         })
-                        
-                        // 2. Notificación Nativa de Chrome
                         showBrowserNotification(newNotif.titulo, newNotif.mensaje)
-                        
-                        // 3. Refrescar datos de la ruta actual (RSC) para sincronizar UI en tiempo real
                         router.refresh()
                     }
-                }
-            )
-            .subscribe((status) => {
-                console.log('Estado suscripción realtime:', status)
-            })
+                )
+                .subscribe()
+        }
+
+        init()
 
         return () => {
-            supabase.removeChannel(channel)
+            if (channel) supabase.removeChannel(channel)
         }
     }, [fetchUnread, supabase])
 

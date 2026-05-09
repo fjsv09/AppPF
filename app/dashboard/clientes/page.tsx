@@ -109,53 +109,66 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
             .map((p: any) => p.id)
     )
 
-    let cuotasByLoan = new Map<string, any[]>()
+    const cuotasByLoan = new Map<string, any[]>()
+    const pagosByLoan = new Map<string, any[]>()
+
     if (activeLoanIds.length > 0) {
-        const chunkSize = 50
-        for (let i = 0; i < activeLoanIds.length; i += chunkSize) {
-            const chunkIds = activeLoanIds.slice(i, i + chunkSize)
-            const { data: cuotasRaw } = await supabaseAdmin
-                .from('cronograma_cuotas')
-                .select(`
-                    prestamo_id,
-                    monto_cuota,
-                    monto_pagado,
-                    fecha_vencimiento,
-                    estado,
-                    pagos (
-                        created_at,
+        const cuotaChunkSize = 50
+        const pagosChunkSize = 100
+
+        const cuotaPromises = []
+        for (let i = 0; i < activeLoanIds.length; i += cuotaChunkSize) {
+            cuotaPromises.push(
+                supabaseAdmin
+                    .from('cronograma_cuotas')
+                    .select(`
+                        prestamo_id,
+                        monto_cuota,
                         monto_pagado,
-                        estado_verificacion
-                    )
-                `)
-                .in('prestamo_id', chunkIds)
-            
-            cuotasRaw?.forEach(c => {
+                        fecha_vencimiento,
+                        estado,
+                        pagos (
+                            created_at,
+                            monto_pagado,
+                            estado_verificacion
+                        )
+                    `)
+                    .in('prestamo_id', activeLoanIds.slice(i, i + cuotaChunkSize))
+            )
+        }
+
+        const pagosPromises = []
+        for (let i = 0; i < activeLoanIds.length; i += pagosChunkSize) {
+            pagosPromises.push(
+                supabaseAdmin
+                    .from('pagos')
+                    .select('prestamo_id, monto_pagado, estado_verificacion')
+                    .in('prestamo_id', activeLoanIds.slice(i, i + pagosChunkSize))
+            )
+        }
+
+        const [cuotasResults, pagosResults] = await Promise.all([
+            Promise.all(cuotaPromises),
+            Promise.all(pagosPromises)
+        ])
+
+        cuotasResults.forEach(res => {
+            res.data?.forEach((c: any) => {
                 const list = cuotasByLoan.get(c.prestamo_id) || []
                 list.push(c)
                 cuotasByLoan.set(c.prestamo_id, list)
             })
-        }
-    }
+        })
 
-    let pagosByLoan = new Map<string, any[]>()
-    if (activeLoanIds.length > 0) {
-        const chunkSize = 100
-        for (let i = 0; i < activeLoanIds.length; i += chunkSize) {
-            const chunkIds = activeLoanIds.slice(i, i + chunkSize)
-            const { data: pagosDirectos } = await supabaseAdmin
-                .from('pagos')
-                .select('prestamo_id, monto_pagado, estado_verificacion')
-                .in('prestamo_id', chunkIds)
-                
-            pagosDirectos?.forEach(p => {
+        pagosResults.forEach(res => {
+            res.data?.forEach((p: any) => {
                 if (p.estado_verificacion !== 'rechazado') {
                     const list = pagosByLoan.get(p.prestamo_id) || []
                     list.push(p)
                     pagosByLoan.set(p.prestamo_id, list)
                 }
             })
-        }
+        })
     }
 
     clientsRaw.forEach(c => {

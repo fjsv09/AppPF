@@ -3,7 +3,7 @@ import { useState, useEffect, useTransition } from 'react'
 
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { DollarSign, TrendingUp, Search, User, Users, Briefcase, X, CalendarDays, Loader2, Clock, CreditCard, Wallet, ArrowUpRight, ArrowRight, ExternalLink, ChevronDown } from 'lucide-react'
+import { DollarSign, TrendingUp, Search, User, Users, Briefcase, X, CalendarDays, Loader2, Clock, CreditCard, Wallet, ArrowUpRight, ArrowRight, ExternalLink, ChevronDown, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Input } from '@/components/ui/input'
@@ -18,149 +18,202 @@ interface RecentPaymentsListProps {
     perfiles: any[]
     userRol: 'admin' | 'supervisor' | 'asesor' | 'secretaria'
     userId: string
+    stats: {
+        totalCobradoHoy: number
+        totalGananciaHoy: number
+        totalFiltrado: number
+        totalGananciaFiltrado: number
+        hasFilters: boolean
+    }
+    activeTipo: 'cobros' | 'renovaciones'
 }
 
 const ITEMS_PER_LOAD = 20
 
-export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, userId }: RecentPaymentsListProps) {
+const TableSkeleton = () => (
+    <div className="animate-pulse space-y-4 p-4">
+        {/* Mobile Skeleton */}
+        <div className="md:hidden space-y-4">
+            {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-slate-900 border border-slate-800 rounded-xl p-4 h-32 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-800/10 to-transparent skew-x-12 animate-shimmer" />
+                    <div className="flex gap-4">
+                        <div className="h-10 w-10 bg-slate-800 rounded-xl" />
+                        <div className="space-y-2 flex-1">
+                            <div className="h-4 w-3/4 bg-slate-800 rounded" />
+                            <div className="h-3 w-1/2 bg-slate-800 rounded" />
+                        </div>
+                    </div>
+                </div>
+            ))}
+        </div>
+        
+        {/* Desktop Skeleton */}
+        <div className="hidden md:block space-y-4">
+             <div className="flex gap-4 border-b border-slate-800/50 pb-4">
+                {[1,2,3,4,5,6].map(i => <div key={i} className="h-4 bg-slate-800 rounded flex-1 opacity-50" />)}
+             </div>
+             {[1,2,3,4,5,6,7,8].map((i) => (
+                <div key={i} className="flex gap-4 items-center py-3 border-b border-slate-800/30">
+                    <div className="h-10 w-10 rounded-xl bg-slate-800" />
+                    <div className="h-4 w-48 bg-slate-800 rounded" />
+                    <div className="h-4 flex-1 bg-slate-800 rounded opacity-50" />
+                    <div className="h-6 w-20 bg-slate-800 rounded-full" />
+                </div>
+             ))}
+        </div>
+    </div>
+)
+
+export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, userId, stats, activeTipo }: RecentPaymentsListProps) {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
     const [isPending, startTransition] = useTransition()
     const [isRangeMode, setIsRangeMode] = useState(Boolean(searchParams.get('fecha_inicio') || searchParams.get('fecha_fin')))
     const [itemsToShow, setItemsToShow] = useState(ITEMS_PER_LOAD)
-    const currentSearch = searchParams.get('q') || ''
-    const currentAsesor = searchParams.get('asesor') || 'all'
-    const currentSupervisor = searchParams.get('supervisor') || 'all'
-    const today = getTodayPeru()
-    const currentFecha = searchParams.get('fecha') || today
-    const currentFechaInicio = searchParams.get('fecha_inicio') || today
-    const currentFechaFin = searchParams.get('fecha_fin') || today
-    const currentTurno = searchParams.get('turno') || 'all'
-    const currentMetodo = searchParams.get('metodo') || 'all'
-    const currentPagoPor = searchParams.get('pago_por') || 'all'
-
-    const [searchValue, setSearchValue] = useState(currentSearch)
-    const [tempFecha, setTempFecha] = useState(currentFecha)
-    const [tempFechaInicio, setTempFechaInicio] = useState(currentFechaInicio)
-    const [tempFechaFin, setTempFechaFin] = useState(currentFechaFin)
     
+    // --- LOCAL REACTIVE STATE ---
+    const [localTipo, setLocalTipo] = useState<'cobros' | 'renovaciones'>(activeTipo)
+    const [localSearch, setLocalSearch] = useState(searchParams.get('q') || '')
+    const [localAsesor, setLocalAsesor] = useState(searchParams.get('asesor') || 'all')
+    const [localSupervisor, setLocalSupervisor] = useState(searchParams.get('supervisor') || 'all')
+    const today = getTodayPeru()
+    const [localFecha, setLocalFecha] = useState(searchParams.get('fecha') || today)
+    const [localFechaInicio, setLocalFechaInicio] = useState(searchParams.get('fecha_inicio') || today)
+    const [localFechaFin, setLocalFechaFin] = useState(searchParams.get('fecha_fin') || today)
+    const [localTurno, setLocalTurno] = useState(searchParams.get('turno') || 'all')
+    const [localMetodo, setLocalMetodo] = useState(searchParams.get('metodo') || 'all')
+    const [localPagoPor, setLocalPagoPor] = useState(searchParams.get('pago_por') || 'all')
+
+    // --- SYNC LOCAL STATE WITH URL ---
     useEffect(() => {
-        setSearchValue(searchParams.get('q') || '')
-    }, [searchParams.get('q')])
+        setLocalTipo(activeTipo)
+        setLocalSearch(searchParams.get('q') || '')
+        setLocalAsesor(searchParams.get('asesor') || 'all')
+        setLocalSupervisor(searchParams.get('supervisor') || 'all')
+        setLocalFecha(searchParams.get('fecha') || today)
+        setLocalFechaInicio(searchParams.get('fecha_inicio') || today)
+        setLocalFechaFin(searchParams.get('fecha_fin') || today)
+        setLocalTurno(searchParams.get('turno') || 'all')
+        setLocalMetodo(searchParams.get('metodo') || 'all')
+        setLocalPagoPor(searchParams.get('pago_por') || 'all')
+    }, [searchParams, today, activeTipo])
 
-    useEffect(() => {
-        setTempFecha(currentFecha)
-    }, [currentFecha])
-
-    useEffect(() => {
-        setTempFechaInicio(currentFechaInicio)
-    }, [currentFechaInicio])
-
-    useEffect(() => {
-        setTempFechaFin(currentFechaFin)
-    }, [currentFechaFin])
-
-    useEffect(() => {
-        const timeout = setTimeout(() => {
-            // Only apply if at least one date has changed from the searchParams
-            const hasChanged = isRangeMode 
-                ? (tempFechaInicio !== (searchParams.get('fecha_inicio') || '') || tempFechaFin !== (searchParams.get('fecha_fin') || ''))
-                : (tempFecha !== (searchParams.get('fecha') || ''))
-            
-            if (hasChanged) {
-                applyDates()
-            }
-        }, 800)
-        return () => clearTimeout(timeout)
-    }, [tempFecha, tempFechaInicio, tempFechaFin, isRangeMode])
-
-
-
-    const applyDates = (forcedMode?: boolean) => {
-        const mode = forcedMode !== undefined ? forcedMode : isRangeMode
+    const updateParams = (updates: Record<string, string | null>) => {
         startTransition(() => {
             const params = new URLSearchParams(searchParams.toString())
             params.set('p_page', '1')
-            if (mode) {
-                if (tempFechaInicio) params.set('fecha_inicio', tempFechaInicio)
-                if (tempFechaFin) params.set('fecha_fin', tempFechaFin)
-                params.delete('fecha')
-            } else {
-                if (tempFecha) params.set('fecha', tempFecha)
-                params.delete('fecha_inicio')
-                params.delete('fecha_fin')
-            }
+            
+            Object.entries(updates).forEach(([key, value]) => {
+                if (value === null || value === 'all' || value === '') {
+                    params.delete(key)
+                } else {
+                    params.set(key, value)
+                }
+            })
+            
             router.push(`${pathname}?${params.toString()}`, { scroll: false })
         })
     }
 
-    const handleFilterChange = (key: string, value: string) => {
-        if (key !== 'fecha' && key !== 'fecha_inicio' && key !== 'fecha_fin') {
-            startTransition(() => {
-                const params = new URLSearchParams(searchParams.toString())
-                params.set('p_page', '1')
-                if (value && value !== 'all') {
-                    params.set(key, value)
-                } else {
-                    params.delete(key)
+    // Debounced search sync
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            if (localSearch !== (searchParams.get('q') || '')) {
+                updateParams({ q: localSearch })
+            }
+        }, 500)
+        return () => clearTimeout(timeout)
+    }, [localSearch])
+
+    // Debounced date sync
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            if (isRangeMode) {
+                const hasChanged = localFechaInicio !== (searchParams.get('fecha_inicio') || today) || 
+                                 localFechaFin !== (searchParams.get('fecha_fin') || today)
+                if (hasChanged) {
+                    updateParams({ 
+                        fecha_inicio: localFechaInicio, 
+                        fecha_fin: localFechaFin, 
+                        fecha: null 
+                    })
                 }
-                router.push(`${pathname}?${params.toString()}`, { scroll: false })
-            })
-        }
+            } else {
+                if (localFecha !== (searchParams.get('fecha') || today)) {
+                    updateParams({ 
+                        fecha: localFecha, 
+                        fecha_inicio: null, 
+                        fecha_fin: null 
+                    })
+                }
+            }
+        }, 800)
+        return () => clearTimeout(timeout)
+    }, [localFecha, localFechaInicio, localFechaFin, isRangeMode])
+
+    const handleClearFilters = () => {
+        setLocalSearch('')
+        setLocalAsesor('all')
+        setLocalSupervisor('all')
+        setLocalFecha(today)
+        setLocalFechaInicio(today)
+        setLocalFechaFin(today)
+        setLocalTurno('all')
+        setLocalMetodo('all')
+        setLocalPagoPor('all')
+        setIsRangeMode(false)
+        
+        startTransition(() => {
+            const params = new URLSearchParams(searchParams.toString())
+            params.set('tipo', localTipo) // Preserve current type
+            params.set('p_page', '1')
+            
+            // Clean up everything else
+            params.delete('q')
+            params.delete('asesor')
+            params.delete('supervisor')
+            params.delete('fecha')
+            params.delete('fecha_inicio')
+            params.delete('fecha_fin')
+            params.delete('turno')
+            params.delete('metodo')
+            params.delete('pago_por')
+
+            router.push(`${pathname}?${params.toString()}`, { scroll: false })
+        })
     }
 
     const toggleDateMode = () => {
         const nextMode = !isRangeMode
         setIsRangeMode(nextMode)
         
-        startTransition(() => {
-            const params = new URLSearchParams(searchParams.toString())
-            if (nextMode) {
-                const current = tempFecha || getTodayPeru()
-                params.set('fecha_inicio', current)
-                params.set('fecha_fin', current)
-                params.delete('fecha')
-                setTempFechaInicio(current)
-                setTempFechaFin(current)
-            } else {
-                const current = tempFechaInicio || getTodayPeru()
-                params.set('fecha', current)
-                params.delete('fecha_inicio')
-                params.delete('fecha_fin')
-                setTempFecha(current)
-            }
-            router.push(`${pathname}?${params.toString()}`, { scroll: false })
-        })
+        if (nextMode) {
+            updateParams({ 
+                fecha_inicio: localFecha || today, 
+                fecha_fin: localFecha || today, 
+                fecha: null 
+            })
+        } else {
+            updateParams({ 
+                fecha: localFechaInicio || today, 
+                fecha_inicio: null, 
+                fecha_fin: null 
+            })
+        }
     }
 
-    const handleSearch = (q: string) => {
-        startTransition(() => {
-            const params = new URLSearchParams(searchParams.toString())
-            params.set('p_page', '1')
-            if (q) {
-                params.set('q', q)
-            } else {
-                params.delete('q')
-            }
-            router.push(`${pathname}?${params.toString()}`, { scroll: false })
-        })
-    }
-
-    useEffect(() => {
-        const timeout = setTimeout(() => {
-            if (searchValue !== (searchParams.get('q') || '')) {
-                handleSearch(searchValue)
-            }
-        }, 500)
-        return () => clearTimeout(timeout)
-    }, [searchValue])
+    const hasActiveFilters = localSearch || localAsesor !== 'all' || localSupervisor !== 'all' || 
+                            localTurno !== 'all' || localMetodo !== 'all' || localPagoPor !== 'all' ||
+                            (isRangeMode && (localFechaInicio !== today || localFechaFin !== today)) ||
+                            (!isRangeMode && localFecha !== today)
 
     const supervisores = perfiles.filter(p => p.rol === 'supervisor')
     const asesores = perfiles.filter(p => {
         if (userRol === 'admin') {
-            if (currentSupervisor !== 'all') {
-                return p.rol === 'asesor' && p.supervisor_id === currentSupervisor
+            if (localSupervisor !== 'all') {
+                return p.rol === 'asesor' && p.supervisor_id === localSupervisor
             }
             return p.rol === 'asesor'
         }
@@ -182,7 +235,88 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
     })
 
     return (
-        <div className="space-y-4 mt-8">
+        <div className="space-y-6 mt-8">
+            {/* KPI Cards Section */}
+            <div className={cn(
+                "grid grid-cols-2 gap-3 md:gap-4",
+                (stats.hasFilters && userRol === 'admin') ? "md:grid-cols-4" : 
+                (stats.hasFilters || userRol === 'admin') ? "md:grid-cols-2" : "md:grid-cols-1"
+            )}>
+                {/* Cobrado Hoy */}
+                <div className={cn(
+                    "relative overflow-hidden bg-slate-900/50 border border-slate-800/60 rounded-2xl p-4 md:p-5 transition-all group hover:border-emerald-500/30",
+                    isPending && "opacity-60 blur-[0.5px]"
+                )}>
+                    {isPending && <div className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-500/5 to-transparent animate-shimmer" />}
+                    <div className="flex items-center gap-3 md:gap-4">
+                        <div className="p-2 md:p-3 bg-emerald-500/10 rounded-xl group-hover:bg-emerald-500/20 transition-colors">
+                            <DollarSign className="w-5 h-5 md:w-6 md:h-6 text-emerald-500" />
+                        </div>
+                        <div>
+                            <p className="text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-1">Cobrado Hoy</p>
+                            <h3 className="text-lg md:text-2xl font-black text-white tracking-tight">S/ {stats.totalCobradoHoy.toFixed(2)}</h3>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Ganancia Hoy (Admin Only) */}
+                {userRol === 'admin' && (
+                    <div className={cn(
+                        "relative overflow-hidden bg-slate-900/50 border border-slate-800/60 rounded-2xl p-4 md:p-5 transition-all group hover:border-purple-500/30",
+                        isPending && "opacity-60 blur-[0.5px]"
+                    )}>
+                        {isPending && <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/5 to-transparent animate-shimmer" />}
+                        <div className="flex items-center gap-3 md:gap-4">
+                            <div className="p-2 md:p-3 bg-purple-500/10 rounded-xl group-hover:bg-purple-500/20 transition-colors">
+                                <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-purple-500" />
+                            </div>
+                            <div>
+                                <p className="text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-1">Ganancia Hoy</p>
+                                <h3 className="text-lg md:text-2xl font-black text-purple-400 tracking-tight">S/ {stats.totalGananciaHoy.toFixed(2)}</h3>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Total en Búsqueda (Only if filters active) */}
+                {stats.hasFilters && (
+                    <div className={cn(
+                        "relative overflow-hidden bg-slate-900/50 border border-slate-800/60 rounded-2xl p-4 md:p-5 transition-all group hover:border-blue-500/30 animate-in fade-in slide-in-from-right-4 duration-500",
+                        isPending && "opacity-60 blur-[0.5px]"
+                    )}>
+                        {isPending && <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500/5 to-transparent animate-shimmer" />}
+                        <div className="flex items-center gap-3 md:gap-4">
+                            <div className="p-2 md:p-3 bg-blue-500/10 rounded-xl group-hover:bg-blue-500/20 transition-colors">
+                                <Search className="w-5 h-5 md:w-6 md:h-6 text-blue-500" />
+                            </div>
+                            <div>
+                                <p className="text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-1">Total Filtrado</p>
+                                <h3 className="text-lg md:text-2xl font-black text-white tracking-tight">S/ {stats.totalFiltrado.toFixed(2)}</h3>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Ganancia Búsqueda (Admin + Filters) */}
+                {stats.hasFilters && userRol === 'admin' && (
+                    <div className={cn(
+                        "relative overflow-hidden bg-slate-900/50 border border-slate-800/60 rounded-2xl p-4 md:p-5 transition-all group hover:border-indigo-500/30 animate-in fade-in slide-in-from-right-4 duration-500",
+                        isPending && "opacity-60 blur-[0.5px]"
+                    )}>
+                        {isPending && <div className="absolute inset-0 bg-gradient-to-r from-transparent via-indigo-500/5 to-transparent animate-shimmer" />}
+                        <div className="flex items-center gap-3 md:gap-4">
+                            <div className="p-2 md:p-3 bg-indigo-500/10 rounded-xl group-hover:bg-indigo-500/20 transition-colors">
+                                <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-indigo-500" />
+                            </div>
+                            <div>
+                                <p className="text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-1">Ganancia Filtrada</p>
+                                <h3 className="text-lg md:text-2xl font-black text-indigo-400 tracking-tight">S/ {stats.totalGananciaFiltrado.toFixed(2)}</h3>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
             <div className="flex items-center justify-between gap-4 mb-2">
                 <h2 className="section-title mb-0">
                     <TrendingUp className="h-5 w-5 text-emerald-500" />
@@ -194,27 +328,60 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
             </div>
 
             <div className="sticky top-[var(--sat)] z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
-                {isPending && (
-                    <div className="absolute inset-0 bg-slate-900/20 rounded-xl flex items-center justify-center z-40 pointer-events-none">
-                        <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />
+                {/* Admin Tabs */}
+                {userRol === 'admin' && (
+                    <div className="flex bg-slate-950/60 p-1 rounded-2xl border border-slate-800/80 shadow-inner md:w-auto w-full">
+                        <button
+                            onClick={() => {
+                                setLocalTipo('cobros')
+                                updateParams({ tipo: 'cobros' })
+                            }}
+                            className={cn(
+                                "flex-1 md:flex-none px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2",
+                                localTipo === 'cobros' 
+                                    ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/40 ring-1 ring-emerald-400/30" 
+                                    : "text-slate-500 hover:text-slate-300 hover:bg-slate-800/50"
+                            )}
+                        >
+                            <DollarSign className={cn("w-3.5 h-3.5", localTipo === 'cobros' ? "text-white" : "text-slate-600")} />
+                            Cobros
+                        </button>
+                        <button
+                            onClick={() => {
+                                setLocalTipo('renovaciones')
+                                updateParams({ tipo: 'renovaciones' })
+                            }}
+                            className={cn(
+                                "flex-1 md:flex-none px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2",
+                                localTipo === 'renovaciones' 
+                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40 ring-1 ring-blue-400/30" 
+                                    : "text-slate-500 hover:text-slate-300 hover:bg-slate-800/50"
+                            )}
+                        >
+                            <RotateCcw className={cn("w-3.5 h-3.5", localTipo === 'renovaciones' ? "text-white" : "text-slate-600")} />
+                            Renovaciones
+                        </button>
                     </div>
                 )}
 
                 <div className="relative w-full md:flex-1 md:max-w-none min-w-[180px]">
-                    {isPending ? (
-                        <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500 animate-spin z-10" />
-                    ) : (
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                    )}
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <Input
                         placeholder="Buscar cliente, asesor..."
-                        value={searchValue}
-                        onChange={(e) => setSearchValue(e.target.value)}
-                        className="h-10 pl-9 pr-8 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 w-full focus:bg-slate-900 transition-colors"
+                        value={localSearch}
+                        onChange={(e) => setLocalSearch(e.target.value)}
+                        className={cn(
+                            "h-10 pl-9 pr-8 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 w-full focus:bg-slate-900 transition-all",
+                            localSearch && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
+                            isPending && "opacity-70"
+                        )}
                     />
-                    {searchValue && (
+                    {localSearch && (
                         <button 
-                            onClick={() => setSearchValue('')}
+                            onClick={() => {
+                                setLocalSearch('')
+                                updateParams({ q: '' })
+                            }}
                             className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center text-slate-500 hover:text-white hover:bg-slate-800 rounded-full transition-all z-10"
                         >
                             <X className="h-3 w-3" />
@@ -224,7 +391,10 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
 
                 <div className="flex items-center gap-2 overflow-x-auto pb-2 -mb-2 w-full custom-scrollbar">
                     
-                <div className="flex items-center bg-slate-950/50 border border-slate-700 rounded-2xl p-1 gap-1 pr-3">
+                <div className={cn(
+                    "flex items-center bg-slate-950/50 border border-slate-700 rounded-2xl p-1 gap-1 pr-3 transition-all",
+                    ((isRangeMode && (localFechaInicio !== today || localFechaFin !== today)) || (!isRangeMode && localFecha !== today)) && "border-blue-500/50 bg-blue-500/5 shadow-[0_0_10px_rgba(59,130,246,0.1)]"
+                )}>
                     {userRol === 'admin' && (
                         <button
                             onClick={toggleDateMode}
@@ -246,8 +416,8 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                                 <CalendarDays className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
                                 <Input
                                     type="date"
-                                    value={tempFechaInicio}
-                                    onChange={(e) => setTempFechaInicio(e.target.value)}
+                                    value={localFechaInicio}
+                                    onChange={(e) => setLocalFechaInicio(e.target.value)}
                                     className="h-9 pl-8 pr-2 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[135px] focus-visible:ring-0 [color-scheme:dark]"
                                 />
                             </div>
@@ -256,8 +426,8 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                                 <CalendarDays className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
                                 <Input
                                     type="date"
-                                    value={tempFechaFin}
-                                    onChange={(e) => setTempFechaFin(e.target.value)}
+                                    value={localFechaFin}
+                                    onChange={(e) => setLocalFechaFin(e.target.value)}
                                     className="h-9 pl-8 pr-2 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[135px] focus-visible:ring-0 [color-scheme:dark]"
                                 />
                             </div>
@@ -267,19 +437,37 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                             <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                             <Input
                                 type="date"
-                                value={tempFecha}
-                                onChange={(e) => setTempFecha(e.target.value)}
+                                value={localFecha}
+                                onChange={(e) => setLocalFecha(e.target.value)}
                                 className="h-9 pl-9 pr-2 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[160px] focus-visible:ring-0 [color-scheme:dark]"
                             />
                         </div>
                     )}
                 </div>
 
+                    {hasActiveFilters && (
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={handleClearFilters}
+                            className="h-10 px-3 text-[10px] font-black text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 rounded-xl uppercase tracking-widest shrink-0 animate-in fade-in zoom-in duration-300"
+                        >
+                            <X className="w-3 h-3 mr-1.5" /> Limpiar
+                        </Button>
+                    )}
+
                     {userRol === 'admin' && supervisores.length > 0 && (
-                        <Select value={currentSupervisor} onValueChange={(val) => handleFilterChange('supervisor', val)}>
-                            <SelectTrigger className="h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3">
+                        <Select value={localSupervisor} onValueChange={(val) => {
+                            setLocalSupervisor(val)
+                            updateParams({ supervisor: val, asesor: 'all' })
+                        }}>
+                            <SelectTrigger className={cn(
+                                "h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
+                                localSupervisor !== 'all' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
+                                isPending && "opacity-70"
+                            )}>
                                 <div className="flex items-center gap-2 truncate">
-                                    <Users className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                                    <Users className={cn("w-3.5 h-3.5 shrink-0", localSupervisor !== 'all' ? "text-blue-400" : "text-purple-400")} />
                                     <SelectValue placeholder="Supervisor" />
                                 </div>
                             </SelectTrigger>
@@ -293,10 +481,17 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                     )}
 
                     {(userRol === 'admin' || userRol === 'supervisor') && asesores.length > 0 && (
-                        <Select value={currentAsesor} onValueChange={(val) => handleFilterChange('asesor', val)} disabled={isPending}>
-                            <SelectTrigger className="h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <Select value={localAsesor} onValueChange={(val) => {
+                            setLocalAsesor(val)
+                            updateParams({ asesor: val })
+                        }}>
+                            <SelectTrigger className={cn(
+                                "h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
+                                localAsesor !== 'all' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
+                                isPending && "opacity-70"
+                            )}>
                                 <div className="flex items-center gap-2 truncate">
-                                    <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                                    <User className={cn("w-3.5 h-3.5 shrink-0", localAsesor !== 'all' ? "text-blue-400" : "text-blue-400")} />
                                     <SelectValue placeholder="Asesor" />
                                 </div>
                             </SelectTrigger>
@@ -309,10 +504,17 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                         </Select>
                     )}
 
-                    <Select value={currentPagoPor} onValueChange={(val) => handleFilterChange('pago_por', val)} disabled={isPending}>
-                        <SelectTrigger className="h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <Select value={localPagoPor} onValueChange={(val) => {
+                        setLocalPagoPor(val)
+                        updateParams({ pago_por: val })
+                    }}>
+                        <SelectTrigger className={cn(
+                            "h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
+                            localPagoPor !== 'all' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
+                            isPending && "opacity-70"
+                        )}>
                             <div className="flex items-center gap-2 truncate">
-                                <Briefcase className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                <Briefcase className={cn("w-3.5 h-3.5 shrink-0", localPagoPor !== 'all' ? "text-blue-400" : "text-indigo-400")} />
                                 <SelectValue placeholder="Pagado Por" />
                             </div>
                         </SelectTrigger>
@@ -324,10 +526,17 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                         </SelectContent>
                     </Select>
 
-                    <Select value={currentTurno} onValueChange={(val) => handleFilterChange('turno', val)} disabled={isPending}>
-                        <SelectTrigger className="h-10 w-[140px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <Select value={localTurno} onValueChange={(val) => {
+                        setLocalTurno(val)
+                        updateParams({ turno: val })
+                    }}>
+                        <SelectTrigger className={cn(
+                            "h-10 w-[140px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 shrink-0 transition-all",
+                            localTurno !== 'all' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
+                            isPending && "opacity-70"
+                        )}>
                             <div className="flex items-center gap-2 truncate">
-                                <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                <Clock className={cn("w-3.5 h-3.5 shrink-0", localTurno !== 'all' ? "text-blue-400" : "text-amber-400")} />
                                 <SelectValue placeholder="Turno" />
                             </div>
                         </SelectTrigger>
@@ -338,10 +547,17 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                         </SelectContent>
                     </Select>
 
-                    <Select value={currentMetodo} onValueChange={(val) => handleFilterChange('metodo', val)} disabled={isPending}>
-                        <SelectTrigger className="h-10 w-[160px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <Select value={localMetodo} onValueChange={(val) => {
+                        setLocalMetodo(val)
+                        updateParams({ metodo: val })
+                    }}>
+                        <SelectTrigger className={cn(
+                            "h-10 w-[160px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 shrink-0 transition-all",
+                            localMetodo !== 'all' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
+                            isPending && "opacity-70"
+                        )}>
                             <div className="flex items-center gap-2 truncate">
-                                <CreditCard className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                <CreditCard className={cn("w-3.5 h-3.5 shrink-0", localMetodo !== 'all' ? "text-blue-400" : "text-emerald-400")} />
                                 <SelectValue placeholder="Método" />
                             </div>
                         </SelectTrigger>
@@ -354,15 +570,11 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                             <SelectItem value="Otros">Otros</SelectItem>
                         </SelectContent>
                     </Select>
+
                 </div>
             </div>
 
             <div className="relative bg-slate-900/50 border border-slate-800/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
-                {isPending && (
-                    <div className="absolute inset-0 bg-slate-900/40 rounded-2xl flex items-center justify-center z-40">
-                        <Loader2 className="h-6 w-6 text-blue-400 animate-spin" />
-                    </div>
-                )}
                 <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 bg-slate-950/50 border-b border-slate-800 text-[10px] uppercase tracking-wider font-bold text-slate-500 items-center">
                     <div className="col-span-6">Detalle del Pago / Fecha</div>
                     <div className="col-span-3 text-right">Monto</div>
@@ -371,6 +583,12 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                 </div>
 
                 <div className="divide-y divide-slate-800/40">
+                    {isPending ? (
+                        <div className="p-0 animate-in fade-in duration-500">
+                            <TableSkeleton />
+                        </div>
+                    ) : (
+                    <>
                     {pagos?.slice(0, itemsToShow).map((pago) => {
                         const prestamoId = pago.cronograma_cuotas?.prestamo_id || pago.cronograma_cuotas?.prestamos?.id
                         return (
@@ -488,6 +706,8 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                                 Los pagos históricos aparecerán aquí
                             </p>
                         </div>
+                    )}
+                    </>
                     )}
                 </div>
 

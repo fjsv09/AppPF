@@ -158,14 +158,18 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     const [navigatingToId, setNavigatingToId] = useState<string | null>(null)
 
     // View type toggle (cards | table), persisted in localStorage
-    const [viewType, setViewType] = useState<'cards' | 'table'>('cards')
+    const [viewType, setViewType] = useState<'cards' | 'table'>(userRol === 'admin' ? 'cards' : 'table')
     const [isMountedView, setIsMountedView] = useState(false)
 
     useEffect(() => {
-        const savedView = localStorage.getItem('client-view-type')
-        if (savedView === 'cards' || savedView === 'table') setViewType(savedView)
+        if (userRol === 'admin') {
+            const savedView = localStorage.getItem('client-view-type')
+            if (savedView === 'cards' || savedView === 'table') setViewType(savedView)
+        } else {
+            setViewType('table')
+        }
         setIsMountedView(true)
-    }, [])
+    }, [userRol])
 
     useEffect(() => {
         if (isMountedView) localStorage.setItem('client-view-type', viewType)
@@ -818,9 +822,9 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
-                    {/* View Type Toggle */}
-                    {!showMap && (
-                        <div className="w-auto shrink-0">
+                    {/* View Type Toggle - Solo Admin & Mobile */}
+                    {!showMap && userRol === 'admin' && (
+                        <div className="w-auto shrink-0 md:hidden">
                             <Button
                                 variant="outline"
                                 size="icon"

@@ -167,7 +167,7 @@ export function PrestamosTable({
     const { isPending, updateParams: updateParamsContext, startTransition } = useLoading()
 
     const [userLoc, setUserLoc] = useState<[number, number] | null>(null)
-    const [viewType, setViewType] = useState<'cards' | 'table'>('cards')
+    const [viewType, setViewType] = useState<'cards' | 'table'>(userRol === 'admin' ? 'cards' : 'table')
     const [isMountedView, setIsMountedView] = useState(false)
     const [showMap, setShowMap] = useState(false)
     const [localSearch, setLocalSearch] = useState(searchParams.get('search') || '')
@@ -221,12 +221,16 @@ export function PrestamosTable({
 
     // Persistence for View Type (Mobile)
     useEffect(() => {
-        const savedView = localStorage.getItem('loan-view-type')
-        if (savedView === 'cards' || savedView === 'table') {
-            setViewType(savedView)
+        if (userRol === 'admin') {
+            const savedView = localStorage.getItem('loan-view-type')
+            if (savedView === 'cards' || savedView === 'table') {
+                setViewType(savedView)
+            }
+        } else {
+            setViewType('table')
         }
         setIsMountedView(true)
-    }, [])
+    }, [userRol])
 
     useEffect(() => {
         if (isMountedView) {
@@ -964,17 +968,19 @@ export function PrestamosTable({
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                    {/* View Toggle (Mobile Only) */}
-                    <div className="shrink-0 md:hidden">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setViewType(viewType === 'cards' ? 'table' : 'cards')}
-                            className="h-10 w-10 bg-slate-950/50 border border-slate-700 text-slate-400"
-                        >
-                            {viewType === 'cards' ? <Table className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
-                        </Button>
-                    </div>
+                    {/* View Toggle (Mobile Only) - Solo Admin */}
+                    {userRol === 'admin' && (
+                        <div className="shrink-0 md:hidden">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setViewType(viewType === 'cards' ? 'table' : 'cards')}
+                                className="h-10 w-10 bg-slate-950/50 border border-slate-700 text-slate-400"
+                            >
+                                {viewType === 'cards' ? <Table className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+                            </Button>
+                        </div>
+                    )}
 
                     {/* View Filter */}
                     <Select value={activeFilter} onValueChange={(val) => handleTabChange(val as FilterTab)}>

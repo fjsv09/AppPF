@@ -34,22 +34,15 @@ export function VoucherContent({ payment, loan, client, cronograma, allPayments,
     const { cuotasPagadasVirtual: pagadas, saldoCuotaEnCurso: saldoCuotaActual, saldoTotalPendiente: saldoPendiente } =
         computeVirtualCronograma(cronograma ?? [], allPaymentsFiltered)
 
-    // Cuotas atrasadas: calculado sobre totales (igual que calculateLoanMetrics)
-    // para respetar pagos cubiertos por cascade FIFO que no tienen monto_pagado en DB
+    // Cuotas atrasadas: usa pagadas (de computeVirtualCronograma) vs cuotas vencidas por fecha.
+    // Evita falsos positivos en préstamos migrados donde monto_pagado está en cronograma_cuotas
+    // pero no tiene registros equivalentes en la tabla pagos.
     const paymentDateStr = (() => {
         try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date(payment.created_at || new Date())) }
         catch { return '' }
     })()
-    const totalExigibleHastaHoy = (cronograma ?? [])
-        .filter(c => c.fecha_vencimiento <= paymentDateStr)
-        .reduce((sum, c) => sum + Number(c.monto_cuota || 0), 0)
-    const totalPagadoVirtual = allPaymentsFiltered
-        .reduce((sum, p) => sum + Number(p.monto_pagado || p.pago_monto || 0), 0)
-    const deudaExigible = Math.max(0, totalExigibleHastaHoy - totalPagadoVirtual)
-    const valorCuotaPromedio = (cronograma?.length ?? 0) > 0
-        ? (cronograma ?? []).reduce((s, c) => s + Number(c.monto_cuota || 0), 0) / (cronograma?.length ?? 1)
-        : 0
-    const cuotasAtrasadas = valorCuotaPromedio > 0 ? Math.floor(deudaExigible / valorCuotaPromedio) : 0
+    const cuotasVencidasHastaHoy = (cronograma ?? []).filter(c => c.fecha_vencimiento <= paymentDateStr).length
+    const cuotasAtrasadas = Math.max(0, cuotasVencidasHastaHoy - pagadas)
 
     const progressPct = totalCuotas > 0 ? (pagadas / totalCuotas) * 100 : 0;
 

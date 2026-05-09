@@ -58,7 +58,7 @@ export function PaymentModal({ userRol, trigger }: PaymentModalProps) {
                     <DialogHeader className="mb-4 md:mb-6">
                         <DialogTitle className="text-xl md:text-2xl font-bold text-white">Registrar Pago</DialogTitle>
                     </DialogHeader>
-                    <PaymentWizard userRol={userRol} systemSchedule={systemSchedule} onClose={() => setOpen(false)} />
+                    {open && <PaymentWizard userRol={userRol} systemSchedule={systemSchedule} onClose={() => setOpen(false)} />}
                 </div>
             </DialogContent>
         </Dialog>

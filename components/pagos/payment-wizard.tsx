@@ -173,10 +173,10 @@ export function PaymentWizard({ userRol = 'asesor', systemSchedule, onClose }: P
         }
 
         if (qData) {
-            // Lógica de Cuota Inteligente
+            // Lógica de Cuota Inteligente — usar virtualQData para respetar pagos en verificación
             const today = new Date().toLocaleString("en-CA", { timeZone: "America/Lima" }).split(',')[0]
-            const todayQuota = qData.find((c: any) => c.fecha_vencimiento === today && c.estado !== 'pagado')
-            const oldestPending = qData.find((c: any) => c.estado !== 'pagado')
+            const todayQuota = virtualQData.find((c: any) => c.fecha_vencimiento === today && c.estado !== 'pagado')
+            const oldestPending = virtualQData.find((c: any) => c.estado !== 'pagado')
             const targetQuota = todayQuota || oldestPending
             if (targetQuota) initiatePayment(targetQuota)
         }

@@ -401,11 +401,60 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         return Array.from(unique).sort()
     }, [clientes])
 
-    // Tabs logic
+    // 5. Cumulative Filter Logic
+    // Using URL-derived values directly as source of truth for logic to avoid sync issues
+    const baseFilteredClientes = useMemo(() => {
+        let result = clientes
+
+        // 1. Supervisor Filter (Only for Admin/Secretaria)
+        // If an Asesor is selected, we don't need to filter by Supervisor as Asesor is more specific
+        if ((userRol === 'admin' || userRol === 'secretaria') && filtroSupervisor !== 'todos' && filtroAsesor === 'todos') {
+             const advisorIds = perfiles
+                .filter(p => p.supervisor_id === filtroSupervisor)
+                .map(p => p.id)
+             result = result.filter(c => advisorIds.includes(c.asesor_id))
+        }
+
+        // 2. Asesor Filter
+        if (filtroAsesor !== 'todos') {
+            result = result.filter(c => c.asesor_id === filtroAsesor)
+        }
+
+        // 3. Sector Filter
+        if (filtroSector !== 'todos') {
+            result = result.filter(c => c.sector_id === filtroSector)
+        }
+
+        // 4. Frecuencia Filter - Look for any loan with this frequency
+        if (filtroFrecuencia !== 'todos') {
+            result = result.filter(c => {
+                const loans = c.prestamos || []
+                return loans.some((p: any) => p.frecuencia === filtroFrecuencia)
+            })
+        }
+
+        // 5. Search Filter — accent-insensitive + multi-word
+        if (searchQuery.trim()) {
+            const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+            const words = norm(searchQuery).split(/\s+/).filter(Boolean)
+            result = result.filter(c => {
+                const nombre = norm(c.nombres || '')
+                const sector = norm(c.sectores?.nombre || '')
+                const dni = c.dni || ''
+                const tel = c.telefono || ''
+                if (dni.includes(searchQuery.toLowerCase()) || tel.includes(searchQuery.toLowerCase())) return true
+                return words.every(w => nombre.includes(w) || sector.includes(w))
+            })
+        }
+
+        return result
+    }, [clientes, searchQuery, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia, userRol, perfiles])
+
+    // Tabs logic - CUMULATIVE
     const tabs = useMemo(() => [
-        { id: 'todos' as FilterTab, label: 'Todos', count: clientes.length },
-        { id: 'con_deuda' as FilterTab, label: 'Con Deuda', count: clientes.filter(c => c.stats.totalDebt > 0).length },
-        { id: 'activos_deuda' as FilterTab, label: 'ACTIVOS', count: clientes.filter(c => {
+        { id: 'todos' as FilterTab, label: 'Todos', count: baseFilteredClientes.length },
+        { id: 'con_deuda' as FilterTab, label: 'Con Deuda', count: baseFilteredClientes.filter(c => c.stats.totalDebt > 0).length },
+        { id: 'activos_deuda' as FilterTab, label: 'ACTIVOS', count: baseFilteredClientes.filter(c => {
             if (!!c.bloqueado_renovacion) return false
             const loans = c.prestamos || []
             const mainActiveLoan = loans.find((p: any) => {
@@ -421,42 +470,23 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             })
             if (!mainActiveLoan) return false
             if (mainActiveLoan.estado_mora === 'vencido') return false
-            // Using the centralized utility
             const today = getTodayPeru()
             const metrics = calculateLoanMetrics(mainActiveLoan, today)
             return metrics.saldoPendiente > 0.01
         }).length },
-        { id: 'sin_prestamos' as FilterTab, label: 'Sin Préstamos', count: clientes.filter(c => c.stats.activeLoansCount === 0).length },
-        ...(userRol === 'admin' ? [{ id: 'reasignados' as FilterTab, label: 'Reasignados', count: clientes.filter(c => c.wasReassigned).length }] : []),
+        { id: 'sin_prestamos' as FilterTab, label: 'Sin Préstamos', count: baseFilteredClientes.filter(c => c.stats.activeLoansCount === 0).length },
+        ...(userRol === 'admin' ? [{ id: 'reasignados' as FilterTab, label: 'Reasignados', count: baseFilteredClientes.filter(c => c.wasReassigned).length }] : []),
         ...((userRol === 'admin' || userRol === 'supervisor') ? [
-            { id: 'recibos' as FilterTab, label: 'Control de Recibos', count: clientes.filter(c => !!c.excepcion_voucher).length },
-            { id: 'bloqueados' as FilterTab, label: 'Bloqueados', count: clientes.filter(c => !!c.bloqueado_renovacion).length }
+            { id: 'recibos' as FilterTab, label: 'Control de Recibos', count: baseFilteredClientes.filter(c => !!c.excepcion_voucher).length },
+            { id: 'bloqueados' as FilterTab, label: 'Bloqueados', count: baseFilteredClientes.filter(c => !!c.bloqueado_renovacion).length }
         ] : []),
-    ], [clientes, userRol])
+    ], [baseFilteredClientes, userRol, prestamoIdsProductoRefinanciamiento])
 
-    // Filtering logic
+    // Final filtered list
     const filteredClientes = useMemo(() => {
-        let result = clientes
+        let result = baseFilteredClientes
 
-        // Supervisor
-        if (userRol === 'admin' && localSupervisor !== 'todos') {
-             const advisorIds = perfiles
-                .filter(p => p.supervisor_id === localSupervisor)
-                .map(p => p.id)
-             result = result.filter(c => advisorIds.includes(c.asesor_id))
-        }
-
-        // Asesor
-        if (localAsesor !== 'todos') {
-            result = result.filter(c => c.asesor_id === localAsesor)
-        }
-
-        // Sector
-        if (localSector !== 'todos') {
-            result = result.filter(c => c.sector_id === localSector)
-        }
-
-        // Tabs
+        // Tab Filter
         switch (activeFilter) {
             case 'con_deuda': result = result.filter(c => c.stats.totalDebt > 0); break;
             case 'activos_deuda': result = result.filter(c => {
@@ -485,22 +515,8 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             case 'bloqueados': result = result.filter(c => !!c.bloqueado_renovacion); break;
         }
 
-        // Search — accent-insensitive + multi-word
-        if (localSearch.trim()) {
-            const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-            const words = norm(localSearch).split(/\s+/).filter(Boolean)
-            result = result.filter(c => {
-                const nombre = norm(c.nombres || '')
-                const sector = norm(c.sectores?.nombre || '')
-                const dni = c.dni || ''
-                const tel = c.telefono || ''
-                if (dni.includes(localSearch.toLowerCase()) || tel.includes(localSearch.toLowerCase())) return true
-                return words.every(w => nombre.includes(w) || sector.includes(w))
-            })
-        }
-
         return result
-    }, [clientes, activeFilter, localSearch, localSupervisor, localAsesor, localSector, localFrecuencia, userRol, perfiles])
+    }, [baseFilteredClientes, activeFilter, prestamoIdsProductoRefinanciamiento])
 
     // Pagination
     const paginatedClientes = useMemo(() => {
@@ -576,35 +592,13 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
 
     // Helper counts for KPI cards based on CURRENT filters (except tab)
     const kpiCounts = useMemo(() => {
-        // We filter by Search, Supervisor, Asesor, Sector but NOT by Tab
-        let base = clientes
-        if (userRol === 'admin' && localSupervisor !== 'todos') {
-            const advisorIds = perfiles.filter(p => p.supervisor_id === localSupervisor).map(p => p.id)
-            base = base.filter(c => advisorIds.includes(c.asesor_id))
-        }
-        if (localAsesor !== 'todos') base = base.filter(c => c.asesor_id === localAsesor)
-        if (localSector !== 'todos') base = base.filter(c => c.sector_id === localSector)
-        if (localFrecuencia !== 'todos') {
-            base = base.filter(c => {
-                const loans = c.prestamos || []
-                return loans.some((p: any) => p.frecuencia === localFrecuencia && p.estado === 'activo')
-            })
-        }
-        if (localSearch.trim()) {
-            const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-            const words = norm(localSearch).split(/\s+/).filter(Boolean)
-            base = base.filter(c => {
-                const nombre = norm(c.nombres || ''), sector = norm(c.sectores?.nombre || ''), dni = c.dni || '', tel = c.telefono || ''
-                if (dni.includes(localSearch.toLowerCase()) || tel.includes(localSearch.toLowerCase())) return true
-                return words.every(w => nombre.includes(w) || sector.includes(w))
-            })
-        }
-
+        const base = baseFilteredClientes
         const total = base.length
         const conDeuda = base.filter(c => c.stats.totalDebt > 0).length
         const sinPrestamos = base.filter(c => c.stats.activeLoansCount === 0).length
         const reasignados = base.filter(c => c.wasReassigned).length
         const bloqueados = base.filter(c => !!c.bloqueado_renovacion).length
+        const bloqueadosSinPrestamos = base.filter(c => !!c.bloqueado_renovacion && c.stats.activeLoansCount === 0).length
         const activos = base.filter(c => {
             if (!!c.bloqueado_renovacion) return false
             const loans = c.prestamos || []
@@ -617,8 +611,8 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             return calculateLoanMetrics(mainActiveLoan, getTodayPeru()).saldoPendiente > 0.01
         }).length
 
-        return { total, conDeuda, sinPrestamos, reasignados, bloqueados, activos }
-    }, [clientes, localSearch, localSupervisor, localAsesor, localSector, localFrecuencia, userRol, perfiles, prestamoIdsProductoRefinanciamiento])
+        return { total, conDeuda, sinPrestamos, reasignados, bloqueados, bloqueadosSinPrestamos, activos }
+    }, [baseFilteredClientes, prestamoIdsProductoRefinanciamiento])
 
     return (
         <div className="space-y-4 pb-4">
@@ -638,8 +632,14 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                     </div>
                     <p className="kpi-label">Total Clientes</p>
                     <h2 className="kpi-value">{kpiCounts.total}</h2>
-                    <div className="mt-2 flex items-center text-blue-400">
+                    <div className="mt-2 flex items-center flex-wrap gap-2">
                          <span className="kpi-badge bg-blue-950/50 text-blue-400 border border-blue-900/50">REGISTRADOS</span>
+                         {kpiCounts.bloqueados > 0 && (
+                             <span className="kpi-badge bg-rose-950/50 text-rose-400 border border-rose-900/50 flex items-center gap-1">
+                                 <Lock className="w-3 h-3" />
+                                 {kpiCounts.bloqueados} BLOQUEADOS
+                             </span>
+                         )}
                     </div>
                     {activeFilter === 'todos' && <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-500/50" />}
                  </div>
@@ -701,8 +701,12 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                     </div>
                     <p className="kpi-label">Sin Préstamos</p>
                     <h2 className="kpi-value">{kpiCounts.sinPrestamos}</h2>
-                    <div className="mt-2 text-slate-400 flex items-center gap-1">
+                    <div className="mt-2 flex items-center flex-wrap gap-2">
                          <span className="kpi-badge bg-slate-900/50 text-slate-500 border border-slate-800">SIN ACTIVIDAD</span>
+                         <span className="kpi-badge bg-rose-950/50 text-rose-400 border border-rose-900/50 flex items-center gap-1">
+                             <Lock className="w-3 h-3" />
+                             {kpiCounts.bloqueadosSinPrestamos} BLOQUEADOS
+                         </span>
                     </div>
                     {activeFilter === 'sin_prestamos' && <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-500/50" />}
                  </div>
@@ -837,6 +841,19 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                         </div>
                     )}
 
+                    {/* Filter Action: Clear All */}
+                    {hasActiveFilters && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleClearFilters}
+                            className="h-10 px-3 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 rounded-xl transition-all flex items-center gap-2 group animate-in fade-in slide-in-from-right-2"
+                        >
+                            <X className="w-4 h-4 group-hover:rotate-90 transition-transform" />
+                            <span className="text-xs font-bold uppercase tracking-wider">Limpiar</span>
+                        </Button>
+                    )}
+
                     {/* Status Filter */}
                     <div className="w-auto shrink-0">
                         <Select value={activeFilter} onValueChange={handleFilterChange}>
@@ -872,18 +889,6 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                         </Button>
                     </div>
 
-                    {/* Filter Action: Clear All */}
-                    {hasActiveFilters && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleClearFilters}
-                            className="h-10 px-3 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 rounded-xl transition-all flex items-center gap-2 group animate-in fade-in slide-in-from-right-2"
-                        >
-                            <X className="w-4 h-4 group-hover:rotate-90 transition-transform" />
-                            <span className="text-xs font-bold uppercase tracking-wider">Limpiar</span>
-                        </Button>
-                    )}
 
                     {/* Supervisor Filter */}
                     {(userRol === 'admin' || userRol === 'secretaria') && (

@@ -938,6 +938,56 @@ export function calculateClientSituation(client: any) {
 }
 
 /**
+ * Determina si un cliente cuenta como "Activo" bajo las reglas estrictas del Panel de Préstamos.
+ * Estas reglas se usan para KPIs de Cobranza Vigente (excluye paralelos, refinanciados, vencidos y bloqueados).
+ */
+export function isClientStrictActive(
+  client: any, 
+  loans: any[], 
+  prestamoIdsProductoRefinanciamiento: string[] = []
+): boolean {
+  if (!client || !loans || loans.length === 0) return false;
+
+  // 1. Exclusión por bloqueo de cliente
+  if (!!client.bloqueado_renovacion) return false;
+
+  // 2. Buscar el préstamo principal activo
+  const mainActive = loans.find((p: any) => 
+    p.estado === 'activo' && 
+    !p.es_paralelo && 
+    !prestamoIdsProductoRefinanciamiento.includes(p.id)
+  );
+
+  if (!mainActive) return false;
+
+  // 3. Exclusión por mora crítica (Vencido)
+  // El Panel de Préstamos excluye explícitamente el estado_mora === 'vencido'
+  const mora = mainActive.estado_mora?.toLowerCase() || '';
+  if (mora === 'vencido') return false;
+  
+  // También excluimos legal/castigado por seguridad si el estado principal no lo hizo
+  if (['legal', 'castigado'].includes(mora)) return false;
+
+  // 4. Exclusión por saldo pendiente mínimo ($0.01)
+  // Usamos el saldo calculado (metrics.saldoPendiente) si existe, 
+  // sino calculamos una aproximación rápida.
+  let saldo = 0;
+  if (mainActive.metrics && typeof mainActive.metrics.saldoPendiente === 'number') {
+    saldo = mainActive.metrics.saldoPendiente;
+  } else {
+    const totalPagar = Number(mainActive.monto) * (1 + (Number(mainActive.interes) / 100));
+    const totalPagado = Number(mainActive.total_pagado_acumulado || 0);
+    saldo = Math.max(0, totalPagar - totalPagado);
+  }
+
+  // Regla para Préstamos Migrados (doble verificación de saldo)
+  const isMigrado = (mainActive.observacion_supervisor || '').includes('Préstamo migrado') || (mainActive.observacion_supervisor || '').includes('[MIGRACIÓN]');
+  if (isMigrado && saldo <= 0.01) return false;
+
+  return saldo > 0.01;
+}
+
+/**
  * CONSTANTES DE MODALIDAD
  */
 export const CUOTAS_ESTANDAR = {

@@ -454,26 +454,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     const tabs = useMemo(() => [
         { id: 'todos' as FilterTab, label: 'Todos', count: baseFilteredClientes.length },
         { id: 'con_deuda' as FilterTab, label: 'Con Deuda', count: baseFilteredClientes.filter(c => c.stats.totalDebt > 0).length },
-        { id: 'activos_deuda' as FilterTab, label: 'ACTIVOS', count: baseFilteredClientes.filter(c => {
-            if (!!c.bloqueado_renovacion) return false
-            const loans = c.prestamos || []
-            const mainActiveLoan = loans.find((p: any) => {
-                const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado') || (p.observacion_supervisor || '').includes('[MIGRACIÓN]')
-                const saldo = p.cronograma_cuotas?.reduce((acc: number, cuota: any) => acc + (cuota.monto_cuota - (cuota.monto_pagado || 0)), 0) || 0
-                const isEffectivelyFinalized = isMigrado && saldo <= 0.01
-
-                return p.estado === 'activo' && 
-                    !isEffectivelyFinalized &&
-                    !p.es_paralelo && 
-                    p.estado !== 'refinanciado' &&
-                    !prestamoIdsProductoRefinanciamiento.includes(p.id)
-            })
-            if (!mainActiveLoan) return false
-            if (mainActiveLoan.estado_mora === 'vencido') return false
-            const today = getTodayPeru()
-            const metrics = calculateLoanMetrics(mainActiveLoan, today)
-            return metrics.saldoPendiente > 0.01
-        }).length },
+        { id: 'activos_deuda' as FilterTab, label: 'ACTIVOS', count: baseFilteredClientes.filter(c => (c.stats.strictActiveLoansCount || 0) > 0).length },
         { id: 'sin_prestamos' as FilterTab, label: 'Sin Préstamos', count: baseFilteredClientes.filter(c => c.stats.activeLoansCount === 0).length },
         ...(userRol === 'admin' ? [{ id: 'reasignados' as FilterTab, label: 'Reasignados', count: baseFilteredClientes.filter(c => c.wasReassigned).length }] : []),
         ...((userRol === 'admin' || userRol === 'supervisor') ? [
@@ -489,26 +470,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         // Tab Filter
         switch (activeFilter) {
             case 'con_deuda': result = result.filter(c => c.stats.totalDebt > 0); break;
-            case 'activos_deuda': result = result.filter(c => {
-                if (!!c.bloqueado_renovacion) return false
-                const loans = c.prestamos || []
-                const mainActiveLoan = loans.find((p: any) => {
-                    const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado') || (p.observacion_supervisor || '').includes('[MIGRACIÓN]')
-                    const saldo = p.cronograma_cuotas?.reduce((acc: number, cuota: any) => acc + (cuota.monto_cuota - (cuota.monto_pagado || 0)), 0) || 0
-                    const isEffectivelyFinalized = isMigrado && saldo <= 0.01
-
-                    return p.estado === 'activo' && 
-                           !isEffectivelyFinalized &&
-                           !p.es_paralelo && 
-                           p.estado !== 'refinanciado' &&
-                           !prestamoIdsProductoRefinanciamiento.includes(p.id)
-                })
-                if (!mainActiveLoan) return false
-                if (mainActiveLoan.estado_mora === 'vencido') return false
-                const today = getTodayPeru()
-                const metrics = calculateLoanMetrics(mainActiveLoan, today)
-                return metrics.saldoPendiente > 0.01
-            }); break;
+            case 'activos_deuda': result = result.filter(c => (c.stats.strictActiveLoansCount || 0) > 0); break;
             case 'sin_prestamos': result = result.filter(c => c.stats.activeLoansCount === 0); break;
             case 'reasignados': result = result.filter(c => c.wasReassigned); break;
             case 'recibos': result = result.filter(c => !!c.excepcion_voucher); break;
@@ -599,17 +561,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         const reasignados = base.filter(c => c.wasReassigned).length
         const bloqueados = base.filter(c => !!c.bloqueado_renovacion).length
         const bloqueadosSinPrestamos = base.filter(c => !!c.bloqueado_renovacion && c.stats.activeLoansCount === 0).length
-        const activos = base.filter(c => {
-            if (!!c.bloqueado_renovacion) return false
-            const loans = c.prestamos || []
-            const mainActiveLoan = loans.find((p: any) => {
-                const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado') || (p.observacion_supervisor || '').includes('[MIGRACIÓN]')
-                const saldo = p.cronograma_cuotas?.reduce((acc: number, cuota: any) => acc + (cuota.monto_cuota - (cuota.monto_pagado || 0)), 0) || 0
-                return p.estado === 'activo' && !(isMigrado && saldo <= 0.01) && !p.es_paralelo && p.estado !== 'refinanciado' && !prestamoIdsProductoRefinanciamiento.includes(p.id)
-            })
-            if (!mainActiveLoan || mainActiveLoan.estado_mora === 'vencido') return false
-            return calculateLoanMetrics(mainActiveLoan, getTodayPeru()).saldoPendiente > 0.01
-        }).length
+        const activos = base.filter(c => (c.stats.strictActiveLoansCount || 0) > 0).length
 
         return { total, conDeuda, sinPrestamos, reasignados, bloqueados, bloqueadosSinPrestamos, activos }
     }, [baseFilteredClientes, prestamoIdsProductoRefinanciamiento])
@@ -1343,7 +1295,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                 </div>
 
                                 <div className="col-span-1 text-center">
-                                    <Badge variant="outline" className="bg-slate-800 border-slate-700 text-slate-400">{cliente.stats.activeLoansCount}</Badge>
+                                    <Badge variant="outline" className="bg-slate-800 border-slate-700 text-slate-400">{cliente.stats.strictActiveLoansCount || 0}</Badge>
                                 </div>
 
                                 <div className="col-span-1 text-center">

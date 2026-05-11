@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { BackButton } from '@/components/ui/back-button'
 import { Plus, Lock } from 'lucide-react'
 import { ClientDirectory } from '@/components/clientes/client-directory'
-import { getTodayPeru, calculateClientSituation, calculateLoanMetrics } from '@/lib/financial-logic'
+import { getTodayPeru, calculateClientSituation, calculateLoanMetrics, isClientStrictActive } from '@/lib/financial-logic'
 import { cn } from '@/lib/utils'
 import { DashboardAlerts } from '@/components/dashboard/dashboard-alerts'
 import { checkAdvisorBlocked } from '@/utils/checkAdvisorBlocked'
@@ -189,12 +189,17 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
     }
 
     const allLoanIds = (clientsRaw || []).flatMap(c => (c.prestamos || []).map((p: any) => p.id))
-    const { data: renovacionesRefinanciamiento } = await supabaseAdmin
+    // Obtener IDs de préstamos que son producto de un refinanciamiento (deben ser excluidos de Activos)
+    const { data: renovacionesRefi } = await supabaseAdmin
         .from('renovaciones')
-        .select('prestamo_nuevo_id, prestamo_original:prestamo_original_id(estado)')
-        .in('prestamo_nuevo_id', allLoanIds)
+        .select(`
+            prestamo_nuevo_id,
+            prestamo_original:prestamo_original_id (
+                estado
+            )
+        `)
 
-    const prestamoIdsProductoRefinanciamiento = (renovacionesRefinanciamiento || [])
+    const prestamoIdsProductoRefinanciamiento = (renovacionesRefi || [])
         .filter((r: any) => (r.prestamo_original as any)?.estado === 'refinanciado')
         .map((r: any) => r.prestamo_nuevo_id as string)
         .filter(Boolean)
@@ -202,18 +207,17 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
     const todayPeru = getTodayPeru()
     
     const clients = (clientsRaw || [])?.map((client: any) => {
+        // Inyectar métricas en cada préstamo para que isClientStrictActive pueda usarlas
+        client.prestamos?.forEach((p: any) => {
+            const pagosDirectos = pagosByLoan.get(p.id) || []
+            p.metrics = calculateLoanMetrics(p, todayPeru, {}, pagosDirectos)
+            p.total_pagado_acumulado = p.metrics.totalPagadoAcumulado
+        })
+
         const activeLoans = client.prestamos?.filter((p: any) => {
             const isMigrado = (p.observacion_supervisor || '').includes('Préstamo migrado') || (p.observacion_supervisor || '').includes('[MIGRACIÓN]')
-            let saldoCuotas = 0
-            if (p.cronograma_cuotas) {
-                saldoCuotas = p.cronograma_cuotas.reduce((acc: number, c: any) => acc + (c.monto_cuota - (c.monto_pagado || 0)), 0)
-            }
-            const totalPagar = Number(p.monto) * (1 + (Number(p.interes) / 100))
-            const totalPagado = (p.cronograma_cuotas || []).reduce((acc: number, c: any) => acc + (Number(c.monto_pagado) || 0), 0)
-            const saldoGlobal = Math.max(0, totalPagar - totalPagado)
-            const isEffectivelyFinalized = isMigrado && (p.cronograma_cuotas?.length ?? 0) > 0 && 
-                                           saldoCuotas <= 0.01 && 
-                                           saldoGlobal <= 0.01
+            const saldo = p.metrics?.saldoPendiente || 0
+            const isEffectivelyFinalized = isMigrado && (p.metrics?.cuotasPagadasVirtual ?? 0) > 0 && saldo <= 0.01
 
             return p.estado === 'activo' && !isEffectivelyFinalized
         }) || []
@@ -233,15 +237,13 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
         let totalDebt = 0
         let isRecaptable = false
         activeLoans.forEach((p: any) => {
-            const pagosDirectos = pagosByLoan.get(p.id) || []
-            const metrics = calculateLoanMetrics(p, todayPeru, {}, pagosDirectos)
-            totalDebt += metrics.saldoPendiente
-            if (metrics.esRenovable) isRecaptable = true
+            totalDebt += p.metrics.saldoPendiente
+            if (p.metrics.esRenovable) isRecaptable = true
         })
 
         const latestSolicitud = client.solicitudes?.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
         const historicalLoans = client.prestamos?.filter((p: any) => {
-             const pendingBalance = p.cronograma_cuotas?.reduce((acc: number, c: any) => acc + (c.monto_cuota - (c.monto_pagado || 0)), 0) || 0
+             const pendingBalance = p.metrics?.saldoPendiente || 0
              return (
                 p.estado === 'completado' || p.estado === 'renovado' || p.estado === 'finalizado' || 
                 (pendingBalance <= 0.01 && p.estado !== 'anulado' && p.estado !== 'rechazado')
@@ -260,7 +262,12 @@ export default async function ClientesPage({ searchParams }: { searchParams: { [
             motivo_prestamo: latestSolicitud?.motivo_prestamo,
             isRecaptable,
             wasReassigned: reassignedClientIds.has(client.id),
-            stats: { activeLoansCount: activeLoans.length, totalDebt: totalDebt, historicalLoansCount: historicalLoans.length }
+            stats: { 
+                activeLoansCount: activeLoans.length, 
+                strictActiveLoansCount: isClientStrictActive(client, client.prestamos || [], prestamoIdsProductoRefinanciamiento) ? 1 : 0,
+                totalDebt: totalDebt, 
+                historicalLoansCount: historicalLoans.length 
+            }
         }
     }) || []
 

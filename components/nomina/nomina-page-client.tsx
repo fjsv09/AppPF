@@ -206,23 +206,102 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
     }
   }, [selectedId])
 
+  // Función para sincronizar sueldo
+  async function sincronizarSueldo() {
+    if (!payrollData || !perfil) return
+    
+    setLoading(true)
+    const { error } = await supabase
+      .from('nomina_personal')
+      .update({ sueldo_base: perfil.sueldo_base })
+      .eq('id', payrollData.id)
+    
+    if (error) {
+      alert('Error al sincronizar sueldo: ' + error.message)
+    } else {
+      await fetchNomina()
+    }
+    setLoading(false)
+  }
+
+  async function reconciliarNomina() {
+    if (!payrollData) return
+    setLoading(true)
+    
+    // 1. Buscar transacciones de este trabajador este mes que no tengan nomina_id
+    const transaccionesHuerfanas = actividadFinanciera
+      .filter((a: any) => a.tipo === 'pago' && !a.nomina_id)
+      .map((a: any) => a.id)
+    
+    if (transaccionesHuerfanas.length > 0) {
+      await supabase
+        .from('transacciones_personal')
+        .update({ nomina_id: payrollData.id })
+        .in('id', transaccionesHuerfanas)
+    }
+    
+    // 2. Actualizar el contador de pagos completados al número real del historial
+    const { error } = await supabase
+      .from('nomina_personal')
+      .update({ pagos_completados: numPagosEnHistorial })
+      .eq('id', payrollData.id)
+    
+    if (error) {
+      alert('Error al reconciliar: ' + error.message)
+    } else {
+      await fetchNomina()
+    }
+    setLoading(false)
+  }
+
 
   const frecuencia = perfil?.frecuencia_pago || 'mensual'
   const divisor = frecuencia === 'semanal' ? 4 : frecuencia === 'quincenal' ? 2 : 1
   const sueldoBaseProporcional = (payrollData?.sueldo_base || perfil?.sueldo_base || 0) / divisor
   
-  // Pagos completados: lectura directa de la tabla
-  const pagosCompletados = payrollData?.pagos_completados || 0
+  // Pagos completados: prioridad al historial real de transacciones para evitar desfases
+  const numPagosEnHistorial = actividadFinanciera.filter((a: any) => a.tipo === 'pago').length
+  const pagosCompletados = Math.max(payrollData?.pagos_completados || 0, numPagosEnHistorial)
+  
+  // CALCULO DE REINTEGRO POR CAMBIO DE SUELDO (Lógica dinámica por trabajador)
+  const pagosRealizados = actividadFinanciera.filter((a: any) => a.tipo === 'pago')
+  
+  const reintegroPendiente = pagosRealizados.reduce((acc: number, pago: any) => {
+    const montoPagado = parseFloat(pago.monto || 0)
+    // Si lo que se pagó es menor a lo que debería cobrar hoy por cuota, hay deuda
+    if (montoPagado > 0 && montoPagado < (sueldoBaseProporcional - 0.01)) { // Tolerancia de 1 céntimo
+      return acc + (sueldoBaseProporcional - montoPagado)
+    }
+    return acc
+  }, 0)
 
   // Total pagado este mes (sumado desde la tabla de transacciones para visualización)
   const totalPagadoAcumulado = actividadFinanciera
     .filter((a: any) => ['pago', 'bono'].includes(a.tipo))
     .reduce((acc: number, curr: any) => acc + parseFloat(curr.monto || 0), 0)
 
+  // BONOS, ADELANTOS Y DESCUENTOS: Sincronización automática con el historial
+  const totalBonosHistorial = actividadFinanciera
+    .filter((a: any) => a.tipo === 'bono')
+    .reduce((acc: number, curr: any) => acc + parseFloat(curr.monto || 0), 0)
+    
+  const totalAdelantosHistorial = actividadFinanciera
+    .filter((a: any) => a.tipo === 'adelanto')
+    .reduce((acc: number, curr: any) => acc + parseFloat(curr.monto || 0), 0)
+    
+  const totalDescuentosHistorial = actividadFinanciera
+    .filter((a: any) => a.tipo === 'descuento')
+    .reduce((acc: number, curr: any) => acc + parseFloat(curr.monto || 0), 0)
+
+  const bonos = Math.max(payrollData?.bonos || 0, totalBonosHistorial)
+  const adelantos = Math.max(payrollData?.adelantos || 0, totalAdelantosHistorial)
+  const descuentos = Math.max(payrollData?.descuentos || 0, totalDescuentosHistorial)
+
   const totalCalculated = sueldoBaseProporcional + 
-    ((pagosCompletados + 1) === divisor ? (payrollData?.bonos || 0) : 0) - 
-    (payrollData?.descuentos || 0) - 
-    (payrollData?.adelantos || 0)
+    reintegroPendiente +
+    ((pagosCompletados + 1) === divisor ? bonos : totalBonosHistorial) - 
+    descuentos - 
+    adelantos
 
   const rolLabel = (rol: string) => {
     switch(rol) {
@@ -337,6 +416,57 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
                 </div>
             )}
 
+            {/* Alerta de Reconciliación si hay desfase */}
+      {payrollData && numPagosEnHistorial > (payrollData?.pagos_completados || 0) && (
+        <div className="bg-blue-500/10 border border-blue-500/50 rounded-2xl p-4 backdrop-blur-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center shadow-lg shadow-blue-500/40">
+                    <RotateCcw className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                    <h4 className="text-sm font-bold text-white">Desfase de Pagos Detectado</h4>
+                    <p className="text-xs text-blue-200/80 font-medium">
+                        Se han encontrado <strong>{numPagosEnHistorial}</strong> pagos en el historial, pero la nómina solo registra <strong>{payrollData?.pagos_completados || 0}</strong>.
+                    </p>
+                </div>
+            </div>
+            <Button 
+                size="sm" 
+                variant="outline"
+                className="bg-blue-500/20 border-blue-500/50 hover:bg-blue-500/40 text-blue-100"
+                onClick={reconciliarNomina}
+                disabled={loading}
+            >
+                {loading ? "Reconciliando..." : "Reconciliar Ahora"}
+            </Button>
+        </div>
+      )}
+
+      {/* Alerta de Sincronización de Sueldo */}
+            {payrollData && perfil && perfil.sueldo_base !== payrollData.sueldo_base && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 backdrop-blur-md flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-amber-500 flex items-center justify-center shadow-lg shadow-amber-500/40">
+                            <AlertCircle className="w-6 h-6 text-white" />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-bold text-white">Cambio de Sueldo Detectado</h4>
+                            <p className="text-xs text-amber-200/80 font-medium">
+                                El sueldo del perfil (S/ {perfil.sueldo_base}) es diferente al de esta nómina (S/ {payrollData.sueldo_base}). 
+                                {pagosCompletados > 0 && <span className="block mt-1 font-black text-amber-400">Se generará un reintegro de S/ {reintegroPendiente.toFixed(2)} por las cuotas ya pagadas.</span>}
+                            </p>
+                        </div>
+                    </div>
+                    <Button 
+                        size="sm" 
+                        onClick={sincronizarSueldo}
+                        className="bg-amber-600 hover:bg-amber-500 text-white font-black text-[10px] uppercase tracking-widest px-6"
+                    >
+                        Sincronizar
+                    </Button>
+                </div>
+            )}
+
             <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm overflow-hidden border-t-4 border-t-blue-500">
               <CardHeader className="bg-slate-800/20 border-b border-slate-800">
                 <div className="flex justify-between items-center">
@@ -373,18 +503,16 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
                 </div>
               </CardHeader>
               <CardContent className="p-4 md:p-6">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
                   <PayItem label="Sueldo Base" amount={payrollData?.sueldo_base || perfil?.sueldo_base || 0} icon={<Calculator className="w-3.5 h-3.5 text-blue-400" />} />
-                  <PayItem label="Bonos" amount={payrollData?.bonos || 0} icon={<BadgePercent className="w-3.5 h-3.5 text-emerald-400" />} plus />
-                  <PayItem 
-                    label="Descuentos" 
-                    amount={payrollData?.descuentos || 0} 
-                    icon={<AlertCircle className="w-3.5 h-3.5 text-rose-500" />} 
-                    minus 
-                    onClick={() => document.getElementById('detalle-actividad')?.scrollIntoView({ behavior: 'smooth' })}
-                    active={payrollData?.descuentos > 0}
-                  />
-                  <PayItem label="Adelantos" amount={payrollData?.adelantos || 0} icon={<TrendingUp className="w-3.5 h-3.5 text-amber-500" />} minus />
+                  
+                  {reintegroPendiente > 0 && (
+                      <PayItem label="Reintegro" amount={reintegroPendiente} icon={<RotateCcw className="w-3.5 h-3.5 text-indigo-400" />} plus active={true} />
+                  )}
+                  
+                  <PayItem label="Bonos" amount={bonos} icon={<BadgePercent className="w-3.5 h-3.5 text-emerald-400" />} plus />
+                  <PayItem label="Adelantos" amount={adelantos} icon={<TrendingUp className="w-3.5 h-3.5 text-amber-500" />} minus />
+                  <PayItem label="Descuentos" amount={descuentos} icon={<TrendingDown className="w-3.5 h-3.5 text-rose-500" />} minus />
                 </div>
 
                 <div className="mt-6 pt-6 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -397,16 +525,14 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
                     <p className="text-xs text-slate-400">El sistema restará los adelantos automáticamente de tu próximo pago.</p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
 
-            {/* Botones de Acción (Solo Admin) */}
+                {/* Botones de Acción (Solo Admin) */}
             {currentRole === 'admin' && (
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                 <button
                   onClick={() => setShowPagoModal(true)}
                   disabled={payrollData?.estado === 'pagado'}
-                  className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all group disabled:opacity-40 text-center"
+                  className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all group text-center disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
                     <Banknote className="w-4 h-4 text-emerald-400" />
@@ -419,10 +545,10 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
 
                 <button
                   onClick={() => setShowAdelantoModal(true)}
-                  className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 hover:bg-amber-500/10 hover:border-amber-500/30 transition-all group text-center"
+                  className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 hover:bg-amber-500/10 hover:border-amber-500/30 transition-all group text-center"
                 >
                   <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <PlusCircle className="w-4 h-4 text-amber-400" />
+                    <TrendingUp className="w-4 h-4 text-amber-400" />
                   </div>
                   <div>
                     <p className="font-bold text-amber-400 text-xs">Registrar Adelanto</p>
@@ -431,19 +557,52 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
                 </button>
 
                 <button
-                  onClick={() => setShowLiquidacionModal(true)}
-                  className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-rose-500/5 border border-rose-500/10 hover:bg-rose-500/10 hover:border-rose-500/30 transition-all group text-center"
+                    onClick={() => {
+                        // En el futuro podemos pasar un tipo 'bono' al modal
+                        alert("Función para Registrar Bono - Se habilitará en breve");
+                    }}
+                    className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 hover:bg-indigo-500/10 hover:border-indigo-500/30 transition-all group text-center"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-rose-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <UserMinus className="w-4 h-4 text-rose-400" />
+                    <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <PlusCircle className="w-4 h-4 text-indigo-400" />
+                    </div>
+                    <div>
+                        <p className="font-bold text-indigo-400 text-xs">Registrar Bono</p>
+                        <p className="text-[9px] text-slate-500 hidden sm:block">Premio o meta</p>
+                    </div>
+                </button>
+
+                <button
+                    onClick={() => {
+                        alert("Función para Registrar Descuento - Se habilitará en breve");
+                    }}
+                    className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-rose-500/5 border border-rose-500/10 hover:bg-rose-500/10 hover:border-rose-500/30 transition-all group text-center"
+                >
+                    <div className="w-8 h-8 rounded-lg bg-rose-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <TrendingDown className="w-4 h-4 text-rose-400" />
+                    </div>
+                    <div>
+                        <p className="font-bold text-rose-400 text-xs">Registrar Descuento</p>
+                        <p className="text-[9px] text-slate-500 hidden sm:block">Faltas o cobros</p>
+                    </div>
+                </button>
+
+                <button
+                  onClick={() => setShowLiquidacionModal(true)}
+                  className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 hover:bg-slate-800 hover:border-slate-600 transition-all group text-center"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <UserMinus className="w-4 h-4 text-slate-400" />
                   </div>
                   <div>
-                    <p className="font-bold text-rose-400 text-xs">Liquidación</p>
+                    <p className="font-bold text-slate-400 text-xs">Liquidación</p>
                     <p className="text-[9px] text-slate-500 hidden sm:block">Baja de personal</p>
                   </div>
                 </button>
               </div>
             )}
+              </CardContent>
+            </Card>
 
             {/* Monto pagado acumulado */}
             {totalPagadoAcumulado > 0 && (
@@ -719,7 +878,24 @@ export function NominaPageClient({ trabajadores, defaultUserId, currentRole }: N
       <PagoModal
         open={showPagoModal}
         onOpenChange={setShowPagoModal}
-        nomina={payrollData}
+        nomina={payrollData ? { 
+          ...payrollData, 
+          reintegro: reintegroPendiente, 
+          pagos_completados: pagosCompletados,
+          adelantos: adelantos,
+          bonos: bonos,
+          descuentos: descuentos
+        } : {
+            trabajador_id: selectedId,
+            mes: today.getMonth() + 1,
+            anio: today.getFullYear(),
+            sueldo_base: perfil?.sueldo_base || 0,
+            pagos_completados: pagosCompletados,
+            bonos: bonos,
+            descuentos: descuentos,
+            adelantos: adelantos,
+            reintegro: reintegroPendiente
+        }}
         userRole={currentRole}
         trabajador={{ 
             id: selectedId, 

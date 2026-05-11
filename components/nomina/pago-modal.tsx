@@ -78,14 +78,44 @@ export function PagoModal({ open, onOpenChange, nomina, userRole, trabajador, on
     
     // Cálculos
     const sueldoBasePeriodo = (nomina?.sueldo_base || 0) / divisor
-    const bonos = (nroPago === maxPagos && incluirBonos) ? (nomina?.bonos || 0) : 0
-    const descuentos = nomina?.descuentos || 0
-    const adelantosPendientes = nomina?.adelantos || 0
     
-    // Deducción automática de adelantos
-    const montoPrevioNeto = sueldoBasePeriodo + bonos - descuentos
-    const deduccionAdelanto = Math.min(montoPrevioNeto > 0 ? montoPrevioNeto : 0, adelantosPendientes)
-    const montoFinalPagar = Math.max(0, montoPrevioNeto - deduccionAdelanto)
+    // CÁLCULO DE REINTEGRO (Diferencia de pagos anteriores si el sueldo subió)
+    // Nota: El sueldo_base en nomina ya está actualizado, pero los pagos anteriores se hicieron con el viejo.
+    // Como no guardamos el historial de sueldos por pago, el administrador sincroniza el sueldo primero.
+    // Si ya se pagaron cuotas, y el total pagado acumulado es menor a lo que debería ser (nro_pagos * sueldo_actual / divisor), hay reintegro.
+    // Pero para simplificar y ser consistentes con la UI principal, calculamos el reintegro si detectamos pagos previos.
+    // Usaremos una lógica de 'reintegro por cuotas pasadas' si el usuario sincronizó.
+    
+    // Si el usuario ya sincronizó, nomina.sueldo_base es 1800. 
+    // Pero sabemos que las cuotas anteriores se pagaron a 400 (base 1600).
+    // Necesitamos saber cuánto se pagó realmente.
+    const totalSueldoBasePagadoReal = (nomina?.pagos_completados || 0) * (nomina?.sueldo_base_anterior || (nomina?.sueldo_base - 200) || 1600) / divisor 
+    // Esto es complejo sin la columna sueldo_base_anterior.
+    
+    // MEJOR: Recibiremos el reintegro como prop o lo calcularemos basándonos en la diferencia 
+    // entre el sueldo del perfil y el de la nomina SI NO se ha sincronizado aún.
+    // Pero el usuario ya sincronizó (o lo hará). 
+    
+    // Volvamos a la lógica simple: Si el usuario quiere que aparezca como "faltante", 
+    // usaré el monto de 'bonos' o una lógica similar si el usuario sincronizó y se guardó la deuda.
+    
+    // DECISIÓN: Para que sea exacto, sumaremos el reintegro que calculamos en la pantalla principal.
+    // Como el modal recibe 'nomina', y la nomina ya tiene el sueldo nuevo, 
+    // el modal por sí solo no sabe cuánto fue el sueldo viejo.
+    
+    // Voy a pasar el reintegro calculado desde el padre.
+    const reintegro = (nomina as any)?.reintegro || 0
+    const sueldoBase = nomina?.sueldo_base || 0
+    const bonos = (nroPago === maxPagos && incluirBonos) ? (nomina?.bonos || 0) : ((nomina as any)?.bonos || 0)
+    const descuentos = (nomina as any)?.descuentos || 0
+    const adelantos = (nomina as any)?.adelantos || 0
+    
+    // Lógica unificada con el padre
+    const montoFinalPagar = Math.max(0, sueldoBasePeriodo + reintegro + bonos - descuentos - adelantos)
+
+    // Variables para la UI del modal (compatibilidad)
+    const adelantosPendientes = adelantos
+    const deduccionAdelanto = adelantos
 
     const cuentaSeleccionada = cuentas.find(c => c.id === selectedCuenta)
     const saldoSuficiente = montoFinalPagar <= 0 || (cuentaSeleccionada ? parseFloat(cuentaSeleccionada.saldo) >= montoFinalPagar : false)
@@ -160,8 +190,17 @@ export function PagoModal({ open, onOpenChange, nomina, userRole, trabajador, on
                                 <span className="text-slate-400">Sueldo del Periodo (1/{divisor})</span>
                                 <span className="text-white font-bold">S/ {sueldoBasePeriodo.toFixed(2)}</span>
                             </div>
+                            {reintegro > 0 && (
+                                <div className="flex justify-between text-sm border-y border-white/5 py-1.5 my-1">
+                                    <div className="flex flex-col">
+                                        <span className="text-indigo-400 font-bold">Reintegro (Ajuste Sueldo)</span>
+                                        <span className="text-[9px] text-slate-500 uppercase">Diferencia de cuotas anteriores</span>
+                                    </div>
+                                    <span className="text-indigo-400 font-black">+ S/ {reintegro.toFixed(2)}</span>
+                                </div>
+                            )}
                             {(nomina?.bonos || 0) > 0 && (
-                                <div className="flex justify-between items-start py-1.5 border-y border-white/5 my-1">
+                                <div className="flex justify-between items-start py-1.5 border-b border-white/5 mb-1">
                                     <div className="flex flex-col">
                                         <span className="text-slate-400 text-xs">Bonos del Mes (Meta)</span>
                                         {nroPago < maxPagos && (

@@ -6,12 +6,10 @@ import { useEffect, useState, useCallback } from 'react'
  * ScreenProtection — Provider global that prevents screenshots
  * 
  * Techniques used:
- * 1. CSS: -webkit-user-select: none, user-select: none
- * 2. CSS: @media print { display: none }
- * 3. JS: Block PrintScreen, Ctrl+Shift+S, Ctrl+P, etc.
- * 4. JS: Detect visibility change (switching apps) → blur content
- * 5. JS: Block right-click contextmenu
- * 6. CSS: Watermark overlay as deterrent
+ * 1. CSS: @media print { display: none }
+ * 2. JS: Block PrintScreen, Ctrl+Shift+S, Ctrl+P, etc.
+ * 3. JS: Detect visibility change (switching apps) → blur content
+ * 4. CSS: Watermark overlay as deterrent
  */
 export function ScreenProtection({ children, userName }: { children: React.ReactNode; userName?: string }) {
     const [isBlurred, setIsBlurred] = useState(false)
@@ -54,21 +52,12 @@ export function ScreenProtection({ children, userName }: { children: React.React
         }
     }, [])
 
-    // Block right-click
-    const handleContextMenu = useCallback((e: MouseEvent) => {
-        e.preventDefault()
-        return false
-    }, [])
+
 
     useEffect(() => {
         // Register event listeners
         document.addEventListener('keydown', handleKeyDown)
-        document.addEventListener('contextmenu', handleContextMenu)
 
-        // Block copy
-        document.addEventListener('copy', (e) => {
-            e.preventDefault()
-        })
 
         // Inject print protection styles
         const styleEl = document.createElement('style')
@@ -102,18 +91,15 @@ export function ScreenProtection({ children, userName }: { children: React.React
 
         return () => {
             document.removeEventListener('keydown', handleKeyDown)
-            document.removeEventListener('contextmenu', handleContextMenu)
             const existingStyle = document.getElementById('screen-protection-styles')
             if (existingStyle) existingStyle.remove()
         }
-    }, [handleKeyDown, handleContextMenu])
+    }, [handleKeyDown])
 
     return (
         <div 
             className="screen-protected-container"
             style={{ 
-                userSelect: 'none', 
-                WebkitUserSelect: 'none',
                 position: 'relative'
             }}
         >

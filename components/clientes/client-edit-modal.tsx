@@ -27,19 +27,19 @@ import { updateClientAction } from "@/actions/clientes"
 import { useRouter } from "next/navigation"
 
 const clientSchema = z.object({
-  nombres: z.string().min(3, "El nombre es requerido"),
-  dni: z.string().min(8, "DNI debe tener al menos 8 caracteres"),
-  telefono: z.string().min(9, "Teléfono es requerido"),
-  direccion: z.string().min(5, "Dirección es requerida"),
+  nombres: z.string(),
+  dni: z.string(),
+  telefono: z.string(),
+  direccion: z.string(),
   referencia: z.string().optional(),
-  giro_negocio: z.string().min(3, "Giro de negocio es requerido"),
-  fuentes_ingresos: z.string().min(5, "Describa sus fuentes de ingresos"),
-  ingresos_mensuales: z.number().min(0, "Ingresos mensuales requeridos"),
-  motivo_prestamo: z.string().min(10, "Explique el motivo del préstamo"),
-  sector_id: z.string().min(1, "Sector es requerido"),
+  giro_negocio: z.string(),
+  fuentes_ingresos: z.string(),
+  ingresos_mensuales: z.number().min(0),
+  motivo_prestamo: z.string(),
+  sector_id: z.string(),
   estado: z.enum(["activo", "inactivo"]),
   excepcion_voucher: z.boolean().default(false),
-  limite_prestamo: z.number().min(0, "El límite debe ser mayor o igual a 0"),
+  limite_prestamo: z.number().min(0),
 })
 
 interface ClientEditModalProps {
@@ -63,7 +63,17 @@ const DOCUMENTOS_REQUERIDOS = [
 
 export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }: ClientEditModalProps) {
   const isSuper = userRol === 'supervisor'
+  const isAsesor = userRol === 'asesor'
   const router = useRouter()
+
+  // Para asesor: un campo con valor existente es de solo lectura
+  const fieldHasValue = (value: any): boolean => {
+    if (value === null || value === undefined) return false
+    if (typeof value === 'string') return value.trim() !== ''
+    if (typeof value === 'number') return value > 0
+    return Boolean(value)
+  }
+  const lock = (value: any) => isAsesor && fieldHasValue(value)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sectores, setSectores] = useState<any[]>([])
@@ -169,7 +179,7 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
         <DialogHeader className="p-4 md:p-6 border-b border-white/5 bg-slate-900/50">
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <User className="w-5 h-5 text-blue-400" />
-            Editar Perfil del Cliente
+            {isAsesor ? 'Completar Datos del Cliente' : 'Editar Perfil del Cliente'}
           </DialogTitle>
         </DialogHeader>
 
@@ -200,33 +210,33 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
 
                 <div className="md:col-span-3 space-y-4">
                     <div className="space-y-2">
-                        <label className="text-xs text-slate-400 ml-1">Nombres Completos *</label>
-                        <Input 
+                        <label className="text-xs text-slate-400 ml-1">Nombres Completos</label>
+                        <Input
                             {...register("nombres")}
                             className="bg-slate-900 border-slate-800 focus:border-blue-500/50"
                             placeholder="Nombre del cliente"
-                            disabled={isSubmitting || isSuper}
+                            disabled={isSubmitting || isSuper || lock(cliente?.nombres)}
                         />
                         {errors.nombres && <p className="text-[10px] text-red-400">{errors.nombres.message as string}</p>}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-xs text-slate-400 ml-1">DNI *</label>
-                            <Input 
+                            <label className="text-xs text-slate-400 ml-1">DNI</label>
+                            <Input
                                 {...register("dni")}
                                 className="bg-slate-900 border-slate-800 focus:border-blue-500/50"
                                 placeholder="DNI"
-                                disabled={isSubmitting || isSuper}
+                                disabled={isSubmitting || isSuper || lock(cliente?.dni)}
                             />
                             {errors.dni && <p className="text-[10px] text-red-400">{errors.dni.message as string}</p>}
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs text-slate-400 ml-1">Teléfono *</label>
-                            <Input 
+                            <label className="text-xs text-slate-400 ml-1">Teléfono</label>
+                            <Input
                                 {...register("telefono")}
                                 className="bg-slate-900 border-slate-800 focus:border-blue-500/50"
                                 placeholder="999 999 999"
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || lock(cliente?.telefono)}
                             />
                             {errors.telefono && <p className="text-[10px] text-red-400">{errors.telefono.message as string}</p>}
                         </div>
@@ -241,12 +251,12 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <label className="text-xs text-slate-400 ml-1">Dirección *</label>
-                        <Input 
+                        <label className="text-xs text-slate-400 ml-1">Dirección</label>
+                        <Input
                             {...register("direccion")}
                             className="bg-slate-900 border-slate-800 focus:border-blue-500/50"
                             placeholder="Dirección exacta"
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || lock(cliente?.direccion)}
                         />
                         {errors.direccion && <p className="text-[10px] text-red-400">{errors.direccion.message as string}</p>}
                     </div>
@@ -260,10 +270,11 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
                         />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-xs text-slate-400 ml-1">Sector *</label>
-                        <Select 
+                        <label className="text-xs text-slate-400 ml-1">Sector</label>
+                        <Select
                             defaultValue={cliente?.sector_id}
                             onValueChange={(val) => setValue("sector_id", val)}
+                            disabled={isSubmitting || lock(cliente?.sector_id)}
                         >
                             <SelectTrigger className="bg-slate-900 border-slate-800">
                                 <SelectValue placeholder="Seleccione un sector" />
@@ -278,10 +289,10 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
                     </div>
                     <div className="space-y-2">
                         <label className="text-xs text-slate-400 ml-1">Estado</label>
-                        <Select 
+                        <Select
                             defaultValue={cliente?.estado || "activo"}
                             onValueChange={(val: any) => setValue("estado", val)}
-                            disabled={isSubmitting || isSuper}
+                            disabled={isSubmitting || isSuper || isAsesor}
                         >
                             <SelectTrigger className="bg-slate-900 border-slate-800 h-10">
                                 <SelectValue placeholder="Estado del cliente" />
@@ -294,10 +305,10 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
                     </div>
                     <div className="space-y-2">
                         <label className="text-xs text-slate-400 ml-1">Exento de Recibo (Voucher)</label>
-                        <Select 
+                        <Select
                             value={String(cliente?.excepcion_voucher || false)}
                             onValueChange={(val) => setValue("excepcion_voucher", val === "true")}
-                            disabled={isSubmitting || isSuper}
+                            disabled={isSubmitting || isSuper || isAsesor}
                         >
                             <SelectTrigger className="bg-slate-900 border-slate-800 h-10">
                                 <SelectValue placeholder="¿Exento de recibo?" />
@@ -319,14 +330,14 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
                 
                 <div className="space-y-4">
                     <div className="space-y-2">
-                        <label className="text-xs text-slate-400 ml-1">Giro de Negocio *</label>
+                        <label className="text-xs text-slate-400 ml-1">Giro de Negocio</label>
                         <div className="relative">
                             <Briefcase className="absolute left-3 top-3.5 h-4 w-4 text-blue-500" />
-                            <Input 
+                            <Input
                                 {...register("giro_negocio")}
                                 className="pl-9 bg-slate-900 border-slate-800 focus:border-blue-500/50"
                                 placeholder="Ej: Bodega, Restaurante, Taxi"
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || lock(cliente?.giro_negocio || cliente?.ocupacion)}
                             />
                         </div>
                         {errors.giro_negocio && <p className="text-[10px] text-red-400">{errors.giro_negocio.message as string}</p>}
@@ -334,26 +345,26 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-xs text-slate-400 ml-1">Fuentes de Ingresos *</label>
-                            <Input 
+                            <label className="text-xs text-slate-400 ml-1">Fuentes de Ingresos</label>
+                            <Input
                                 {...register("fuentes_ingresos")}
                                 className="bg-slate-900 border-slate-800 focus:border-blue-500/50"
                                 placeholder="Ej: Ventas, Servicios"
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || lock(cliente?.fuentes_ingresos)}
                             />
                             {errors.fuentes_ingresos && <p className="text-[10px] text-red-400">{errors.fuentes_ingresos.message as string}</p>}
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs text-slate-400 ml-1">Ingresos Mensuales (S/) *</label>
+                            <label className="text-xs text-slate-400 ml-1">Ingresos Mensuales (S/)</label>
                             <div className="relative">
                                 <DollarSign className="absolute left-3 top-3.5 h-4 w-4 text-emerald-500" />
-                                <Input 
+                                <Input
                                     type="number"
                                     step="0.01"
                                     {...register("ingresos_mensuales", { valueAsNumber: true })}
                                     className="pl-9 bg-slate-900 border-slate-800 focus:border-emerald-500/50"
                                     placeholder="2500"
-                                    disabled={isSubmitting}
+                                    disabled={isSubmitting || lock(cliente?.ingresos_mensuales)}
                                 />
                             </div>
                             {errors.ingresos_mensuales && <p className="text-[10px] text-red-400">{errors.ingresos_mensuales.message as string}</p>}
@@ -361,12 +372,12 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-xs text-slate-400 ml-1">Motivo del Préstamo *</label>
-                        <Textarea 
+                        <label className="text-xs text-slate-400 ml-1">Motivo del Préstamo</label>
+                        <Textarea
                             {...register("motivo_prestamo")}
                             className="bg-slate-900 border-slate-800 focus:border-blue-500/50 min-h-[80px] resize-none"
                             placeholder="Describa para qué utilizará el préstamo..."
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || lock(cliente?.motivo_prestamo)}
                         />
                         {errors.motivo_prestamo && <p className="text-[10px] text-red-400">{errors.motivo_prestamo.message as string}</p>}
                     </div>

@@ -1018,10 +1018,12 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                     ) : (
                     <>
                     {paginatedClientes.map((cliente) => {
-                         const asesorName = (userRol === 'admin' || userRol === 'supervisor') 
-                            ? perfiles.find(p => p.id === cliente.asesor_id)?.nombre_completo 
+                         const asesorName = (userRol === 'admin' || userRol === 'supervisor')
+                            ? perfiles.find(p => p.id === cliente.asesor_id)?.nombre_completo
                             : null
                          const isSelected = selectedClients.includes(cliente.id)
+                         const ASESOR_COMPLETABLE = ['telefono', 'direccion', 'sector_id', 'giro_negocio', 'fuentes_ingresos', 'motivo_prestamo']
+                         const asesorClientHasMissing = userRol === 'asesor' && ASESOR_COMPLETABLE.some(f => { const v = (cliente as any)[f]; return !v || (typeof v === 'string' && v.trim() === '') })
 
                          return (
                         <div key={cliente.id} className="contents group">
@@ -1064,12 +1066,12 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                 )}
                                             </div>
                                             <div className="flex items-center gap-2 mt-0.5">
-                                                <Badge variant="outline" className={cn("px-1.5 py-0 text-[10px] h-5 rounded-sm border-0 font-bold", 
+                                                <Badge variant="outline" className={cn("px-1.5 py-0 text-[10px] h-5 rounded-sm border-0 font-bold",
                                                     cliente.situacion === 'vencido' ? "bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse" :
-                                                    cliente.situacion === 'moroso' ? "bg-rose-500/20 text-rose-400 border border-rose-500/30" : 
-                                                    cliente.situacion === 'cpp' ? "bg-amber-500/20 text-orange-400 border border-amber-500/30" : 
-                                                    cliente.situacion === 'deuda' ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" : 
-                                                    cliente.situacion === 'ok' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : 
+                                                    cliente.situacion === 'moroso' ? "bg-rose-500/20 text-rose-400 border border-rose-500/30" :
+                                                    cliente.situacion === 'cpp' ? "bg-amber-500/20 text-orange-400 border border-amber-500/30" :
+                                                    cliente.situacion === 'deuda' ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" :
+                                                    cliente.situacion === 'ok' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" :
                                                     cliente.situacion === 'sin_deuda' ? "bg-blue-500/20 text-blue-400 border border-blue-500/30" :
                                                     "bg-slate-700/50 text-slate-400"
                                                 )}>
@@ -1096,6 +1098,12 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                     </Badge>
                                                 )}
                                             </div>
+                                            {asesorName && (
+                                                <div className="flex items-center gap-1 mt-1">
+                                                    <Users className="w-2.5 h-2.5 text-blue-400 shrink-0" />
+                                                    <span className="text-[9px] text-blue-400 font-medium truncate max-w-[130px]">{asesorName}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="text-right">
@@ -1192,7 +1200,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                             )}
                                             {(userRol === 'admin' || userRol === 'supervisor') && (
                                                 <>
-                                                    <DropdownMenuItem 
+                                                    <DropdownMenuItem
                                                         onClick={() => setEditingSectorCliente(cliente)}
                                                         className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-purple-400 font-bold"
                                                     >
@@ -1208,6 +1216,14 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                         <Edit className="w-4 h-4 mr-2" /> Editar Datos
                                                     </DropdownMenuItem>
                                                 </>
+                                            )}
+                                            {asesorClientHasMissing && (
+                                                <DropdownMenuItem
+                                                    onClick={() => setEditingCliente(clientOverrides[cliente.id] ? { ...cliente, ...clientOverrides[cliente.id] } : cliente)}
+                                                    className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400 font-bold"
+                                                >
+                                                    <Edit className="w-4 h-4 mr-2" /> Completar Datos
+                                                </DropdownMenuItem>
                                             )}
                                             <DropdownMenuItem onClick={() => setQuickViewClientId(cliente.id)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
                                                 <Eye className="w-4 h-4 mr-2" /> Ver Detalle Rápido
@@ -1455,7 +1471,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                             )}
                                             {(userRol === 'admin' || userRol === 'supervisor') && (
                                                 <>
-                                                    <DropdownMenuItem 
+                                                    <DropdownMenuItem
                                                         onClick={() => setEditingSectorCliente(cliente)}
                                                         className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-purple-400 font-bold"
                                                     >
@@ -1471,6 +1487,14 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                                         <Edit className="w-4 h-4 mr-2" /> Editar Datos
                                                     </DropdownMenuItem>
                                                 </>
+                                            )}
+                                            {asesorClientHasMissing && (
+                                                <DropdownMenuItem
+                                                    onClick={() => setEditingCliente(clientOverrides[cliente.id] ? { ...cliente, ...clientOverrides[cliente.id] } : cliente)}
+                                                    className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800 text-blue-400 font-bold"
+                                                >
+                                                    <Edit className="w-4 h-4 mr-2" /> Completar Datos
+                                                </DropdownMenuItem>
                                             )}
                                             <DropdownMenuItem onClick={() => setQuickViewClientId(cliente.id)} className="cursor-pointer hover:bg-slate-800 focus:bg-slate-800">
                                                 <Eye className="w-4 h-4 mr-2" /> Ver Detalle Rápido

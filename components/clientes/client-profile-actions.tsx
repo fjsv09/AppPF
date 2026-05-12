@@ -24,6 +24,8 @@ interface ClientProfileActionsProps {
   userRole: string
 }
 
+const ASESOR_COMPLETABLE_FIELDS = ['telefono', 'direccion', 'sector_id', 'giro_negocio', 'fuentes_ingresos', 'motivo_prestamo']
+
 export function ClientProfileActions({ cliente, userRole }: ClientProfileActionsProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [updatingExcepcion, setUpdatingExcepcion] = useState(false)
@@ -36,7 +38,13 @@ export function ClientProfileActions({ cliente, userRole }: ClientProfileActions
     setIsExempt(cliente.excepcion_voucher || false)
   }, [cliente.excepcion_voucher])
 
-  if (userRole !== 'admin' && userRole !== 'supervisor') return null
+  const isAsesor = userRole === 'asesor'
+  const asesorHasMissingFields = isAsesor && ASESOR_COMPLETABLE_FIELDS.some(f => {
+    const v = cliente[f]
+    return !v || (typeof v === 'string' && v.trim() === '')
+  })
+
+  if (userRole !== 'admin' && userRole !== 'supervisor' && !asesorHasMissingFields) return null
 
   const handleToggleBlock = async () => {
     const isBlocked = !!cliente.bloqueado_renovacion
@@ -84,14 +92,14 @@ export function ClientProfileActions({ cliente, userRole }: ClientProfileActions
 
   return (
     <div className="w-full">
-      {(userRole === 'admin' || userRole === 'supervisor') && (
-        <Button 
-          variant="outline" 
+      {(userRole === 'admin' || userRole === 'supervisor' || asesorHasMissingFields) && (
+        <Button
+          variant="outline"
           onClick={() => setIsEditModalOpen(true)}
           className="w-full bg-slate-900 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 hover:border-blue-500/50 transition-all duration-300 h-9 rounded-xl shadow-lg text-xs"
         >
           <Edit className="w-4 h-4 mr-2" />
-          Editar Perfil
+          {isAsesor ? 'Completar Datos' : 'Editar Perfil'}
         </Button>
       )}
 

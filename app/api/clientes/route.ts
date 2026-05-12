@@ -109,7 +109,7 @@ export async function PATCH(request: Request) {
     const supabaseAdmin = createAdminClient()
     const { data: perfil } = await supabaseAdmin.from('perfiles').select('rol, nombre_completo').eq('id', user.id).single()
     
-    if (perfil?.rol !== 'admin' && perfil?.rol !== 'supervisor') {
+    if (perfil?.rol !== 'admin' && perfil?.rol !== 'supervisor' && perfil?.rol !== 'asesor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -155,6 +155,22 @@ export async function PATCH(request: Request) {
             else solicitationPayload[key] = updateData[key]
         }
     })
+
+    // Asesor: solo puede completar campos vacíos, campos de identidad/estado son intocables
+    if (perfil.rol === 'asesor') {
+        const ASESOR_CLIENT_ALLOWED = ['telefono', 'direccion', 'referencia', 'sector_id', 'foto_perfil']
+        Object.keys(clientPayload).forEach(key => {
+            const allowed = ASESOR_CLIENT_ALLOWED.includes(key)
+            const currentVal = oldClient[key]
+            const isEmpty = currentVal === null || currentVal === undefined || currentVal === '' || currentVal === 0
+            if (!allowed || !isEmpty) delete clientPayload[key]
+        })
+        // Solicitation fields: solo eliminar los no permitidos (valores vacíos se permiten por migración)
+        const ASESOR_SOLIC_ALLOWED = ['giro_negocio', 'fuentes_ingresos', 'ingresos_mensuales', 'motivo_prestamo', 'gps_coordenadas', 'documentos_evaluacion']
+        Object.keys(solicitationPayload).forEach(key => {
+            if (!ASESOR_SOLIC_ALLOWED.includes(key)) delete solicitationPayload[key]
+        })
+    }
 
     // 1. Update Cliente table
     const { data: updated, error: clientError } = await supabaseAdmin

@@ -23,6 +23,8 @@ interface ClientDetailDrawerProps {
   onUpdate?: (updatedClient: any) => void
 }
 
+const ASESOR_COMPLETABLE_FIELDS = ['telefono', 'direccion', 'sector_id', 'giro_negocio', 'fuentes_ingresos', 'motivo_prestamo']
+
 export function ClientDetailDrawer({ cliente, isOpen, onClose, userRol = "asesor", onUpdate }: ClientDetailDrawerProps) {
   const [profileImageOpen, setProfileImageOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -31,6 +33,11 @@ export function ClientDetailDrawer({ cliente, isOpen, onClose, userRol = "asesor
 
   // Safe navigation logic
   if (!cliente) return null
+
+  const asesorHasMissingFields = userRol === 'asesor' && ASESOR_COMPLETABLE_FIELDS.some(f => {
+    const v = cliente[f]
+    return !v || (typeof v === 'string' && v.trim() === '')
+  })
 
   const formatMoney = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })
 
@@ -113,16 +120,16 @@ export function ClientDetailDrawer({ cliente, isOpen, onClose, userRol = "asesor
                   </div>
                </div>
                
-               {/* Admin Edit Action */}
-               {userRol === 'admin' && (
-                   <Button 
-                       variant="outline" 
-                       size="sm" 
+               {/* Edit Action */}
+               {(userRol === 'admin' || (userRol === 'asesor' && asesorHasMissingFields)) && (
+                   <Button
+                       variant="outline"
+                       size="sm"
                        className="h-8 bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
                        onClick={() => setIsEditModalOpen(true)}
                    >
                        <Edit className="w-3 h-3 mr-1.5" />
-                       Editar Perfil
+                       {userRol === 'asesor' ? 'Completar Datos' : 'Editar Perfil'}
                    </Button>
                )}
             </div>
@@ -270,9 +277,10 @@ export function ClientDetailDrawer({ cliente, isOpen, onClose, userRol = "asesor
             onClose={() => setProfileImageOpen(false)} 
         />
 
-        <ClientEditModal 
+        <ClientEditModal
             cliente={cliente}
             isOpen={isEditModalOpen}
+            userRol={userRol}
             onClose={() => setIsEditModalOpen(false)}
             onSuccess={(updated) => {
                 if (onUpdate) onUpdate(updated)

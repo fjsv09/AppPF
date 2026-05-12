@@ -100,58 +100,8 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
         setLocalPagoPor(searchParams.get('pago_por') || 'all')
     }, [searchParams, today, activeTipo])
 
-    const updateParams = (updates: Record<string, string | null>) => {
-        startTransition(() => {
-            const params = new URLSearchParams(searchParams.toString())
-            params.set('p_page', '1')
-            
-            Object.entries(updates).forEach(([key, value]) => {
-                if (value === null || value === 'all' || value === '') {
-                    params.delete(key)
-                } else {
-                    params.set(key, value)
-                }
-            })
-            
-            router.push(`${pathname}?${params.toString()}`, { scroll: false })
-        })
-    }
 
-    // Debounced search sync
-    useEffect(() => {
-        const timeout = setTimeout(() => {
-            if (localSearch !== (searchParams.get('q') || '')) {
-                updateParams({ q: localSearch })
-            }
-        }, 500)
-        return () => clearTimeout(timeout)
-    }, [localSearch])
 
-    // Debounced date sync
-    useEffect(() => {
-        const timeout = setTimeout(() => {
-            if (isRangeMode) {
-                const hasChanged = localFechaInicio !== (searchParams.get('fecha_inicio') || today) || 
-                                 localFechaFin !== (searchParams.get('fecha_fin') || today)
-                if (hasChanged) {
-                    updateParams({ 
-                        fecha_inicio: localFechaInicio, 
-                        fecha_fin: localFechaFin, 
-                        fecha: null 
-                    })
-                }
-            } else {
-                if (localFecha !== (searchParams.get('fecha') || today)) {
-                    updateParams({ 
-                        fecha: localFecha, 
-                        fecha_inicio: null, 
-                        fecha_fin: null 
-                    })
-                }
-            }
-        }, 800)
-        return () => clearTimeout(timeout)
-    }, [localFecha, localFechaInicio, localFechaFin, isRangeMode])
 
     const handleClearFilters = () => {
         setLocalSearch('')
@@ -163,14 +113,13 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
         setLocalTurno('all')
         setLocalMetodo('all')
         setLocalPagoPor('all')
+        setLocalTipo('cobros')
         setIsRangeMode(false)
-        
+
         startTransition(() => {
             const params = new URLSearchParams(searchParams.toString())
-            params.set('tipo', localTipo) // Preserve current type
+            params.set('tipo', 'cobros')
             params.set('p_page', '1')
-            
-            // Clean up everything else
             params.delete('q')
             params.delete('asesor')
             params.delete('supervisor')
@@ -180,6 +129,43 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
             params.delete('turno')
             params.delete('metodo')
             params.delete('pago_por')
+            router.push(`${pathname}?${params.toString()}`, { scroll: false })
+        })
+    }
+
+    const applyFilters = () => {
+        startTransition(() => {
+            const params = new URLSearchParams(searchParams.toString())
+            params.set('p_page', '1')
+            params.set('tipo', localTipo)
+
+            if (localSearch) params.set('q', localSearch)
+            else params.delete('q')
+
+            if (localAsesor !== 'all') params.set('asesor', localAsesor)
+            else params.delete('asesor')
+
+            if (localSupervisor !== 'all') params.set('supervisor', localSupervisor)
+            else params.delete('supervisor')
+
+            if (localTurno !== 'all') params.set('turno', localTurno)
+            else params.delete('turno')
+
+            if (localMetodo !== 'all') params.set('metodo', localMetodo)
+            else params.delete('metodo')
+
+            if (localPagoPor !== 'all') params.set('pago_por', localPagoPor)
+            else params.delete('pago_por')
+
+            if (isRangeMode) {
+                params.set('fecha_inicio', localFechaInicio)
+                params.set('fecha_fin', localFechaFin)
+                params.delete('fecha')
+            } else {
+                params.set('fecha', localFecha)
+                params.delete('fecha_inicio')
+                params.delete('fecha_fin')
+            }
 
             router.push(`${pathname}?${params.toString()}`, { scroll: false })
         })
@@ -188,26 +174,19 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
     const toggleDateMode = () => {
         const nextMode = !isRangeMode
         setIsRangeMode(nextMode)
-        
         if (nextMode) {
-            updateParams({ 
-                fecha_inicio: localFecha || today, 
-                fecha_fin: localFecha || today, 
-                fecha: null 
-            })
+            setLocalFechaInicio(localFecha || today)
+            setLocalFechaFin(localFecha || today)
         } else {
-            updateParams({ 
-                fecha: localFechaInicio || today, 
-                fecha_inicio: null, 
-                fecha_fin: null 
-            })
+            setLocalFecha(localFechaInicio || today)
         }
     }
 
-    const hasActiveFilters = localSearch || localAsesor !== 'all' || localSupervisor !== 'all' || 
+    const hasActiveFilters = !!(localSearch || localAsesor !== 'all' || localSupervisor !== 'all' ||
                             localTurno !== 'all' || localMetodo !== 'all' || localPagoPor !== 'all' ||
+                            localTipo !== 'cobros' ||
                             (isRangeMode && (localFechaInicio !== today || localFechaFin !== today)) ||
-                            (!isRangeMode && localFecha !== today)
+                            (!isRangeMode && localFecha !== today))
 
     const supervisores = perfiles.filter(p => p.rol === 'supervisor')
     const asesores = perfiles.filter(p => {
@@ -327,19 +306,16 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                 </div>
             </div>
 
-            <div className="sticky top-[var(--sat)] z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
-                {/* Admin Tabs */}
+            <div className="sticky top-[var(--sat)] z-30 flex flex-col md:flex-row md:items-center gap-2 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
+                {/* Admin Tabs (tipo) */}
                 {userRol === 'admin' && (
                     <div className="flex bg-slate-950/60 p-1 rounded-2xl border border-slate-800/80 shadow-inner md:w-auto w-full">
                         <button
-                            onClick={() => {
-                                setLocalTipo('cobros')
-                                updateParams({ tipo: 'cobros' })
-                            }}
+                            onClick={() => setLocalTipo('cobros')}
                             className={cn(
                                 "flex-1 md:flex-none px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2",
-                                localTipo === 'cobros' 
-                                    ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/40 ring-1 ring-emerald-400/30" 
+                                localTipo === 'cobros'
+                                    ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/40 ring-1 ring-emerald-400/30"
                                     : "text-slate-500 hover:text-slate-300 hover:bg-slate-800/50"
                             )}
                         >
@@ -347,14 +323,11 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                             Cobros
                         </button>
                         <button
-                            onClick={() => {
-                                setLocalTipo('renovaciones')
-                                updateParams({ tipo: 'renovaciones' })
-                            }}
+                            onClick={() => setLocalTipo('renovaciones')}
                             className={cn(
                                 "flex-1 md:flex-none px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2",
-                                localTipo === 'renovaciones' 
-                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40 ring-1 ring-blue-400/30" 
+                                localTipo === 'renovaciones'
+                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40 ring-1 ring-blue-400/30"
                                     : "text-slate-500 hover:text-slate-300 hover:bg-slate-800/50"
                             )}
                         >
@@ -364,6 +337,7 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                     </div>
                 )}
 
+                {/* Search */}
                 <div className="relative w-full md:flex-1 md:max-w-none min-w-[180px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <Input
@@ -377,11 +351,8 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                         )}
                     />
                     {localSearch && (
-                        <button 
-                            onClick={() => {
-                                setLocalSearch('')
-                                updateParams({ q: '' })
-                            }}
+                        <button
+                            onClick={() => setLocalSearch('')}
                             className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center text-slate-500 hover:text-white hover:bg-slate-800 rounded-full transition-all z-10"
                         >
                             <X className="h-3 w-3" />
@@ -389,84 +360,104 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                     )}
                 </div>
 
-                <div className="flex items-center gap-2 overflow-x-auto pb-2 -mb-2 w-full custom-scrollbar">
-                    
-                <div className={cn(
-                    "flex items-center bg-slate-950/50 border border-slate-700 rounded-2xl p-1 gap-1 pr-3 transition-all shrink-0",
-                    ((isRangeMode && (localFechaInicio !== today || localFechaFin !== today)) || (!isRangeMode && localFecha !== today)) && "border-blue-500/50 bg-blue-500/5 shadow-[0_0_10px_rgba(59,130,246,0.1)]"
-                )}>
-                    {userRol === 'admin' && (
-                        <button
-                            onClick={toggleDateMode}
-                            title={isRangeMode ? "Cambiar a fecha única" : "Cambiar a rango de fechas"}
-                            className={cn(
-                                "h-10 w-10 shrink-0 flex items-center justify-center rounded-xl transition-all border",
-                                isRangeMode 
-                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20 border-blue-400" 
-                                    : "bg-slate-800/50 border-slate-700 text-slate-400 hover:text-white"
-                            )}
-                        >
-                            <ArrowRight className={cn("w-4 h-4 transition-transform", isRangeMode ? "rotate-180" : "")} />
-                        </button>
-                    )}
-
-                    {isRangeMode ? (
-                        <div className="flex flex-1 items-center gap-1 min-w-0">
-                            <div className="relative flex-1 min-w-0 group/date">
-                                <span className="absolute left-8 top-1.5 text-[7px] font-black text-slate-500 uppercase tracking-tighter pointer-events-none">Desde</span>
-                                <CalendarDays className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500 group-hover/date:text-blue-400 transition-colors pointer-events-none" />
-                                <Input
-                                    type="date"
-                                    value={localFechaInicio}
-                                    onChange={(e) => setLocalFechaInicio(e.target.value)}
-                                    onClick={(e) => e.currentTarget.showPicker()}
-                                    className="h-10 pl-8 pr-8 pt-3 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[125px] focus-visible:ring-0 [color-scheme:dark] cursor-pointer"
-                                />
-                            </div>
-                            <div className="h-4 w-[1px] bg-slate-800 shrink-0" />
-                            <div className="relative flex-1 min-w-0 group/date">
-                                <span className="absolute left-8 top-1.5 text-[7px] font-black text-slate-500 uppercase tracking-tighter pointer-events-none">Hasta</span>
-                                <CalendarDays className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500 group-hover/date:text-blue-400 transition-colors pointer-events-none" />
-                                <Input
-                                    type="date"
-                                    value={localFechaFin}
-                                    onChange={(e) => setLocalFechaFin(e.target.value)}
-                                    onClick={(e) => e.currentTarget.showPicker()}
-                                    className="h-10 pl-8 pr-8 pt-3 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[125px] focus-visible:ring-0 [color-scheme:dark] cursor-pointer"
-                                />
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="relative flex-1 min-w-0 group/date">
-                            <span className="absolute left-9 top-1.5 text-[7px] font-black text-slate-500 uppercase tracking-tighter pointer-events-none">Fecha de Consulta</span>
-                            <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-hover/date:text-blue-400 transition-colors pointer-events-none" />
-                            <Input
-                                type="date"
-                                value={localFecha}
-                                onChange={(e) => setLocalFecha(e.target.value)}
-                                onClick={(e) => e.currentTarget.showPicker()}
-                                className="h-10 pl-9 pr-8 pt-3 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[160px] focus-visible:ring-0 [color-scheme:dark] cursor-pointer"
-                            />
-                        </div>
-                    )}
+                {/* Mobile-only action buttons: between search and filters */}
+                <div className="flex items-center gap-2 md:hidden">
+                    <Button
+                        onClick={applyFilters}
+                        disabled={!hasActiveFilters}
+                        size="sm"
+                        className={cn(
+                            "h-10 flex-1 flex items-center justify-center gap-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider",
+                            hasActiveFilters
+                                ? "bg-blue-600 hover:bg-blue-500 text-white border-transparent shadow-lg shadow-blue-900/30"
+                                : "bg-slate-800/50 border border-slate-700 text-slate-600 cursor-not-allowed"
+                        )}
+                    >
+                        <Search className="w-4 h-4" />
+                        Aplicar
+                    </Button>
+                    <Button
+                        onClick={handleClearFilters}
+                        disabled={!hasActiveFilters}
+                        size="icon"
+                        variant="ghost"
+                        className={cn(
+                            "h-10 w-10 rounded-xl transition-all",
+                            hasActiveFilters
+                                ? "text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20"
+                                : "text-slate-700 border border-slate-800 cursor-not-allowed"
+                        )}
+                    >
+                        <X className="w-4 h-4" />
+                    </Button>
                 </div>
 
-                    {hasActiveFilters && (
-                        <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={handleClearFilters}
-                            className="h-10 px-3 text-[10px] font-black text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 rounded-xl uppercase tracking-widest shrink-0 animate-in fade-in zoom-in duration-300"
-                        >
-                            <X className="w-3 h-3 mr-1.5" /> Limpiar
-                        </Button>
-                    )}
+                {/* Filters row */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-2 -mb-2 w-full custom-scrollbar">
+
+                    {/* Date picker */}
+                    <div className={cn(
+                        "flex items-center bg-slate-950/50 border border-slate-700 rounded-2xl p-1 gap-1 pr-3 transition-all shrink-0",
+                        ((isRangeMode && (localFechaInicio !== today || localFechaFin !== today)) || (!isRangeMode && localFecha !== today)) && "border-blue-500/50 bg-blue-500/5 shadow-[0_0_10px_rgba(59,130,246,0.1)]"
+                    )}>
+                        {userRol === 'admin' && (
+                            <button
+                                onClick={toggleDateMode}
+                                title={isRangeMode ? "Cambiar a fecha única" : "Cambiar a rango de fechas"}
+                                className={cn(
+                                    "h-10 w-10 shrink-0 flex items-center justify-center rounded-xl transition-all border",
+                                    isRangeMode
+                                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20 border-blue-400"
+                                        : "bg-slate-800/50 border-slate-700 text-slate-400 hover:text-white"
+                                )}
+                            >
+                                <ArrowRight className={cn("w-4 h-4 transition-transform", isRangeMode ? "rotate-180" : "")} />
+                            </button>
+                        )}
+
+                        {isRangeMode ? (
+                            <div className="flex flex-1 items-center gap-1 min-w-0">
+                                <div className="relative flex-1 min-w-0 group/date">
+                                    <span className="absolute left-8 top-1.5 text-[7px] font-black text-slate-500 uppercase tracking-tighter pointer-events-none">Desde</span>
+                                    <CalendarDays className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500 group-hover/date:text-blue-400 transition-colors pointer-events-none" />
+                                    <Input
+                                        type="date"
+                                        value={localFechaInicio}
+                                        onChange={(e) => setLocalFechaInicio(e.target.value)}
+                                        onClick={(e) => e.currentTarget.showPicker()}
+                                        className="h-10 pl-8 pr-8 pt-3 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[125px] focus-visible:ring-0 [color-scheme:dark] cursor-pointer"
+                                    />
+                                </div>
+                                <div className="h-4 w-[1px] bg-slate-800 shrink-0" />
+                                <div className="relative flex-1 min-w-0 group/date">
+                                    <span className="absolute left-8 top-1.5 text-[7px] font-black text-slate-500 uppercase tracking-tighter pointer-events-none">Hasta</span>
+                                    <CalendarDays className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500 group-hover/date:text-blue-400 transition-colors pointer-events-none" />
+                                    <Input
+                                        type="date"
+                                        value={localFechaFin}
+                                        onChange={(e) => setLocalFechaFin(e.target.value)}
+                                        onClick={(e) => e.currentTarget.showPicker()}
+                                        className="h-10 pl-8 pr-8 pt-3 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[125px] focus-visible:ring-0 [color-scheme:dark] cursor-pointer"
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="relative flex-1 min-w-0 group/date">
+                                <span className="absolute left-9 top-1.5 text-[7px] font-black text-slate-500 uppercase tracking-tighter pointer-events-none">Fecha de Consulta</span>
+                                <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-hover/date:text-blue-400 transition-colors pointer-events-none" />
+                                <Input
+                                    type="date"
+                                    value={localFecha}
+                                    onChange={(e) => setLocalFecha(e.target.value)}
+                                    onClick={(e) => e.currentTarget.showPicker()}
+                                    className="h-10 pl-9 pr-8 pt-3 bg-transparent border-0 text-[11px] text-slate-300 font-bold w-[160px] focus-visible:ring-0 [color-scheme:dark] cursor-pointer"
+                                />
+                            </div>
+                        )}
+                    </div>
 
                     {userRol === 'admin' && supervisores.length > 0 && (
-                        <Select value={localSupervisor} onValueChange={(val) => {
-                            setLocalSupervisor(val)
-                            updateParams({ supervisor: val, asesor: 'all' })
-                        }}>
+                        <Select value={localSupervisor} onValueChange={(val) => { setLocalSupervisor(val); setLocalAsesor('all') }}>
                             <SelectTrigger className={cn(
                                 "h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
                                 localSupervisor !== 'all' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
@@ -487,17 +478,14 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                     )}
 
                     {(userRol === 'admin' || userRol === 'supervisor') && asesores.length > 0 && (
-                        <Select value={localAsesor} onValueChange={(val) => {
-                            setLocalAsesor(val)
-                            updateParams({ asesor: val })
-                        }}>
+                        <Select value={localAsesor} onValueChange={setLocalAsesor}>
                             <SelectTrigger className={cn(
                                 "h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
                                 localAsesor !== 'all' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
                                 isPending && "opacity-70"
                             )}>
                                 <div className="flex items-center gap-2 truncate">
-                                    <User className={cn("w-3.5 h-3.5 shrink-0", localAsesor !== 'all' ? "text-blue-400" : "text-blue-400")} />
+                                    <User className="w-3.5 h-3.5 shrink-0 text-blue-400" />
                                     <SelectValue placeholder="Asesor" />
                                 </div>
                             </SelectTrigger>
@@ -510,10 +498,7 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                         </Select>
                     )}
 
-                    <Select value={localPagoPor} onValueChange={(val) => {
-                        setLocalPagoPor(val)
-                        updateParams({ pago_por: val })
-                    }}>
+                    <Select value={localPagoPor} onValueChange={setLocalPagoPor}>
                         <SelectTrigger className={cn(
                             "h-10 w-[180px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
                             localPagoPor !== 'all' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
@@ -532,10 +517,7 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                         </SelectContent>
                     </Select>
 
-                    <Select value={localTurno} onValueChange={(val) => {
-                        setLocalTurno(val)
-                        updateParams({ turno: val })
-                    }}>
+                    <Select value={localTurno} onValueChange={setLocalTurno}>
                         <SelectTrigger className={cn(
                             "h-10 w-[140px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 shrink-0 transition-all",
                             localTurno !== 'all' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
@@ -553,10 +535,7 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                         </SelectContent>
                     </Select>
 
-                    <Select value={localMetodo} onValueChange={(val) => {
-                        setLocalMetodo(val)
-                        updateParams({ metodo: val })
-                    }}>
+                    <Select value={localMetodo} onValueChange={setLocalMetodo}>
                         <SelectTrigger className={cn(
                             "h-10 w-[160px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 shrink-0 transition-all",
                             localMetodo !== 'all' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
@@ -577,6 +556,38 @@ export function RecentPaymentsList({ pagos, totalRecords, perfiles, userRol, use
                         </SelectContent>
                     </Select>
 
+                    {/* Desktop-only action buttons: at end of filter row */}
+                    <div className="hidden md:flex items-center gap-1.5 shrink-0 ml-auto">
+                        <Button
+                            onClick={applyFilters}
+                            disabled={!hasActiveFilters}
+                            size="icon"
+                            className={cn(
+                                "h-10 w-10 rounded-xl transition-all",
+                                hasActiveFilters
+                                    ? "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/30"
+                                    : "bg-slate-800/50 border border-slate-700 text-slate-600 cursor-not-allowed"
+                            )}
+                            title="Aplicar filtros"
+                        >
+                            <Search className="w-4 h-4" />
+                        </Button>
+                        <Button
+                            onClick={handleClearFilters}
+                            disabled={!hasActiveFilters}
+                            size="icon"
+                            variant="ghost"
+                            className={cn(
+                                "h-10 w-10 rounded-xl transition-all",
+                                hasActiveFilters
+                                    ? "text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20"
+                                    : "text-slate-700 border border-slate-800 cursor-not-allowed"
+                            )}
+                            title="Limpiar filtros"
+                        >
+                            <X className="w-4 h-4" />
+                        </Button>
+                    </div>
                 </div>
             </div>
 

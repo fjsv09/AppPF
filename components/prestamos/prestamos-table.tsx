@@ -171,10 +171,15 @@ export function PrestamosTable({
     const [isMountedView, setIsMountedView] = useState(false)
     const [showMap, setShowMap] = useState(false)
     const [localSearch, setLocalSearch] = useState(searchParams.get('search') || '')
+    const [appliedSearch, setAppliedSearch] = useState(searchParams.get('search') || '')
     const [localSupervisor, setLocalSupervisor] = useState(searchParams.get('supervisor') || 'todos')
     const [localAsesor, setLocalAsesor] = useState(searchParams.get('asesor') || 'todos')
     const [localSector, setLocalSector] = useState(searchParams.get('sector') || 'todos')
     const [localFrecuencia, setLocalFrecuencia] = useState(searchParams.get('frecuencia') || 'todos')
+    const [localTab, setLocalTab] = useState<FilterTab>(
+        (searchParams.get('tab') as FilterTab) ||
+        ((userRol === 'admin' || userRol === 'supervisor' || userRol === 'secretaria') ? 'en_curso' : 'ruta_hoy')
+    )
     const [canRequestDueToTime, setCanRequestDueToTime] = useState(true)
 
     // Admin/Mgmt states
@@ -272,18 +277,20 @@ export function PrestamosTable({
     const filtroSector = searchParams.get('sector') || 'todos'
     const filtroFrecuencia = searchParams.get('frecuencia') || 'todos'
 
-    // Sync local state with URL for external changes (back/forward, kpi cards)
+    // Sync local state with URL for external changes (back/forward)
     useEffect(() => {
         setLocalSearch(searchQuery)
+        setAppliedSearch(searchQuery)
         setLocalSupervisor(filtroSupervisor)
         setLocalAsesor(filtroAsesor)
         setLocalSector(filtroSector)
         setLocalFrecuencia(filtroFrecuencia)
-    }, [searchQuery, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia])
+        setLocalTab((searchParams.get('tab') as FilterTab) || defaultTab)
+    }, [searchQuery, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia, searchParams])
 
     useEffect(() => {
         setItemsToShow(ITEMS_PER_LOAD)
-    }, [activeFilter, localSearch, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia])
+    }, [activeFilter, appliedSearch, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia])
 
     // --- PROTECCIÓN DE RUTA (VISITAS CONTROL) ---
     useEffect(() => {
@@ -304,56 +311,63 @@ export function PrestamosTable({
         updateParamsContext(updates)
     }
 
-    // Derived: check if any filter is active
+    // Derived: check if any filter is active (pending or applied)
     const hasActiveFilters = useMemo(() => {
-        return (localSearch !== '') || 
-               (localSupervisor !== 'todos') || 
-               (localAsesor !== 'todos') || 
-               (localSector !== 'todos') || 
-               (localFrecuencia !== 'todos')
-    }, [localSearch, localSupervisor, localAsesor, localSector, localFrecuencia])
+        return (localSearch !== '') ||
+               (localSupervisor !== 'todos') ||
+               (localAsesor !== 'todos') ||
+               (localSector !== 'todos') ||
+               (localFrecuencia !== 'todos') ||
+               (localTab !== defaultTab)
+    }, [localSearch, localSupervisor, localAsesor, localSector, localFrecuencia, localTab, defaultTab])
 
-    const handleTabChange = (val: FilterTab) => {
-        updateParams({ tab: val, page: '1' })
-    }
+    const handleTabChange = (val: FilterTab) => setLocalTab(val)
 
-    // Handlers for instant UI feedback
-    const handleSearch = (val: string) => {
-        setLocalSearch(val)
-    }
+    // Handlers: only update local (pending) state — no URL update until applyFilters()
+    const handleSearch = (val: string) => setLocalSearch(val)
 
     const handleSupervisorFilter = (val: string) => {
         setLocalSupervisor(val)
-        updateParams({ supervisor: val, asesor: 'todos', sector: 'todos' })
+        setLocalAsesor('todos')
+        setLocalSector('todos')
     }
 
     const handleAsesorFilter = (val: string) => {
         setLocalAsesor(val)
-        updateParams({ asesor: val, sector: 'todos' })
+        setLocalSector('todos')
     }
 
-    const handleSectorFilter = (val: string) => {
-        setLocalSector(val)
-        updateParams({ sector: val })
-    }
+    const handleSectorFilter = (val: string) => setLocalSector(val)
 
-    const handleFrequencyFilter = (val: string) => {
-        setLocalFrecuencia(val)
-        updateParams({ frecuencia: val })
-    }
+    const handleFrequencyFilter = (val: string) => setLocalFrecuencia(val)
 
     const handleClearFilters = () => {
         setLocalSearch('')
+        setAppliedSearch('')
         setLocalSupervisor('todos')
         setLocalAsesor('todos')
         setLocalSector('todos')
         setLocalFrecuencia('todos')
-        updateParams({ 
-            search: null, 
-            supervisor: 'todos', 
-            asesor: 'todos', 
-            sector: 'todos', 
-            frecuencia: 'todos'
+        setLocalTab(defaultTab)
+        updateParams({
+            search: null,
+            supervisor: 'todos',
+            asesor: 'todos',
+            sector: 'todos',
+            frecuencia: 'todos',
+            tab: defaultTab
+        })
+    }
+
+    const applyFilters = () => {
+        setAppliedSearch(localSearch)
+        updateParams({
+            search: localSearch || null,
+            supervisor: localSupervisor,
+            asesor: localAsesor,
+            sector: localSector,
+            frecuencia: localFrecuencia,
+            tab: localTab
         })
     }
 
@@ -409,21 +423,6 @@ export function PrestamosTable({
     }, [systemSchedule, userRol, isBlockedByCuadre])
     // --- FIN LOGICA DE HORARIO ---
 
-    // Búsqueda híbrida: filtro inmediato client-side + sync debounced a URL para refetch server-side.
-    // Debounce de 600ms para reducir round-trips innecesarios al servidor.
-    useEffect(() => {
-        const handler = setTimeout(() => {
-            const currentUrlSearch = searchParams.get('search') || ''
-            if (localSearch === currentUrlSearch) return
-            const params = new URLSearchParams(searchParams.toString())
-            if (localSearch) params.set('search', localSearch)
-            else params.delete('search')
-            startTransition(() => {
-                router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-            })
-        }, 600)
-        return () => clearTimeout(handler)
-    }, [localSearch, searchParams, pathname, router])
 
 
 
@@ -635,18 +634,15 @@ export function PrestamosTable({
     const filteredPrestamos = useMemo(() => {
         let filtered = [...processedPrestamos]
 
-        // 1. Text Search (local state, no URL round-trip)
-        // Accent-insensitive + multi-word: "maria ramos" finds "José María Pupuche Ramos"
-        if (localSearch) {
+        // 1. Text Search (applied state — only updates when applyFilters() is called)
+        if (appliedSearch) {
             const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-            const words = norm(localSearch).split(/\s+/).filter(Boolean)
+            const words = norm(appliedSearch).split(/\s+/).filter(Boolean)
             filtered = filtered.filter(p => {
                 const nombre = norm(p.clientes?.nombres || '')
                 const dni = p.clientes?.dni || ''
                 const id = p.id.toLowerCase()
-                // DNI / ID: basta con que contenga el término completo
-                if (dni.includes(localSearch.toLowerCase()) || id.includes(localSearch.toLowerCase())) return true
-                // Nombre: TODAS las palabras deben aparecer en algún lugar del nombre
+                if (dni.includes(appliedSearch.toLowerCase()) || id.includes(appliedSearch.toLowerCase())) return true
                 return words.every(w => nombre.includes(w))
             })
         }
@@ -854,7 +850,7 @@ export function PrestamosTable({
         })
 
         return filtered
-    }, [processedPrestamos, activeFilter, localSearch, localSupervisor, localAsesor, localSector, localFrecuencia, userRol, perfiles, sortBy, sortOrder])
+    }, [processedPrestamos, activeFilter, appliedSearch, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia, userRol, perfiles, sortBy, sortOrder])
 
 
 
@@ -947,8 +943,8 @@ export function PrestamosTable({
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             {/* Main Filter Bar - Responsive & Clean */}
-            <div className="sticky top-[var(--sat)] z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
-                
+            <div className="sticky top-[var(--sat)] z-30 flex flex-col md:flex-row md:items-center gap-2 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
+
                 {/* Search */}
                 <div className="relative w-full md:flex-1">
                     {isPending ? (
@@ -967,6 +963,38 @@ export function PrestamosTable({
                     />
                 </div>
 
+                {/* Mobile-only action buttons: between search and filters */}
+                <div className="flex items-center gap-2 md:hidden">
+                    <Button
+                        onClick={applyFilters}
+                        disabled={!hasActiveFilters}
+                        size="sm"
+                        className={cn(
+                            "h-10 flex-1 flex items-center justify-center gap-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider",
+                            hasActiveFilters
+                                ? "bg-blue-600 hover:bg-blue-500 text-white border-transparent shadow-lg shadow-blue-900/30"
+                                : "bg-slate-800/50 border border-slate-700 text-slate-600 cursor-not-allowed"
+                        )}
+                    >
+                        <Search className="w-4 h-4" />
+                        Aplicar
+                    </Button>
+                    <Button
+                        onClick={handleClearFilters}
+                        disabled={!hasActiveFilters}
+                        size="icon"
+                        variant="ghost"
+                        className={cn(
+                            "h-10 w-10 rounded-xl transition-all",
+                            hasActiveFilters
+                                ? "text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20"
+                                : "text-slate-700 border border-slate-800 cursor-not-allowed"
+                        )}
+                    >
+                        <X className="w-4 h-4" />
+                    </Button>
+                </div>
+
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     {/* View Toggle (Mobile Only) - Solo Admin */}
                     {userRol === 'admin' && (
@@ -983,13 +1011,13 @@ export function PrestamosTable({
                     )}
 
                     {/* View Filter */}
-                    <Select value={activeFilter} onValueChange={(val) => handleTabChange(val as FilterTab)}>
+                    <Select value={localTab} onValueChange={(val) => handleTabChange(val as FilterTab)}>
                         <SelectTrigger className={cn(
                             "h-10 w-auto min-w-[150px] shrink-0 bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3 transition-all",
-                            activeFilter !== 'ruta_hoy' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
+                            localTab !== defaultTab && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
                             isPending && "opacity-70"
                         )}>
-                            <ListFilter className={cn("w-3 h-3 mr-2 shrink-0", activeFilter !== 'ruta_hoy' ? "text-blue-400" : "text-emerald-400")} />
+                            <ListFilter className={cn("w-3 h-3 mr-2 shrink-0", localTab !== defaultTab ? "text-blue-400" : "text-emerald-400")} />
                             <SelectValue placeholder="Préstamos" />
                         </SelectTrigger>
                         <SelectContent className="bg-slate-900 border-slate-800">
@@ -1031,19 +1059,6 @@ export function PrestamosTable({
                         <MapPin className={cn("w-4 h-4 mr-2", showMap ? "text-emerald-300 animate-bounce" : "text-emerald-400")} />
                         {showMap ? "Lista" : "Mapa"}
                     </Button>
-
-                    {/* Filter Action: Clear All */}
-                    {hasActiveFilters && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleClearFilters}
-                            className="h-10 px-3 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 rounded-xl transition-all flex items-center gap-2 group"
-                        >
-                            <X className="w-4 h-4 group-hover:rotate-90 transition-transform" />
-                            <span className="text-xs font-bold uppercase tracking-wider">Limpiar</span>
-                        </Button>
-                    )}
 
                     {/* Frecuencia Filter */}
                     <Select value={localFrecuencia} onValueChange={handleFrequencyFilter}>
@@ -1118,6 +1133,39 @@ export function PrestamosTable({
                             </SelectContent>
                         </Select>
                     )}
+
+                    {/* Desktop-only action buttons: at end of filter row */}
+                    <div className="hidden md:flex items-center gap-1.5 shrink-0 ml-auto">
+                        <Button
+                            onClick={applyFilters}
+                            disabled={!hasActiveFilters}
+                            size="icon"
+                            className={cn(
+                                "h-10 w-10 rounded-xl transition-all",
+                                hasActiveFilters
+                                    ? "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/30"
+                                    : "bg-slate-800/50 border border-slate-700 text-slate-600 cursor-not-allowed"
+                            )}
+                            title="Aplicar filtros"
+                        >
+                            <Search className="w-4 h-4" />
+                        </Button>
+                        <Button
+                            onClick={handleClearFilters}
+                            disabled={!hasActiveFilters}
+                            size="icon"
+                            variant="ghost"
+                            className={cn(
+                                "h-10 w-10 rounded-xl transition-all",
+                                hasActiveFilters
+                                    ? "text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20"
+                                    : "text-slate-700 border border-slate-800 cursor-not-allowed"
+                            )}
+                            title="Limpiar filtros"
+                        >
+                            <X className="w-4 h-4" />
+                        </Button>
+                    </div>
                 </div>
             </div>
 

@@ -115,6 +115,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
     const [localAsesor, setLocalAsesor] = useState(filtroAsesor)
     const [localSector, setLocalSector] = useState(filtroSector)
     const [localFrecuencia, setLocalFrecuencia] = useState(filtroFrecuencia)
+    const [localTab, setLocalTab] = useState<FilterTab>((searchParams.get('tab') as FilterTab) || 'todos')
     const [fechaFiltro, setFechaFiltro] = useState<string>('')
     const [selectedClients, setSelectedClients] = useState<string[]>([]) // For bulk actions
     const [showMap, setShowMap] = useState<boolean>(false)
@@ -268,48 +269,45 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         })
     }
 
-    // 4. Sync local search and filters with URL (for external changes like KPI cards or Back button)
+    // 4. Sync local state with URL (for external changes like back button or programmatic navigation)
     useEffect(() => {
         setLocalSearch(searchQuery)
         setLocalSupervisor(filtroSupervisor)
         setLocalAsesor(filtroAsesor)
         setLocalSector(filtroSector)
         setLocalFrecuencia(filtroFrecuencia)
-    }, [searchQuery, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia])
+        setLocalTab((searchParams.get('tab') as FilterTab) || 'todos')
+    }, [searchQuery, filtroSupervisor, filtroAsesor, filtroSector, filtroFrecuencia, searchParams])
 
-    // Derived: check if any filter is active
+    // Derived: check if any filter is active (pending or applied)
     const hasActiveFilters = useMemo(() => {
-        return (localSearch !== '') || 
-               (localSupervisor !== 'todos') || 
-               (localAsesor !== 'todos') || 
-               (localSector !== 'todos') || 
-               (localFrecuencia !== 'todos')
-    }, [localSearch, localSupervisor, localAsesor, localSector, localFrecuencia])
+        return (localSearch !== '') ||
+               (localSupervisor !== 'todos') ||
+               (localAsesor !== 'todos') ||
+               (localSector !== 'todos') ||
+               (localFrecuencia !== 'todos') ||
+               (localTab !== 'todos')
+    }, [localSearch, localSupervisor, localAsesor, localSector, localFrecuencia, localTab])
 
-    // Handlers for instant UI feedback
+    // Handlers: only update local (pending) state — no URL update until applyFilters()
     const handleSearch = (val: string) => {
         setLocalSearch(val)
     }
 
     const handleSupervisorFilter = (val: string) => {
         setLocalSupervisor(val)
-        updateParams({ supervisor: val, asesor: 'todos', sector: 'todos', page: '1' })
+        setLocalAsesor('todos')
+        setLocalSector('todos')
     }
 
     const handleAsesorFilter = (val: string) => {
         setLocalAsesor(val)
-        updateParams({ asesor: val, sector: 'todos', page: '1' })
+        setLocalSector('todos')
     }
 
-    const handleSectorFilter = (val: string) => {
-        setLocalSector(val)
-        updateParams({ sector: val, page: '1' })
-    }
+    const handleSectorFilter = (val: string) => setLocalSector(val)
 
-    const handleFrequencyFilter = (val: string) => {
-        setLocalFrecuencia(val)
-        updateParams({ frecuencia: val, page: '1' })
-    }
+    const handleFrequencyFilter = (val: string) => setLocalFrecuencia(val)
 
     const handleClearFilters = () => {
         setLocalSearch('')
@@ -317,25 +315,29 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         setLocalAsesor('todos')
         setLocalSector('todos')
         setLocalFrecuencia('todos')
-        updateParams({ 
-            q: null, 
-            supervisor: 'todos', 
-            asesor: 'todos', 
-            sector: 'todos', 
+        setLocalTab('todos')
+        updateParams({
+            q: null,
+            supervisor: 'todos',
+            asesor: 'todos',
+            sector: 'todos',
             frecuencia: 'todos',
-            page: '1' 
+            tab: 'todos',
+            page: '1'
         })
     }
 
-    // Debounce Search Effect
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            if (localSearch !== searchQuery) {
-                updateParams({ q: localSearch || null })
-            }
-        }, 600)
-        return () => clearTimeout(timer)
-    }, [localSearch, searchQuery])
+    const applyFilters = () => {
+        updateParams({
+            q: localSearch || null,
+            supervisor: localSupervisor,
+            asesor: localAsesor,
+            sector: localSector,
+            frecuencia: localFrecuencia,
+            tab: localTab,
+            page: '1'
+        })
+    }
 
     // Reset itemsToShow on filter changes
     useEffect(() => {
@@ -487,10 +489,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
 
     const totalDebt = filteredClientes.reduce((acc, c) => acc + (c.stats.totalDebt || 0), 0)
 
-    const handleFilterChange = (val: string) => updateParams({ tab: val })
-    const handleSupervisorChange = (val: string) => updateParams({ supervisor: val })
-    const handleAsesorChange = (val: string) => updateParams({ asesor: val })
-    const handleSectorChange = (val: string) => updateParams({ sector: val })
+    const handleFilterChange = (val: string) => setLocalTab(val as FilterTab)
 
     // Bulk Actions Logic
     const selectedClientsCurrentAsesorIds = useMemo(() => {
@@ -571,11 +570,11 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
              {/* KPI Grid - Reactive to URL transitions */}
              <div className="kpi-grid lg:grid-cols-5 mb-6">
                  {/* Card 1: Total */}
-                 <div 
+                 <div
                     onClick={() => handleFilterChange('todos')}
                     className={cn(
                         "kpi-card group cursor-pointer h-full transition-all duration-300",
-                        activeFilter === 'todos' ? "border-blue-500/50 bg-blue-950/20 shadow-[0_0_15px_-5px_rgba(59,130,246,0.2)]" : "hover:border-blue-500/30 hover:scale-[1.02]",
+                        localTab === 'todos' ? "border-blue-500/50 bg-blue-950/20 shadow-[0_0_15px_-5px_rgba(59,130,246,0.2)]" : "hover:border-blue-500/30 hover:scale-[1.02]",
                         isPending && "opacity-80"
                     )}
                 >
@@ -593,15 +592,15 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                              </span>
                          )}
                     </div>
-                    {activeFilter === 'todos' && <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-500/50" />}
+                    {localTab === 'todos' && <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-500/50" />}
                  </div>
 
                  {/* Card 2: Con Deuda */}
-                 <div 
+                 <div
                     onClick={() => handleFilterChange('con_deuda')}
                     className={cn(
                         "kpi-card group cursor-pointer h-full transition-all duration-300",
-                        activeFilter === 'con_deuda' ? "border-amber-500/50 bg-amber-950/20 shadow-[0_0_15px_-5px_rgba(245,158,11,0.2)]" : "hover:border-amber-500/30 hover:scale-[1.02]",
+                        localTab === 'con_deuda' ? "border-amber-500/50 bg-amber-950/20 shadow-[0_0_15px_-5px_rgba(245,158,11,0.2)]" : "hover:border-amber-500/30 hover:scale-[1.02]",
                         isPending && "opacity-80"
                     )}
                 >
@@ -613,16 +612,16 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                     <div className="mt-2 text-amber-400 flex items-center gap-1">
                         <span className="kpi-badge bg-amber-950/50 text-amber-400 border border-amber-900/50">SALDO PENDIENTE</span>
                     </div>
-                    {activeFilter === 'con_deuda' && <div className="absolute bottom-0 left-0 w-full h-1 bg-amber-500/50" />}
+                    {localTab === 'con_deuda' && <div className="absolute bottom-0 left-0 w-full h-1 bg-amber-500/50" />}
                  </div>
 
                  {/* Card 3: Activos con Deuda */}
-                 <div 
+                 <div
                     onClick={() => handleFilterChange('activos_deuda')}
                     className={cn(
                         "kpi-card group cursor-pointer h-full relative overflow-hidden transition-all duration-300",
-                        activeFilter === 'activos_deuda' 
-                            ? "border-emerald-500/60 bg-emerald-950/20 shadow-[0_0_20px_-5px_rgba(16,185,129,0.3)]" 
+                        localTab === 'activos_deuda'
+                            ? "border-emerald-500/60 bg-emerald-950/20 shadow-[0_0_20px_-5px_rgba(16,185,129,0.3)]"
                             : "border-emerald-500/10 hover:border-emerald-500/40 hover:scale-[1.02]",
                         isPending && "opacity-80"
                     )}
@@ -636,15 +635,15 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                     <div className="mt-2 text-emerald-400 flex items-center gap-1">
                          <span className="kpi-badge bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">ACTIVOS</span>
                     </div>
-                    {activeFilter === 'activos_deuda' && <div className="absolute bottom-0 left-0 w-full h-1 bg-emerald-500/50" />}
+                    {localTab === 'activos_deuda' && <div className="absolute bottom-0 left-0 w-full h-1 bg-emerald-500/50" />}
                  </div>
 
                  {/* Card 4: Sin Préstamos */}
-                 <div 
+                 <div
                     onClick={() => handleFilterChange('sin_prestamos')}
                     className={cn(
                         "kpi-card group cursor-pointer h-full transition-all duration-300",
-                        activeFilter === 'sin_prestamos' ? "border-slate-500/50 bg-slate-900/40 shadow-[0_0_15px_-5px_rgba(100,116,139,0.2)]" : "hover:border-slate-500/30 hover:scale-[1.02]",
+                        localTab === 'sin_prestamos' ? "border-slate-500/50 bg-slate-900/40 shadow-[0_0_15px_-5px_rgba(100,116,139,0.2)]" : "hover:border-slate-500/30 hover:scale-[1.02]",
                         isPending && "opacity-80"
                     )}
                 >
@@ -660,16 +659,16 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                              {kpiCounts.bloqueadosSinPrestamos} BLOQUEADOS
                          </span>
                     </div>
-                    {activeFilter === 'sin_prestamos' && <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-500/50" />}
+                    {localTab === 'sin_prestamos' && <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-500/50" />}
                  </div>
 
                  {/* Card 5: Control / Reasignados / Bloqueados */}
                  {((userRol === 'admin' || userRol === 'secretaria') ? (
-                     <div 
+                     <div
                         onClick={() => handleFilterChange('reasignados')}
                         className={cn(
                             "kpi-card group cursor-pointer h-full transition-all duration-300",
-                            activeFilter === 'reasignados' ? "border-purple-500/50 bg-purple-950/20 shadow-[0_0_15px_-5px_rgba(168,85,247,0.2)]" : "hover:border-purple-500/30 hover:scale-[1.02]",
+                            localTab === 'reasignados' ? "border-purple-500/50 bg-purple-950/20 shadow-[0_0_15px_-5px_rgba(168,85,247,0.2)]" : "hover:border-purple-500/30 hover:scale-[1.02]",
                             isPending && "opacity-80"
                         )}
                     >
@@ -681,14 +680,14 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                          <div className="mt-2 text-purple-400 flex items-center gap-1">
                               <span className="kpi-badge bg-purple-950/50 text-purple-400 border border-purple-900/50">CAMBIO ASESOR</span>
                          </div>
-                         {activeFilter === 'reasignados' && <div className="absolute bottom-0 left-0 w-full h-1 bg-purple-500/50" />}
+                         {localTab === 'reasignados' && <div className="absolute bottom-0 left-0 w-full h-1 bg-purple-500/50" />}
                       </div>
                   ) : (userRol === 'supervisor' ? (
-                     <div 
+                     <div
                         onClick={() => handleFilterChange('bloqueados')}
                         className={cn(
                             "kpi-card group cursor-pointer h-full transition-all duration-300",
-                            activeFilter === 'bloqueados' ? "border-rose-500/50 bg-rose-950/20 shadow-[0_0_15px_-5px_rgba(244,63,94,0.2)]" : "hover:border-rose-500/30 hover:scale-[1.02]",
+                            localTab === 'bloqueados' ? "border-rose-500/50 bg-rose-950/20 shadow-[0_0_15px_-5px_rgba(244,63,94,0.2)]" : "hover:border-rose-500/30 hover:scale-[1.02]",
                             isPending && "opacity-80"
                         )}
                     >
@@ -700,14 +699,14 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                          <div className="mt-2 text-rose-400 flex items-center gap-1">
                               <span className="kpi-badge bg-rose-950/50 text-rose-400 border border-rose-900/50">RESTRICCIÓN</span>
                          </div>
-                         {activeFilter === 'bloqueados' && <div className="absolute bottom-0 left-0 w-full h-1 bg-rose-500/50" />}
+                         {localTab === 'bloqueados' && <div className="absolute bottom-0 left-0 w-full h-1 bg-rose-500/50" />}
                       </div>
                   ) : (
-                     <div 
+                     <div
                         onClick={() => handleFilterChange('todos')}
                         className={cn(
                             "kpi-card group cursor-pointer h-full transition-all duration-300",
-                            activeFilter === 'todos' ? "border-blue-500/50 bg-blue-950/20 shadow-[0_0_15px_-5px_rgba(59,130,246,0.2)]" : "hover:border-blue-500/30 hover:scale-[1.02]",
+                            localTab === 'todos' ? "border-blue-500/50 bg-blue-950/20 shadow-[0_0_15px_-5px_rgba(59,130,246,0.2)]" : "hover:border-blue-500/30 hover:scale-[1.02]",
                             isPending && "opacity-80"
                         )}
                     >
@@ -719,7 +718,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                          <div className="mt-2 text-blue-400 flex items-center gap-1">
                               <span className="kpi-badge bg-blue-950/50 text-blue-400 border border-blue-900/50">CLIENTES TOTAL</span>
                          </div>
-                         {activeFilter === 'todos' && <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-500/50" />}
+                         {localTab === 'todos' && <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-500/50" />}
                       </div>
                   )))}
              </div>
@@ -761,7 +760,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
              />
 
              {/* Main Filter Bar - Responsive & Clean */}
-             <div className="sticky top-[var(--sat)] z-30 flex flex-col md:flex-row md:items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
+             <div className="sticky top-[var(--sat)] z-30 flex flex-col md:flex-row md:items-center gap-2 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50 backdrop-blur-md mb-4 w-full">
                 {/* Search */}
                 <div className="relative w-full md:flex-1 md:max-w-none">
                     {isPending ? (
@@ -772,9 +771,41 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                     <Input
                         placeholder="Buscar cliente (DNI, Nombre)..."
                         value={localSearch}
-                        onChange={(e) => setLocalSearch(e.target.value)}
+                        onChange={(e) => handleSearch(e.target.value)}
                         className="h-10 pl-9 bg-slate-950/50 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:bg-slate-900 transition-colors w-full"
                     />
+                </div>
+
+                {/* Mobile-only action buttons: between search and filters */}
+                <div className="flex items-center gap-2 md:hidden">
+                    <Button
+                        onClick={applyFilters}
+                        disabled={!hasActiveFilters}
+                        size="sm"
+                        className={cn(
+                            "h-10 flex-1 flex items-center justify-center gap-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider",
+                            hasActiveFilters
+                                ? "bg-blue-600 hover:bg-blue-500 text-white border-transparent shadow-lg shadow-blue-900/30"
+                                : "bg-slate-800/50 border border-slate-700 text-slate-600 cursor-not-allowed"
+                        )}
+                    >
+                        <Search className="w-4 h-4" />
+                        Aplicar
+                    </Button>
+                    <Button
+                        onClick={handleClearFilters}
+                        disabled={!hasActiveFilters}
+                        size="icon"
+                        variant="ghost"
+                        className={cn(
+                            "h-10 w-10 rounded-xl transition-all",
+                            hasActiveFilters
+                                ? "text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20"
+                                : "text-slate-700 border border-slate-800 cursor-not-allowed"
+                        )}
+                    >
+                        <X className="w-4 h-4" />
+                    </Button>
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
@@ -793,22 +824,9 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                         </div>
                     )}
 
-                    {/* Filter Action: Clear All */}
-                    {hasActiveFilters && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleClearFilters}
-                            className="h-10 px-3 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 rounded-xl transition-all flex items-center gap-2 group animate-in fade-in slide-in-from-right-2"
-                        >
-                            <X className="w-4 h-4 group-hover:rotate-90 transition-transform" />
-                            <span className="text-xs font-bold uppercase tracking-wider">Limpiar</span>
-                        </Button>
-                    )}
-
                     {/* Status Filter */}
                     <div className="w-auto shrink-0">
-                        <Select value={activeFilter} onValueChange={handleFilterChange}>
+                        <Select value={localTab} onValueChange={handleFilterChange}>
                             <SelectTrigger className={cn("h-10 w-auto min-w-[150px] bg-slate-950/50 border-slate-700 text-xs text-slate-300 px-3", isPending && "opacity-70 cursor-wait")}>
                                 {isPending ? <Loader2 className="w-3 h-3 mr-2 animate-spin text-emerald-400" /> : <ListFilter className="w-3 h-3 mr-2 text-emerald-400 shrink-0" />}
                                 <SelectValue placeholder="Estado" />
@@ -841,7 +859,6 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                         </Button>
                     </div>
 
-
                     {/* Supervisor Filter */}
                     {(userRol === 'admin' || userRol === 'secretaria') && (
                         <Select value={localSupervisor} onValueChange={handleSupervisorFilter}>
@@ -870,7 +887,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                                 localAsesor !== 'todos' && "border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]",
                                 isPending && "opacity-70"
                             )}>
-                                <Users className={cn("w-3 h-3 mr-2 shrink-0", localAsesor !== 'todos' ? "text-blue-400" : "text-blue-400")} />
+                                <Users className="w-3 h-3 mr-2 shrink-0 text-blue-400" />
                                 <SelectValue placeholder="Asesor" />
                             </SelectTrigger>
                             <SelectContent className="bg-slate-900 border-slate-700">
@@ -917,6 +934,39 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
                             ))}
                         </SelectContent>
                     </Select>
+
+                    {/* Desktop-only action buttons: at end of filter row */}
+                    <div className="hidden md:flex items-center gap-1.5 shrink-0 ml-auto">
+                        <Button
+                            onClick={applyFilters}
+                            disabled={!hasActiveFilters}
+                            size="icon"
+                            className={cn(
+                                "h-10 w-10 rounded-xl transition-all",
+                                hasActiveFilters
+                                    ? "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/30"
+                                    : "bg-slate-800/50 border border-slate-700 text-slate-600 cursor-not-allowed"
+                            )}
+                            title="Aplicar filtros"
+                        >
+                            <Search className="w-4 h-4" />
+                        </Button>
+                        <Button
+                            onClick={handleClearFilters}
+                            disabled={!hasActiveFilters}
+                            size="icon"
+                            variant="ghost"
+                            className={cn(
+                                "h-10 w-10 rounded-xl transition-all",
+                                hasActiveFilters
+                                    ? "text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20"
+                                    : "text-slate-700 border border-slate-800 cursor-not-allowed"
+                            )}
+                            title="Limpiar filtros"
+                        >
+                            <X className="w-4 h-4" />
+                        </Button>
+                    </div>
                 </div>
             </div>
 

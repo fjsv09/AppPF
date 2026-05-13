@@ -39,7 +39,9 @@ import {
     Maximize2,
     Wallet,
     RotateCcw,
-    ShieldAlert
+    ShieldAlert,
+    ChevronDown,
+    ExternalLink
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -64,12 +66,10 @@ function ValidacionPagosContent() {
     
     const [activeTab, setActiveTab] = useState(tabParam === 'historial' ? 'historial' : 'pendientes')
     
-    // Paginación
-    const [pagePendientes, setPagePendientes] = useState(1)
-    const [pageHistorial, setPageHistorial] = useState(1)
-    const [totalPendientes, setTotalPendientes] = useState(0)
-    const [totalHistorial, setTotalHistorial] = useState(0)
-    const ITEMS_PER_PAGE = 10
+    // Scroll infinito (Load More)
+    const ITEMS_PER_LOAD = 20
+    const [itemsToShowPendientes, setItemsToShowPendientes] = useState(ITEMS_PER_LOAD)
+    const [itemsToShowHistorial, setItemsToShowHistorial] = useState(ITEMS_PER_LOAD)
     
     // Modales
     const [showAprobarModal, setShowAprobarModal] = useState(false)
@@ -82,15 +82,13 @@ function ValidacionPagosContent() {
 
     const supabase = createClient()
 
-    const fetchPagos = async (tipo: 'pendientes' | 'historial', currentUserId?: string, currentRole?: string, filterAsesor?: string, targetPage?: number) => {
+    const fetchPagos = async (tipo: 'pendientes' | 'historial', currentUserId?: string, currentRole?: string, filterAsesor?: string) => {
         try {
             setLoading(true)
             
             const role = currentRole || userRole
             const uid = currentUserId || userId
             const asoFilter = filterAsesor !== undefined ? filterAsesor : selectedAsesor
-            const page = targetPage || (tipo === 'pendientes' ? pagePendientes : pageHistorial)
-            const offset = (page - 1) * ITEMS_PER_PAGE
 
             let query = supabase
                 .from('pagos')
@@ -110,7 +108,7 @@ function ValidacionPagosContent() {
                             clientes ( nombres, telefono ) 
                         )
                     )
-                `, { count: 'exact' })
+                `)
 
             if (tipo === 'pendientes') {
                 query = query.eq('estado_verificacion', 'pendiente')
@@ -128,17 +126,14 @@ function ValidacionPagosContent() {
                 query = query.eq('registrado_por', asoFilter)
             }
 
-            const { data, error, count } = await query
+            const { data, error } = await query
                 .order('created_at', { ascending: false })
-                .range(offset, offset + ITEMS_PER_PAGE - 1)
 
             if (error) throw error
             if (tipo === 'pendientes') {
                 setPagosPendientes(data || [])
-                setTotalPendientes(count || 0)
             } else {
                 setHistorial(data || [])
-                setTotalHistorial(count || 0)
             }
         } catch (error) {
             console.error(error)
@@ -247,24 +242,12 @@ function ValidacionPagosContent() {
 
     useEffect(() => {
         if (userRole && userId) {
-            setPagePendientes(1)
-            setPageHistorial(1)
-            fetchPagos('pendientes', userId, userRole, selectedAsesor, 1)
-            fetchPagos('historial', userId, userRole, selectedAsesor, 1)
+            setItemsToShowPendientes(ITEMS_PER_LOAD)
+            setItemsToShowHistorial(ITEMS_PER_LOAD)
+            fetchPagos('pendientes', userId, userRole, selectedAsesor)
+            fetchPagos('historial', userId, userRole, selectedAsesor)
         }
     }, [selectedAsesor])
-
-    useEffect(() => {
-        if (userRole && userId) {
-            fetchPagos('pendientes')
-        }
-    }, [pagePendientes])
-
-    useEffect(() => {
-        if (userRole && userId) {
-            fetchPagos('historial')
-        }
-    }, [pageHistorial])
 
     const handleAccion = async (pagoId: string, accion: 'aprobar' | 'rechazar', params: any = {}) => {
         const { motivo, cuenta_id } = params
@@ -372,6 +355,17 @@ function ValidacionPagosContent() {
                 {!isHistory && userRole === 'admin' && (
                     <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
+                            {pago.cronograma_cuotas?.prestamos?.id && (
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    className="h-8 w-8 p-0 bg-slate-800/40 hover:bg-blue-500/10 hover:text-blue-400 text-slate-400 rounded-lg transition-all border border-slate-700/50 hover:border-blue-500/30"
+                                    onClick={() => router.push(`/dashboard/prestamos/${pago.cronograma_cuotas.prestamos.id}`)}
+                                    title="Ver detalle del préstamo"
+                                >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                </Button>
+                            )}
                             <Button 
                                 variant="outline" 
                                 size="sm"
@@ -446,13 +440,25 @@ function ValidacionPagosContent() {
                     </div>
 
                     {!isHistory && userRole === 'admin' && (
-                        <div className="grid grid-cols-2 gap-3 mt-2">
-                            <Button variant="outline" className="h-10 rounded-2xl border-slate-800 text-rose-400 font-black uppercase text-[10px] tracking-widest" onClick={() => openRechazarModal(pago)} disabled={isProcessing}>
-                                {isProcessing && procesandoId === pago.id ? <div className="w-3 h-3 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" /> : 'Rechazar'}
-                            </Button>
-                            <Button className="h-10 rounded-2xl bg-emerald-600 text-white font-black uppercase text-[10px] tracking-widest border-none" onClick={() => openAprobarModal(pago)} disabled={isProcessing}>
-                                {isProcessing && procesandoId === pago.id ? <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Aprobar'}
-                            </Button>
+                        <div className="space-y-3 mt-2">
+                            {pago.cronograma_cuotas?.prestamos?.id && (
+                                <Button 
+                                    variant="outline" 
+                                    className="w-full h-9 rounded-2xl border-slate-700/50 text-blue-400 font-black uppercase text-[10px] tracking-widest hover:bg-blue-500/10 hover:border-blue-500/30" 
+                                    onClick={() => router.push(`/dashboard/prestamos/${pago.cronograma_cuotas.prestamos.id}`)}
+                                >
+                                    <ExternalLink className="w-3.5 h-3.5 mr-2" />
+                                    Ver Préstamo
+                                </Button>
+                            )}
+                            <div className="grid grid-cols-2 gap-3">
+                                <Button variant="outline" className="h-10 rounded-2xl border-slate-800 text-rose-400 font-black uppercase text-[10px] tracking-widest" onClick={() => openRechazarModal(pago)} disabled={isProcessing}>
+                                    {isProcessing && procesandoId === pago.id ? <div className="w-3 h-3 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" /> : 'Rechazar'}
+                                </Button>
+                                <Button className="h-10 rounded-2xl bg-emerald-600 text-white font-black uppercase text-[10px] tracking-widest border-none" onClick={() => openAprobarModal(pago)} disabled={isProcessing}>
+                                    {isProcessing && procesandoId === pago.id ? <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Aprobar'}
+                                </Button>
+                            </div>
                         </div>
                     )}
                 </CardContent>
@@ -469,7 +475,7 @@ function ValidacionPagosContent() {
                         <h1 className="page-title flex flex-wrap items-center gap-2 sm:gap-3">
                             <span className="truncate">Validación de Pagos</span>
                             <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px] font-black h-5 uppercase tracking-tighter shrink-0">
-                                {pagosPendientes.length} Pendientes
+                                {pagosPendientes.length} Pendiente{pagosPendientes.length !== 1 ? 's' : ''}
                             </Badge>
                         </h1>
                         <p className="page-subtitle font-medium">Gestión de recaudación digital</p>
@@ -549,41 +555,35 @@ function ValidacionPagosContent() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {pagosPendientes.map(pago => renderRow(pago))}
+                                        {pagosPendientes.slice(0, itemsToShowPendientes).map(pago => renderRow(pago))}
                                     </TableBody>
                                 </Table>
                             </div>
                             {/* Cards (Mobile) */}
                             <div className="grid gap-4 md:hidden animate-in fade-in duration-500">
-                                {pagosPendientes.map(pago => renderCard(pago))}
+                                {pagosPendientes.slice(0, itemsToShowPendientes).map(pago => renderCard(pago))}
                             </div>
 
-                            {/* Pagination Pendientes */}
-                            <div className="mt-6 flex items-center justify-between bg-slate-900/30 p-4 rounded-2xl border border-slate-800/50">
-                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                                    Mostrando {pagosPendientes.length} de {totalPendientes} resultados
-                                </p>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-8 border-slate-800 text-slate-400 hover:bg-slate-800 font-bold uppercase text-[9px] px-3 rounded-lg"
-                                        disabled={pagePendientes === 1 || loading}
-                                        onClick={() => setPagePendientes(prev => prev - 1)}
-                                    >
-                                        Anterior
-                                    </Button>
-                                    <span className="text-[10px] font-black text-white px-2">{pagePendientes}</span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-8 border-slate-800 text-slate-400 hover:bg-slate-800 font-bold uppercase text-[9px] px-3 rounded-lg"
-                                        disabled={pagePendientes * ITEMS_PER_PAGE >= totalPendientes || loading}
-                                        onClick={() => setPagePendientes(prev => prev + 1)}
-                                    >
-                                        Siguiente
-                                    </Button>
-                                </div>
+                            {/* Load More + Recuento (Pendientes) */}
+                            <div className="mt-6 mb-4 border-t border-slate-800/50 pt-6 flex flex-col items-center gap-6">
+                                {itemsToShowPendientes < pagosPendientes.length && pagosPendientes.length > 0 && (
+                                    <div className="flex flex-col items-center gap-4">
+                                        <Button
+                                            onClick={() => setItemsToShowPendientes(prev => prev + ITEMS_PER_LOAD)}
+                                            className="group flex items-center gap-2 bg-slate-800/50 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-white px-8 py-2 rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
+                                        >
+                                            <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+                                            Cargar {ITEMS_PER_LOAD} más
+                                        </Button>
+                                    </div>
+                                )}
+
+                                {pagosPendientes.length > 0 && (
+                                    <div className="flex items-center gap-2 opacity-60">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Recuento</span>
+                                        <span className="text-sm font-black text-slate-300">{pagosPendientes.length}</span>
+                                    </div>
+                                )}
                             </div>
                         </>
                     )}
@@ -612,41 +612,35 @@ function ValidacionPagosContent() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {historial.map(pago => renderRow(pago, true))}
+                                        {historial.slice(0, itemsToShowHistorial).map(pago => renderRow(pago, true))}
                                     </TableBody>
                                 </Table>
                             </div>
                             {/* Cards (Mobile) */}
                             <div className="grid gap-4 md:hidden animate-in fade-in duration-500">
-                                {historial.map(pago => renderCard(pago, true))}
+                                {historial.slice(0, itemsToShowHistorial).map(pago => renderCard(pago, true))}
                             </div>
 
-                            {/* Pagination Historial */}
-                            <div className="mt-6 flex items-center justify-between bg-slate-900/30 p-4 rounded-2xl border border-slate-800/50">
-                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                                    Mostrando {historial.length} de {totalHistorial} resultados
-                                </p>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-8 border-slate-800 text-slate-400 hover:bg-slate-800 font-bold uppercase text-[9px] px-3 rounded-lg"
-                                        disabled={pageHistorial === 1 || loading}
-                                        onClick={() => setPageHistorial(prev => prev - 1)}
-                                    >
-                                        Anterior
-                                    </Button>
-                                    <span className="text-[10px] font-black text-white px-2">{pageHistorial}</span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-8 border-slate-800 text-slate-400 hover:bg-slate-800 font-bold uppercase text-[9px] px-3 rounded-lg"
-                                        disabled={pageHistorial * ITEMS_PER_PAGE >= totalHistorial || loading}
-                                        onClick={() => setPageHistorial(prev => prev + 1)}
-                                    >
-                                        Siguiente
-                                    </Button>
-                                </div>
+                            {/* Load More + Recuento (Historial) */}
+                            <div className="mt-6 mb-4 border-t border-slate-800/50 pt-6 flex flex-col items-center gap-6">
+                                {itemsToShowHistorial < historial.length && historial.length > 0 && (
+                                    <div className="flex flex-col items-center gap-4">
+                                        <Button
+                                            onClick={() => setItemsToShowHistorial(prev => prev + ITEMS_PER_LOAD)}
+                                            className="group flex items-center gap-2 bg-slate-800/50 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-white px-8 py-2 rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
+                                        >
+                                            <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+                                            Cargar {ITEMS_PER_LOAD} más
+                                        </Button>
+                                    </div>
+                                )}
+
+                                {historial.length > 0 && (
+                                    <div className="flex items-center gap-2 opacity-60">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Recuento</span>
+                                        <span className="text-sm font-black text-slate-300">{historial.length}</span>
+                                    </div>
+                                )}
                             </div>
                         </>
                     )}

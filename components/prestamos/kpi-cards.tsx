@@ -401,8 +401,8 @@ export function KpiCards({
         </div>
       )}
 
-      {/* Threshold info bar */}
-      {(isAdmin || userRole === 'asesor' || userRole === 'supervisor') && (
+      {/* Threshold info bar - Solo Admin */}
+      {isAdmin && (
         <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-3 text-xs text-slate-400 flex flex-col md:flex-row gap-4 mb-4">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-rose-500 mt-0.5 shrink-0" />

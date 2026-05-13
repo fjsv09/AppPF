@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -33,17 +33,23 @@ interface VisitActionButtonProps {
     className?: string
     showText?: boolean
     disabled?: boolean
+    hideStartTrigger?: boolean
 }
 
-export function VisitActionButton({ 
-    cuotaId, 
+export interface VisitActionButtonHandle {
+    openConfirm: () => void
+}
+
+export const VisitActionButton = forwardRef<VisitActionButtonHandle, VisitActionButtonProps>(function VisitActionButton({
+    cuotaId,
     clientCoords,
     userLoc: externalUserLoc,
-    variant = 'outline', 
+    variant = 'outline',
     className,
     showText = true,
-    disabled = false
-}: VisitActionButtonProps) {
+    disabled = false,
+    hideStartTrigger = false,
+}, ref) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [visitaEnCurso, setVisitaEnCurso] = useState<any>(null)
@@ -103,6 +109,10 @@ export function VisitActionButton({
     }, [visitaEnCurso, open]);
 
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
+
+    useImperativeHandle(ref, () => ({
+        openConfirm: () => setConfirmDialogOpen(true)
+    }), [])
 
     const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
         const R = 6371000;
@@ -264,7 +274,7 @@ export function VisitActionButton({
     const isTimeMet = timer >= minTime * 60
 
     if (!visitaEnCurso) {
-        const triggerButton = variant === 'icon' ? (
+        const triggerButton = hideStartTrigger ? null : variant === 'icon' ? (
             <Button
                 variant="ghost"
                 size="icon"
@@ -452,4 +462,4 @@ export function VisitActionButton({
             </AlertDialog>
         </>
     )
-}
+})

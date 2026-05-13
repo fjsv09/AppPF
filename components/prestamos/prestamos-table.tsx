@@ -27,7 +27,7 @@ import { ContratoGenerator } from './contrato-generator'
 import { QuickPayModal } from './quick-pay-modal'
 import { SolicitudRenovacionModal } from './solicitud-renovacion-modal'
 import { RegistrarGestionModal } from '../gestiones/registrar-gestion-modal'
-import { VisitActionButton } from './visit-action-button'
+import { VisitActionButton, type VisitActionButtonHandle } from './visit-action-button'
 import { EditLoanModal } from './edit-loan-modal'
 import {
     DropdownMenu,
@@ -167,7 +167,7 @@ export function PrestamosTable({
     const { isPending, updateParams: updateParamsContext, startTransition } = useLoading()
 
     const [userLoc, setUserLoc] = useState<[number, number] | null>(null)
-    const [viewType, setViewType] = useState<'cards' | 'table'>(userRol === 'admin' ? 'cards' : 'table')
+    const [viewType, setViewType] = useState<'cards' | 'table'>('cards')
     const [isMountedView, setIsMountedView] = useState(false)
     const [showMap, setShowMap] = useState(false)
     const [localSearch, setLocalSearch] = useState(searchParams.get('search') || '')
@@ -208,6 +208,7 @@ export function PrestamosTable({
     const [isFiltering, setIsFiltering] = useState(false)
     const [itemsToShow, setItemsToShow] = useState(ITEMS_PER_LOAD)
     const observerTarget = useRef<HTMLDivElement>(null)
+    const visitButtonRefs = useRef<Map<string, VisitActionButtonHandle | null>>(new Map())
 
 
 
@@ -224,15 +225,11 @@ export function PrestamosTable({
         }
     }, [])
 
-    // Persistence for View Type (Mobile)
+    // Persistence for View Type (Mobile) - todos los roles
     useEffect(() => {
-        if (userRol === 'admin') {
-            const savedView = localStorage.getItem('loan-view-type')
-            if (savedView === 'cards' || savedView === 'table') {
-                setViewType(savedView)
-            }
-        } else {
-            setViewType('table')
+        const savedView = localStorage.getItem('loan-view-type')
+        if (savedView === 'cards' || savedView === 'table') {
+            setViewType(savedView)
         }
         setIsMountedView(true)
     }, [userRol])
@@ -998,19 +995,18 @@ export function PrestamosTable({
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 md:pb-0 md:mb-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                    {/* View Toggle (Mobile Only) - Solo Admin */}
-                    {userRol === 'admin' && (
-                        <div className="shrink-0 md:hidden">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setViewType(viewType === 'cards' ? 'table' : 'cards')}
-                                className="h-10 w-10 bg-slate-950/50 border border-slate-700 text-slate-400"
-                            >
-                                {viewType === 'cards' ? <Table className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
-                            </Button>
-                        </div>
-                    )}
+                    {/* View Toggle (Mobile Only) - todos los roles */}
+                    <div className="shrink-0 md:hidden">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setViewType(viewType === 'cards' ? 'table' : 'cards')}
+                            className="h-10 w-10 bg-slate-950/50 border border-slate-700 text-slate-400"
+                            title={viewType === 'cards' ? 'Cambiar a vista tabla' : 'Cambiar a vista tarjetas'}
+                        >
+                            {viewType === 'cards' ? <Table className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+                        </Button>
+                    </div>
 
                     {/* View Filter */}
                     <Select value={localTab} onValueChange={(val) => handleTabChange(val as FilterTab)}>
@@ -1781,6 +1777,7 @@ export function PrestamosTable({
                                                                             const clientCoords = prestamo.gps_coordenadas || (prestamo.clientes?.solicitudes?.[0]?.gps_coordenadas);
 
                                                                             return <VisitActionButton
+                                                                                ref={(el) => { visitButtonRefs.current.set(prestamo.id, el) }}
                                                                                 cuotaId={cuotaTargetId}
                                                                                 clientCoords={clientCoords}
                                                                                 userLoc={userLoc}
@@ -2634,6 +2631,32 @@ export function PrestamosTable({
                                                                         <MessageSquare className="w-3.5 h-3.5 mr-2" />
                                                                         Registrar Gestión
                                                                     </DropdownMenuItem>
+
+                                                                    {(() => {
+                                                                        if (userRol !== 'asesor') return null;
+                                                                        const isEffectivelyFinalized = prestamo.isFinalizado || prestamo.estado === 'finalizado' || prestamo.estado === 'renovado' || prestamo.saldo_pendiente <= 0;
+                                                                        if (isEffectivelyFinalized) return null;
+                                                                        const cronograma = (prestamo.cronograma_cuotas || []);
+                                                                        const hoy = getTodayPeru();
+                                                                        const cuotaHoy = cronograma.find((c: any) => c.fecha_vencimiento === hoy && c.estado !== 'pagado');
+                                                                        const cuotaPendiente = cronograma.find((c: any) => c.estado !== 'pagado');
+                                                                        const cuotaTargetId = cuotaHoy?.id || cuotaPendiente?.id;
+                                                                        if (!cuotaTargetId) return null;
+                                                                        return (
+                                                                            <DropdownMenuItem
+                                                                                className="hover:bg-slate-800 cursor-pointer text-xs text-indigo-400 font-bold"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setTimeout(() => {
+                                                                                        visitButtonRefs.current.get(prestamo.id)?.openConfirm();
+                                                                                    }, 50);
+                                                                                }}
+                                                                            >
+                                                                                <MapPin className="w-3.5 h-3.5 mr-2" />
+                                                                                Iniciar Visita
+                                                                            </DropdownMenuItem>
+                                                                        );
+                                                                    })()}
 
                                                                     {userRol === 'admin' && (
                                                                         <DropdownMenuItem

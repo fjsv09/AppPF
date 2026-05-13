@@ -141,18 +141,23 @@ export async function POST(request: Request) {
         let cuotaRaw: any = null
 
         // --- DETERMINAR TARGET USER ID (Para atribución de dinero/comisiones) ---
-        // [NUEVO] Si quien registra es un Supervisor, el dinero debe atribuirse al Asesor del préstamo
+        // Si quien registra es un Supervisor, el dinero debe atribuirse al Asesor del préstamo
         let targetUserId = user.id
+        let supervisorPaymentInfo: { clienteNombre: string; numeroCuota: number } | null = null
         if (perfil?.rol === 'supervisor') {
             const { data: qData } = await supabaseAdmin
                 .from('cronograma_cuotas')
-                .select('prestamos(clientes(asesor_id))')
+                .select('numero_cuota, prestamos(clientes(asesor_id, nombres))')
                 .eq('id', cuota_id)
                 .single()
             
             const loanAdvisorId = (qData?.prestamos as any)?.clientes?.asesor_id
             if (loanAdvisorId) {
                 targetUserId = loanAdvisorId
+                supervisorPaymentInfo = {
+                    clienteNombre: (qData?.prestamos as any)?.clientes?.nombres || 'Cliente',
+                    numeroCuota: (qData as any)?.numero_cuota || 0,
+                }
             }
         }
 
@@ -221,6 +226,7 @@ export async function POST(request: Request) {
                 p_cuota_id: cuota_id,
                 p_monto: monto,
                 p_usuario_id: targetUserId, // Atribuimos el dinero al Asesor si es supervisor
+                p_registrado_por: perfil?.rol === 'supervisor' ? user.id : null, // Marca al supervisor como ejecutor real
                 p_metodo_pago: metodo_pago,
                 p_latitud: latitud,
                 p_longitud: longitud,
@@ -268,6 +274,22 @@ export async function POST(request: Request) {
                     )
                 }
             }).catch(e => console.error('Notify Error:', e))
+        }
+
+        // --- NOTIFICACIÓN AL ASESOR: Supervisor pagó cuota de su cliente ---
+        if (perfil?.rol === 'supervisor' && supervisorPaymentInfo && targetUserId !== user.id) {
+            import('@/services/notification-service').then(({ createFullNotification }) => {
+                const supervisorNombre = perfil.nombre_completo || 'Tu supervisor'
+                const montoStr = parseFloat(monto).toFixed(2)
+                const cuotaNum = supervisorPaymentInfo!.numeroCuota
+                const clienteNom = supervisorPaymentInfo!.clienteNombre
+                createFullNotification(targetUserId, {
+                    titulo: '💰 Pago registrado por tu Supervisor',
+                    mensaje: `${supervisorNombre} registró un pago de S/ ${montoStr} en la cuota #${cuotaNum} del cliente ${clienteNom}. El cobro aparecerá en tu cuadre.`,
+                    link: '/dashboard/pagos',
+                    tipo: 'info'
+                })
+            }).catch(e => console.error('[Supervisor Pay Notify Error]:', e))
         }
 
         revalidatePath('/dashboard/pagos')

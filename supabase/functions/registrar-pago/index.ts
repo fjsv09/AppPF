@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
                 .eq('id', cuota_id)
                 .single()
             
-            const loanAdvisorId = qData?.prestamos?.clientes?.asesor_id
+            const loanAdvisorId = (qData as any)?.prestamos?.clientes?.asesor_id
             if (loanAdvisorId) {
                 targetUserId = loanAdvisorId
             }
@@ -70,6 +70,7 @@ Deno.serve(async (req) => {
             p_cuota_id: cuota_id,
             p_monto: monto,
             p_usuario_id: targetUserId,
+            p_registrado_por: perfil?.rol === 'supervisor' ? user.id : null,
             p_latitud: latitud,
             p_longitud: longitud
         })

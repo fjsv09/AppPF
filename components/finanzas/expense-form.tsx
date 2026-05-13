@@ -158,6 +158,18 @@ export function ExpenseForm({ carteras, cuentas, categorias, advisors, userId, u
         })
         if (error) throw error
         toast.success('Gasto registrado correctamente')
+
+        // Notificar a los admins en segundo plano (no bloquea la UI)
+        const categoriaNombre = categorias.find(c => c.id === values.categoria_id)?.nombre || ''
+        fetch('/api/gastos/notificar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            monto: montoNum,
+            descripcion: values.descripcion,
+            categoria_nombre: categoriaNombre
+          })
+        }).catch(err => console.error('[Gasto Notif] Error:', err))
       }
 
       if (!initialData) {

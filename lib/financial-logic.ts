@@ -209,6 +209,39 @@ export function calculateLoanMetrics(
     .filter((c: any) => c.fecha_vencimiento === today)
     .reduce((sum: number, c: any) => sum + Number(c.monto_cuota), 0);
 
+  // CALCULAR cuotaDiaHoy, cobradoHoy y cobradoRutaHoy PARA TODOS LOS PRÉSTAMOS
+  // Necesario para que no-activos (migradores, etc.) aparezcan en Ruta Hoy y el
+  // contador "X de Y préstamos" sea correcto (no contarlos como cobrados si no pagaron).
+  //
+  // IMPORTANTE: usamos c.pagos (registros reales vinculados a la cuota) en lugar de
+  // c.monto_pagado para evitar falsos-cero causados por:
+  //   1) Cascada de pagos del RPC (aplica excedente a cuotas futuras actualizando
+  //      monto_pagado sin crear registro en pagos para esa cuota)
+  //   2) Pagos rechazados cuyo monto_pagado no fue revertido correctamente
+  const cuotaDiaHoyAll = cronograma
+    .filter((c: any) => c.fecha_vencimiento === today)
+    .reduce((sum: number, c: any) => {
+      const pagadoPorCuota = (c.pagos || [])
+        .filter((p: any) => p.estado_verificacion !== 'rechazado')
+        .reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
+      return sum + Math.max(0, Number(c.monto_cuota) - pagadoPorCuota);
+    }, 0);
+
+  const cobradoHoyAll = pagos
+    .filter((pay: any) =>
+      getIsToday(pay.created_at || pay.fecha_pago) &&
+      pay.metodo_pago !== 'Renovación' &&
+      pay.metodo_pago !== 'Sistema' &&
+      pay.metodo_pago !== 'Excedente' &&
+      pay.es_autopago_renovacion !== true
+    )
+    .reduce((sum: number, pay: any) => sum + (Number(pay.monto_pagado) || 0), 0);
+
+  // Si el préstamo tiene cuota programada hoy, todo lo que cobró el asesor hoy
+  // cuenta como avance de ruta (aunque el pago se haya aplicado por cascada a una
+  // cuota atrasada). Si no tiene cuota hoy, no aporta al progreso de ruta.
+  const cobradoRutaHoyAll = cuotaDiaProgramada > 0 ? cobradoHoyAll : 0;
+
   if (loan.estado !== 'activo') {
     // Para préstamos no-activos, calcular métricas de atrasos correctamente
     // (migradores, refinanciados, etc. que aún están en cobranza)
@@ -227,10 +260,10 @@ export function calculateLoanMetrics(
       cuotasAtrasadas: cuotasAtrasadasNA,
       deudaExigibleTotal: saldoPendienteNA,
       deudaExigibleHoy: deudaExigibleHoyNA,
-      cuotaDiaHoy: 0,
+      cuotaDiaHoy: cuotaDiaHoyAll,
       cuotaDiaProgramada: cuotaDiaProgramada,
-      cobradoHoy: 0,
-      cobradoRutaHoy: 0,
+      cobradoHoy: cobradoHoyAll,
+      cobradoRutaHoy: cobradoRutaHoyAll,
       totalPagadoAcumulado: totalPagadoAcumulado,
       saldoPendiente: saldoPendienteNA,
       riesgoPorcentaje: (totalPagar > 0) ? (deudaExigibleHoyNA / totalPagar) * 100 : 0,
@@ -262,37 +295,33 @@ export function calculateLoanMetrics(
     };
   }
 
-  // 1. Meta Hoy (Especísticamente cuotas que vencen hoy)
+  // 1. Meta Hoy (cuotas que vencen hoy, pendientes de cobrar)
+  // Usa c.pagos (no c.monto_pagado) para evitar falsos-cero por cascada o rechazos no revertidos.
   const cuotaDiaHoy = cronograma
     .filter((c: any) => c.fecha_vencimiento === today)
-    .reduce((sum: number, c: any) => sum + Math.max(0, Number(c.monto_cuota) - (Number(c.monto_pagado) || 0)), 0);
+    .reduce((sum: number, c: any) => {
+      const pagadoPorCuota = (c.pagos || [])
+        .filter((p: any) => p.estado_verificacion !== 'rechazado')
+        .reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
+      return sum + Math.max(0, Number(c.monto_cuota) - pagadoPorCuota);
+    }, 0);
 
-  // 2. Cobrados Hoy
-
+  // 2. Cobrados Hoy (solo lo que el asesor cobró hoy — excluye auto-pagos de renovación/sistema)
   const cobradoHoy = pagos
-    .filter((pay: any) => getIsToday(pay.created_at || pay.fecha_pago))
+    .filter((pay: any) =>
+      getIsToday(pay.created_at || pay.fecha_pago) &&
+      pay.metodo_pago !== 'Renovación' &&
+      pay.metodo_pago !== 'Sistema' &&
+      pay.metodo_pago !== 'Excedente' &&
+      pay.es_autopago_renovacion !== true
+    )
     .reduce((sum: number, pay: any) => sum + (Number(pay.monto_pagado) || 0), 0);
 
-  // Cobrado Ruta Hoy: SOLO lo que pagó de la cuota que vence HOY (Meta de la ruta)
-  const cobradoRutaHoy = cronograma
-    .filter((c: any) => c.fecha_vencimiento === today)
-    .reduce((sum: number, c: any) => {
-      const pagosDeEstaCuotaHoy = (c.pagos || [])
-        .filter((p: any) => getIsToday(p.created_at) && p.estado_verificacion !== 'rechazado' && p.estado_verificacion !== 'pendiente')
-        .reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
-
-      const metaCuota = Number(c.monto_cuota);
-      const totalPagadoAcumulado = Number(c.monto_pagado || 0);
-
-      // ¿Cuánto se pagó ANTES de hoy?
-      const pagadoAntes = Math.max(0, totalPagadoAcumulado - pagosDeEstaCuotaHoy);
-
-      // ¿Cuánto faltaba cobrar de esta cuota al iniciar el día? (ESTO ES LA META REAL)
-      const pendienteAlInicio = Math.max(0, metaCuota - pagadoAntes);
-
-      // El avance es el pago de hoy, pero topado por lo que faltaba (no contar adelantos/intereses de más como "avance")
-      return sum + Math.min(pagosDeEstaCuotaHoy, pendienteAlInicio);
-    }, 0);
+  // Cobrado Ruta Hoy: si el préstamo tiene cuota programada hoy, todo el cobro del
+  // asesor hoy cuenta como avance de ruta (sea para hoy o aplicado por cascada a
+  // una cuota atrasada). Si no tiene cuota hoy, no aporta (los pagos extra no
+  // entran al progreso de la ruta).
+  const cobradoRutaHoy = cuotaDiaProgramada > 0 ? cobradoHoy : 0;
 
   // 2.5. Cuota Programada para Hoy: Ya calculada al principio para todos los préstamos
   // (ver línea anterior al check de estado !== 'activo')
@@ -305,7 +334,14 @@ export function calculateLoanMetrics(
   cronograma.forEach((c: any, idx: number) => {
     if (c.fecha_vencimiento <= today) {
       const pagosDeEstaCuotaHoy = (c.pagos || [])
-        .filter((p: any) => getIsToday(p.created_at) && p.estado_verificacion !== 'rechazado' && p.estado_verificacion !== 'pendiente')
+        .filter((p: any) =>
+          getIsToday(p.created_at) &&
+          p.estado_verificacion !== 'rechazado' &&
+          p.metodo_pago !== 'Renovación' &&
+          p.metodo_pago !== 'Sistema' &&
+          p.metodo_pago !== 'Excedente' &&
+          p.es_autopago_renovacion !== true
+        )
         .reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
 
       const metaCuota = Number(c.monto_cuota);

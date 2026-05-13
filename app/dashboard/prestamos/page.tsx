@@ -364,7 +364,7 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
                 .from('cronograma_cuotas')
                 .select(`
                     *,
-                    pagos (id, created_at, monto_pagado, metodo_pago, voucher_compartido, latitud, longitud, registrado_por, estado_verificacion)
+                    pagos (id, created_at, monto_pagado, metodo_pago, voucher_compartido, latitud, longitud, registrado_por, estado_verificacion, es_autopago_renovacion)
                 `)
                 .in('prestamo_id', chunk)
                 .limit(5000)

@@ -883,20 +883,22 @@ export function PrestamosTable({
             const isActivo = p.estado === 'activo'
             const isFinalizado = p.estado === 'finalizado'
             const isDiario = p.frecuencia?.toLowerCase() === 'diario'
+            const isExcludedEstado = ['finalizado', 'liquidado', 'anulado', 'castigado'].includes(p.estado)
 
             if (p.es_renovable_estricto) counts.renovaciones++
+
+            // Contar ruta_hoy y visitas_control para TODOS los estados no excluidos
+            // (igual que el filtro real del tab, incluye migradores y otros no-activos)
+            if (!isExcludedEstado) {
+                if (p.cuota_dia_hoy > 0.01) counts.ruta_hoy++
+                if (p.cuota_dia_programada > 0.01 || p.cobrado_hoy > 0.01) counts.visitas_control++
+            }
 
             if (['activo', 'vencido', 'moroso', 'cpp', 'legal'].includes(p.estado)) {
                 const isEffectivelyPaid = (p.saldo_pendiente || p.metrics?.saldoPendiente || 0) <= 0.01;
                 if (!isEffectivelyPaid) counts.en_curso++
                 counts.semana++
 
-                if (p.cuota_dia_hoy > 0.01) {
-                    counts.ruta_hoy++
-                }
-                if (p.cuota_dia_programada > 0.01 || p.cobrado_hoy > 0.01) {
-                    counts.visitas_control++
-                }
                 if ((p.atrasadas >= 1 || p.deudaHoy > (p.cuota_dia_hoy || 0) + 0.1) && p.deudaHoy > 0.01) counts.cobranza++
 
                 const hasCriticalStatus = ['vencido', 'legal', 'castigado'].includes(p.estado_mora || '')

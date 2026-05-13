@@ -103,6 +103,7 @@ export function KpiCards({
     // Usar baseForKpi directamente para no excluir finalizados, renovados, etc.
     const metaCobranzaHoy = baseForKpi.reduce((acc, p) => acc + (p.cuota_dia_programada || 0), 0)
     const recaudadoRutaHoy = baseForKpi.reduce((acc, p) => acc + (p.cobrado_ruta_hoy || 0), 0)
+    // Solo cuentan préstamos con cuota programada hoy (no pagos extra de cuotas atrasadas)
     const totalClientesHoy = baseForKpi.filter(p => (p.cuota_dia_programada || 0) > 0).length
     const clientesPendientesHoy = baseForKpi.filter(p => (p.cuota_dia_hoy || 0) > 0).length
     const clientesCobradosHoy = totalClientesHoy - clientesPendientesHoy
@@ -160,6 +161,7 @@ export function KpiCards({
       metaEficienciaTotal, cobradoEficienciaTotal, porcentajeEficiencia,
       tasaMorosidadCapital: moraBancaria.tasaMorosidadCapital,
       capitalEnRiesgo: moraBancaria.capitalVencido,
+      capitalOriginal: moraBancaria.capitalOriginal,
       totalPagado, porcentajeRecuperacion,
       alertasGraves, clientesEnMora,
     }
@@ -210,7 +212,7 @@ export function KpiCards({
               </p>
             </div>
             <div className="flex">
-              <span className="bg-[#10b981]/10 text-[#10b981] text-[10px] md:text-[12px] font-black px-1.5 md:px-2 py-0.5 rounded border border-[#10b981]/20 uppercase tracking-wider mt-1">
+              <span className="bg-[#10b981]/15 text-emerald-100 text-[11px] md:text-[13px] font-black px-2 md:px-2.5 py-0.5 rounded border border-[#10b981]/30 uppercase mt-1 tabular-nums">
                 {kpis.clientesCobradosHoy} de {kpis.totalClientesHoy} Préstamos
               </span>
             </div>
@@ -318,9 +320,16 @@ export function KpiCards({
           </div>
           <div className="relative z-10">
             <p className="text-rose-500 font-bold text-[10px] md:text-[11px] uppercase tracking-[0.2em] mb-1 md:mb-2">Índice Mora</p>
-            <h2 className="text-lg md:text-3xl font-black text-white tracking-tighter">
-              {kpis.tasaMorosidadCapital.toFixed(1)}%
-            </h2>
+            <div className="flex items-baseline gap-1">
+              <h2 className="text-lg md:text-3xl font-black text-white tracking-tighter">
+                {kpis.tasaMorosidadCapital.toFixed(1)}%
+              </h2>
+              {isAdmin && (
+                <span className="text-slate-600 text-[9px] md:text-sm font-medium">
+                  / ${Math.round(kpis.capitalOriginal).toLocaleString()}
+                </span>
+              )}
+            </div>
           </div>
           <div className="relative z-10 flex">
             <span className="bg-rose-500/10 text-rose-500 text-[10px] md:text-[12px] font-black px-1.5 py-0.5 rounded border border-rose-500/20 uppercase tracking-wider">

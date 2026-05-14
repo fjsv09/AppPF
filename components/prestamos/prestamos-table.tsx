@@ -89,7 +89,7 @@ interface PrestamosTableProps {
     exigirGpsCobranza?: boolean
 }
 
-type FilterTab = 'ruta_hoy' | 'cobranza' | 'morosos' | 'notificar' | 'semana' | 'en_curso' | 'renovaciones' | 'finalizados' | 'todos' | 'supervisor_alertas' | 'supervisor_mora' | 'renovados' | 'refinanciados' | 'anulados' | 'pendientes' | 'visitas_control' | 'activos'
+type FilterTab = 'ruta_hoy' | 'cobranza' | 'morosos' | 'notificar' | 'semana' | 'en_curso' | 'renovaciones' | 'finalizados' | 'todos' | 'supervisor_alertas' | 'supervisor_mora' | 'renovados' | 'refinanciados' | 'anulados' | 'pendientes' | 'visitas_control' | 'activos' | 'al_dia' | 'vencidos' | 'atrasados'
 type SortBy = 'fecha_inicio' | 'frecuencia'
 type SortOrder = 'asc' | 'desc'
 

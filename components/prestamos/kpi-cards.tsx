@@ -100,9 +100,9 @@ export function KpiCards({
       : baseForKpi
 
     // META HOY: solo préstamos donde el asesor tiene/tuvo trabajo hoy.
-    // Excluye los que fueron liquidados por auto-pago de sistema (estados terminales) o anulados.
+    // Excluye los que ya pagaron adelantado (deuda 0 y cobrado_hoy 0) y los estados terminales.
     const esRelevantHoy = (p: any) =>
-      (p.cuota_dia_programada || 0) > 0 &&
+      ((p.cobrado_hoy || 0) > 0.01 || ((p.cuota_dia_programada || 0) > 0 && parseFloat(p.deuda_exigible_hoy || 0) > 0.01)) &&
       !['finalizado', 'liquidado', 'anulado', 'castigado', 'renovado', 'refinanciado'].includes(p.estado)
 
     const metaCobranzaHoy = baseForKpi.filter(esRelevantHoy).reduce((acc, p) => acc + (p.cuota_dia_programada || 0), 0)

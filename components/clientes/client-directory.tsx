@@ -42,6 +42,8 @@ import { ShieldAlert, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/utils/supabase/client'
 
+const TERMINAL_ESTADOS_CLIENTE = new Set(['finalizado', 'liquidado', 'anulado', 'castigado', 'renovado', 'refinanciado'])
+
 const TableSkeleton = () => (
     <div className="animate-pulse space-y-4 p-4">
         {/* Mobile Skeleton */}
@@ -356,23 +358,46 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
         return perfiles.filter(p => p.rol === 'asesor')
     }, [perfiles, localSupervisor, userRol, userId])
 
-    // Unique Sectors - Dynamically filtered by Advisor/Supervisor
+    // Unique Sectors - reacts to asesor, supervisor, frecuencia and tab/vista filters.
+    // Uses c.stats (pre-computed server-side) for tab conditions.
     const sectoresList = useMemo(() => {
-        let relevantClients = clientes
-        
-        // Apply Supervisor filter if active
+        // 'sin_prestamos' clients have no active loans; skip terminal filter for them
+        let relevantClients = localTab === 'sin_prestamos'
+            ? [...clientes]
+            : clientes.filter(c =>
+                (c.prestamos || []).some((p: any) => !TERMINAL_ESTADOS_CLIENTE.has(p.estado))
+            )
+
+        // Supervisor filter
         if (localSupervisor !== 'todos') {
             const advisorIds = perfiles.filter(p => p.supervisor_id === localSupervisor).map(p => p.id)
             relevantClients = relevantClients.filter(c => advisorIds.includes(c.asesor_id))
         } else if (userRol === 'supervisor') {
-            // If user is supervisor, default to their advisors
             const advisorIds = perfiles.filter(p => p.supervisor_id === userId).map(p => p.id)
             relevantClients = relevantClients.filter(c => advisorIds.includes(c.asesor_id))
         }
-        
-        // Apply Advisor filter if active
+
+        // Asesor filter
         if (localAsesor !== 'todos') {
             relevantClients = relevantClients.filter(c => c.asesor_id === localAsesor)
+        }
+
+        // Frecuencia filter - client must have at least one loan with this frequency
+        if (localFrecuencia !== 'todos') {
+            relevantClients = relevantClients.filter(c =>
+                (c.prestamos || []).some((p: any) => p.frecuencia === localFrecuencia)
+            )
+        }
+
+        // Tab/Vista filter
+        switch (localTab) {
+            case 'con_deuda': relevantClients = relevantClients.filter(c => c.stats.totalDebt > 0); break
+            case 'activos_deuda': relevantClients = relevantClients.filter(c => (c.stats.strictActiveLoansCount || 0) > 0); break
+            case 'sin_prestamos': relevantClients = relevantClients.filter(c => c.stats.activeLoansCount === 0); break
+            case 'reasignados': relevantClients = relevantClients.filter(c => c.wasReassigned); break
+            case 'recibos': relevantClients = relevantClients.filter(c => !!c.excepcion_voucher); break
+            case 'bloqueados': relevantClients = relevantClients.filter(c => !!c.bloqueado_renovacion); break
+            // 'todos': no additional filter
         }
 
         const unique = new globalThis.Map<string, string>()
@@ -385,7 +410,7 @@ export function ClientDirectory({ clientes, perfiles = [], userRol = 'asesor', u
             const [id, nombre] = entry as [string, string]
             return { id, nombre }
         }).sort((a, b) => a.nombre.localeCompare(b.nombre))
-    }, [clientes, localAsesor, localSupervisor, perfiles, userRol, userId])
+    }, [clientes, localAsesor, localSupervisor, localFrecuencia, localTab, perfiles, userRol, userId])
 
     // Frecuencias List
     const frecuenciasList = useMemo(() => {

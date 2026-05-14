@@ -467,7 +467,7 @@ function ValidacionPagosContent() {
     }
 
     return (
-        <div className="page-container max-w-7xl mx-auto px-3 sm:px-6">
+        <>
             <div className="page-header border-b-0 pb-2">
                 <div className="flex items-center gap-3 sm:gap-4">
                     <BackButton />
@@ -797,18 +797,33 @@ function ValidacionPagosContent() {
             </Dialog>
 
             <div className="h-24 sm:hidden" />
-        </div>
+        </>
     )
 }
 
 export default function ValidacionPagosPage() {
     return (
-        <Suspense fallback={
-            <div className="flex flex-col items-center justify-center py-20 gap-4">
-                <div className="w-10 h-10 border-4 border-slate-800 border-t-indigo-500 rounded-full animate-spin" />
-            </div>
-        }>
-            <ValidacionPagosContent />
-        </Suspense>
+        <div className="page-container max-w-7xl mx-auto px-3 sm:px-6">
+            <Suspense fallback={
+                <>
+                    <div className="page-header border-b-0 pb-2">
+                        <div className="flex items-center gap-3 sm:gap-4">
+                            <BackButton />
+                            <div className="min-w-0 flex-1">
+                                <h1 className="page-title flex flex-wrap items-center gap-2 sm:gap-3">
+                                    <span className="truncate">Validación de Pagos</span>
+                                </h1>
+                                <p className="page-subtitle font-medium">Gestión de recaudación digital</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex flex-col items-center justify-center py-20 gap-4">
+                        <div className="w-10 h-10 border-4 border-slate-800 border-t-indigo-500 rounded-full animate-spin" />
+                    </div>
+                </>
+            }>
+                <ValidacionPagosContent />
+            </Suspense>
+        </div>
     )
 }

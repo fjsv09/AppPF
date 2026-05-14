@@ -30,77 +30,79 @@ export function SimpleImageUpload({
   const [error, setError] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const localPreviewUrl = useRef<string | null>(null)
 
-  // Función para comprimir imagen (portada de ImageUpload.tsx)
+  // Función para comprimir imagen — usa objectURL en lugar de base64 para evitar
+  // imagen negra en móviles con fotos de alta resolución (problema de memoria)
   const compressImage = async (file: File, maxSize: number): Promise<File> => {
     if (file.type === 'application/pdf') return file
 
     return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.readAsDataURL(file)
-      reader.onload = (event) => {
-        const img = new Image()
-        img.src = event.target?.result as string
-        img.onload = () => {
-          const canvas = document.createElement('canvas')
-          let width = img.width
-          let height = img.height
+      const objectUrl = URL.createObjectURL(file)
+      const img = new Image()
+      img.src = objectUrl
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl)
 
-          const MAX_WIDTH = 1600
-          const MAX_HEIGHT = 1600
+        const canvas = document.createElement('canvas')
+        let width = img.naturalWidth || img.width
+        let height = img.naturalHeight || img.height
 
-          if (width > MAX_WIDTH) {
-            height = (height * MAX_WIDTH) / width
-            width = MAX_WIDTH
-          }
-          if (height > MAX_HEIGHT) {
-            width = (width * MAX_HEIGHT) / height
-            height = MAX_HEIGHT
-          }
+        const MAX_DIM = 1200
 
-          canvas.width = width
-          canvas.height = height
-
-          const ctx = canvas.getContext('2d')
-          if (!ctx) {
-            reject(new Error('No se pudo crear canvas'))
-            return
-          }
-
-          ctx.drawImage(img, 0, 0, width, height)
-
-          let quality = 0.8
-          const targetSize = maxSize * 1024 * 1024
-
-          const tryCompress = () => {
-            canvas.toBlob(
-              (blob) => {
-                if (!blob) {
-                  reject(new Error('Error al comprimir imagen'))
-                  return
-                }
-
-                if (blob.size <= targetSize || quality <= 0.4) {
-                  const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
-                    type: 'image/jpeg',
-                    lastModified: Date.now()
-                  })
-                  resolve(compressedFile)
-                } else {
-                  quality -= 0.1
-                  tryCompress()
-                }
-              },
-              'image/jpeg',
-              quality
-            )
-          }
-
-          tryCompress()
+        if (width > MAX_DIM) {
+          height = Math.round((height * MAX_DIM) / width)
+          width = MAX_DIM
         }
-        img.onerror = () => reject(new Error('Error al cargar imagen'))
+        if (height > MAX_DIM) {
+          width = Math.round((width * MAX_DIM) / height)
+          height = MAX_DIM
+        }
+
+        canvas.width = width
+        canvas.height = height
+
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          reject(new Error('No se pudo crear canvas'))
+          return
+        }
+
+        ctx.drawImage(img, 0, 0, width, height)
+
+        let quality = 0.8
+        const targetSize = maxSize * 1024 * 1024
+
+        const tryCompress = () => {
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('Error al comprimir imagen'))
+                return
+              }
+
+              if (blob.size <= targetSize || quality <= 0.4) {
+                const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.jpg', {
+                  type: 'image/jpeg',
+                  lastModified: Date.now()
+                })
+                resolve(compressedFile)
+              } else {
+                quality -= 0.1
+                tryCompress()
+              }
+            },
+            'image/jpeg',
+            quality
+          )
+        }
+
+        tryCompress()
       }
-      reader.onerror = () => reject(new Error('Error al leer archivo'))
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl)
+        reject(new Error('Error al cargar imagen'))
+      }
     })
   }
 
@@ -137,19 +139,21 @@ export function SimpleImageUpload({
         }
       }
 
-      // Generar preview local inmediatamente (solo para imágenes)
+      // Generar preview local (objectURL evita la imagen negra en móviles)
       if (fileToUpload.type.startsWith('image/')) {
-        const reader = new FileReader()
-        reader.onloadend = () => {
-          setPreview(reader.result as string)
-        }
-        reader.readAsDataURL(fileToUpload)
+        if (localPreviewUrl.current) URL.revokeObjectURL(localPreviewUrl.current)
+        localPreviewUrl.current = URL.createObjectURL(fileToUpload)
+        setPreview(localPreviewUrl.current)
       }
 
       // Subir archivo a Supabase Storage
       const publicUrl = await uploadFile(fileToUpload, bucket, folder)
 
-      // Guardar URL pública
+      // Reemplazar preview local por URL pública y liberar el objectURL
+      if (localPreviewUrl.current) {
+        URL.revokeObjectURL(localPreviewUrl.current)
+        localPreviewUrl.current = null
+      }
       onChange(publicUrl!)
       setPreview(publicUrl!)
       setIsUploading(false)
@@ -157,6 +161,10 @@ export function SimpleImageUpload({
     } catch (err: any) {
       console.error('Error al procesar archivo:', err)
       setError(err?.message || 'Error al subir archivo. Intente nuevamente.')
+      if (localPreviewUrl.current) {
+        URL.revokeObjectURL(localPreviewUrl.current)
+        localPreviewUrl.current = null
+      }
       setPreview('')
       setIsUploading(false)
     }

@@ -53,6 +53,10 @@ import { getTodayPeru, calculateLoanMetrics, getLoanStatusUI } from "@/lib/finan
 import { cn, getFrequencyBadgeStyles } from "@/lib/utils"
 import { toast } from "sonner"
 
+const TERMINAL_ESTADOS_PRESTAMO = new Set(['finalizado', 'liquidado', 'anulado', 'castigado', 'renovado', 'refinanciado'])
+const TERMINAL_TABS_PRESTAMO = new Set(['finalizados', 'renovados', 'refinanciados', 'anulados'])
+const ACTIVE_ESTADOS_PRESTAMO = ['activo', 'vencido', 'moroso', 'cpp', 'legal']
+
 interface PrestamosTableProps {
     prestamos: any[]
     today: string
@@ -479,10 +483,107 @@ export function PrestamosTable({
 
 
 
-    // Sectores Logic - Dynamically filtered by Advisor/Supervisor
+    // Sectores Logic - reacts to asesor, supervisor, frecuencia and tab/vista filters.
+    // Uses raw DB fields (cuotas_mora_real, deuda_exigible_hoy, etc.) to mirror tab logic.
     const sectoresList = useMemo(() => {
-        let relevantPrestamos = prestamos
-        
+        // For terminal-state tabs we include those loans; otherwise exclude them
+        const isTerminalTab = localTab !== defaultTab && TERMINAL_TABS_PRESTAMO.has(localTab as string)
+        let relevantPrestamos = isTerminalTab
+            ? [...prestamos]
+            : prestamos.filter((p: any) => !TERMINAL_ESTADOS_PRESTAMO.has(p.estado))
+
+        // Frecuencia filter
+        if (localFrecuencia !== 'todos') {
+            relevantPrestamos = relevantPrestamos.filter((p: any) =>
+                p.frecuencia?.toLowerCase() === localFrecuencia.toLowerCase()
+            )
+        }
+
+        // Tab/Vista filter using raw DB fields
+        if (localTab !== 'todos' && localTab !== defaultTab) {
+            switch (localTab) {
+                case 'ruta_hoy':
+                    relevantPrestamos = relevantPrestamos.filter((p: any) =>
+                        parseFloat(p.cuota_dia_hoy || 0) > 0.01
+                    )
+                    break
+                case 'cobranza': {
+                    relevantPrestamos = relevantPrestamos.filter((p: any) => {
+                        const atrasadas = parseInt(p.cuotas_mora_real || 0)
+                        const deudaHoy = parseFloat(p.deuda_exigible_hoy || 0)
+                        const cuotaHoy = parseFloat(p.cuota_dia_hoy || 0)
+                        return (atrasadas >= 1 || deudaHoy > cuotaHoy + 0.1) && ACTIVE_ESTADOS_PRESTAMO.includes(p.estado)
+                    })
+                    break
+                }
+                case 'morosos':
+                case 'supervisor_mora': {
+                    relevantPrestamos = relevantPrestamos.filter((p: any) => {
+                        const atrasadas = parseInt(p.cuotas_mora_real || 0)
+                        const isDiario = p.frecuencia?.toLowerCase() === 'diario'
+                        const hasCritical = ['vencido', 'legal', 'castigado'].includes(p.estado_mora || '')
+                        const isCritical = hasCritical || (isDiario && atrasadas >= 7) || (!isDiario && atrasadas >= 2)
+                        return ACTIVE_ESTADOS_PRESTAMO.includes(p.estado) && !isCritical &&
+                            ((isDiario && atrasadas >= 4) || (!isDiario && atrasadas >= 1))
+                    })
+                    break
+                }
+                case 'notificar':
+                case 'supervisor_alertas': {
+                    relevantPrestamos = relevantPrestamos.filter((p: any) => {
+                        const atrasadas = parseInt(p.cuotas_mora_real || 0)
+                        const isDiario = p.frecuencia?.toLowerCase() === 'diario'
+                        const hasCritical = ['vencido', 'legal', 'castigado'].includes(p.estado_mora || '')
+                        return ACTIVE_ESTADOS_PRESTAMO.includes(p.estado) &&
+                            (hasCritical || (isDiario && atrasadas >= 7) || (!isDiario && atrasadas >= 2))
+                    })
+                    break
+                }
+                case 'al_dia':
+                    relevantPrestamos = relevantPrestamos.filter((p: any) =>
+                        p.estado === 'activo' && parseInt(p.cuotas_mora_real || 0) === 0
+                    )
+                    break
+                case 'finalizados':
+                    relevantPrestamos = relevantPrestamos.filter((p: any) =>
+                        p.estado === 'finalizado' || parseFloat(p.saldo_pendiente || 0) <= 0
+                    )
+                    break
+                case 'activos':
+                    relevantPrestamos = relevantPrestamos.filter((p: any) =>
+                        p.estado === 'activo' && !p.es_paralelo && p.estado_mora !== 'vencido'
+                    )
+                    break
+                case 'en_curso':
+                    relevantPrestamos = relevantPrestamos.filter((p: any) =>
+                        ['activo', 'vencido'].includes(p.estado) && parseFloat(p.saldo_pendiente || 0) > 0.01
+                    )
+                    break
+                case 'renovados':
+                    relevantPrestamos = relevantPrestamos.filter((p: any) => p.estado === 'renovado')
+                    break
+                case 'refinanciados':
+                    relevantPrestamos = relevantPrestamos.filter((p: any) => p.estado === 'refinanciado')
+                    break
+                case 'anulados':
+                    relevantPrestamos = relevantPrestamos.filter((p: any) => p.estado === 'anulado')
+                    break
+                case 'pendientes':
+                    relevantPrestamos = relevantPrestamos.filter((p: any) => p.estado === 'pendiente')
+                    break
+                case 'renovaciones':
+                    relevantPrestamos = relevantPrestamos.filter((p: any) => !!p.es_renovable_estricto)
+                    break
+                case 'visitas_control':
+                    relevantPrestamos = relevantPrestamos.filter((p: any) =>
+                        parseFloat(p.cuota_dia_programada || 0) > 0.01 || parseFloat(p.cobrado_hoy || 0) > 0.01
+                    )
+                    break
+                // 'semana', 'principal' and others: no additional filter
+            }
+        }
+
+        // Asesor/Supervisor filter
         if (localAsesor !== 'todos') {
             relevantPrestamos = relevantPrestamos.filter((p: any) => p.clientes?.asesor_id === localAsesor)
         } else if (localSupervisor !== 'todos') {
@@ -492,14 +593,14 @@ export function PrestamosTable({
 
         const unique = new Map<string, string>()
         relevantPrestamos.forEach((p: any) => {
-            const cliente = p.clientes;
+            const cliente = p.clientes
             if (cliente?.sector_id && cliente?.sectores?.nombre) {
                 unique.set(cliente.sector_id, cliente.sectores.nombre)
             }
         })
         return Array.from(unique.entries()).map(([id, nombre]) => ({ id, nombre }))
             .sort((a, b) => a.nombre.localeCompare(b.nombre))
-    }, [prestamos, localAsesor, localSupervisor, perfiles])
+    }, [prestamos, localAsesor, localSupervisor, localFrecuencia, localTab, perfiles, defaultTab])
 
     // Frecuencias Logic
     const frecuenciasList = useMemo(() => {

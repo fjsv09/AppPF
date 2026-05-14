@@ -502,11 +502,19 @@ export function PrestamosTable({
         // Tab/Vista filter using raw DB fields
         if (localTab !== 'todos' && localTab !== defaultTab) {
             switch (localTab) {
-                case 'ruta_hoy':
-                    relevantPrestamos = relevantPrestamos.filter((p: any) =>
-                        (parseFloat(p.cuota_dia_hoy || 0) > 0.01 || parseFloat(p.cuota_dia_programada || 0) > 0.01) && parseFloat(p.deuda_exigible_hoy || 0) > 0.01
-                    )
+                case 'ruta_hoy': {
+                    const dateAudit = propSelectedDate || getTodayPeru()
+                    relevantPrestamos = relevantPrestamos.filter((p: any) => {
+                        const allPagosRaw = [...(p.pagos || []), ...(p.cronograma_cuotas || []).flatMap((c: any) => c.pagos || [])]
+                        const allPagos = Array.from(new Map(allPagosRaw.filter((pag: any) => pag?.id && pag.estado_verificacion !== 'rechazado').map((pag: any) => [pag.id, pag])).values())
+                        const hasPagoHoy = allPagos.some((pag: any) => {
+                            const f = pag.created_at || pag.fecha_pago
+                            return f && f.startsWith(dateAudit)
+                        })
+                        return (parseFloat(p.cuota_dia_hoy || 0) > 0.01 || parseFloat(p.cuota_dia_programada || 0) > 0.01) && parseFloat(p.deuda_exigible_hoy || 0) > 0.01 && !hasPagoHoy
+                    })
                     break
+                }
                 case 'cobranza': {
                     relevantPrestamos = relevantPrestamos.filter((p: any) => {
                         const atrasadas = parseInt(p.cuotas_mora_real || 0)
@@ -600,7 +608,7 @@ export function PrestamosTable({
         })
         return Array.from(unique.entries()).map(([id, nombre]) => ({ id, nombre }))
             .sort((a, b) => a.nombre.localeCompare(b.nombre))
-    }, [prestamos, localAsesor, localSupervisor, localFrecuencia, localTab, perfiles, defaultTab])
+    }, [prestamos, localAsesor, localSupervisor, localFrecuencia, localTab, perfiles, defaultTab, propSelectedDate])
 
     // Frecuencias Logic
     const frecuenciasList = useMemo(() => {
@@ -722,7 +730,8 @@ export function PrestamosTable({
                 isVisitadoHoy,
                 metodosPagoHoy,
                 hasVoucherHoy,
-                cobradoPorHoy
+                cobradoPorHoy,
+                hasPagoHoy: pagosHoy.length > 0
             }
         })
         return enriched
@@ -775,8 +784,8 @@ export function PrestamosTable({
         switch (activeFilter) {
             case 'ruta_hoy':
                 // Ruta Hoy: Préstamos con cuota pendiente o programada hoy que el asesor debe cobrar.
-                // Excluye los que ya no tienen deuda hoy (pagados hoy o adelantados).
-                filtered = filtered.filter(p => (p.cuota_dia_hoy > 0.01 || p.cuota_dia_programada > 0.01) && p.deudaHoy > 0.01 &&
+                // Excluye los que ya no tienen deuda hoy (pagados hoy o adelantados) y los que YA tienen un pago hoy.
+                filtered = filtered.filter(p => (p.cuota_dia_hoy > 0.01 || p.cuota_dia_programada > 0.01) && p.deudaHoy > 0.01 && !p.hasPagoHoy &&
                     !['finalizado', 'liquidado', 'anulado', 'castigado', 'renovado', 'refinanciado'].includes(p.estado))
                 break
 

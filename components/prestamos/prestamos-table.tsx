@@ -1358,7 +1358,7 @@ export function PrestamosTable({
                                                 <div
                                                     onClick={() => router.push(`/dashboard/prestamos/${prestamo.id}`)}
                                                     className={cn(
-                                                        "p-3 rounded-xl border-l-[4px] transition-all active:scale-[0.98] mb-2 relative overflow-hidden",
+                                                        "cursor-pointer p-3 rounded-xl border-l-[4px] transition-all active:scale-[0.98] mb-2 relative overflow-hidden",
                                                         auditStatus === 'pending' ? 'bg-slate-900/60 border-slate-800 shadow-lg' :
                                                             auditStatus === 'success' ? 'bg-emerald-500/[0.02] border-emerald-500 shadow-sm' :
                                                                 'bg-rose-500/[0.02] border-rose-500 shadow-sm'
@@ -1384,7 +1384,13 @@ export function PrestamosTable({
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                                <h3 className="text-base font-bold text-white tracking-tight leading-none truncate">
+                                                                <h3 
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        router.push(`/dashboard/clientes/${prestamo.cliente_id || prestamo.clientes?.id}`);
+                                                                    }}
+                                                                    className="text-base font-bold text-white tracking-tight leading-none truncate cursor-pointer hover:text-blue-400 hover:underline transition-colors"
+                                                                >
                                                                     {prestamo.clientes?.nombres}
                                                                 </h3>
                                                             </div>
@@ -1528,8 +1534,9 @@ export function PrestamosTable({
                                             )}
 
                                             <div
+                                                onClick={() => router.push(`/dashboard/prestamos/${prestamo.id}`)}
                                                 className={cn(
-                                                    "group block bg-slate-900 border border-slate-800/60 rounded-xl mb-2 relative overflow-hidden transition-all duration-200 shadow-sm hover:shadow-md hover:border-slate-700",
+                                                    "cursor-pointer group block bg-slate-900 border border-slate-800/60 rounded-xl mb-2 relative overflow-hidden transition-all duration-200 shadow-sm hover:shadow-md hover:border-slate-700",
                                                     // Status Bar (Left Border)
                                                     (prestamo.estado === 'refinanciado' || prestamo.estado === 'renovado' || prestamo.isFinalizado || prestamo.saldo_pendiente <= 0 || (prestamo.totalCuotas > 0 && prestamo.cuotasPagadas >= prestamo.totalCuotas)) ? "border-l-[4px] border-l-slate-600 bg-slate-900/40 opacity-60 grayscale" :
                                                         prestamo.estado_mora === 'vencido' ? "border-l-[4px] border-l-rose-500" :
@@ -1574,7 +1581,13 @@ export function PrestamosTable({
 
                                                             {/* Name & DNI */}
                                                             <div className="flex flex-col min-w-0">
-                                                                <h3 className="text-slate-100 font-bold text-sm leading-tight truncate pr-1">
+                                                                <h3 
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        router.push(`/dashboard/clientes/${prestamo.cliente_id || prestamo.clientes?.id}`);
+                                                                    }}
+                                                                    className="text-slate-100 font-bold text-sm leading-tight truncate pr-1 cursor-pointer hover:text-blue-400 hover:underline transition-colors"
+                                                                >
                                                                     {prestamo.clientes?.nombres}
                                                                 </h3>
                                                                 <div className="flex flex-col gap-0.5 mt-0.5">
@@ -1611,18 +1624,6 @@ export function PrestamosTable({
                                                                                 Paralelo
                                                                             </span>
                                                                         )}
-
-                                                                        {/* Fechas de pago */}
-                                                                        <div className="flex items-center gap-1 shrink-0 border-l border-slate-700/50 pl-1.5 ml-0.5">
-                                                                            <span className="text-[10px] text-slate-300 font-mono tracking-tighter">
-                                                                                {formatDateShort(prestamo.fecha_inicio)} - {formatDateShort(prestamo.fecha_fin)}
-                                                                            </span>
-                                                                            {getDiaPago(prestamo) !== '-' && (
-                                                                                <span className="text-[9px] font-bold text-slate-500 uppercase">
-                                                                                    {getDiaPago(prestamo)}
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
                                                                     </div>
                                                                     {/* Chip: Producto de Refinanciamiento */}
                                                                     {prestamoIdsProductoRefinanciamiento.includes(prestamo.id) && (
@@ -1750,6 +1751,19 @@ export function PrestamosTable({
                                                                         </span>
                                                                     </div>
                                                                 )}
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[8px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Fechas</span>
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className="font-mono text-slate-300 text-[11px] whitespace-nowrap">
+                                                                            {formatDateShort(prestamo.fecha_inicio)} - {formatDateShort(prestamo.fecha_fin)}
+                                                                        </span>
+                                                                        {getDiaPago(prestamo) !== '-' && (
+                                                                            <span className="text-[9px] font-bold text-slate-500 uppercase">
+                                                                                {getDiaPago(prestamo)}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
                                                             </div>
 
                                                             {/* Badges */}

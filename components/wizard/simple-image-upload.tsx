@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Upload, X, FileText, Check, Loader2 } from 'lucide-react'
+import { Upload, X, FileText, Check, Loader2, ImageOff } from 'lucide-react'
 import { uploadFile } from '@/utils/supabase/upload'
 
 interface SimpleImageUploadProps {
@@ -15,7 +15,7 @@ interface SimpleImageUploadProps {
   bucket?: string
 }
 
-export function SimpleImageUpload({ 
+export function SimpleImageUpload({
   label,
   value,
   onChange,
@@ -29,80 +29,56 @@ export function SimpleImageUpload({
   const [fileType, setFileType] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [imgError, setImgError] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const localPreviewUrl = useRef<string | null>(null)
 
-  // Función para comprimir imagen — usa objectURL en lugar de base64 para evitar
-  // imagen negra en móviles con fotos de alta resolución (problema de memoria)
+  // createImageBitmap decodifica en un worker thread sin convertir a base64,
+  // evitando el agotamiento de memoria en móviles con fotos de alta resolución
   const compressImage = async (file: File, maxSize: number): Promise<File> => {
     if (file.type === 'application/pdf') return file
 
+    const MAX_DIM = 1200
+    const targetSize = maxSize * 1024 * 1024
+
+    const bitmap = await createImageBitmap(file)
+    let { width, height } = bitmap
+
+    if (!width || !height) {
+      bitmap.close()
+      throw new Error('Imagen sin dimensiones válidas')
+    }
+
+    if (width > MAX_DIM) { height = Math.round((height * MAX_DIM) / width); width = MAX_DIM }
+    if (height > MAX_DIM) { width = Math.round((width * MAX_DIM) / height); height = MAX_DIM }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) { bitmap.close(); throw new Error('No se pudo crear canvas') }
+
+    ctx.drawImage(bitmap, 0, 0, width, height)
+    bitmap.close()
+
     return new Promise((resolve, reject) => {
-      const objectUrl = URL.createObjectURL(file)
-      const img = new Image()
-      img.src = objectUrl
-      img.onload = () => {
-        URL.revokeObjectURL(objectUrl)
-
-        const canvas = document.createElement('canvas')
-        let width = img.naturalWidth || img.width
-        let height = img.naturalHeight || img.height
-
-        const MAX_DIM = 1200
-
-        if (width > MAX_DIM) {
-          height = Math.round((height * MAX_DIM) / width)
-          width = MAX_DIM
-        }
-        if (height > MAX_DIM) {
-          width = Math.round((width * MAX_DIM) / height)
-          height = MAX_DIM
-        }
-
-        canvas.width = width
-        canvas.height = height
-
-        const ctx = canvas.getContext('2d')
-        if (!ctx) {
-          reject(new Error('No se pudo crear canvas'))
-          return
-        }
-
-        ctx.drawImage(img, 0, 0, width, height)
-
-        let quality = 0.8
-        const targetSize = maxSize * 1024 * 1024
-
-        const tryCompress = () => {
-          canvas.toBlob(
-            (blob) => {
-              if (!blob) {
-                reject(new Error('Error al comprimir imagen'))
-                return
-              }
-
-              if (blob.size <= targetSize || quality <= 0.4) {
-                const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.jpg', {
-                  type: 'image/jpeg',
-                  lastModified: Date.now()
-                })
-                resolve(compressedFile)
-              } else {
-                quality -= 0.1
-                tryCompress()
-              }
-            },
-            'image/jpeg',
-            quality
-          )
-        }
-
-        tryCompress()
+      let quality = 0.8
+      const tryCompress = () => {
+        canvas.toBlob((blob) => {
+          if (!blob) { reject(new Error('Error al comprimir imagen')); return }
+          if (blob.size <= targetSize || quality <= 0.4) {
+            resolve(new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.jpg', {
+              type: 'image/jpeg',
+              lastModified: Date.now()
+            }))
+          } else {
+            quality -= 0.1
+            tryCompress()
+          }
+        }, 'image/jpeg', quality)
       }
-      img.onerror = () => {
-        URL.revokeObjectURL(objectUrl)
-        reject(new Error('Error al cargar imagen'))
-      }
+      tryCompress()
     })
   }
 
@@ -111,11 +87,11 @@ export function SimpleImageUpload({
     if (!selectedFile) return
 
     setError(null)
+    setImgError(false)
     setIsUploading(true)
     setFileType(selectedFile.type)
 
     try {
-      // Validar tamaño inicial (permitir hasta el doble para luego comprimir)
       const sizeMB = selectedFile.size / (1024 * 1024)
       if (sizeMB > maxSizeMB * 3) {
         setError(`Archivo demasiado grande. Máximo ${maxSizeMB}MB`)
@@ -123,39 +99,44 @@ export function SimpleImageUpload({
         return
       }
 
-      // Comprimir si es imagen
+      // Preview desde el archivo ORIGINAL — siempre decodificable por el browser
+      // La compresión es solo para reducir el tamaño de upload, no del preview
+      if (selectedFile.type.startsWith('image/')) {
+        if (localPreviewUrl.current) URL.revokeObjectURL(localPreviewUrl.current)
+        localPreviewUrl.current = URL.createObjectURL(selectedFile)
+        setPreview(localPreviewUrl.current)
+      }
+
+      // Comprimir para el upload
       let fileToUpload = selectedFile
       if (selectedFile.type.startsWith('image/')) {
         try {
           fileToUpload = await compressImage(selectedFile, maxSizeMB)
         } catch (compressErr) {
           console.error('Error comprimiendo:', compressErr)
-          // Si falla la compresión, intentamos con el original si no es gigante
           if (sizeMB > maxSizeMB) {
             setError('La imagen es muy pesada y no se pudo optimizar.')
+            if (localPreviewUrl.current) {
+              URL.revokeObjectURL(localPreviewUrl.current)
+              localPreviewUrl.current = null
+            }
+            setPreview('')
             setIsUploading(false)
             return
           }
+          // Si es pequeño, subir el original sin comprimir
         }
       }
 
-      // Generar preview local (objectURL evita la imagen negra en móviles)
-      if (fileToUpload.type.startsWith('image/')) {
-        if (localPreviewUrl.current) URL.revokeObjectURL(localPreviewUrl.current)
-        localPreviewUrl.current = URL.createObjectURL(fileToUpload)
-        setPreview(localPreviewUrl.current)
-      }
-
-      // Subir archivo a Supabase Storage
       const publicUrl = await uploadFile(fileToUpload, bucket, folder)
+      if (!publicUrl) throw new Error('Error al subir el archivo. Intente nuevamente.')
 
-      // Reemplazar preview local por URL pública y liberar el objectURL
       if (localPreviewUrl.current) {
         URL.revokeObjectURL(localPreviewUrl.current)
         localPreviewUrl.current = null
       }
-      onChange(publicUrl!)
-      setPreview(publicUrl!)
+      onChange(publicUrl)
+      setPreview(publicUrl)
       setIsUploading(false)
 
     } catch (err: any) {
@@ -174,10 +155,9 @@ export function SimpleImageUpload({
     setPreview('')
     setFileType('')
     setError(null)
+    setImgError(false)
     onChange('')
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const hasFile = preview || value
@@ -200,7 +180,7 @@ export function SimpleImageUpload({
             htmlFor={`upload-${label.replace(/\s/g, '-')}`}
             className={`flex flex-col items-center justify-center aspect-square border-2 border-dashed rounded-lg transition-all ${
               disabled || isUploading
-                ? 'border-slate-700 bg-slate-900 cursor-not-allowed opacity-50' 
+                ? 'border-slate-700 bg-slate-900 cursor-not-allowed opacity-50'
                 : 'border-slate-600 hover:border-blue-500 hover:bg-slate-800/50 cursor-pointer'
             }`}
           >
@@ -230,7 +210,7 @@ export function SimpleImageUpload({
               <X className="w-3 h-3 text-white" />
             </button>
           )}
-          
+
           <div className="absolute top-1 left-1 p-1 bg-emerald-500 rounded-full z-10">
             <Check className="w-3 h-3 text-white" />
           </div>
@@ -240,15 +220,19 @@ export function SimpleImageUpload({
               <FileText className="w-12 h-12 text-red-400" />
               <span className="text-[10px] text-slate-300 font-medium">PDF</span>
             </div>
+          ) : imgError ? (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-slate-900">
+              <ImageOff className="w-8 h-8 text-slate-500" />
+              <span className="text-[10px] text-slate-500 text-center px-2">Vista previa no disponible</span>
+            </div>
           ) : (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={preview || value}
-                alt={label}
-                className="w-full h-full object-cover"
-              />
-            </>
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={preview || value}
+              alt=""
+              className="w-full h-full object-cover"
+              onError={() => setImgError(true)}
+            />
           )}
         </div>
       )}

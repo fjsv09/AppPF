@@ -99,14 +99,18 @@ export function KpiCards({
       ? baseForKpi.filter(p => ['activo', 'legal', 'vencido', 'moroso', 'cpp'].includes(p.estado))
       : baseForKpi
 
-    // META HOY debe incluir TODAS las cuotas vencidas hoy sin importar estado
-    // Usar baseForKpi directamente para no excluir finalizados, renovados, etc.
-    const metaCobranzaHoy = baseForKpi.reduce((acc, p) => acc + (p.cuota_dia_programada || 0), 0)
+    // META HOY: solo préstamos donde el asesor tiene/tuvo trabajo hoy.
+    // Excluye los que fueron liquidados por auto-pago de sistema (estados terminales) o anulados.
+    const esRelevantHoy = (p: any) =>
+      (p.cuota_dia_programada || 0) > 0 &&
+      !['finalizado', 'liquidado', 'anulado', 'castigado', 'renovado', 'refinanciado'].includes(p.estado)
+
+    const metaCobranzaHoy = baseForKpi.filter(esRelevantHoy).reduce((acc, p) => acc + (p.cuota_dia_programada || 0), 0)
     const recaudadoRutaHoy = baseForKpi.reduce((acc, p) => acc + (p.cobrado_ruta_hoy || 0), 0)
-    // Solo cuentan préstamos con cuota programada hoy (no pagos extra de cuotas atrasadas)
-    const totalClientesHoy = baseForKpi.filter(p => (p.cuota_dia_programada || 0) > 0).length
-    const clientesPendientesHoy = baseForKpi.filter(p => (p.cuota_dia_hoy || 0) > 0).length
-    const clientesCobradosHoy = totalClientesHoy - clientesPendientesHoy
+    const totalClientesHoy = baseForKpi.filter(esRelevantHoy).length
+    const clientesCobradosHoy = baseForKpi.filter(p =>
+      (p.cuota_dia_programada || 0) > 0 && (p.cobrado_hoy || 0) > 0.01
+    ).length
 
     // Active loans - mirrors server logic - use baseForKpi for complete count
     const clientesMap = new Map<string, any[]>()

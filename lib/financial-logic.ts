@@ -218,13 +218,28 @@ export function calculateLoanMetrics(
   //   1) Cascada de pagos del RPC (aplica excedente a cuotas futuras actualizando
   //      monto_pagado sin crear registro en pagos para esa cuota)
   //   2) Pagos rechazados cuyo monto_pagado no fue revertido correctamente
+  // Para préstamos liquidados por el sistema (renovado/refinanciado/etc.), el auto-pago
+  // actualiza monto_pagado sin crear registros en c.pagos → hay que confiar en monto_pagado.
+  // Para préstamos en curso (activo/moroso/vencido), la cascada del RPC puede actualizar
+  // monto_pagado incorrectamente → hay que confiar solo en c.pagos.
+  const isSystemHandled = ['renovado', 'refinanciado', 'finalizado', 'liquidado', 'anulado', 'castigado'].includes(loan.estado);
+
   const cuotaDiaHoyAll = cronograma
     .filter((c: any) => c.fecha_vencimiento === today)
     .reduce((sum: number, c: any) => {
       const pagadoPorCuota = (c.pagos || [])
-        .filter((p: any) => p.estado_verificacion !== 'rechazado')
+        .filter((p: any) =>
+          p.estado_verificacion !== 'rechazado' &&
+          p.metodo_pago !== 'Renovación' &&
+          p.metodo_pago !== 'Sistema' &&
+          p.metodo_pago !== 'Excedente' &&
+          p.es_autopago_renovacion !== true
+        )
         .reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
-      return sum + Math.max(0, Number(c.monto_cuota) - pagadoPorCuota);
+      const efectivamentePagado = isSystemHandled
+        ? Math.max(pagadoPorCuota, Number(c.monto_pagado || 0))
+        : pagadoPorCuota;
+      return sum + Math.max(0, Number(c.monto_cuota) - efectivamentePagado);
     }, 0);
 
   const cobradoHoyAll = pagos
@@ -296,12 +311,19 @@ export function calculateLoanMetrics(
   }
 
   // 1. Meta Hoy (cuotas que vencen hoy, pendientes de cobrar)
-  // Usa c.pagos (no c.monto_pagado) para evitar falsos-cero por cascada o rechazos no revertidos.
+  // Para activos: solo c.pagos — la cascada del RPC puede actualizar monto_pagado
+  // de cuotas futuras sin crear registros, produciendo falsos-cero si usamos monto_pagado.
   const cuotaDiaHoy = cronograma
     .filter((c: any) => c.fecha_vencimiento === today)
     .reduce((sum: number, c: any) => {
       const pagadoPorCuota = (c.pagos || [])
-        .filter((p: any) => p.estado_verificacion !== 'rechazado')
+        .filter((p: any) =>
+          p.estado_verificacion !== 'rechazado' &&
+          p.metodo_pago !== 'Renovación' &&
+          p.metodo_pago !== 'Sistema' &&
+          p.metodo_pago !== 'Excedente' &&
+          p.es_autopago_renovacion !== true
+        )
         .reduce((s: number, p: any) => s + (Number(p.monto_pagado) || 0), 0);
       return sum + Math.max(0, Number(c.monto_cuota) - pagadoPorCuota);
     }, 0);

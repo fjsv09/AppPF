@@ -504,7 +504,7 @@ export function PrestamosTable({
             switch (localTab) {
                 case 'ruta_hoy':
                     relevantPrestamos = relevantPrestamos.filter((p: any) =>
-                        parseFloat(p.cuota_dia_hoy || 0) > 0.01
+                        parseFloat(p.cuota_dia_hoy || 0) > 0.01 || parseFloat(p.cuota_dia_programada || 0) > 0.01
                     )
                     break
                 case 'cobranza': {
@@ -774,11 +774,10 @@ export function PrestamosTable({
 
         switch (activeFilter) {
             case 'ruta_hoy':
-                // Ruta Hoy: Todos los préstamos con saldo pendiente hoy
-                // Incluye activos y migradores que aún están en proceso
-                // Excluye solo los finalizados/liquidados (cobranza completada)
-                filtered = filtered.filter(p => p.cuota_dia_hoy > 0.01 &&
-                    !['finalizado', 'liquidado', 'anulado', 'castigado'].includes(p.estado))
+                // Ruta Hoy: Préstamos con cuota pendiente o programada hoy que el asesor debe cobrar.
+                // Excluye renovados/refinanciados cuya cuota fue liquidada por el sistema.
+                filtered = filtered.filter(p => (p.cuota_dia_hoy > 0.01 || p.cuota_dia_programada > 0.01) &&
+                    !['finalizado', 'liquidado', 'anulado', 'castigado', 'renovado', 'refinanciado'].includes(p.estado))
                 break
 
             case 'cobranza':
@@ -903,9 +902,9 @@ export function PrestamosTable({
                 break
 
             case 'visitas_control':
-                // Control Ruta: Solo los de "Ruta Hoy" (quienes deben ser visitados hoy - Auditoría)
-                // Usamos cuota_dia_programada para que no desaparezcan al pagar. Se incluyen también pagos extra del día.
-                filtered = filtered.filter(p => (p.cuota_dia_programada > 0.01 || p.cobrado_hoy > 0.01) && !['finalizado', 'liquidado', 'anulado', 'castigado'].includes(p.estado))
+                // Control Ruta: Préstamos que el asesor debe/debía visitar hoy.
+                // Excluye renovados/refinanciados: su cuota fue liquidada por el sistema, no por asesor.
+                filtered = filtered.filter(p => (p.cuota_dia_programada > 0.01 || p.cobrado_hoy > 0.01) && !['finalizado', 'liquidado', 'anulado', 'castigado', 'renovado', 'refinanciado'].includes(p.estado))
                 break
 
             case 'todos':
@@ -988,7 +987,7 @@ export function PrestamosTable({
             // Contar ruta_hoy y visitas_control para TODOS los estados no excluidos
             // (igual que el filtro real del tab, incluye migradores y otros no-activos)
             if (!isExcludedEstado) {
-                if (p.cuota_dia_hoy > 0.01) counts.ruta_hoy++
+                if (p.cuota_dia_hoy > 0.01 || p.cuota_dia_programada > 0.01) counts.ruta_hoy++
                 if (p.cuota_dia_programada > 0.01 || p.cobrado_hoy > 0.01) counts.visitas_control++
             }
 
@@ -1039,6 +1038,32 @@ export function PrestamosTable({
         }
         return perfiles.filter(p => p.rol === 'asesor');
     }, [perfiles, filtroSupervisor, userRol, userId]);
+
+    const formatDateShort = (dateStr: string) => {
+        if (!dateStr) return '-'
+        const d = new Date(dateStr + 'T00:00:00') // Force local
+        return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' })
+    }
+
+    const getDiaPago = (p: any) => {
+        const freq = p.frecuencia?.toLowerCase()
+        if (freq === 'diario') return '-'
+        if (!p.fecha_inicio) return '-'
+
+        const d = new Date(p.fecha_inicio + 'T00:00:00')
+        const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
+        if (freq === 'semanal') return diasSemana[d.getDay()]
+        if (freq === 'quincenal') {
+            const day1 = d.getDate()
+            let day2 = day1 + 14
+            if (day2 > 30) day2 = day2 - 30
+            return `Día ${day1} y ${day2}`
+        }
+        if (freq === 'mensual') return `Día ${d.getDate()}`
+
+        return diasSemana[d.getDay()]
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -1586,6 +1611,18 @@ export function PrestamosTable({
                                                                                 Paralelo
                                                                             </span>
                                                                         )}
+
+                                                                        {/* Fechas de pago */}
+                                                                        <div className="flex items-center gap-1 shrink-0 border-l border-slate-700/50 pl-1.5 ml-0.5">
+                                                                            <span className="text-[10px] text-slate-300 font-mono tracking-tighter">
+                                                                                {formatDateShort(prestamo.fecha_inicio)} - {formatDateShort(prestamo.fecha_fin)}
+                                                                            </span>
+                                                                            {getDiaPago(prestamo) !== '-' && (
+                                                                                <span className="text-[9px] font-bold text-slate-500 uppercase">
+                                                                                    {getDiaPago(prestamo)}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                     {/* Chip: Producto de Refinanciamiento */}
                                                                     {prestamoIdsProductoRefinanciamiento.includes(prestamo.id) && (
@@ -2061,32 +2098,7 @@ export function PrestamosTable({
                                             const cuotasPendientes = Math.max(0, totalCuotas - cuotasPagadas)
 
                                             // Format dates
-                                            const formatDateShort = (dateStr: string) => {
-                                                if (!dateStr) return '-'
-                                                const d = new Date(dateStr + 'T00:00:00') // Force local
-                                                return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' })
-                                            }
                                             const rangoFechas = `${formatDateShort(prestamo.fecha_inicio)} - ${formatDateShort(prestamo.fecha_fin)}`
-
-                                            const getDiaPago = (p: any) => {
-                                                const freq = p.frecuencia?.toLowerCase()
-                                                if (freq === 'diario') return '-'
-                                                if (!p.fecha_inicio) return '-'
-
-                                                const d = new Date(p.fecha_inicio + 'T00:00:00')
-                                                const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
-
-                                                if (freq === 'semanal') return diasSemana[d.getDay()]
-                                                if (freq === 'quincenal') {
-                                                    const day1 = d.getDate()
-                                                    let day2 = day1 + 14
-                                                    if (day2 > 30) day2 = day2 - 30
-                                                    return `Día ${day1} y ${day2}`
-                                                }
-                                                if (freq === 'mensual') return `Día ${d.getDate()}`
-
-                                                return diasSemana[d.getDay()]
-                                            }
 
                                             // Check if loan is fully paid (saldo = 0) but not yet marked finalizado
                                             const isFullyPaid = prestamo.saldo_pendiente <= 0 || (prestamo.cuotasPagadas >= prestamo.totalCuotas && prestamo.totalCuotas > 0)

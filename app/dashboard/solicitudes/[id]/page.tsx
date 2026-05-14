@@ -135,7 +135,8 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
         'corregir_solicitud', 
         'rechazar_solicitud', 
         'aprobar_solicitud', 
-        'preprobar_solicitud'
+        'preprobar_solicitud',
+        'reabrir_solicitud'
     ].includes(log.accion))
 
     // Consolidar logs únicos por timestamp para evitar duplicados si los hubiera
@@ -223,6 +224,7 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
                                     const isCorreccion = log.accion === 'corregir_solicitud'
                                     const isAprobacion = log.accion === 'aprobar_solicitud'
                                     const isPreAprobacion = log.accion === 'preprobar_solicitud'
+                                    const isReabierto = log.accion === 'reabrir_solicitud'
                                     
                                     const det = typeof log.detalle === 'string' ? JSON.parse(log.detalle) : log.detalle
                                     
@@ -233,11 +235,13 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
                                                     "p-1.5 rounded-full mt-0.5",
                                                     isObservacion ? "bg-orange-500/10 text-orange-400" :
                                                     isRechazo ? "bg-red-500/10 text-red-400" :
+                                                    isReabierto ? "bg-blue-500/10 text-blue-400" :
                                                     isAprobacion ? "bg-emerald-500/10 text-emerald-400" :
                                                     "bg-blue-500/10 text-blue-400"
                                                 )}>
                                                     {isObservacion ? <MessageSquare className="w-3.5 h-3.5" /> : 
                                                      isRechazo ? <XCircle className="w-3.5 h-3.5" /> : 
+                                                     isReabierto ? <RefreshCw className="w-3.5 h-3.5" /> :
                                                      isAprobacion ? <CheckCircle className="w-3.5 h-3.5" /> :
                                                      <RefreshCw className="w-3.5 h-3.5" />}
                                                 </div>
@@ -247,6 +251,7 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
                                                             {isObservacion ? 'Observación' : 
                                                              isRechazo ? 'Rechazo' : 
                                                              isPreAprobacion ? 'Pre-Aprobación' :
+                                                             isReabierto ? 'Reabierta por Admin' :
                                                              isAprobacion ? 'Aprobación Final' : 'Reenvío / Corrección'}
                                                         </span>
                                                         <span className="text-[10px] font-mono text-slate-500" suppressHydrationWarning>
@@ -254,7 +259,7 @@ export default async function SolicitudDetailPage({ params }: { params: { id: st
                                                         </span>
                                                     </div>
                                                     <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
-                                                        {det?.observacion || det?.motivo || (isCorreccion ? 'El asesor corrigió los datos y reenvió la solicitud.' : isAprobacion ? 'La solicitud fue aprobada definitivamente y se generó el préstamo.' : '')}
+                                                        {det?.observacion || det?.motivo || (isCorreccion ? 'El asesor corrigió los datos y reenvió la solicitud.' : isReabierto ? `Motivo anterior de rechazo: ${det?.motivo_rechazo_anterior || 'N/A'}` : isAprobacion ? 'La solicitud fue aprobada definitivamente y se generó el préstamo.' : '')}
                                                     </p>
                                                     <div className="mt-2 flex items-center gap-1.5">
                                                         <span className="text-[10px] text-slate-500">Por:</span>

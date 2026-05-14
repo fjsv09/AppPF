@@ -21,10 +21,12 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
     const [loading, setLoading] = useState<string | null>(null)
     const [showObservacion, setShowObservacion] = useState(false)
     const [showRechazo, setShowRechazo] = useState(false)
+    const [showReabrir, setShowReabrir] = useState(false)
     const [showSuccess, setShowSuccess] = useState(false)
     const [wasNotified, setWasNotified] = useState(false)
     const [observacion, setObservacion] = useState('')
     const [motivoRechazo, setMotivoRechazo] = useState('')
+    const [observacionReabrir, setObservacionReabrir] = useState('')
     const [cuentaOrigenId, setCuentaOrigenId] = useState<string>('')
     const [prestamoId, setPrestamoId] = useState<string | null>(null)
     
@@ -61,11 +63,15 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
                 toast.success(
                     action === 'preprobar' ? 'Solicitud pre-aprobada' :
                     action === 'rechazar' ? 'Solicitud rechazada' :
-                    action === 'observar' ? 'Observación enviada' : 'Acción completada'
+                    action === 'observar' ? 'Observación enviada' :
+                    action === 'reabrir' ? '🔄 Solicitud reabierta — El asesor fue notificado' :
+                    'Acción completada'
                 )
                 router.refresh()
                 setShowObservacion(false)
                 setShowRechazo(false)
+                setShowReabrir(false)
+                setObservacionReabrir('')
             }
 
         } catch (e: any) {
@@ -73,6 +79,14 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
         } finally {
             setLoading(null)
         }
+    }
+
+    const handleReabrir = async () => {
+        if (!observacionReabrir || observacionReabrir.trim().length < 5) {
+            toast.error('Debe escribir una observación para el asesor (mínimo 5 caracteres)')
+            return
+        }
+        await handleAction('reabrir', { observacion: observacionReabrir })
     }
 
     const handleSendWhatsApp = () => {
@@ -91,28 +105,42 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
         router.refresh()
     }
 
-    // Si ya está aprobada o rechazada, no mostrar acciones (a menos que estemos en éxito)
-    if (['aprobado', 'rechazado'].includes(solicitud.estado_solicitud) && !showSuccess) {
+    // Si ya está aprobada, no mostrar acciones (a menos que estemos en éxito)
+    // Las solicitudes RECHAZADAS se pueden reabrir por el admin, por eso no se bloquean aquí
+    if (solicitud.estado_solicitud === 'aprobado' && !showSuccess) {
         return null
     }
 
-    // Acciones para Asesor - Corregir solicitud observada
+    // Solicitud rechazada: solo el admin puede reabrir
+    if (solicitud.estado_solicitud === 'rechazado' && userRole !== 'admin') {
+        return null
+    }
+
+    // Acciones para Asesor - Corregir solicitud observada (por supervisor o admin)
     if (userRole === 'asesor' && solicitud.estado_solicitud === 'en_correccion' && solicitud.asesor_id === userId) {
+        const isAdminReview = solicitud.observacion_supervisor?.startsWith('[Revisión Admin')
         return (
-            <div className="space-y-4 p-4 rounded-xl bg-slate-900/50 border border-orange-500/30">
+            <div className={`space-y-4 p-4 rounded-xl bg-slate-900/50 border ${isAdminReview ? 'border-blue-500/40' : 'border-orange-500/30'}`}>
                 <div className="flex items-start gap-4">
-                    <div className="p-2 bg-orange-500/10 rounded-lg">
-                        <Edit className="w-6 h-6 text-orange-400" />
+                    <div className={`p-2 rounded-lg ${isAdminReview ? 'bg-blue-500/10' : 'bg-orange-500/10'}`}>
+                        <Edit className={`w-6 h-6 ${isAdminReview ? 'text-blue-400' : 'text-orange-400'}`} />
                     </div>
                     <div className="flex-1">
-                        <h3 className="text-sm font-bold text-orange-400 mb-1">Solicitud Observada</h3>
+                        <h3 className={`text-sm font-bold mb-1 ${isAdminReview ? 'text-blue-400' : 'text-orange-400'}`}>
+                            {isAdminReview ? '🔄 Reabierta por Administrador' : 'Solicitud Observada'}
+                        </h3>
                         <p className="text-sm text-slate-300 mb-4">
-                            El supervisor ha devuelto esta solicitud con observaciones. 
-                            Puedes editar todos los datos (montos, cliente, documentos) y volver a enviarla.
+                            {isAdminReview
+                                ? 'El administrador ha revisado el rechazo y te pide que corrijas esta solicitud. Puedes editar todos los datos y volver a enviarla.'
+                                : 'El supervisor ha devuelto esta solicitud con observaciones. Puedes editar todos los datos (montos, cliente, documentos) y volver a enviarla.'}
                         </p>
                         <Button
                             onClick={() => router.push(`/dashboard/solicitudes/nueva?mode=edit&id=${solicitud.id}`)}
-                            className="w-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-medium shadow-lg shadow-orange-500/20"
+                            className={`w-full text-white font-medium shadow-lg ${
+                                isAdminReview
+                                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-blue-500/20'
+                                    : 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 shadow-orange-500/20'
+                            }`}
                         >
                             <Edit className="w-4 h-4 mr-2" />
                             Editar Solicitud Completa
@@ -202,6 +230,65 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
                             Rechazar
                         </Button>
                     </div>
+                )}
+            </div>
+        )
+    }
+
+    // ─── EXCEPCIÓN ADMIN: Reabrir solicitud rechazada ───
+    if (userRole === 'admin' && solicitud.estado_solicitud === 'rechazado') {
+        return (
+            <div className="space-y-4 p-4 rounded-xl bg-slate-900/50 border border-red-500/30">
+                <div className="flex items-start gap-3 mb-2">
+                    <div className="p-2 bg-red-500/10 rounded-lg shrink-0">
+                        <XCircle className="w-5 h-5 text-red-400" />
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-bold text-red-400">Solicitud Rechazada</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                            Como administrador puedes reabrir esta solicitud para que el asesor realice correcciones y la reenvíe al flujo normal de aprobación.
+                        </p>
+                    </div>
+                </div>
+
+                {showReabrir ? (
+                    <div className="space-y-3">
+                        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                            <p className="text-xs text-amber-400">
+                                <AlertTriangle className="w-3 h-3 inline mr-1" />
+                                El asesor recibirá una notificación y la solicitud pasará a estado <strong>"En Corrección"</strong>. Luego deberá ser revisada nuevamente por el supervisor.
+                            </p>
+                        </div>
+                        <textarea
+                            value={observacionReabrir}
+                            onChange={(e) => setObservacionReabrir(e.target.value)}
+                            placeholder="Escribe las observaciones para el asesor: qué debe corregir o mejorar..."
+                            className="w-full p-3 rounded-lg bg-slate-950 border border-slate-700 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-sm"
+                            rows={4}
+                        />
+                        <div className="flex gap-2">
+                            <Button
+                                onClick={handleReabrir}
+                                disabled={!observacionReabrir || observacionReabrir.trim().length < 5 || loading === 'reabrir'}
+                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold"
+                            >
+                                {loading === 'reabrir' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                                Reabrir y Notificar Asesor
+                            </Button>
+                            <Button variant="ghost" onClick={() => { setShowReabrir(false); setObservacionReabrir('') }}>
+                                Cancelar
+                            </Button>
+                        </div>
+                    </div>
+                ) : (
+                    <Button
+                        onClick={() => setShowReabrir(true)}
+                        variant="outline"
+                        className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-950 font-bold"
+                    >
+                        <Send className="w-4 h-4 mr-2" />
+                        Reabrir para Corrección
+                    </Button>
                 )}
             </div>
         )

@@ -124,7 +124,13 @@ export function KpiCards({
     const recaudadoRutaHoy = baseForKpi.reduce((acc, p) => {
       const { sumPagosHoy } = getPagosHoyInfo(p)
       const cobradoHoy = Math.max(parseFloat(p.cobrado_ruta_hoy || 0), parseFloat(p.cobrado_hoy || 0), sumPagosHoy)
-      return acc + cobradoHoy
+      
+      // Limitamos el aporte al progreso para que no exceda la cuota del día
+      // y así evitar inflar el porcentaje de avance (ej. pago de atrasadas)
+      const metaDiaria = p.cuota_dia_programada || 0
+      const aporteAvance = metaDiaria > 0 ? Math.min(cobradoHoy, metaDiaria) : 0
+      
+      return acc + aporteAvance
     }, 0)
 
     const clientesCobradosHoy = baseForKpi.filter(p => {

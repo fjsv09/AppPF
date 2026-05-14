@@ -2168,8 +2168,9 @@ export function PrestamosTable({
                                                             </div>
                                                         )}
                                                         <div
+                                                            onClick={() => router.push(`/dashboard/prestamos/${prestamo.id}`)}
                                                             className={cn(
-                                                                "grid grid-cols-[repeat(16,minmax(0,1fr))] gap-2 px-6 py-4 hover:bg-slate-800/40 transition-all items-center border-l-[4px]",
+                                                                "cursor-pointer grid grid-cols-[repeat(16,minmax(0,1fr))] gap-2 px-6 py-4 hover:bg-slate-800/40 transition-all items-center border-l-[4px]",
                                                                 auditStatus === 'pending' ? 'border-l-slate-700 bg-slate-900/10' :
                                                                     auditStatus === 'success' ? 'border-l-emerald-500 bg-emerald-500/5' :
                                                                         'border-l-rose-500 bg-rose-500/5'
@@ -2181,7 +2182,15 @@ export function PrestamosTable({
                                                                     <span className="text-[10px] font-black text-blue-400 uppercase tracking-tighter truncate">
                                                                         {prestamo.asesor_nombre || 'SIN ASESOR'}
                                                                     </span>
-                                                                    <span className="text-sm font-bold text-white truncate">{prestamo.clientes?.nombres}</span>
+                                                                    <span 
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            router.push(`/dashboard/clientes/${prestamo.cliente_id || prestamo.clientes?.id}`);
+                                                                        }}
+                                                                        className="text-sm font-bold text-white truncate cursor-pointer hover:text-blue-400 hover:underline transition-colors"
+                                                                    >
+                                                                        {prestamo.clientes?.nombres}
+                                                                    </span>
                                                                 </div>
                                                             </div>
 
@@ -2370,9 +2379,10 @@ export function PrestamosTable({
                                                         </div>
                                                     )}
                                                     <div
+                                                        onClick={() => router.push(`/dashboard/prestamos/${prestamo.id}`)}
                                                         style={{ borderLeftWidth: '6px', borderLeftStyle: 'solid', borderLeftColor: rowStyle.borderLeftColor }}
                                                         className={cn(
-                                                            "grid grid-cols-[repeat(13,minmax(0,1fr))] gap-2 px-6 py-4 hover:bg-slate-800/40 transition-all items-center group relative",
+                                                            "cursor-pointer grid grid-cols-[repeat(13,minmax(0,1fr))] gap-2 px-6 py-4 hover:bg-slate-800/40 transition-all items-center group relative",
                                                             rowStyle.className
                                                         )}
                                                     >
@@ -2406,7 +2416,13 @@ export function PrestamosTable({
                                                                 )}
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <p className="font-semibold text-slate-200 group-hover:text-white transition-colors truncate text-xs sm:text-sm">
+                                                                <p 
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        router.push(`/dashboard/clientes/${prestamo.cliente_id || prestamo.clientes?.id}`);
+                                                                    }}
+                                                                    className="font-semibold text-slate-200 group-hover:text-white transition-colors truncate text-xs sm:text-sm cursor-pointer hover:text-blue-400 hover:underline"
+                                                                >
                                                                     {prestamo.clientes?.nombres}
                                                                 </p>
                                                                 <div className="flex items-center gap-2 mt-0.5">

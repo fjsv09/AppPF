@@ -504,7 +504,7 @@ export function PrestamosTable({
             switch (localTab) {
                 case 'ruta_hoy':
                     relevantPrestamos = relevantPrestamos.filter((p: any) =>
-                        parseFloat(p.cuota_dia_hoy || 0) > 0.01 || parseFloat(p.cuota_dia_programada || 0) > 0.01
+                        parseFloat(p.cuota_dia_hoy || 0) > 0.01 || (parseFloat(p.cuota_dia_programada || 0) > 0.01 && parseFloat(p.cobrado_hoy || 0) <= 0.01)
                     )
                     break
                 case 'cobranza': {
@@ -774,9 +774,9 @@ export function PrestamosTable({
 
         switch (activeFilter) {
             case 'ruta_hoy':
-                // Ruta Hoy: Préstamos con cuota pendiente o programada hoy que el asesor debe cobrar.
+                // Ruta Hoy: Préstamos con cuota pendiente o programada hoy que el asesor debe cobrar (y no han pagado).
                 // Excluye renovados/refinanciados cuya cuota fue liquidada por el sistema.
-                filtered = filtered.filter(p => (p.cuota_dia_hoy > 0.01 || p.cuota_dia_programada > 0.01) &&
+                filtered = filtered.filter(p => (p.cuota_dia_hoy > 0.01 || (p.cuota_dia_programada > 0.01 && p.cobrado_hoy <= 0.01)) &&
                     !['finalizado', 'liquidado', 'anulado', 'castigado', 'renovado', 'refinanciado'].includes(p.estado))
                 break
 
@@ -987,7 +987,7 @@ export function PrestamosTable({
             // Contar ruta_hoy y visitas_control para TODOS los estados no excluidos
             // (igual que el filtro real del tab, incluye migradores y otros no-activos)
             if (!isExcludedEstado) {
-                if (p.cuota_dia_hoy > 0.01 || p.cuota_dia_programada > 0.01) counts.ruta_hoy++
+                if (p.cuota_dia_hoy > 0.01 || (p.cuota_dia_programada > 0.01 && p.cobrado_hoy <= 0.01)) counts.ruta_hoy++
                 if (p.cuota_dia_programada > 0.01 || p.cobrado_hoy > 0.01) counts.visitas_control++
             }
 

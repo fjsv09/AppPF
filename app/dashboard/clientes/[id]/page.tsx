@@ -44,7 +44,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
 
     const { data: cliente } = await supabaseAdmin
         .from('clientes')
-        .select('*, solicitudes(documentos_evaluacion, created_at, gps_coordenadas, giro_negocio, fuentes_ingresos, ingresos_mensuales, motivo_prestamo), sectores(id, nombre), asesor:asesor_id(nombre_completo)')
+        .select('*, solicitudes(documentos_evaluacion, created_at, gps_coordenadas, giro_negocio, fuentes_ingresos, ingresos_mensuales, motivo_prestamo, monto_solicitado, interes, cuotas, modalidad, fecha_inicio_propuesta), sectores(id, nombre), asesor:asesor_id(nombre_completo)')
         .eq('id', id)
         .single()
 
@@ -527,7 +527,7 @@ export default async function ClienteProfilePage({ params }: { params: { id: str
                         </TabsContent>
 
                             <TabsContent value="expediente" className="m-0 animate-in fade-in duration-300 overflow-x-hidden">
-                                 <ClientExpediente documentos={documentos} />
+                                 <ClientExpediente documentos={documentos} solicitud={latestSolicitud} />
                             </TabsContent>
 
                             <TabsContent value="reputacion" className="m-0 animate-in fade-in duration-300">

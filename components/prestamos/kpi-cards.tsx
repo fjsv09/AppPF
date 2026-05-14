@@ -99,18 +99,47 @@ export function KpiCards({
       ? baseForKpi.filter(p => ['activo', 'legal', 'vencido', 'moroso', 'cpp'].includes(p.estado))
       : baseForKpi
 
+    // Helpers para pagos en tiempo real
+    const getPagosHoyInfo = (p: any) => {
+      const allPagosRaw = [...(p.pagos || []), ...(p.cronograma_cuotas || []).flatMap((c: any) => c.pagos || [])]
+      const allPagos = Array.from(new Map(allPagosRaw.filter((pag: any) => pag?.id && pag.estado_verificacion !== 'rechazado').map((pag: any) => [pag.id, pag])).values())
+      const pagosHoyArr = allPagos.filter((pag: any) => {
+          const f = pag.created_at || pag.fecha_pago
+          return f && f.startsWith(today)
+      })
+      const hasPagoHoy = pagosHoyArr.length > 0
+      const sumPagosHoy = pagosHoyArr.reduce((sum, curr) => sum + parseFloat(curr.monto || 0), 0)
+      return { hasPagoHoy, sumPagosHoy }
+    }
+
     // META HOY: solo préstamos donde el asesor tiene/tuvo trabajo hoy.
-    // Excluye los que ya pagaron adelantado (deuda 0 y cobrado_hoy 0) y los estados terminales.
-    const esRelevantHoy = (p: any) =>
-      ((p.cobrado_hoy || 0) > 0.01 || ((p.cuota_dia_programada || 0) > 0 && parseFloat(p.deuda_exigible_hoy || 0) > 0.01)) &&
+    const esRelevantHoy = (p: any) => {
+      const { hasPagoHoy } = getPagosHoyInfo(p)
+      return (hasPagoHoy || (p.cobrado_hoy || 0) > 0.01 || ((p.cuota_dia_programada || 0) > 0 && parseFloat(p.deuda_exigible_hoy || 0) > 0.01)) &&
       !['finalizado', 'liquidado', 'anulado', 'castigado', 'renovado', 'refinanciado'].includes(p.estado)
+    }
 
     const metaCobranzaHoy = baseForKpi.filter(esRelevantHoy).reduce((acc, p) => acc + (p.cuota_dia_programada || 0), 0)
-    const recaudadoRutaHoy = baseForKpi.reduce((acc, p) => acc + (p.cobrado_ruta_hoy || 0), 0)
-    const totalClientesHoy = baseForKpi.filter(esRelevantHoy).length
-    const clientesCobradosHoy = baseForKpi.filter(p =>
-      (p.cuota_dia_programada || 0) > 0 && (p.cobrado_hoy || 0) > 0.01
-    ).length
+    
+    const recaudadoRutaHoy = baseForKpi.reduce((acc, p) => {
+      const { sumPagosHoy } = getPagosHoyInfo(p)
+      const cobradoHoy = Math.max(parseFloat(p.cobrado_ruta_hoy || 0), parseFloat(p.cobrado_hoy || 0), sumPagosHoy)
+      return acc + cobradoHoy
+    }, 0)
+
+    const clientesCobradosHoy = baseForKpi.filter(p => {
+      const { hasPagoHoy } = getPagosHoyInfo(p)
+      return (p.cuota_dia_programada || 0) > 0 && ((p.cobrado_hoy || 0) > 0.01 || hasPagoHoy)
+    }).length
+
+    const pendientesRuta = baseForKpi.filter((p: any) => {
+      const { hasPagoHoy } = getPagosHoyInfo(p)
+      return (parseFloat(p.cuota_dia_hoy || 0) > 0.01 || parseFloat(p.cuota_dia_programada || 0) > 0.01) && 
+             parseFloat(p.deuda_exigible_hoy || 0) > 0.01 && 
+             !hasPagoHoy &&
+             !['finalizado', 'liquidado', 'anulado', 'castigado', 'renovado', 'refinanciado'].includes(p.estado)
+    }).length
+    const totalClientesHoy = clientesCobradosHoy + pendientesRuta // Para evitar discrepancias
 
     // Active loans - mirrors server logic - use baseForKpi for complete count
     const clientesMap = new Map<string, any[]>()
@@ -160,7 +189,7 @@ export function KpiCards({
 
     return {
       metaCobranzaHoy, recaudadoRutaHoy,
-      totalClientesHoy, clientesCobradosHoy,
+      totalClientesHoy, clientesCobradosHoy, pendientesRuta,
       activeLoans, oportunidadesRenovacion,
       metaEficienciaTotal, cobradoEficienciaTotal, porcentajeEficiencia,
       tasaMorosidadCapital: moraBancaria.tasaMorosidadCapital,
@@ -217,7 +246,7 @@ export function KpiCards({
             </div>
             <div className="flex">
               <span className="bg-[#10b981]/15 text-emerald-100 text-[11px] md:text-[13px] font-black px-2 md:px-2.5 py-0.5 rounded border border-[#10b981]/30 uppercase mt-1 tabular-nums">
-                {kpis.clientesCobradosHoy} de {kpis.totalClientesHoy} Préstamos
+                {kpis.clientesCobradosHoy} COBRADOS / {kpis.pendientesRuta} PENDIENTES
               </span>
             </div>
           </div>

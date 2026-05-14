@@ -256,7 +256,7 @@ export function SolicitudActions({ solicitud, userRole, userId, cuentasAdmin = [
                         <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
                             <p className="text-xs text-amber-400">
                                 <AlertTriangle className="w-3 h-3 inline mr-1" />
-                                El asesor recibirá una notificación y la solicitud pasará a estado <strong>"En Corrección"</strong>. Luego deberá ser revisada nuevamente por el supervisor.
+                                El asesor recibirá una notificación y la solicitud pasará a estado <strong>&quot;En Corrección&quot;</strong>. Luego deberá ser revisada nuevamente por el supervisor.
                             </p>
                         </div>
                         <textarea

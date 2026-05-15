@@ -30,19 +30,34 @@ export function CobranzaRutaClient({ userRole }: Props) {
   const [selectedMetric, setSelectedMetric] = useState<'quedan' | 'cobraron' | 'total' | null>(null)
   const [detalle, setDetalle] = useState<DetalleMetrica | null>(null)
   const [detalleLoading, setDetalleLoading] = useState(false)
+  const [detalleError, setDetalleError] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isDesktop, setIsDesktop] = useState(true)
+  const [isDesktop, setIsDesktop] = useState(false)
 
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Detectar si es desktop
+  // Detectar si es desktop y manejar transición entre sidebar y modal al redimensionar
   useEffect(() => {
-    const check = () => setIsDesktop(window.innerWidth >= 1024)
+    const check = () => {
+      const desktop = window.innerWidth >= 1024
+      setIsDesktop(prev => {
+        if (prev !== desktop) {
+          if (desktop && isModalOpen) {
+            setIsModalOpen(false)
+            if (selectedAsesorId) setIsSidebarOpen(true)
+          } else if (!desktop && isSidebarOpen) {
+            setIsSidebarOpen(false)
+            if (selectedAsesorId) setIsModalOpen(true)
+          }
+        }
+        return desktop
+      })
+    }
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
-  }, [])
+  }, [isModalOpen, isSidebarOpen, selectedAsesorId])
 
   // Contador de segundos desde última actualización
   useEffect(() => {
@@ -55,6 +70,7 @@ export function CobranzaRutaClient({ userRole }: Props) {
   }, [lastUpdated])
 
   const fetchAsesores = useCallback(async (isManual = false) => {
+    if (!isManual) setLoading(true)
     if (isManual) setRefreshing(true)
     try {
       const params = new URLSearchParams()
@@ -90,14 +106,16 @@ export function CobranzaRutaClient({ userRole }: Props) {
       if (!res.ok) throw new Error('Error al cargar detalle')
       const data = await res.json()
       setDetalle(data)
+      setDetalleError(null)
     } catch (e: unknown) {
       setDetalle(null)
+      setDetalleError(e instanceof Error ? e.message : 'Error al cargar detalle')
     } finally {
       setDetalleLoading(false)
     }
   }, [])
 
-  const handleMetricClick = (asesorId: string, metric: 'quedan' | 'cobraron' | 'total') => {
+  const handleMetricClick = useCallback((asesorId: string, metric: 'quedan' | 'cobraron' | 'total') => {
     // Toggle: cerrar si ya estaba seleccionado
     if (selectedAsesorId === asesorId && selectedMetric === metric) {
       setSelectedAsesorId(null)
@@ -111,15 +129,16 @@ export function CobranzaRutaClient({ userRole }: Props) {
     fetchDetalle(asesorId, metric)
     if (isDesktop) setIsSidebarOpen(true)
     else setIsModalOpen(true)
-  }
+  }, [selectedAsesorId, selectedMetric, isDesktop, fetchDetalle])
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setIsSidebarOpen(false)
     setIsModalOpen(false)
     setSelectedAsesorId(null)
     setSelectedMetric(null)
     setDetalle(null)
-  }
+    setDetalleError(null)
+  }, [])
 
   const selectedAsesor = asesores.find(a => a.asesor_id === selectedAsesorId)
 
@@ -207,6 +226,9 @@ export function CobranzaRutaClient({ userRole }: Props) {
             </div>
             <div className="flex-1 overflow-y-auto">
               <AsesorMetricsDetails detalle={detalle} loading={detalleLoading} />
+              {detalleError && (
+                <p className="text-xs text-red-400 p-3">{detalleError}</p>
+              )}
             </div>
           </div>
         )}
@@ -217,11 +239,14 @@ export function CobranzaRutaClient({ userRole }: Props) {
         <DialogContent className="bg-slate-900 border-white/10 text-white max-h-[80vh] flex flex-col p-0">
           <DialogHeader className="p-4 border-b border-white/10 shrink-0">
             <DialogTitle className="text-sm text-white">
-              {selectedAsesor?.nombre_asesor} — {selectedMetric === 'quedan' ? 'Quedan por Cobrar' : selectedMetric === 'cobraron' ? 'Cobraron en Ruta' : 'Total Cobrado'}
+              {selectedAsesor?.nombre_asesor ?? 'Asesor'} — {selectedMetric === 'quedan' ? 'Quedan por Cobrar' : selectedMetric === 'cobraron' ? 'Cobraron en Ruta' : 'Total Cobrado'}
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto">
             <AsesorMetricsDetails detalle={detalle} loading={detalleLoading} />
+            {detalleError && (
+              <p className="text-xs text-red-400 p-3">{detalleError}</p>
+            )}
           </div>
         </DialogContent>
       </Dialog>

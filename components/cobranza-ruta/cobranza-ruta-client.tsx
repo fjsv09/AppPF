@@ -70,8 +70,9 @@ export function CobranzaRutaClient({ userRole }: Props) {
   }, [lastUpdated])
 
   const fetchAsesores = useCallback(async (isManual = false) => {
-    if (!isManual) setLoading(true)
-    if (isManual) setRefreshing(true)
+    // El skeleton solo aparece en la carga inicial (loading empieza en true).
+    // Los auto-refrescos y refrescos manuales actualizan en silencio.
+    setRefreshing(true)
     try {
       const params = new URLSearchParams()
       if (selectedSupervisorId) params.append('supervisorId', selectedSupervisorId)

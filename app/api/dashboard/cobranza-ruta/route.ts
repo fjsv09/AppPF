@@ -105,9 +105,9 @@ export async function GET(request: Request) {
     })
 
     // 7. Obtener total cobrado ayer por asesor (para tendencia)
-    const yesterday = new Date(fechaParam + 'T00:00:00-05:00')
-    yesterday.setDate(yesterday.getDate() - 1)
-    const ayer = yesterday.toISOString().split('T')[0]
+    const [yr, mo, dy] = fechaParam.split('-').map(Number)
+    const ayerDate = new Date(yr, mo - 1, dy - 1)
+    const ayer = `${ayerDate.getFullYear()}-${String(ayerDate.getMonth() + 1).padStart(2, '0')}-${String(ayerDate.getDate()).padStart(2, '0')}`
 
     const { data: pagosAyer } = await supabaseAdmin
       .from('pagos')

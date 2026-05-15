@@ -845,7 +845,7 @@ export function PrestamosTable({
                 // En Curso: Activo, Mora, CPP, Vencido con saldo. (Excludes Finalizado/Anulado/Pagado)
                 filtered = filtered.filter(p => {
                     const isEffectivelyPaid = (p.saldo_pendiente || p.metrics?.saldoPendiente || 0) <= 0.01;
-                    return ['activo', 'vencido'].includes(p.estado) && !['finalizado', 'anulado'].includes(p.estado) && !isEffectivelyPaid;
+                    return ['activo', 'vencido', 'moroso', 'cpp', 'legal'].includes(p.estado) && !isEffectivelyPaid;
                 })
                 break
 

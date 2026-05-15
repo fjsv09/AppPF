@@ -12,17 +12,17 @@ export async function GET() {
   try {
     const adminClient = createAdminClient()
 
-    // 2. Calcular Capital en Calle (con interés)
-    const { data: cuotasPendientes } = await adminClient
-      .from('cronograma_cuotas')
-      .select('monto_cuota, monto_pagado, prestamos!inner(estado)')
-      .in('prestamos.estado', ['activo', 'vencido', 'moroso', 'cpp'])
-      .neq('estado', 'pagado')
+    // 2. Calcular Cobranza Total via RPC (escalable, sin límites de filas)
+    // La función `calcular_totales_cartera` hace todo el JOIN en Postgres
+    // con NULL = cartera global (todos los asesores).
+    const { data: rpcData, error: rpcError } = await adminClient
+      .rpc('calcular_totales_cartera')
 
-    const capitalEnCalle = cuotasPendientes?.reduce((acc, c) => {
-      const pendiente = parseFloat(c.monto_cuota) - (parseFloat(c.monto_pagado) || 0)
-      return acc + (pendiente > 0 ? pendiente : 0)
-    }, 0) || 0
+    if (rpcError) console.error('Error en RPC calcular_totales_cartera:', rpcError)
+
+    const totales = rpcData?.[0] ?? { total_capital_colocado: 0, total_cobranza_pendiente: 0, total_prestamos_activos: 0 }
+    const capitalEnCalle = parseFloat(totales.total_cobranza_pendiente) || 0
+
 
     // 3. Obtener Saldo en Cuentas
     const { data: accounts } = await adminClient.from('cuentas_financieras').select('saldo')

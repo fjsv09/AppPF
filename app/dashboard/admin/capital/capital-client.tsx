@@ -256,7 +256,7 @@ export default function CapitalClient({
 
         <Card className="bg-slate-900/40 border-slate-800 backdrop-blur-md">
           <CardHeader className="pb-2">
-            <CardDescription className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-500">Capital en Calle</CardDescription>
+            <CardDescription className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-500">Cobranza Total</CardDescription>
             <CardTitle className="text-2xl sm:text-3xl font-black text-white break-words">
               {valuation ? formatCurrency(valuation.metricas.capital_en_calle) : '...'}
             </CardTitle>
@@ -603,7 +603,7 @@ export default function CapitalClient({
               </CardHeader>
               <CardContent className="space-y-3 sm:space-y-4">
                 <div className="flex justify-between items-center gap-2 p-3 bg-slate-800/20 rounded-lg">
-                  <span className="text-xs sm:text-sm text-slate-400">Capital en Calle (Activo)</span>
+                  <span className="text-xs sm:text-sm text-slate-400">Cobranza Total (Activa)</span>
                   <span className="font-bold text-white text-sm sm:text-base whitespace-nowrap">{valuation ? formatCurrency(valuation.metricas.capital_en_calle) : '...'}</span>
                 </div>
                 <div className="flex justify-between items-center gap-2 p-3 bg-slate-800/20 rounded-lg">

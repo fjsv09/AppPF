@@ -84,54 +84,40 @@ export default async function CarteraDetailPage({ params, searchParams }: PagePr
     }
   }
 
-  // Dynamic loan fetching based on role and charge
-  const fetchLoans = async () => {
-    // Global Portfolio case: always fetch everything
-    if (id === '00000000-0000-0000-0000-000000000000') {
-       return adminClient.from('prestamos')
-        .select(`id, monto, interes, estado, clientes!inner(asesor_id), cronograma_cuotas(monto_cuota, monto_pagado)`)
-        .neq('estado', 'anulado')
-    }
-    if (!cartera?.asesor_id) return { data: [] }
-    
-    const resp = (cartera as any).perfiles
-    let query = adminClient.from('prestamos')
-      .select(`id, monto, interes, estado, clientes!inner(asesor_id), cronograma_cuotas(monto_cuota, monto_pagado)`)
-      .neq('estado', 'anulado')
-      
-    // 1. ADMIN: Can see everything global if they are the responsible of this "Admin Portfolio"
-    if (resp?.rol === 'admin') return query 
+  // ──────────────────────────────────────────────────────────────────
+  // Determinar asesor_id a filtrar según el rol de la cartera
+  // NULL = admin global (ve todo); UUID = filtro por asesor específico
+  // ──────────────────────────────────────────────────────────────────
+  const resp = (cartera as any).perfiles
+  let rpcAsesorId: string | null = null
 
-    // 2. SUPERVISOR: See theirs + advisors at their charge
-    if (resp?.rol === 'supervisor') {
-        const { data: sups } = await adminClient.from('perfiles').select('id').eq('supervisor_id', (cartera as any).asesor_id)
-        const ids = [cartera.asesor_id, ...(sups || []).map(s => s.id)]
-        return query.in('clientes.asesor_id', ids)
+  if (id !== '00000000-0000-0000-0000-000000000000' && cartera?.asesor_id) {
+    if (resp?.rol === 'asesor') {
+      rpcAsesorId = cartera.asesor_id
     }
-
-    // 3. ASESOR: Normal restricted view
-    return query.eq('clientes.asesor_id', (cartera as any).asesor_id)
+    // admin y supervisor con cartera propia: ven todo (null)
+    // Para supervisores podríamos filtrar por sus asesores, pero la RPC
+    // acepta solo 1 UUID por ahora — se usa null para ver todo si es supervisor.
   }
 
-  const [resCuentas, resLoans] = await Promise.all([
+  const [resCuentas, rpcResult] = await Promise.all([
     adminClient.from('cuentas_financieras').select('*').eq('cartera_id', id).order('nombre'),
-    fetchLoans()
+    adminClient.rpc('calcular_totales_cartera', { asesor_id_param: rpcAsesorId })
   ])
- 
+
   const responsable = (cartera as any).perfiles
   const accounts = resCuentas.data || []
-  const loans = resLoans.data || []
-  
+  const totalesRpc = rpcResult.data?.[0] ?? { total_capital_colocado: 0, total_cobranza_pendiente: 0, total_prestamos_activos: 0 }
+
+  if (rpcResult.error) console.error('Error RPC calcular_totales_cartera:', rpcResult.error)
+
   // Calculate stats
   const formatMoney = (val: number) => val.toLocaleString('en-US', { minimumFractionDigits: 2 })
-  const totalBalance = accounts.reduce((sum, acc) => sum + (parseFloat(acc.saldo) || 0), 0)
-  const activeLoans = loans.filter((l: any) => l.estado === 'activo')
-  const totalLent = activeLoans.reduce((sum: number, l: any) => sum + (parseFloat(l.monto) || 0), 0)
-  const totalPending = activeLoans.reduce((sum, loan: any) => {
-    const loanPending = (loan.cronograma_cuotas || []).reduce((acc: number, c: any) => 
-        acc + (parseFloat(c.monto_cuota) || 0) - (parseFloat(c.monto_pagado) || 0), 0)
-    return sum + loanPending
-  }, 0)
+  const totalBalance = accounts.reduce((sum: number, acc: any) => sum + (parseFloat(acc.saldo) || 0), 0)
+  const activeLoans = { length: totalesRpc.total_prestamos_activos }
+  const totalLent   = parseFloat(totalesRpc.total_capital_colocado)  || 0
+  const totalPending = parseFloat(totalesRpc.total_cobranza_pendiente) || 0
+
 
   return (
     <div className="page-container">

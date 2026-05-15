@@ -207,8 +207,31 @@ async function PrestamosPageInner({ searchParams }: { searchParams: { [key: stri
         `)
         .order('fecha_inicio', { ascending: false })
         .order('created_at', { ascending: false })
-
         .limit(5000)
+
+    // ──────────────────────────────────────────────────────────────────
+    // [ESCALABILIDAD] Filtrado Server-side por Tab
+    // Evita que los préstamos finalizados (miles) oculten a los activos
+    // debido al límite de 1000 filas de PostgREST.
+    // ──────────────────────────────────────────────────────────────────
+    const activeFilter = activeTab || ((userRole === 'admin' || userRole === 'supervisor' || userRole === 'secretaria') ? 'en_curso' : 'ruta_hoy')
+    const ACTIVE_STATES = ['activo', 'vencido', 'moroso', 'cpp', 'legal']
+
+    if (activeFilter === 'finalizados') {
+        prestamosQuery = prestamosQuery.eq('estado', 'finalizado')
+    } else if (activeFilter === 'renovados') {
+        prestamosQuery = prestamosQuery.eq('estado', 'renovado')
+    } else if (activeFilter === 'refinanciados') {
+        prestamosQuery = prestamosQuery.eq('estado', 'refinanciado')
+    } else if (activeFilter === 'anulados') {
+        prestamosQuery = prestamosQuery.eq('estado', 'anulado')
+    } else if (activeFilter === 'pendientes') {
+        prestamosQuery = prestamosQuery.eq('estado', 'pendiente')
+    } else if (activeFilter !== 'todos') {
+        // Para todas las demás pestañas operativas (Ruta, Cobranza, En Curso, etc.)
+        // Filtramos solo por estados de cartera vigente en SQL.
+        prestamosQuery = prestamosQuery.in('estado', ACTIVE_STATES)
+    }
 
     // Filtro de sector a nivel DB
     if (filtroSector !== 'todos') {

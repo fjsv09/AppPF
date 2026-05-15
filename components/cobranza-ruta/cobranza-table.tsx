@@ -11,7 +11,7 @@ interface Props {
   onMetricClick: (asesorId: string, metric: 'quedan' | 'cobraron' | 'total') => void
 }
 
-function formatSoles(n: number) {
+function formatSolesCompact(n: number) {
   if (n >= 1000) return `S/ ${(n / 1000).toFixed(1)}K`
   return `S/ ${n.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
@@ -105,7 +105,7 @@ export function CobranzaTable({ asesores, selectedAsesorId, selectedMetric, onMe
               </td>
               <td className="py-3 px-4">
                 <MetricCell
-                  value={formatSoles(asesor.quedan_por_cobrar)}
+                  value={formatSolesCompact(asesor.quedan_por_cobrar)}
                   metric="quedan"
                   asesorId={asesor.asesor_id}
                   selectedAsesorId={selectedAsesorId}
@@ -115,7 +115,7 @@ export function CobranzaTable({ asesores, selectedAsesorId, selectedMetric, onMe
               </td>
               <td className="py-3 px-4">
                 <MetricCell
-                  value={formatSoles(asesor.cobraron_en_ruta)}
+                  value={formatSolesCompact(asesor.cobraron_en_ruta)}
                   metric="cobraron"
                   asesorId={asesor.asesor_id}
                   selectedAsesorId={selectedAsesorId}
@@ -125,7 +125,7 @@ export function CobranzaTable({ asesores, selectedAsesorId, selectedMetric, onMe
               </td>
               <td className="py-3 px-4">
                 <MetricCell
-                  value={formatSoles(asesor.total_cobrado)}
+                  value={formatSolesCompact(asesor.total_cobrado)}
                   metric="total"
                   asesorId={asesor.asesor_id}
                   selectedAsesorId={selectedAsesorId}
@@ -173,9 +173,12 @@ export function CobranzaTable({ asesores, selectedAsesorId, selectedMetric, onMe
               </div>
               <button
                 onClick={() => onMetricClick(asesor.asesor_id, 'total')}
-                className="text-right"
+                className={cn(
+                  "text-right rounded-md transition-all",
+                  selectedAsesorId === asesor.asesor_id && selectedMetric === 'total' && "ring-1 ring-blue-500/50"
+                )}
               >
-                <p className="text-lg font-bold text-white">{formatSoles(asesor.total_cobrado)}</p>
+                <p className="text-lg font-bold text-white">{formatSolesCompact(asesor.total_cobrado)}</p>
                 <p className={cn(
                   "text-xs font-semibold",
                   asesor.porcentaje_meta >= 85 ? "text-emerald-400" :
@@ -194,7 +197,7 @@ export function CobranzaTable({ asesores, selectedAsesorId, selectedMetric, onMe
                 )}
               >
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">Quedan</p>
-                <p className="text-sm font-semibold text-white">{formatSoles(asesor.quedan_por_cobrar)}</p>
+                <p className="text-sm font-semibold text-white">{formatSolesCompact(asesor.quedan_por_cobrar)}</p>
               </button>
               <button
                 onClick={() => onMetricClick(asesor.asesor_id, 'cobraron')}
@@ -204,7 +207,7 @@ export function CobranzaTable({ asesores, selectedAsesorId, selectedMetric, onMe
                 )}
               >
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">Cobraron</p>
-                <p className="text-sm font-semibold text-emerald-400">{formatSoles(asesor.cobraron_en_ruta)}</p>
+                <p className="text-sm font-semibold text-emerald-400">{formatSolesCompact(asesor.cobraron_en_ruta)}</p>
               </button>
             </div>
           </div>

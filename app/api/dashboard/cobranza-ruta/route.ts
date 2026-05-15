@@ -29,7 +29,11 @@ export async function GET(request: Request) {
     const today = getTodayPeru()
     const { searchParams } = new URL(request.url)
     const supervisorIdParam = searchParams.get('supervisorId')
-    const fechaParam = searchParams.get('fecha') || today
+    const rawFecha = searchParams.get('fecha')
+    if (rawFecha && !/^\d{4}-\d{2}-\d{2}$/.test(rawFecha)) {
+      return NextResponse.json({ error: 'Formato de fecha inválido (YYYY-MM-DD)' }, { status: 400 })
+    }
+    const fechaParam = rawFecha || today
 
     // 2. Obtener asesores según rol
     let asesoresQuery = supabaseAdmin
@@ -93,10 +97,11 @@ export async function GET(request: Request) {
     let allCuotas: any[] = []
     for (let i = 0; i < loanIds.length; i += 150) {
       const chunk = loanIds.slice(i, i + 150)
-      const { data: cuotasChunk } = await supabaseAdmin
+      const { data: cuotasChunk, error: chunkError } = await supabaseAdmin
         .from('cronograma_cuotas')
         .select('*, pagos(*)')
         .in('prestamo_id', chunk)
+      if (chunkError) throw new Error(`Error al cargar cuotas: ${chunkError.message}`)
       if (cuotasChunk) allCuotas.push(...cuotasChunk)
     }
 

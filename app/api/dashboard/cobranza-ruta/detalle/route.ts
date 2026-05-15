@@ -118,57 +118,72 @@ export async function GET(request: Request) {
 
     } else if (tipo === 'cobraron' || tipo === 'total') {
       const cuotaIds = allCuotas.map(c => c.id)
-      const { data: pagosHoy } = await supabaseAdmin
-        .from('pagos')
-        .select('monto_pagado, estado_verificacion, created_at, cuota_id, cuota:cuota_id(numero_cuota, prestamo:prestamo_id(cliente_id))')
-        .in('cuota_id', cuotaIds)
-        .neq('estado_verificacion', 'rechazado')
-        .gte('created_at', `${fecha}T00:00:00-05:00`)
-        .lt('created_at', `${fecha}T23:59:59-05:00`)
-        .order('created_at', { ascending: false })
 
-      detalle.pagos_cobrados = pagosHoy?.map((p: any) => {
-        const clienteId = p.cuota?.prestamo?.cliente_id || ''
-        const hora = new Date(p.created_at).toLocaleTimeString('es-PE', {
-          timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit'
-        })
-        return {
-          cliente_id: clienteId,
-          nombre_cliente: clienteNombreMap.get(clienteId) || 'Cliente',
-          monto_cobrado: Number(p.monto_pagado || 0),
-          hora_pago: hora,
-          estado_verificacion: p.estado_verificacion,
-          cuota_numero: p.cuota?.numero_cuota || 0
+      if (cuotaIds.length === 0) {
+        // Guard: No active loans → no cuotas → empty results
+        detalle.pagos_cobrados = []
+        if (tipo === 'total') {
+          detalle.resumen_total = {
+            total_cobrado_hoy: 0,
+            total_cobrado_ayer: 0,
+            meta_programada: 0,
+            diferencia_porcentaje: 0
+          }
         }
-      }) || []
-
-      if (tipo === 'total') {
-        const [yr, mo, dy] = fecha.split('-').map(Number)
-        const ayerDate = new Date(yr, mo - 1, dy - 1)
-        const ayer = `${ayerDate.getFullYear()}-${String(ayerDate.getMonth() + 1).padStart(2, '0')}-${String(ayerDate.getDate()).padStart(2, '0')}`
-
-        const { data: pagosAyer } = await supabaseAdmin
+      } else {
+        // Fetch payments for today
+        const { data: pagosHoy } = await supabaseAdmin
           .from('pagos')
-          .select('monto_pagado')
+          .select('monto_pagado, estado_verificacion, created_at, cuota_id, cuota:cuota_id(numero_cuota, prestamo:prestamo_id(cliente_id))')
           .in('cuota_id', cuotaIds)
           .neq('estado_verificacion', 'rechazado')
-          .gte('created_at', `${ayer}T00:00:00-05:00`)
-          .lt('created_at', `${ayer}T23:59:59-05:00`)
+          .gte('created_at', `${fecha}T00:00:00-05:00`)
+          .lt('created_at', `${fecha}T23:59:59-05:00`)
+          .order('created_at', { ascending: false })
 
-        const totalHoy = detalle.pagos_cobrados?.reduce((s, p) => s + p.monto_cobrado, 0) || 0
-        const totalAyer = pagosAyer?.reduce((s, p: any) => s + Number(p.monto_pagado || 0), 0) || 0
-        const metaTotal = (prestamosRaw || []).reduce((s, p) => {
-          const m = calculateLoanMetrics(p, fecha, config)
-          return s + m.cuotaDiaProgramada
-        }, 0)
+        detalle.pagos_cobrados = pagosHoy?.map((p: any) => {
+          const clienteId = p.cuota?.prestamo?.cliente_id || ''
+          const hora = new Date(p.created_at).toLocaleTimeString('es-PE', {
+            timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit'
+          })
+          return {
+            cliente_id: clienteId,
+            nombre_cliente: clienteNombreMap.get(clienteId) || 'Cliente',
+            monto_cobrado: Number(p.monto_pagado || 0),
+            hora_pago: hora,
+            estado_verificacion: p.estado_verificacion,
+            cuota_numero: p.cuota?.numero_cuota || 0
+          }
+        }) || []
 
-        detalle.resumen_total = {
-          total_cobrado_hoy: Math.round(totalHoy * 100) / 100,
-          total_cobrado_ayer: Math.round(totalAyer * 100) / 100,
-          meta_programada: Math.round(metaTotal * 100) / 100,
-          diferencia_porcentaje: totalAyer > 0
-            ? Math.round(((totalHoy - totalAyer) / totalAyer) * 100)
-            : 0
+        if (tipo === 'total') {
+          const [yr, mo, dy] = fecha.split('-').map(Number)
+          const ayerDate = new Date(yr, mo - 1, dy - 1)
+          const ayer = `${ayerDate.getFullYear()}-${String(ayerDate.getMonth() + 1).padStart(2, '0')}-${String(ayerDate.getDate()).padStart(2, '0')}`
+
+          const { data: pagosAyer } = await supabaseAdmin
+            .from('pagos')
+            .select('monto_pagado')
+            .in('cuota_id', cuotaIds)
+            .neq('estado_verificacion', 'rechazado')
+            .gte('created_at', `${ayer}T00:00:00-05:00`)
+            .lt('created_at', `${ayer}T23:59:59-05:00`)
+
+          const totalHoy = detalle.pagos_cobrados?.reduce((s, p) => s + p.monto_cobrado, 0) || 0
+          const totalAyer = pagosAyer?.reduce((s, p: any) => s + Number(p.monto_pagado || 0), 0) || 0
+          const metaTotal = (prestamosRaw || []).reduce((s, p) => {
+            const m = calculateLoanMetrics(p, fecha, config)
+            return s + m.cuotaDiaProgramada
+          }, 0)
+
+          detalle.resumen_total = {
+            total_cobrado_hoy: Math.round(totalHoy * 100) / 100,
+            total_cobrado_ayer: Math.round(totalAyer * 100) / 100,
+            meta_programada: Math.round(metaTotal * 100) / 100,
+            diferencia_porcentaje: totalAyer > 0
+              ? Math.round(((totalHoy - totalAyer) / totalAyer) * 100)
+              : 0
+          }
         }
       }
     }

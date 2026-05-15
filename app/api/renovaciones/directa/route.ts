@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { checkSystemAccess } from '@/utils/systemRestrictions'
 import { createFullNotification } from '@/services/notification-service'
-import { generarCronogramaNode } from '@/lib/financial-logic'
+import { generarCronogramaNode, computeVirtualCronograma } from '@/lib/financial-logic'
 
 export const dynamic = 'force-dynamic'
 
@@ -100,20 +100,20 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'La cuenta seleccionada no existe.' }, { status: 404 })
         }
 
-        // Obtener cuotas pendientes para saber cuánto debemos retener
-        const { data: cuotasPendientes } = await supabaseAdmin
+        // Obtener TODAS las cuotas + pagos para calcular saldo real via cascada FIFO
+        const { data: todasCuotasDir } = await supabaseAdmin
             .from('cronograma_cuotas')
-            .select('id, monto_cuota, monto_pagado')
+            .select('id, numero_cuota, monto_cuota, monto_pagado')
             .eq('prestamo_id', prestamo_id)
-            .neq('estado', 'pagado')
 
-        let saldo_retenido = 0;
-        if (cuotasPendientes && cuotasPendientes.length > 0) {
-            saldo_retenido = cuotasPendientes.reduce((acc: number, c: any) => {
-                const pagado = Number(c.monto_pagado || 0);
-                return acc + (Number(c.monto_cuota) - pagado);
-            }, 0);
-        }
+        const cuotaIdsDir = (todasCuotasDir || []).map((c: any) => c.id)
+        const pagosResultDir = cuotaIdsDir.length > 0
+            ? await supabaseAdmin.from('pagos').select('monto_pagado, estado_verificacion, created_at').in('cuota_id', cuotaIdsDir)
+            : { data: [] }
+
+        // Saldo retenido = saldo real pendiente via FIFO (fuente de verdad, igual que el dashboard)
+        const { saldoTotalPendiente: saldoPendienteDir } = computeVirtualCronograma(todasCuotasDir || [], pagosResultDir.data || [])
+        const saldo_retenido = saldoPendienteDir
 
         const desembolso_neto = monto_solicitado - saldo_retenido;
         const monto_a_descontar = desembolso_neto; // puede ser negativo o 0

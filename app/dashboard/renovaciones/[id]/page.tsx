@@ -14,7 +14,7 @@ import {
     CheckCircle2, XCircle, Clock, MessageSquare,
     Activity, Files, ArrowUpRight
 } from 'lucide-react'
-import { calculateRenovationAdjustment } from '@/lib/financial-logic'
+import { calculateRenovationAdjustment, computeVirtualCronograma } from '@/lib/financial-logic'
 import { BackButton } from '@/components/ui/back-button'
 import { RenovacionesActions } from '@/components/renovaciones/renovaciones-actions'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
@@ -101,7 +101,6 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
         getClientReputationAction,
         getLoanHealthScoreAction,
         getFinancialConfig,
-        getSaldoPendienteRenovacion
     } = await import('@/lib/financial-logic')
 
     // [SNAPSHOT TOTAL] Priorizar datos inmutables guardados para evitar cálculos redundantes
@@ -167,28 +166,25 @@ export default async function RenovacionDetailPage({ params }: { params: { id: s
     if (solicitud.prestamo_id && numCuotasPendientes === null) {
         const { data: cuotasPendientesData } = await supabaseAdmin
             .from('cronograma_cuotas')
-            .select('monto_cuota, monto_pagado')
+            .select('id')
             .eq('prestamo_id', solicitud.prestamo_id)
             .neq('estado', 'pagado')
-        
         numCuotasPendientes = cuotasPendientesData?.length || 0
+    }
 
-        if (solicitud.estado_solicitud !== 'aprobado') {
-            saldoPendienteOriginal = (cuotasPendientesData || []).reduce((acc: number, c: any) => {
-                return acc + (Number(c.monto_cuota) - Number(c.monto_pagado || 0))
-            }, 0)
-        }
-    } else if (solicitud.prestamo_id && numCuotasPendientes !== null && solicitud.estado_solicitud !== 'aprobado') {
-        // Si tenemos el snapshot pero aún necesitamos el saldoPendienteOriginal para cálculos
-        const { data: cuotasPendientesData } = await supabaseAdmin
+    if (solicitud.prestamo_id && solicitud.estado_solicitud !== 'aprobado') {
+        const { data: todasCuotas } = await supabaseAdmin
             .from('cronograma_cuotas')
-            .select('monto_cuota, monto_pagado')
+            .select('id, numero_cuota, monto_cuota, monto_pagado')
             .eq('prestamo_id', solicitud.prestamo_id)
-            .neq('estado', 'pagado')
-        
-        saldoPendienteOriginal = (cuotasPendientesData || []).reduce((acc: number, c: any) => {
-            return acc + (Number(c.monto_cuota) - Number(c.monto_pagado || 0))
-        }, 0)
+
+        const cuotaIds = (todasCuotas || []).map((c: any) => c.id)
+        const pagosResult = cuotaIds.length > 0
+            ? await supabaseAdmin.from('pagos').select('monto_pagado, estado_verificacion, created_at').in('cuota_id', cuotaIds)
+            : { data: [] }
+
+        const { saldoTotalPendiente } = computeVirtualCronograma(todasCuotas || [], pagosResult.data || [])
+        saldoPendienteOriginal = saldoTotalPendiente
     }
 
     if (solicitud.estado_solicitud === 'aprobado' && !saldoPendienteOriginal) {

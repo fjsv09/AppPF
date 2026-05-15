@@ -3,7 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createFullNotification } from '@/services/notification-service'
-import { generarCronogramaNode } from '@/lib/financial-logic'
+import { generarCronogramaNode, computeVirtualCronograma } from '@/lib/financial-logic'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,18 +72,28 @@ export async function PATCH(
             return NextResponse.json({ error: 'La cuenta de origen seleccionada no existe.' }, { status: 404 })
         }
 
-        // Obtener cuotas pendientes: necesarias para saldo_retenido y para el recibo de liquidación
+        // Obtener TODAS las cuotas + pagos para calcular saldo real via cascada FIFO
+        const { data: todasCuotas } = await supabaseAdmin
+            .from('cronograma_cuotas')
+            .select('id, numero_cuota, monto_cuota, monto_pagado')
+            .eq('prestamo_id', solicitud.prestamo_id)
+
+        const cuotaIds = (todasCuotas || []).map((c: any) => c.id)
+        const pagosResult = cuotaIds.length > 0
+            ? await supabaseAdmin.from('pagos').select('monto_pagado, estado_verificacion, created_at').in('cuota_id', cuotaIds)
+            : { data: [] }
+
+        // Saldo retenido = saldo real pendiente via FIFO (fuente de verdad, igual que el dashboard)
+        const { saldoTotalPendiente } = computeVirtualCronograma(todasCuotas || [], pagosResult.data || [])
+        const saldo_retenido = saldoTotalPendiente
+
+        // cuotasPendientes solo se necesita para obtener p_cuota_id de referencia en la RPC
         const { data: cuotasPendientes } = await supabaseAdmin
             .from('cronograma_cuotas')
-            .select('id, monto_cuota, monto_pagado')
+            .select('id')
             .eq('prestamo_id', solicitud.prestamo_id)
-            .neq('estado', 'pagado');
-
-        // Saldo retenido = toda la deuda restante (vencida + futura), porque la renovación
-        // liquida el préstamo anterior completamente sin importar la fecha de vencimiento.
-        const saldo_retenido = (cuotasPendientes || []).reduce((acc: number, c: any) => {
-            return acc + (Number(c.monto_cuota) - Number(c.monto_pagado || 0));
-        }, 0);
+            .neq('estado', 'pagado')
+            .limit(1)
 
         const desembolso_neto = solicitud.monto_solicitado - saldo_retenido;
         // El monto a descontar de la cuenta es el NETO (lo que efectivamente sale del sistema)

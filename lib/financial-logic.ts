@@ -1855,3 +1855,92 @@ async function _regenerarConCuotasPagadas(
     return { success: true, fecha_fin: fe, pagos_reaplicados: todosLosPagos.length, monto_migracion: parseFloat(montoMigracion.toFixed(2)), total_pagado_reaplicado: parseFloat(totalPagadoCuotas.toFixed(2)), cuotas_pagadas_resultado: cpR, cuotas_pendientes: nC - cpR };
 }
 
+// ─── Cobranza en Ruta ─────────────────────────────────────────────────────────
+
+export interface AsesorRutaCalculation {
+  quedan_por_cobrar: number
+  cobraron_en_ruta: number
+  total_cobrado: number
+  meta_programada: number
+  porcentaje_meta: number
+  estado_badge: 'critico' | 'riesgo' | 'al_dia'
+  tendencia: 'up' | 'down' | 'flat'
+  clientes_pendientes_count: number
+}
+
+/**
+ * Calcula métricas de cobranza en ruta para un asesor dado sus préstamos activos.
+ * @param prestamos - Array de préstamos del asesor, cada uno con cronograma_cuotas y pagos anidados
+ * @param today - Fecha en formato YYYY-MM-DD (usar getTodayPeru())
+ * @param totalCobradoAyer - Suma de pagos del mismo asesor en la fecha anterior (para tendencia)
+ * @param config - Configuración del sistema (thresholds)
+ */
+export function calculateAsesorRutaMetrics(
+  prestamos: any[],
+  today: string,
+  totalCobradoAyer: number,
+  config: { umbralCpp?: number; umbralMoroso?: number; umbralCppOtros?: number; umbralMorosoOtros?: number; renovacionMinPagado?: number } = {}
+): AsesorRutaCalculation {
+  let quedan_por_cobrar = 0
+  let cobraron_en_ruta = 0
+  let total_cobrado = 0
+  let meta_programada = 0
+  let clientes_pendientes_count = 0
+
+  const clientesConDeudaPendiente = new Set<string>()
+
+  for (const prestamo of prestamos) {
+    if (!['activo', 'legal', 'vencido', 'moroso', 'cpp'].includes(prestamo.estado)) continue
+
+    const metrics = calculateLoanMetrics(prestamo, today, config)
+
+    // Cuánto falta cobrar hoy (cuotas de hoy + atrasadas - lo ya pagado)
+    quedan_por_cobrar += Math.max(0, metrics.metaTotalHoyYAtrasados - metrics.cobradoTotalHoyYAtrasados)
+
+    // Lo cobrado en ruta (cuotas de hoy + atrasadas pagadas hoy)
+    cobraron_en_ruta += metrics.cobradoRutaHoy
+
+    // Lo cobrado en total hoy (incluyendo adelantos)
+    total_cobrado += metrics.cobradoHoy
+
+    // Meta del día (cuota programada para hoy)
+    meta_programada += metrics.cuotaDiaProgramada
+
+    // Clientes con deuda pendiente
+    if (metrics.metaTotalHoyYAtrasados - metrics.cobradoTotalHoyYAtrasados > 0.01) {
+      clientesConDeudaPendiente.add(prestamo.cliente_id)
+    }
+  }
+
+  clientes_pendientes_count = clientesConDeudaPendiente.size
+
+  // Porcentaje de meta (vs cuota programada de hoy)
+  const porcentaje_meta = meta_programada > 0
+    ? Math.min(150, (cobraron_en_ruta / meta_programada) * 100)
+    : total_cobrado > 0 ? 100 : 0
+
+  // Estado badge basado en porcentaje de meta
+  let estado_badge: 'critico' | 'riesgo' | 'al_dia'
+  if (porcentaje_meta >= 85) estado_badge = 'al_dia'
+  else if (porcentaje_meta >= 60) estado_badge = 'riesgo'
+  else estado_badge = 'critico'
+
+  // Tendencia vs ayer (misma lógica de comparación)
+  let tendencia: 'up' | 'down' | 'flat'
+  const diff = total_cobrado - totalCobradoAyer
+  if (Math.abs(diff) < 0.01) tendencia = 'flat'
+  else if (diff > 0) tendencia = 'up'
+  else tendencia = 'down'
+
+  return {
+    quedan_por_cobrar: Math.round(quedan_por_cobrar * 100) / 100,
+    cobraron_en_ruta: Math.round(cobraron_en_ruta * 100) / 100,
+    total_cobrado: Math.round(total_cobrado * 100) / 100,
+    meta_programada: Math.round(meta_programada * 100) / 100,
+    porcentaje_meta: Math.round(porcentaje_meta * 10) / 10,
+    estado_badge,
+    tendencia,
+    clientes_pendientes_count
+  }
+}
+

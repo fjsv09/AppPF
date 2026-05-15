@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { Wallet, TrendingUp, AlertCircle, Users, Loader2 } from 'lucide-react'
 import { useLoading } from './loading-context'
-import { calculateMoraBancaria } from '@/lib/financial-logic'
+import { calculateMoraBancaria, ESTADOS_TERMINALES_RUTA, isLoanCobradoEnRuta, isLoanPendienteEnRuta } from '@/lib/financial-logic'
 import { cn } from '@/lib/utils'
 
 interface KpiCardsProps {
@@ -134,16 +134,20 @@ export function KpiCards({
     }, 0)
 
     const clientesCobradosHoy = baseForKpi.filter(p => {
-      const { hasPagoHoy } = getPagosHoyInfo(p)
-      return (p.cuota_dia_programada || 0) > 0 && ((p.cobrado_hoy || 0) > 0.01 || hasPagoHoy)
+      const { hasPagoHoy, sumPagosHoy } = getPagosHoyInfo(p)
+      const cobradoHoy = Math.max(parseFloat(p.cobrado_hoy || 0), hasPagoHoy ? sumPagosHoy : 0)
+      return isLoanCobradoEnRuta({ cuotaDiaProgramada: p.cuota_dia_programada || 0, cobradoHoy })
     }).length
 
     const pendientesRuta = baseForKpi.filter((p: any) => {
-      const { hasPagoHoy } = getPagosHoyInfo(p)
-      return (parseFloat(p.cuota_dia_hoy || 0) > 0.01 || parseFloat(p.cuota_dia_programada || 0) > 0.01) && 
-             parseFloat(p.deuda_exigible_hoy || 0) > 0.01 && 
-             !hasPagoHoy &&
-             !['finalizado', 'liquidado', 'anulado', 'castigado', 'renovado', 'refinanciado'].includes(p.estado)
+      const { hasPagoHoy, sumPagosHoy } = getPagosHoyInfo(p)
+      const cobradoHoy = Math.max(parseFloat(p.cobrado_hoy || 0), hasPagoHoy ? sumPagosHoy : 0)
+      return !ESTADOS_TERMINALES_RUTA.has(p.estado) && isLoanPendienteEnRuta({
+        cuotaDiaHoy: parseFloat(p.cuota_dia_hoy || 0),
+        cuotaDiaProgramada: parseFloat(p.cuota_dia_programada || 0),
+        deudaExigibleHoy: parseFloat(p.deuda_exigible_hoy || 0),
+        cobradoHoy,
+      })
     }).length
     const totalClientesHoy = clientesCobradosHoy + pendientesRuta // Para evitar discrepancias
 

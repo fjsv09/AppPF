@@ -1857,6 +1857,22 @@ async function _regenerarConCuotasPagadas(
 
 // ─── Cobranza en Ruta ─────────────────────────────────────────────────────────
 
+/** Estados que cierran el préstamo — no participan en cobranza activa */
+export const ESTADOS_TERMINALES_RUTA = new Set([
+  'finalizado', 'liquidado', 'anulado', 'castigado', 'renovado', 'refinanciado'
+])
+
+/** Predicados de ruta — fuente única de verdad para kpi-cards Y calculateAsesorRutaMetrics */
+export function isLoanCobradoEnRuta(m: { cuotaDiaProgramada: number; cobradoHoy: number }): boolean {
+  return m.cuotaDiaProgramada > 0 && m.cobradoHoy > 0.01
+}
+
+export function isLoanPendienteEnRuta(m: { cuotaDiaHoy: number; cuotaDiaProgramada: number; deudaExigibleHoy: number; cobradoHoy: number }): boolean {
+  return (m.cuotaDiaHoy > 0.01 || m.cuotaDiaProgramada > 0.01)
+    && m.deudaExigibleHoy > 0.01
+    && m.cobradoHoy <= 0.01
+}
+
 export interface AsesorRutaCalculation {
   quedan_por_cobrar: number
   cobraron_en_ruta: number
@@ -1893,16 +1909,13 @@ export function calculateAsesorRutaMetrics(
   let cobrados_ruta_count = 0
   let pendientes_ruta_count = 0
 
-  // Misma lógica que kpi-cards: excluir terminales, no restringir por inclusión
-  const ESTADOS_TERMINALES = new Set(['finalizado', 'liquidado', 'anulado', 'castigado', 'renovado', 'refinanciado'])
   const ESTADOS_ACTIVOS = new Set(['activo', 'legal', 'vencido', 'moroso', 'cpp'])
 
   for (const prestamo of prestamos) {
-    if (ESTADOS_TERMINALES.has(prestamo.estado)) continue
+    if (ESTADOS_TERMINALES_RUTA.has(prestamo.estado)) continue
 
     const metrics = calculateLoanMetrics(prestamo, today, config)
 
-    // Montos: solo estados operativos activos
     if (ESTADOS_ACTIVOS.has(prestamo.estado)) {
       quedan_por_cobrar += Math.max(0, metrics.metaTotalHoyYAtrasados - metrics.cobradoTotalHoyYAtrasados)
       cobraron_en_ruta += metrics.cobradoRutaHoy
@@ -1913,15 +1926,8 @@ export function calculateAsesorRutaMetrics(
       }
     }
 
-    // Conteos de ruta: todos los no-terminales, cuenta préstamos (no clientes únicos), igual que kpi-cards
-    if (metrics.cuotaDiaProgramada > 0 && metrics.cobradoHoy > 0.01) {
-      cobrados_ruta_count++
-    }
-    if ((metrics.cuotaDiaHoy > 0.01 || metrics.cuotaDiaProgramada > 0.01)
-      && metrics.deudaExigibleHoy > 0.01
-      && metrics.cobradoHoy <= 0.01) {
-      pendientes_ruta_count++
-    }
+    if (isLoanCobradoEnRuta(metrics)) cobrados_ruta_count++
+    if (isLoanPendienteEnRuta(metrics)) pendientes_ruta_count++
   }
 
   clientes_pendientes_count = clientesConDeudaPendiente.size

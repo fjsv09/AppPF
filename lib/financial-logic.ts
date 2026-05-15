@@ -1890,41 +1890,37 @@ export function calculateAsesorRutaMetrics(
   let clientes_pendientes_count = 0
 
   const clientesConDeudaPendiente = new Set<string>()
-  const clientesCobradosRuta = new Set<string>()
-  const clientesPendientesRuta = new Set<string>()
+  let cobrados_ruta_count = 0
+  let pendientes_ruta_count = 0
+
+  // Misma lógica que kpi-cards: excluir terminales, no restringir por inclusión
+  const ESTADOS_TERMINALES = new Set(['finalizado', 'liquidado', 'anulado', 'castigado', 'renovado', 'refinanciado'])
+  const ESTADOS_ACTIVOS = new Set(['activo', 'legal', 'vencido', 'moroso', 'cpp'])
 
   for (const prestamo of prestamos) {
-    if (!['activo', 'legal', 'vencido', 'moroso', 'cpp'].includes(prestamo.estado)) continue
+    if (ESTADOS_TERMINALES.has(prestamo.estado)) continue
 
     const metrics = calculateLoanMetrics(prestamo, today, config)
 
-    // Cuánto falta cobrar hoy (cuotas de hoy + atrasadas - lo ya pagado)
-    quedan_por_cobrar += Math.max(0, metrics.metaTotalHoyYAtrasados - metrics.cobradoTotalHoyYAtrasados)
-
-    // Lo cobrado en ruta (cuotas de hoy + atrasadas pagadas hoy)
-    cobraron_en_ruta += metrics.cobradoRutaHoy
-
-    // Lo cobrado en total hoy (incluyendo adelantos)
-    total_cobrado += metrics.cobradoHoy
-
-    // Meta del día (cuota programada para hoy)
-    meta_programada += metrics.cuotaDiaProgramada
-
-    // Clientes con deuda pendiente (monto)
-    if (metrics.metaTotalHoyYAtrasados - metrics.cobradoTotalHoyYAtrasados > 0.01) {
-      clientesConDeudaPendiente.add(prestamo.cliente_id)
+    // Montos: solo estados operativos activos
+    if (ESTADOS_ACTIVOS.has(prestamo.estado)) {
+      quedan_por_cobrar += Math.max(0, metrics.metaTotalHoyYAtrasados - metrics.cobradoTotalHoyYAtrasados)
+      cobraron_en_ruta += metrics.cobradoRutaHoy
+      total_cobrado += metrics.cobradoHoy
+      meta_programada += metrics.cuotaDiaProgramada
+      if (metrics.metaTotalHoyYAtrasados - metrics.cobradoTotalHoyYAtrasados > 0.01) {
+        clientesConDeudaPendiente.add(prestamo.cliente_id)
+      }
     }
 
-    // Cobrados en ruta hoy: tenía cuota programada hoy y cobró algo (misma lógica que kpi-cards)
+    // Conteos de ruta: todos los no-terminales, cuenta préstamos (no clientes únicos), igual que kpi-cards
     if (metrics.cuotaDiaProgramada > 0 && metrics.cobradoHoy > 0.01) {
-      clientesCobradosRuta.add(prestamo.cliente_id)
+      cobrados_ruta_count++
     }
-
-    // Pendientes en ruta hoy: tiene cuota hoy con deuda exigible y no cobró nada hoy
     if ((metrics.cuotaDiaHoy > 0.01 || metrics.cuotaDiaProgramada > 0.01)
       && metrics.deudaExigibleHoy > 0.01
       && metrics.cobradoHoy <= 0.01) {
-      clientesPendientesRuta.add(prestamo.cliente_id)
+      pendientes_ruta_count++
     }
   }
 
@@ -1957,8 +1953,8 @@ export function calculateAsesorRutaMetrics(
     estado_badge,
     tendencia,
     clientes_pendientes_count,
-    cobrados_ruta_count: clientesCobradosRuta.size,
-    pendientes_ruta_count: clientesPendientesRuta.size
+    cobrados_ruta_count,
+    pendientes_ruta_count
   }
 }
 

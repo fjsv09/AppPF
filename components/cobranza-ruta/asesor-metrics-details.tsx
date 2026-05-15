@@ -63,8 +63,8 @@ export function AsesorMetricsDetails({ detalle, loading }: Props) {
               <p className="text-sm">¡Sin deuda pendiente!</p>
             </div>
           ) : (
-            detalle.clientes_pendientes.map((c, i) => (
-              <div key={c.cliente_id + i} className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
+            detalle.clientes_pendientes.map((c) => (
+              <div key={c.cliente_id} className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-white font-medium truncate">{c.nombre_cliente}</p>
                   <p className="text-xs text-slate-400 mt-0.5">
@@ -96,7 +96,7 @@ export function AsesorMetricsDetails({ detalle, loading }: Props) {
                 {detalle.pagos_cobrados.length} pago{detalle.pagos_cobrados.length > 1 ? 's' : ''} registrado{detalle.pagos_cobrados.length > 1 ? 's' : ''}
               </div>
               {detalle.pagos_cobrados.map((p, i) => (
-                <div key={p.cliente_id + i} className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
+                <div key={`${p.cliente_id}-${p.cuota_numero ?? i}-${p.hora_pago}`} className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-white font-medium truncate">{p.nombre_cliente}</p>
                     <div className="flex items-center gap-2 mt-0.5">
@@ -117,6 +117,12 @@ export function AsesorMetricsDetails({ detalle, loading }: Props) {
         )}
 
         {/* Tipo: total */}
+        {detalle.tipo === 'total' && !detalle.resumen_total && (
+          <div className="flex flex-col items-center py-8 text-slate-500 gap-2">
+            <AlertTriangle className="w-8 h-8 text-amber-500" />
+            <p className="text-sm">No hay datos de resumen disponibles</p>
+          </div>
+        )}
         {detalle.tipo === 'total' && detalle.resumen_total && (
           <div className="space-y-4">
             {/* Comparativo */}
@@ -154,7 +160,7 @@ export function AsesorMetricsDetails({ detalle, loading }: Props) {
                 <p className="text-sm font-medium text-white">
                   {detalle.resumen_total.diferencia_porcentaje > 0 ? '+' : ''}{detalle.resumen_total.diferencia_porcentaje}% vs ayer
                 </p>
-                <p className="text-xs text-slate-400">A la misma hora</p>
+                <p className="text-xs text-slate-400">vs. día anterior completo</p>
               </div>
             </div>
 
@@ -163,7 +169,7 @@ export function AsesorMetricsDetails({ detalle, loading }: Props) {
               <div>
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Detalle de Pagos</p>
                 {detalle.pagos_cobrados.map((p, i) => (
-                  <div key={p.cliente_id + i} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
+                  <div key={`${p.cliente_id}-${p.cuota_numero ?? i}-${p.hora_pago}`} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-white truncate">{p.nombre_cliente}</p>
                       <p className="text-xs text-slate-400">{p.hora_pago}</p>

@@ -80,6 +80,8 @@ export function CobranzaTable({ asesores, selectedAsesorId, selectedMetric, onMe
         <thead>
           <tr className="border-b border-white/10">
             <th className="text-left text-xs text-slate-400 uppercase tracking-wider py-3 px-4">Asesor</th>
+            <th className="text-center text-xs text-emerald-500 uppercase tracking-wider py-3 px-3">Cobr. Ruta</th>
+            <th className="text-center text-xs text-amber-500 uppercase tracking-wider py-3 px-3">Pend. Ruta</th>
             <th className="text-right text-xs text-slate-400 uppercase tracking-wider py-3 px-4">Quedan</th>
             <th className="text-right text-xs text-slate-400 uppercase tracking-wider py-3 px-4">Cobraron</th>
             <th className="text-right text-xs text-slate-400 uppercase tracking-wider py-3 px-4">Total Hoy</th>
@@ -102,6 +104,15 @@ export function CobranzaTable({ asesores, selectedAsesorId, selectedMetric, onMe
                 {asesor.clientes_pendientes_count > 0 && (
                   <p className="text-xs text-slate-500 mt-0.5">{asesor.clientes_pendientes_count} con deuda</p>
                 )}
+              </td>
+              <td className="py-3 px-3 text-center">
+                <span className="text-lg font-bold text-emerald-400 tabular-nums">{asesor.cobrados_ruta_count}</span>
+              </td>
+              <td className="py-3 px-3 text-center">
+                <span className={cn(
+                  "text-lg font-bold tabular-nums",
+                  asesor.pendientes_ruta_count > 0 ? "text-amber-400" : "text-slate-500"
+                )}>{asesor.pendientes_ruta_count}</span>
               </td>
               <td className="py-3 px-4">
                 <MetricCell
@@ -169,6 +180,14 @@ export function CobranzaTable({ asesores, selectedAsesorId, selectedMetric, onMe
                 <div className="flex items-center gap-2 mt-0.5">
                   <BadgeEstado estado={asesor.estado_badge} />
                   <TendenciaIcon tendencia={asesor.tendencia} />
+                </div>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="text-[11px] font-bold text-emerald-400 tabular-nums">{asesor.cobrados_ruta_count} cobr.</span>
+                  <span className="text-[11px] text-slate-600">/</span>
+                  <span className={cn(
+                    "text-[11px] font-bold tabular-nums",
+                    asesor.pendientes_ruta_count > 0 ? "text-amber-400" : "text-slate-500"
+                  )}>{asesor.pendientes_ruta_count} pend.</span>
                 </div>
               </div>
               <button

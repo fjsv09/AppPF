@@ -9,6 +9,8 @@ export interface AsesorRutaMetrics {
   estado_badge: 'critico' | 'riesgo' | 'al_dia'
   tendencia: 'up' | 'down' | 'flat'
   clientes_pendientes_count: number
+  cobrados_ruta_count: number     // Nº de clientes cobrados en ruta hoy
+  pendientes_ruta_count: number   // Nº de clientes pendientes de cobrar hoy
 }
 
 export interface ClientePendiente {

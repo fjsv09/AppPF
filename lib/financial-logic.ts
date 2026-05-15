@@ -1866,6 +1866,8 @@ export interface AsesorRutaCalculation {
   estado_badge: 'critico' | 'riesgo' | 'al_dia'
   tendencia: 'up' | 'down' | 'flat'
   clientes_pendientes_count: number
+  cobrados_ruta_count: number
+  pendientes_ruta_count: number
 }
 
 /**
@@ -1888,6 +1890,8 @@ export function calculateAsesorRutaMetrics(
   let clientes_pendientes_count = 0
 
   const clientesConDeudaPendiente = new Set<string>()
+  const clientesCobradosRuta = new Set<string>()
+  const clientesPendientesRuta = new Set<string>()
 
   for (const prestamo of prestamos) {
     if (!['activo', 'legal', 'vencido', 'moroso', 'cpp'].includes(prestamo.estado)) continue
@@ -1906,9 +1910,21 @@ export function calculateAsesorRutaMetrics(
     // Meta del día (cuota programada para hoy)
     meta_programada += metrics.cuotaDiaProgramada
 
-    // Clientes con deuda pendiente
+    // Clientes con deuda pendiente (monto)
     if (metrics.metaTotalHoyYAtrasados - metrics.cobradoTotalHoyYAtrasados > 0.01) {
       clientesConDeudaPendiente.add(prestamo.cliente_id)
+    }
+
+    // Cobrados en ruta hoy: tenía cuota programada hoy y cobró algo (misma lógica que kpi-cards)
+    if (metrics.cuotaDiaProgramada > 0 && metrics.cobradoHoy > 0.01) {
+      clientesCobradosRuta.add(prestamo.cliente_id)
+    }
+
+    // Pendientes en ruta hoy: tiene cuota hoy con deuda exigible y no cobró nada hoy
+    if ((metrics.cuotaDiaHoy > 0.01 || metrics.cuotaDiaProgramada > 0.01)
+      && metrics.deudaExigibleHoy > 0.01
+      && metrics.cobradoHoy <= 0.01) {
+      clientesPendientesRuta.add(prestamo.cliente_id)
     }
   }
 
@@ -1940,7 +1956,9 @@ export function calculateAsesorRutaMetrics(
     porcentaje_meta: Math.round(porcentaje_meta * 10) / 10,
     estado_badge,
     tendencia,
-    clientes_pendientes_count
+    clientes_pendientes_count,
+    cobrados_ruta_count: clientesCobradosRuta.size,
+    pendientes_ruta_count: clientesPendientesRuta.size
   }
 }
 

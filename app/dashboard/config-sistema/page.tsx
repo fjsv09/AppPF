@@ -88,7 +88,11 @@ export default async function ConfiguracionPage() {
             'renovacion_aumento_regular',
             'renovacion_reduccion_riesgo',
             'renovacion_bono_reputacion_excelente',
-            'renovacion_bono_reputacion_bueno'
+            'renovacion_bono_reputacion_bueno',
+            'auditoria_vouchers_faltantes_min',
+            'auditoria_cumplimiento_umbral',
+            'auditoria_cobros_min',
+            'auditoria_control_aleatorio_prob'
         ])
         .order('clave')
     

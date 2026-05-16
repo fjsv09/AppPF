@@ -31,6 +31,7 @@ export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: stri
         .eq('tipo', 'cobranzas');
 
     let leftoverHistorical = 0;
+    let gastosHoy = 0;
     if (accounts && accounts.length > 0) {
         const accountIds = accounts.map(a => a.id);
         const saldoActualTotal = accounts.reduce((acc: number, c: any) => acc + parseFloat(c.saldo || 0), 0) || 0;
@@ -44,25 +45,31 @@ export async function checkAdvisorBlocked(supabase: SupabaseClient, userId: stri
 
         const ingresosHoy = movementsToday?.filter(m => m.cuenta_destino_id && accountIds.includes(m.cuenta_destino_id))
                                           .reduce((acc, m) => acc + parseFloat(m.monto || 0), 0) || 0;
-        
-        const gastosHoy = movementsToday?.filter(m => m.cuenta_origen_id && accountIds.includes(m.cuenta_origen_id))
-                                         .reduce((acc, m) => acc + parseFloat(m.monto || 0), 0) || 0;
+
+        gastosHoy = movementsToday?.filter(m => m.cuenta_origen_id && accountIds.includes(m.cuenta_origen_id))
+                                   .reduce((acc, m) => acc + parseFloat(m.monto || 0), 0) || 0;
 
         const deudaNetaHoy = (ingresosHoy - gastosHoy);
         leftoverHistorical = Math.max(0, saldoActualTotal - deudaNetaHoy);
     }
 
-    // --- 4. CALCULAR SALDO PAGADO HOY ---
-    const { data: oldDebtPayments } = await supabase
+    // --- 4. CALCULAR DEUDA HISTÓRICA PAGADA HOY ---
+    // Los cuadres regulares de HOY (no saldo_pendiente) representan liquidación de recaudación propia,
+    // no pago de deuda histórica. Todo lo demás que salió de cobranzas hoy sí es pago de deuda histórica:
+    // incluye aprobaciones de cuadres de días anteriores + saldo_pendiente de hoy.
+    const { data: todayApprovedRegular } = await supabase
         .from('cuadres_diarios')
         .select('saldo_entregado')
         .eq('asesor_id', userId)
         .eq('fecha', todayStr)
-        .eq('tipo_cuadre', 'saldo_pendiente')
-        .eq('estado', 'aprobado');
-    
-    const oldDebtPaidToday = oldDebtPayments?.reduce((acc: number, c: any) => acc + parseFloat(c.saldo_entregado || '0'), 0) || 0;
-    const remainingHistorical = leftoverHistorical - oldDebtPaidToday;
+        .eq('estado', 'aprobado')
+        .neq('tipo_cuadre', 'saldo_pendiente');
+
+    const todayRegularOutflows = todayApprovedRegular
+        ?.reduce((acc: number, c: any) => acc + parseFloat(c.saldo_entregado || '0'), 0) || 0;
+
+    const oldDebtPaidToday = Math.max(0, gastosHoy - todayRegularOutflows);
+    const remainingHistorical = Math.max(0, leftoverHistorical - oldDebtPaidToday);
 
     // Si ya no tiene deuda histórica, está libre para operar
     if (remainingHistorical <= 1.05) {

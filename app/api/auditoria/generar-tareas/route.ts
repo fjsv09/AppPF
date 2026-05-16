@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse } from 'next/server'
 import { createFullNotification } from '@/services/notification-service'
-import { invalidateConfigCache } from '@/lib/config-cache'
+import { invalidateConfigCache, getSystemConfig } from '@/lib/config-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,6 +41,13 @@ export async function POST(request: Request) {
             .eq('estado', 'activo')
 
         if (pError) throw pError
+
+        // Leer parámetros configurables desde la base de datos
+        const sysConfig = await getSystemConfig()
+        const audVouchersFaltantesMin = parseInt(sysConfig['auditoria_vouchers_faltantes_min'] ?? '3')
+        const audCumplimientoUmbral   = parseInt(sysConfig['auditoria_cumplimiento_umbral']   ?? '70') / 100
+        const audCobrosMin            = parseInt(sysConfig['auditoria_cobros_min']            ?? '3')
+        const audControlAleatorioProb = parseInt(sysConfig['auditoria_control_aleatorio_prob'] ?? '5') / 100
 
         const now = new Date()
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
@@ -106,18 +113,18 @@ export async function POST(request: Request) {
                      const faltantes = totalCobros - compartidos
                      const cumplimiento = compartidos / totalCobros
 
-                     // DISPARADORES:
-                     // A) Si faltan más de 3 vouchers en total
-                     // B) Si el cumplimiento es menor al 70% (con al menos 3 cobros)
-                     if (faltantes >= 3 || (totalCobros >= 3 && cumplimiento < 0.7)) {
+                     // DISPARADORES (configurables desde admin → Auditorías Dirigidas):
+                     // A) Si faltan más de N vouchers en total (auditoria_vouchers_faltantes_min)
+                     // B) Si el cumplimiento es menor al umbral % (auditoria_cumplimiento_umbral)
+                     if (faltantes >= audVouchersFaltantesMin || (totalCobros >= audCobrosMin && cumplimiento < audCumplimientoUmbral)) {
                          priority = 2
                          detail = `P2: Baja entrega detectada (${faltantes} vouchers faltantes de ${totalCobros} cobros realizados).`
                      }
                  }
              }
 
-             // --- REGLA 3: CONTROL ALEATORIO DE SEGURIDAD (5%) ---
-             if (priority === 0 && Math.random() < 0.05) {
+             // --- REGLA 3: CONTROL ALEATORIO DE SEGURIDAD (configurable: auditoria_control_aleatorio_prob) ---
+             if (priority === 0 && Math.random() < audControlAleatorioProb) {
                  const { count: pagosOk } = await supabase
                     .from('cronograma_cuotas')
                     .select('*', { count: 'exact', head: true })
@@ -126,7 +133,7 @@ export async function POST(request: Request) {
 
                  if (pagosOk && pagosOk > 0) {
                     priority = 3
-                    detail = 'P3: Control aleatorio preventivo (5%).'
+                    detail = `P3: Control aleatorio preventivo (${Math.round(audControlAleatorioProb * 100)}%).`
                  }
              }
 

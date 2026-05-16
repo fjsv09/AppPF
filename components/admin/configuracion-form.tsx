@@ -4,9 +4,9 @@ import { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { 
-    TrendingUp, Settings, Save, AlertCircle, Loader2, Lock, Upload, X, 
-    Clock, MapPin, Scale, Activity, Award, Layout, ChevronRight
+import {
+    TrendingUp, Settings, Save, AlertCircle, Loader2, Lock, Upload, X,
+    Clock, MapPin, Scale, Activity, Award, Layout, ChevronRight, ShieldCheck
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -289,6 +289,30 @@ const CONFIG_LABELS: Record<string, { nombre: string; descripcion: string; min?:
         descripcion: 'Bono adicional por reputación buena.',
         min: 0,
         max: 100
+    },
+    'auditoria_vouchers_faltantes_min': {
+        nombre: 'Vouchers Faltantes Mínimos (P2)',
+        descripcion: 'Nº de vouchers faltantes para activar auditoría P2',
+        min: 1,
+        max: 50
+    },
+    'auditoria_cumplimiento_umbral': {
+        nombre: 'Umbral de Cumplimiento % (P2)',
+        descripcion: 'Porcentaje mínimo de entrega de vouchers requerido (0-100)',
+        min: 1,
+        max: 100
+    },
+    'auditoria_cobros_min': {
+        nombre: 'Cobros Mínimos para Evaluar % (P2)',
+        descripcion: 'Nº de cobros requeridos antes de aplicar el umbral porcentual',
+        min: 1,
+        max: 30
+    },
+    'auditoria_control_aleatorio_prob': {
+        nombre: 'Probabilidad Control Aleatorio % (P3)',
+        descripcion: 'Probabilidad de auditoría aleatoria preventiva (0-100)',
+        min: 0,
+        max: 50
     }
 }
 
@@ -355,6 +379,15 @@ const CATEGORIES = [
         iconColor: 'text-slate-400',
         bgColor: 'bg-slate-500/10',
         keys: ['nombre_sistema', 'logo_sistema_url', 'visita_tiempo_minimo', 'visita_radio_maximo']
+    },
+    {
+        id: 'auditoria',
+        nombre: 'Auditorías Dirigidas',
+        descripcion: 'Parámetros que controlan la generación automática de tareas de auditoría.',
+        icon: ShieldCheck,
+        iconColor: 'text-teal-400',
+        bgColor: 'bg-teal-500/10',
+        keys: ['auditoria_vouchers_faltantes_min', 'auditoria_cumplimiento_umbral', 'auditoria_cobros_min', 'auditoria_control_aleatorio_prob']
     }
 ]
 
@@ -546,6 +579,7 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         if (clave.includes('visita')) return '📍'
         if (clave.includes('asistencia') || clave.includes('hora_limite')) return '🕐'
         if (clave.includes('oficina')) return '🏢'
+        if (clave.includes('auditoria')) return '⚖️'
         return '⚙️'
     }
 
@@ -555,10 +589,14 @@ export function ConfiguracionForm({ initialConfig }: ConfiguracionFormProps) {
         if (!displayConfig.find(item => item.clave === key)) {
             displayConfig.push({
                 clave: key,
-                valor: 
-                    key === 'horario_apertura' ? '10:00' : 
-                    key === 'horario_cierre' ? '19:00' : 
+                valor:
+                    key === 'horario_apertura' ? '10:00' :
+                    key === 'horario_cierre' ? '19:00' :
                     key === 'horario_fin_turno_1' ? '13:30' :
+                    key === 'auditoria_vouchers_faltantes_min' ? '3' :
+                    key === 'auditoria_cumplimiento_umbral' ? '70' :
+                    key === 'auditoria_cobros_min' ? '3' :
+                    key === 'auditoria_control_aleatorio_prob' ? '5' :
                     '0',
                 descripcion: CONFIG_LABELS[key]?.descripcion || 'Configuración del sistema',
                 tipo: 'string'

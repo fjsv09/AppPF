@@ -147,6 +147,13 @@ export async function PATCH(
             }, { status: 500 })
         }
 
+        // Garantizar que saldo_pendiente_original refleje el valor FIFO correcto.
+        // Los RPCs internos pueden calcularlo con lógica diferente; este update es la fuente de verdad.
+        await supabaseAdmin
+            .from('renovaciones')
+            .update({ saldo_pendiente_original: saldo_retenido })
+            .eq('prestamo_nuevo_id', prestamo_nuevo_id)
+
         // Generar cronograma para el nuevo préstamo (lógica Node, fuera de la transacción DB)
         const { error: cronogramaError } = await generarCronogramaNode(supabaseAdmin, prestamo_nuevo_id)
             .then(() => ({ error: null }))

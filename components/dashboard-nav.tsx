@@ -139,6 +139,15 @@ export function DashboardNav({
     const filteredLinks = links.filter(link => link.roles.includes(role))
     const categories = Array.from(new Set(filteredLinks.map(link => link.category)))
 
+    const bottomBarHrefs = new Set(filteredLinks.slice(0, 4).map(l => l.href))
+    const moreMenuLinks = categories.flatMap(category =>
+        filteredLinks.filter(link =>
+            link.category === category &&
+            link.href !== '/dashboard/notificaciones' &&
+            !bottomBarHrefs.has(link.href)
+        )
+    )
+
     return (
         <>
             {/* Nav Progress Listener (Global feedback) */}
@@ -404,20 +413,28 @@ export function DashboardNav({
                         </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-slate-800" />
 
-                        {/* Hidden Links */}
-                        {filteredLinks.slice(4).map((link) => {
-                            const Icon = link.icon
+                        {/* Hidden Links grouped by category */}
+                        {categories.map((category) => {
+                            const catLinks = moreMenuLinks.filter(l => l.category === category)
+                            if (catLinks.length === 0) return null
                             return (
-                                <DropdownMenuItem key={link.href} asChild>
-                                    <Link href={link.href} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white focus:text-white hover:bg-slate-800/50 focus:bg-slate-800/50">
-                                        <Icon className="h-4 w-4 text-blue-400" />
-                                        <span>{link.label}</span>
-                                    </Link>
-                                </DropdownMenuItem>
+                                <div key={category}>
+                                    <DropdownMenuLabel className="text-slate-500 text-[9px] uppercase tracking-widest px-2 pt-2 pb-1">{category}</DropdownMenuLabel>
+                                    {catLinks.map((link) => {
+                                        const Icon = link.icon
+                                        return (
+                                            <DropdownMenuItem key={link.href} asChild>
+                                                <Link href={link.href} className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white focus:text-white hover:bg-slate-800/50 focus:bg-slate-800/50">
+                                                    <Icon className="h-4 w-4 text-blue-400" />
+                                                    <span>{link.label}</span>
+                                                </Link>
+                                            </DropdownMenuItem>
+                                        )
+                                    })}
+                                    <DropdownMenuSeparator className="bg-slate-800" />
+                                </div>
                             )
                         })}
-
-                        {filteredLinks.length > 4 && <DropdownMenuSeparator className="bg-slate-800" />}
                         
                         {/* Logout Option */}
                         <DropdownMenuItem 

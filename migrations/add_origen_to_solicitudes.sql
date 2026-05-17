@@ -1,7 +1,9 @@
 -- Agregar campo origen a solicitudes para distinguir su procedencia
 -- Valores: 'normal' (flujo real), 'migracion' (importación masiva), 'edicion_cliente' (edición de cliente migrado)
 
-ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS origen TEXT NOT NULL DEFAULT 'normal';
+ALTER TABLE solicitudes
+  ADD COLUMN IF NOT EXISTS origen TEXT NOT NULL DEFAULT 'normal'
+  CONSTRAINT solicitudes_origen_check CHECK (origen IN ('normal', 'migracion', 'edicion_cliente'));
 
 -- Índice para acelerar el filtro en el listado
 CREATE INDEX IF NOT EXISTS idx_solicitudes_origen ON solicitudes(origen);
@@ -16,4 +18,7 @@ UPDATE solicitudes SET origen = 'edicion_cliente'
 WHERE origen = 'normal'
   AND monto_solicitado = 100
   AND interes = 20
-  AND cuotas = 24;
+  AND cuotas = 24
+  AND NOT EXISTS (
+    SELECT 1 FROM prestamos WHERE prestamos.solicitud_id = solicitudes.id
+  );

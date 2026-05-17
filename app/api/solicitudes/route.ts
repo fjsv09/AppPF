@@ -38,6 +38,7 @@ export async function GET() {
                 supervisor:supervisor_id(id, nombre_completo),
                 admin:admin_id(nombre_completo)
             `)
+            .eq('origen', 'normal')
             .order('created_at', { ascending: false })
 
         // Filtrar según rol

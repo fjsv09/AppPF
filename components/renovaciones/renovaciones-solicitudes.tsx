@@ -44,7 +44,7 @@ interface Solicitud {
     observacion_supervisor: string | null
     motivo_rechazo: string | null
     created_at: string
-    cliente: { id: string; nombres: string; dni: string; telefono?: string }
+    cliente: { id: string; nombres: string; dni: string; telefono?: string; foto_perfil?: string }
     prestamo: { id: string; monto: number; estado: string; estado_mora: string; frecuencia: string }
     asesor: { id: string; nombre_completo: string }
     supervisor?: { id: string; nombre_completo: string }

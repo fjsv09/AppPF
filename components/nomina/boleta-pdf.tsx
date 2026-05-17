@@ -63,7 +63,18 @@ export function BoletaPDF({ nomina, trabajador, open, onOpenChange }: BoletaPDFP
         .filter(d => ['pago', 'adelanto'].includes(d.tipo))
         .reduce((acc, d) => acc + parseFloat(d.monto || 0), 0)
 
-    const totalNeto = sueldoBase + bonos - descuentos - adelantos - totalPagadoHistorico
+    // Cuando hay detalles, calcular totales desde ellos para evitar doble conteo con campos de nomina
+    const totalEgresosDetalles = detalles
+        .filter(d => ['descuento', 'pago', 'adelanto', 'ajuste_negativo'].includes(d.tipo))
+        .reduce((acc, d) => acc + parseFloat(d.monto || 0), 0)
+
+    const totalIngresosDetalles = detalles
+        .filter(d => ['bono', 'liquidacion', 'bonos', 'ajuste_positivo'].includes(d.tipo))
+        .reduce((acc, d) => acc + parseFloat(d.monto || 0), 0)
+
+    const totalNeto = detalles.length > 0
+        ? sueldoBase + totalIngresosDetalles - totalEgresosDetalles
+        : sueldoBase + bonos - descuentos - adelantos - totalPagadoHistorico
     const mesAnio = format(new Date(nomina.anio, nomina.mes - 1), 'MMMM yyyy', { locale: es })
     const fechaPago = nomina.fecha_pago ? format(new Date(nomina.fecha_pago), 'dd/MM/yyyy HH:mm', { locale: es }) : 'Pendiente'
 
@@ -324,10 +335,10 @@ export function BoletaPDF({ nomina, trabajador, open, onOpenChange }: BoletaPDFP
                                 <tr style={{ backgroundColor: '#f8fafc', borderTop: '2px solid #1e40af' }}>
                                     <td style={{ padding: '8px 10px', fontWeight: '800', fontSize: '11px' }}>TOTAL BRUTO / DEDUCCIONES</td>
                                     <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '800', color: '#059669', fontSize: '11px' }}>
-                                        S/ {(sueldoBase + bonos).toFixed(2)}
+                                        S/ {(detalles.length > 0 ? sueldoBase + totalIngresosDetalles : sueldoBase + bonos).toFixed(2)}
                                     </td>
                                     <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '800', color: '#dc2626', fontSize: '11px' }}>
-                                        S/ {(descuentos + adelantos + totalPagadoHistorico).toFixed(2)}
+                                        S/ {(detalles.length > 0 ? totalEgresosDetalles : descuentos + adelantos + totalPagadoHistorico).toFixed(2)}
                                     </td>
                                 </tr>
                             </tfoot>

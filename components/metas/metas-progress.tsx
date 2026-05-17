@@ -15,15 +15,18 @@ import { PaginationControlled } from '@/components/ui/pagination-controlled'
 interface MetasProgressProps {
   userId: string
   userRole?: string
+  viewerRole?: string
 }
 
-export function MetasProgress({ userId, userRole = 'asesor' }: MetasProgressProps) {
+export function MetasProgress({ userId, userRole = 'asesor', viewerRole }: MetasProgressProps) {
   const [metas, setMetas] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [realTimeStats, setRealTimeStats] = useState({
     porcentaje_cobro: 0,
     nuevos_clientes: 0,
     morosidad_actual: 0,
+    capital_vencido: 0,
+    capital_original: 0,
     clientes_en_cartera: 0,
     clientes_finales_bloqueados: 0,
     hueco_calculado: 0,

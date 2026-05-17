@@ -1,4 +1,4 @@
-import { esDiaHabil, isClientStrictActive } from '@/lib/financial-logic'
+import { esDiaHabil, isClientStrictActive, calculateMoraBancaria } from '@/lib/financial-logic'
 
 export async function calculateMetasForUser(supabaseAdmin: any, userId: string, forceEvaluation = false) {
     const hoyPeruStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
@@ -265,35 +265,17 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
         promedioColocacion = prestamosNuevos.length > 0 ? montoTotalBruto / prestamosNuevos.length : 0
     }
 
-    // Calculo Morosidad Bancaria
-    let totalCapitalOriginal = 0
-    let totalCapitalVencido = 0
-    
-    allRecentLoans?.filter((p: any) => p.estado === 'activo').forEach((p: any) => {
-        const montoCapital = parseFloat(p.monto) || 0
-        totalCapitalOriginal += montoCapital
-        
-        const cuotas = p.cronograma_cuotas || []
-        const numCuotas = cuotas.length || 1
-        const capitalPorCuota = montoCapital / numCuotas
-        
-        cuotas.filter((c: any) => c.fecha_vencimiento <= hoyPeruStr && c.estado !== 'pagado').forEach((c: any) => {
-            const montoCuota = parseFloat(c.monto_cuota) || 0
-            const montoPagado = parseFloat(c.monto_pagado) || 0
-            const pendiente = Math.max(0, montoCuota - montoPagado)
-            
-            if (pendiente > 0.01) {
-                const proporcionPendiente = montoCuota > 0 ? pendiente / montoCuota : 1
-                totalCapitalVencido += capitalPorCuota * proporcionPendiente
-            }
-        })
-    })
-
-    const morosidadCalculada = totalCapitalOriginal > 0 ? (totalCapitalVencido / totalCapitalOriginal) * 100 : 0
+    // Calculo Morosidad Bancaria (misma fuente que Panel de Préstamos)
+    const { tasaMorosidadCapital, capitalVencido, capitalOriginal } = calculateMoraBancaria(allRecentLoans || [], hoyPeruStr)
+    const morosidadCalculada = tasaMorosidadCapital
+    const totalCapitalVencido = capitalVencido
+    const totalCapitalOriginal = capitalOriginal
     const metaColoc = metasData?.find((m: any) => m.meta_colocacion_clientes)
     const statsResult = {
         porcentaje_cobro: Math.round(porcentajeCalculado),
         morosidad_actual: morosidadCalculada,
+        capital_vencido: totalCapitalVencido,
+        capital_original: totalCapitalOriginal,
         clientes_en_cartera: clientesActivosNoBloqueados,
         clientes_colocados_mes: netosComisionablesCount,
         nuevos_clientes: netosComisionablesCount,

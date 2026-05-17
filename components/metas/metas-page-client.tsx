@@ -133,7 +133,7 @@ export function MetasPageClient({ asesores, defaultUserId, userRole }: MetasPage
       </div>
 
       {/* Progreso del personal seleccionado */}
-      <MetasProgress key={selectedAsesorId} userId={selectedAsesorId} userRole={selectedAsesor?.rol || 'asesor'} />
+      <MetasProgress key={selectedAsesorId} userId={selectedAsesorId} userRole={selectedAsesor?.rol || 'asesor'} viewerRole={userRole} />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { esDiaHabil } from '@/lib/financial-logic'
+import { esDiaHabil, isClientStrictActive } from '@/lib/financial-logic'
 
 export async function calculateMetasForUser(supabaseAdmin: any, userId: string, forceEvaluation = false) {
     const hoyPeruStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
@@ -153,37 +153,56 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
         }
     }
 
-    // Cartera de clientes y morosidad
-    let clientesActivosNoBloqueados = 0
-    let totalFinalClients = 0
+    // IDs de préstamos producto de refinanciamiento (misma lógica que el panel de préstamos)
+    const { data: renovacionesRef } = await supabaseAdmin
+        .from('renovaciones')
+        .select('prestamo_nuevo_id, prestamo_original:prestamo_original_id(estado)')
 
-    if (clientesAsesor && clientesAsesor.length > 0) {
-        const clienteIds = clientesAsesor.map((c: any) => c.id)
-        const { data: prestamosActivos } = await supabaseAdmin
-            .from('prestamos')
-            .select('cliente_id')
-            .in('cliente_id', clienteIds)
-            .eq('estado', 'activo')
-
-        const idsConPrestamoActivo = new Set(prestamosActivos?.map((p: any) => p.cliente_id) || [])
-        const { data: detallesClientes } = await supabaseAdmin
-            .from('clientes')
-            .select('id, bloqueado_renovacion')
-            .in('id', Array.from(idsConPrestamoActivo))
-
-        totalFinalClients = idsConPrestamoActivo.size
-        clientesActivosNoBloqueados = detallesClientes?.filter((c: any) => !c.bloqueado_renovacion).length || 0
-    }
+    const prestamoIdsProductoRefinanciamiento = (renovacionesRef || [])
+        .filter((r: any) => (r.prestamo_original as any)?.estado === 'refinanciado')
+        .map((r: any) => r.prestamo_nuevo_id as string)
+        .filter(Boolean)
 
     const { data: allRecentLoans } = await supabaseAdmin
         .from('prestamos')
         .select(`
             id, cliente_id, monto, interes, created_at, estado, created_by,
-            clientes!inner (asesor_id),
+            es_paralelo, estado_mora, observacion_supervisor,
+            clientes!inner (asesor_id, bloqueado_renovacion),
             cronograma_cuotas (id, fecha_vencimiento, monto_cuota, monto_pagado, estado)
         `)
         .eq('clientes.asesor_id', userId)
         .in('estado', ['activo', 'desembolsado', 'vigente', 'aprobado', 'finalizado'])
+
+    // Cartera de clientes — usando isClientStrictActive (fuente de verdad del panel de préstamos)
+    // Enriquecemos cada préstamo con el saldo calculado desde cronograma_cuotas
+    // para que isClientStrictActive pueda aplicar el filtro de saldo pendiente > 0.01
+    const loansWithSaldo = allRecentLoans?.map((p: any) => ({
+        ...p,
+        metrics: {
+            saldoPendiente: Math.max(0,
+                Number(p.monto) * (1 + Number(p.interes) / 100) -
+                (p.cronograma_cuotas || []).reduce((acc: number, c: any) => acc + Number(c.monto_pagado || 0), 0)
+            )
+        }
+    }))
+
+    let clientesActivosNoBloqueados = 0
+    let totalFinalClients = 0
+
+    const clientesMapReten = new Map<string, any[]>()
+    loansWithSaldo?.forEach((p: any) => {
+        const cId = p.cliente_id
+        if (!cId) return
+        if (!clientesMapReten.has(cId)) clientesMapReten.set(cId, [])
+        clientesMapReten.get(cId)!.push(p)
+    })
+    clientesMapReten.forEach((loans) => {
+        if (loans.some((p: any) => p.estado === 'activo')) totalFinalClients++
+        if (isClientStrictActive(loans[0]?.clientes, loans, prestamoIdsProductoRefinanciamiento)) {
+            clientesActivosNoBloqueados++
+        }
+    })
 
     const getPeriodStartDate = (period: 'semanal' | 'mensual') => {
         const now = new Date(today)

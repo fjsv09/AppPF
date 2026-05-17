@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { Wallet, TrendingUp, AlertCircle, Users, Loader2 } from 'lucide-react'
 import { useLoading } from './loading-context'
-import { calculateMoraBancaria, ESTADOS_TERMINALES_RUTA, isLoanCobradoEnRuta, isLoanPendienteEnRuta } from '@/lib/financial-logic'
+import { calculateMoraBancaria, ESTADOS_TERMINALES_RUTA, isLoanCobradoEnRuta, isLoanPendienteEnRuta, isClientStrictActive } from '@/lib/financial-logic'
 import { cn } from '@/lib/utils'
 
 interface KpiCardsProps {
@@ -151,7 +151,7 @@ export function KpiCards({
     }).length
     const totalClientesHoy = clientesCobradosHoy + pendientesRuta // Para evitar discrepancias
 
-    // Active loans - mirrors server logic - use baseForKpi for complete count
+    // Active loans — usando isClientStrictActive (fuente de verdad centralizada en financial-logic)
     const clientesMap = new Map<string, any[]>()
     baseForKpi.forEach(p => {
       const cId = p.cliente_id
@@ -159,18 +159,9 @@ export function KpiCards({
       if (!clientesMap.has(cId)) clientesMap.set(cId, [])
       clientesMap.get(cId)!.push(p)
     })
-    const activeLoans = Array.from(clientesMap.entries()).filter(([, loans]) => {
-      const cliente = loans[0]?.clientes
-      if (!!cliente?.bloqueado_renovacion) return false
-      const main = loans.find((p: any) =>
-        p.estado === 'activo' &&
-        !p.es_paralelo &&
-        !prestamoIdsProductoRefinanciamiento.includes(p.id)
-      )
-      if (!main) return false
-      if (main.estado_mora === 'vencido') return false
-      return (main.metrics?.saldoPendiente || 0) > 0.01
-    }).length
+    const activeLoans = Array.from(clientesMap.entries()).filter(([, loans]) =>
+      isClientStrictActive(loans[0]?.clientes, loans, prestamoIdsProductoRefinanciamiento)
+    ).length
 
     const oportunidadesRenovacion = baseForKpi.filter(p => p.es_renovable_estricto).length
 

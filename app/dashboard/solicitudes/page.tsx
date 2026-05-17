@@ -44,7 +44,7 @@ export default async function SolicitudesPage() {
         .from('solicitudes')
         .select(`
             *,
-            cliente:cliente_id(id, nombres, dni),
+            cliente:cliente_id(id, nombres, dni, foto_perfil),
             asesor:asesor_id(id, nombre_completo)
         `)
         .eq('origen', 'normal')

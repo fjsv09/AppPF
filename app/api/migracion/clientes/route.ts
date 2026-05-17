@@ -147,6 +147,7 @@ export async function POST(request: Request) {
                     motivo_prestamo: 'Migración de datos - Sistema Anterior',
                     observacion_supervisor: 'Registro migrado del sistema anterior',
                     documentos_evaluacion: c.sectorId ? { prospecto_sector_id: c.sectorId } : null,
+                    origen: 'migracion',
                 }))
 
                 const { error: solicitudError } = await supabaseAdmin

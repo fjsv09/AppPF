@@ -33,7 +33,7 @@ interface Visita {
     prestamo?: {
         monto: number
         cliente_id?: string
-        cliente?: { nombres: string; dni: string; id: string; telefono: string } | null
+        cliente?: { nombres: string; dni: string; id: string; telefono: string; foto_perfil?: string } | null
     } | null
     // Enriquesimiento (opcional)
     gestion_resultado?: string

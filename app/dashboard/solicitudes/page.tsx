@@ -47,6 +47,7 @@ export default async function SolicitudesPage() {
             cliente:cliente_id(id, nombres, dni),
             asesor:asesor_id(id, nombre_completo)
         `)
+        .eq('origen', 'normal')
         .order('created_at', { ascending: false })
 
     if (perfil?.rol === 'asesor') {

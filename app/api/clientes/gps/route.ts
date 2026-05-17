@@ -69,6 +69,7 @@ export async function POST(request: Request) {
                 cuotas: 24,
                 modalidad: 'diario',
                 fecha_inicio_propuesta: new Date().toISOString().split('T')[0],
+                origen: 'edicion_cliente',
                 gps_coordenadas: gps_coordenadas
             }).select().single()
             

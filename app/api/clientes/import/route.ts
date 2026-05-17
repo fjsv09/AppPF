@@ -135,6 +135,7 @@ export async function POST(request: Request) {
                         interes: interes,
                         cuotas: cuotas,
                         modalidad: modalidad,
+                        origen: 'migracion',
                         fecha_inicio_propuesta: fecha_inicio
                     })
                     .select()

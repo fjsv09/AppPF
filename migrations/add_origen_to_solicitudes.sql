@@ -18,6 +18,7 @@ WHERE motivo_prestamo = 'Migración de datos - Sistema Anterior';
 
 -- Tagging retroactivo: solicitudes creadas por edición de cliente sin solicitud previa
 -- Identificadas por los valores placeholder hardcodeados en el PATCH handler
+-- Usa NOT EXISTS en lugar de prestamo_id IS NULL porque el FK vive en prestamos.solicitud_id, no en solicitudes
 UPDATE solicitudes SET origen = 'edicion_cliente'
 WHERE origen = 'normal'
   AND monto_solicitado = 100
@@ -26,5 +27,10 @@ WHERE origen = 'normal'
   AND NOT EXISTS (
     SELECT 1 FROM prestamos WHERE prestamos.solicitud_id = solicitudes.id
   );
+
+-- Tagging retroactivo: solicitudes creadas por la ruta /api/clientes/import
+UPDATE solicitudes SET origen = 'migracion'
+WHERE origen = 'normal'
+  AND motivo_prestamo = 'Importación Masiva';
 
 COMMIT;

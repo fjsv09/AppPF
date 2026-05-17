@@ -1,12 +1,16 @@
 -- Agregar campo origen a solicitudes para distinguir su procedencia
 -- Valores: 'normal' (flujo real), 'migracion' (importación masiva), 'edicion_cliente' (edición de cliente migrado)
 
+BEGIN;
+
 ALTER TABLE solicitudes
   ADD COLUMN IF NOT EXISTS origen TEXT NOT NULL DEFAULT 'normal'
   CONSTRAINT solicitudes_origen_check CHECK (origen IN ('normal', 'migracion', 'edicion_cliente'));
 
--- Índice para acelerar el filtro en el listado
-CREATE INDEX IF NOT EXISTS idx_solicitudes_origen ON solicitudes(origen);
+-- Índice para acelerar el filtro en el listado (parcial: solo valores no-normales)
+CREATE INDEX IF NOT EXISTS idx_solicitudes_origen
+  ON solicitudes(origen)
+  WHERE origen != 'normal';
 
 -- Tagging retroactivo: solicitudes creadas durante migración original
 UPDATE solicitudes SET origen = 'migracion'
@@ -22,3 +26,5 @@ WHERE origen = 'normal'
   AND NOT EXISTS (
     SELECT 1 FROM prestamos WHERE prestamos.solicitud_id = solicitudes.id
   );
+
+COMMIT;

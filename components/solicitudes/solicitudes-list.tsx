@@ -11,6 +11,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { formatDate, formatTime, formatDateTime } from '@/utils/format'
 import { DocumentButtonAsync } from '@/components/prestamos/document-button-async'
+import { ImageLightbox } from '@/components/ui/image-lightbox'
 
 const estadoConfig: Record<string, { label: string, color: string, icon: any }> = {
     'pendiente_supervision': { label: 'Pendiente Supervisión', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: Clock },
@@ -305,13 +306,21 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                             <div className="flex flex-col py-0.5 gap-2 relative">
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div className="flex items-center gap-2.5 min-w-0">
-                                                        <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 overflow-hidden">
-                                                            {solicitud.cliente?.foto_perfil ? (
-                                                                <img src={solicitud.cliente.foto_perfil} alt="" className="w-full h-full object-cover" />
-                                                            ) : (
+                                                        {solicitud.cliente?.foto_perfil ? (
+                                                            <ImageLightbox
+                                                                src={solicitud.cliente.foto_perfil}
+                                                                alt={solicitud.cliente.nombres || 'Cliente'}
+                                                                thumbnail={
+                                                                    <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 shrink-0 overflow-hidden cursor-zoom-in">
+                                                                        <img src={solicitud.cliente.foto_perfil} alt="" className="w-full h-full object-cover" />
+                                                                    </div>
+                                                                }
+                                                            />
+                                                        ) : (
+                                                            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0">
                                                                 <span className="font-bold text-slate-300 text-xs">{(solicitud.cliente?.nombres || solicitud.prospecto_nombres)?.charAt(0) || '?'}</span>
-                                                            )}
-                                                        </div>
+                                                            </div>
+                                                        )}
                                                         <div className="flex flex-col min-w-0">
                                                             <div className="flex items-center gap-1.5">
                                                                 <h3 className="text-slate-100 font-bold text-sm leading-tight truncate">
@@ -428,13 +437,21 @@ export function SolicitudesList({ initialSolicitudes, perfil }: { initialSolicit
                                         >
                                             {/* Cliente */}
                                             <div className="col-span-3 flex items-center gap-3 min-w-0">
-                                                <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 overflow-hidden">
-                                                    {solicitud.cliente?.foto_perfil ? (
-                                                        <img src={solicitud.cliente.foto_perfil} alt="" className="w-full h-full object-cover" />
-                                                    ) : (
+                                                {solicitud.cliente?.foto_perfil ? (
+                                                    <ImageLightbox
+                                                        src={solicitud.cliente.foto_perfil}
+                                                        alt={solicitud.cliente.nombres || 'Cliente'}
+                                                        thumbnail={
+                                                            <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 shrink-0 overflow-hidden cursor-zoom-in">
+                                                                <img src={solicitud.cliente.foto_perfil} alt="" className="w-full h-full object-cover" />
+                                                            </div>
+                                                        }
+                                                    />
+                                                ) : (
+                                                    <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0">
                                                         <span className="font-bold text-slate-300 text-xs">{(solicitud.cliente?.nombres || solicitud.prospecto_nombres)?.charAt(0) || '?'}</span>
-                                                    )}
-                                                </div>
+                                                    </div>
+                                                )}
                                                 <div className="min-w-0 flex flex-col justify-center">
                                                     <div className="flex items-center gap-2">
                                                         <div className="text-sm font-medium text-slate-200 truncate leading-tight">

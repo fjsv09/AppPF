@@ -42,7 +42,7 @@ export default async function TareasHistoryPage({
         prestamo:prestamo_id(
             monto,
             cliente_id,
-            cliente:cliente_id(nombres, dni, id, telefono)
+            cliente:cliente_id(nombres, dni, id, telefono, foto_perfil)
         )
     `
 

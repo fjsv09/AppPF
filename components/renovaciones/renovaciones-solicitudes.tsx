@@ -18,6 +18,7 @@ import {
     Search, X, Filter, MapPin, Activity, Files, ChevronDown
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { ImageLightbox } from '@/components/ui/image-lightbox'
 import { cn, getFrequencyBadgeStyles } from '@/lib/utils'
 import { formatMoney, formatDate, formatTime, formatDateTime } from '@/utils/format'
 import { DocumentButtonAsync } from '@/components/prestamos/document-button-async'
@@ -343,9 +344,21 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="flex items-center gap-3 min-w-0">
                                                 <div className="shrink-0">
-                                                    <div className="w-10 h-10 rounded-full border border-slate-700 bg-slate-800 text-slate-300 flex items-center justify-center shadow-sm">
-                                                        <span className="font-bold text-sm">{sol.cliente?.nombres?.charAt(0)}</span>
-                                                    </div>
+                                                    {sol.cliente?.foto_perfil ? (
+                                                        <ImageLightbox
+                                                            src={sol.cliente.foto_perfil}
+                                                            alt={sol.cliente.nombres || 'Cliente'}
+                                                            thumbnail={
+                                                                <div className="w-10 h-10 rounded-full border border-slate-700 bg-slate-800 shadow-sm overflow-hidden cursor-zoom-in">
+                                                                    <img src={sol.cliente.foto_perfil} alt="" className="w-full h-full object-cover" />
+                                                                </div>
+                                                            }
+                                                        />
+                                                    ) : (
+                                                        <div className="w-10 h-10 rounded-full border border-slate-700 bg-slate-800 text-slate-300 flex items-center justify-center shadow-sm">
+                                                            <span className="font-bold text-sm">{sol.cliente?.nombres?.charAt(0)}</span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div className="flex flex-col min-w-0">
                                                     <h3 className="text-slate-100 font-bold text-base leading-tight truncate pr-1">
@@ -507,9 +520,21 @@ export function RenovacionesSolicitudes({ solicitudes, userRole, userId, totalRe
                                             >
                                                 {/* Cliente */}
                                                 <div className="col-span-3 flex items-center gap-3 min-w-0">
-                                                    <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 shadow-lg transition-transform group-hover:scale-105">
-                                                        <span className="font-bold text-slate-300 text-xs">{sol.cliente?.nombres?.charAt(0)}</span>
-                                                    </div>
+                                                    {sol.cliente?.foto_perfil ? (
+                                                        <ImageLightbox
+                                                            src={sol.cliente.foto_perfil}
+                                                            alt={sol.cliente.nombres || 'Cliente'}
+                                                            thumbnail={
+                                                                <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 shrink-0 shadow-lg transition-transform group-hover:scale-105 overflow-hidden cursor-zoom-in">
+                                                                    <img src={sol.cliente.foto_perfil} alt="" className="w-full h-full object-cover" />
+                                                                </div>
+                                                            }
+                                                        />
+                                                    ) : (
+                                                        <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 shadow-lg transition-transform group-hover:scale-105">
+                                                            <span className="font-bold text-slate-300 text-xs">{sol.cliente?.nombres?.charAt(0)}</span>
+                                                        </div>
+                                                    )}
                                                     <div className="min-w-0 flex flex-col justify-center">
                                                         <div className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors truncate leading-tight">{sol.cliente?.nombres}</div>
                                                         <div className="flex items-center gap-2 mt-0.5">

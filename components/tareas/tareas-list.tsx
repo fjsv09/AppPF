@@ -16,7 +16,7 @@ import { RejectEvidenceButton } from '@/components/tareas/reject-evidence-button
 
 export function TareasList({ initialTareas, userId, userRol, team = [] }: { initialTareas: any[], userId: string, userRol?: string, team?: any[] }) {
     const [searchTerm, setSearchTerm] = useState('')
-    const [statusFilter, setStatusFilter] = useState('todos')
+    const [statusFilter, setStatusFilter] = useState('pendiente')
     const [tipoFilter, setTipoFilter] = useState('todos')
     const [asesorFilter, setAsesorFilter] = useState('todos')
     const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
@@ -165,9 +165,21 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                             <div className="flex items-start justify-between gap-2.5">
                                                 <div className="flex items-center gap-2.5 min-w-0">
                                                     <div className="shrink-0">
-                                                        <div className="w-9 h-9 rounded-full border border-slate-700 bg-slate-800 text-slate-300 flex items-center justify-center shadow-sm">
-                                                            <span className="font-bold text-sm tracking-tight">{tarea.prestamo?.cliente?.nombres?.charAt(0) || 'C'}</span>
-                                                        </div>
+                                                        {tarea.prestamo?.cliente?.foto_perfil ? (
+                                                            <ImageLightbox
+                                                                src={tarea.prestamo.cliente.foto_perfil}
+                                                                alt={tarea.prestamo.cliente.nombres || 'Cliente'}
+                                                                thumbnail={
+                                                                    <div className="w-9 h-9 rounded-full border border-slate-700 bg-slate-800 shadow-sm overflow-hidden cursor-zoom-in">
+                                                                        <img src={tarea.prestamo.cliente.foto_perfil} alt="" className="w-full h-full object-cover" />
+                                                                    </div>
+                                                                }
+                                                            />
+                                                        ) : (
+                                                            <div className="w-9 h-9 rounded-full border border-slate-700 bg-slate-800 text-slate-300 flex items-center justify-center shadow-sm">
+                                                                <span className="font-bold text-sm tracking-tight">{tarea.prestamo?.cliente?.nombres?.charAt(0) || 'C'}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <div className="flex flex-col min-w-0">
                                                         <h3 className="text-slate-100 font-bold text-[15px] leading-tight truncate pr-1">
@@ -323,9 +335,21 @@ export function TareasList({ initialTareas, userId, userRol, team = [] }: { init
                                             className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-800/40 transition-all items-center group relative pl-[calc(1.5rem-6px)]"
                                         >
                                             <div className="col-span-3 flex items-center gap-3 min-w-0">
-                                                <div className="w-8 h-8 rounded-lg bg- slate-800 border border-slate-700 flex items-center justify-center shrink-0 shadow-lg transition-transform group-hover:scale-105">
-                                                    <span className="font-bold text-slate-300 text-xs">{tarea.prestamo?.cliente?.nombres?.charAt(0) || 'C'}</span>
-                                                </div>
+                                                {tarea.prestamo?.cliente?.foto_perfil ? (
+                                                    <ImageLightbox
+                                                        src={tarea.prestamo.cliente.foto_perfil}
+                                                        alt={tarea.prestamo.cliente.nombres || 'Cliente'}
+                                                        thumbnail={
+                                                            <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 shrink-0 shadow-lg transition-transform group-hover:scale-105 overflow-hidden cursor-zoom-in">
+                                                                <img src={tarea.prestamo.cliente.foto_perfil} alt="" className="w-full h-full object-cover" />
+                                                            </div>
+                                                        }
+                                                    />
+                                                ) : (
+                                                    <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 shadow-lg transition-transform group-hover:scale-105">
+                                                        <span className="font-bold text-slate-300 text-xs">{tarea.prestamo?.cliente?.nombres?.charAt(0) || 'C'}</span>
+                                                    </div>
+                                                )}
                                                 <div className="min-w-0 flex flex-col justify-center w-full">
                                                     <div className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors truncate mb-1">
                                                         {tarea.prestamo?.cliente?.nombres}

@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { QuickPayModal } from "../prestamos/quick-pay-modal"
+import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { cn, formatDatePeru } from "@/lib/utils"
@@ -234,9 +235,21 @@ export function VisitasList({ visitas, userId, userRol, team = [] }: VisitasList
                                         {/* Header */}
                                         <div className="flex items-start justify-between gap-3 mb-3">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-xl bg-blue-800/30 border border-blue-700/30 flex items-center justify-center shrink-0">
-                                                    <ClipboardList className="w-5 h-5 text-blue-400" />
-                                                </div>
+                                                {cliente?.foto_perfil ? (
+                                                    <ImageLightbox
+                                                        src={cliente.foto_perfil}
+                                                        alt={cliente.nombres || 'Cliente'}
+                                                        thumbnail={
+                                                            <div className="w-10 h-10 rounded-xl bg-blue-800/30 border border-blue-700/30 shrink-0 overflow-hidden cursor-zoom-in">
+                                                                <img src={cliente.foto_perfil} alt="" className="w-full h-full object-cover" />
+                                                            </div>
+                                                        }
+                                                    />
+                                                ) : (
+                                                    <div className="w-10 h-10 rounded-xl bg-blue-800/30 border border-blue-700/30 flex items-center justify-center shrink-0">
+                                                        <span className="font-bold text-blue-300 text-sm">{cliente?.nombres?.charAt(0) || '?'}</span>
+                                                    </div>
+                                                )}
                                                 <div>
                                                     <p className="text-sm font-bold text-white">
                                                         {cliente?.nombres || 'Cliente'}
@@ -321,9 +334,21 @@ export function VisitasList({ visitas, userId, userRol, team = [] }: VisitasList
                                     <div key={visita.id} className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 transition-all hover:bg-slate-900/60 group">
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-xl bg-emerald-950/20 border border-emerald-900/30 flex items-center justify-center shrink-0">
-                                                    <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                                                </div>
+                                                {cliente?.foto_perfil ? (
+                                                    <ImageLightbox
+                                                        src={cliente.foto_perfil}
+                                                        alt={cliente.nombres || 'Cliente'}
+                                                        thumbnail={
+                                                            <div className="w-10 h-10 rounded-xl bg-emerald-950/20 border border-emerald-900/30 shrink-0 overflow-hidden cursor-zoom-in">
+                                                                <img src={cliente.foto_perfil} alt="" className="w-full h-full object-cover" />
+                                                            </div>
+                                                        }
+                                                    />
+                                                ) : (
+                                                    <div className="w-10 h-10 rounded-xl bg-emerald-950/20 border border-emerald-900/30 flex items-center justify-center shrink-0">
+                                                        <span className="font-bold text-emerald-400 text-sm">{cliente?.nombres?.charAt(0) || '?'}</span>
+                                                    </div>
+                                                )}
                                                 <div>
                                                     <p className="text-sm font-bold text-slate-300">
                                                         {cliente?.nombres || 'Cliente'}

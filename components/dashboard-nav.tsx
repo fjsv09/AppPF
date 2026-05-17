@@ -254,9 +254,14 @@ export function DashboardNav({
                                         const isThisLoading = loadingTarget === link.href && isPending
                                         
                                         return (
-                                            <button
+                                            <Link
                                                 key={link.href}
-                                                onClick={() => handleLinkClick(link.href)}
+                                                href={link.href}
+                                                onClick={(e) => {
+                                                    if (e.ctrlKey || e.metaKey || e.shiftKey) return
+                                                    e.preventDefault()
+                                                    handleLinkClick(link.href)
+                                                }}
                                                 title={isCollapsed ? link.label : ""}
                                                 className={cn(
                                                     "w-full group flex items-center rounded-xl p-2.5 text-sm font-medium transition-all duration-300 relative overflow-hidden",
@@ -297,7 +302,7 @@ export function DashboardNav({
                                                         <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
                                                     </div>
                                                 )}
-                                            </button>
+                                            </Link>
                                         )
                                     })}
                             </div>

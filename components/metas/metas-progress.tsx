@@ -291,7 +291,7 @@ export function MetasProgress({ userId, userRole = 'asesor', viewerRole }: Metas
                   target={`${metaClie.meta_cantidad_clientes} cli`}
                   progress={Math.min((realTimeStats.nuevos_clientes / (metaClie.meta_cantidad_clientes || 1)) * 100, 100)}
                   icon={<TrendingUp className="w-3.5 h-3.5 text-amber-400" />}
-                  subtitle={`Bono: S/ ${metaClie.bono_monto || 0}`}
+                  subtitle={`Bono: S/ ${projectedBonuses.find(pb => pb.meta_id === metaClie.id)?.monto ?? metaClie.bono_monto ?? 0}`}
                 />
               )}
 
@@ -406,6 +406,7 @@ export function MetasProgress({ userId, userRole = 'asesor', viewerRole }: Metas
                 label = 'Bono Retención'
               } else if (m.meta_cantidad_clientes !== null && m.meta_cantidad_clientes !== undefined) {
                 label = 'Bono Nuevos Clientes'
+                bonoDisplay = projectedBonuses.find(pb => pb.meta_id === m.id)?.monto ? `S/ ${projectedBonuses.find(pb => pb.meta_id === m.id)?.monto}` : `S/ ${m.bono_monto || 0}`
               } else if (m.meta_colocacion_clientes) {
                 label = 'Bono por Cliente'
                 bonoDisplay = projectedBonuses.find(pb => pb.meta_id === m.id)?.monto ? `S/ ${projectedBonuses.find(pb => pb.meta_id === m.id)?.monto}` : `S/ ${(m.bono_por_cliente || 0)}`

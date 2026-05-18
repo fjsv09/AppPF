@@ -75,11 +75,13 @@ export async function POST(request: Request) {
     const { data: existing } = await supabaseAdmin.from('clientes').select('id').eq('dni', dni).single()
     if (existing) return NextResponse.json({ error: 'Cliente ya existe' }, { status: 409 })
 
+    const asesorAsignado = perfil.rol === 'asesor' ? user.id : (asesor_id || null)
     const { data: newClient, error: insertError } = await supabaseAdmin
       .from('clientes')
       .insert({
-        dni, nombres, telefono, direccion, 
-        asesor_id: (perfil.rol === 'asesor' ? user.id : (asesor_id || null)),
+        dni, nombres, telefono, direccion,
+        asesor_id: asesorAsignado,
+        asesor_original_id: asesorAsignado,
         estado: 'activo'
       })
       .select().single()

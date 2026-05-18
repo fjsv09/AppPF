@@ -369,8 +369,9 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
             }
         } 
         else if (meta.meta_cantidad_clientes !== null && meta.meta_cantidad_clientes !== undefined) {
-            if (statsResult.nuevos_clientes >= meta.meta_cantidad_clientes && statsResult.nuevos_clientes > 0) {
+            if (statsResult.nuevos_clientes > 0 && meta.meta_cantidad_clientes > 0) {
                 cumplida = true
+                montoBonoFinal = Math.round((meta.bono_monto / meta.meta_cantidad_clientes) * statsResult.nuevos_clientes)
                 nombreMotivo = 'Clientes Nuevos'
             }
         }

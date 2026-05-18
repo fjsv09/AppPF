@@ -174,6 +174,19 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
         .eq('clientes.asesor_id', userId)
         .in('estado', ['activo', 'desembolsado', 'vigente', 'aprobado', 'finalizado'])
 
+    // Query separado para colocaciones: usa asesor_original_id para dar crédito
+    // al asesor que colocó el cliente, aunque haya sido reasignado después.
+    // solicitudes es LEFT JOIN (préstamos directos no tienen solicitud_id).
+    const { data: prestamosParaColocacion } = await supabaseAdmin
+        .from('prestamos')
+        .select(`
+            id, cliente_id, monto, created_at,
+            clientes!inner (asesor_original_id),
+            solicitudes!solicitud_id (origen)
+        `)
+        .eq('clientes.asesor_original_id', userId)
+        .in('estado', ['activo', 'desembolsado', 'vigente', 'aprobado', 'finalizado'])
+
     // Cartera de clientes — usando isClientStrictActive (fuente de verdad del panel de préstamos)
     // Enriquecemos cada préstamo con el saldo calculado desde cronograma_cuotas
     // para que isClientStrictActive pueda aplicar el filtro de saldo pendiente > 0.01
@@ -228,7 +241,9 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
 
     const totalRecaudadoReal = pagosPeriodo?.reduce((acc: number, p: any) => acc + Number(p.monto_pagado || 0), 0) || 0
 
-    const prestamosNuevos = (allRecentLoans?.filter((p: any) => {
+    const prestamosNuevos = (prestamosParaColocacion?.filter((p: any) => {
+        const origen = (p.solicitudes as any)?.origen  // null si es préstamo directo → se incluye
+        if (origen === 'migracion' || origen === 'edicion_cliente') return false
         const fecha = new Date(p.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
         return fecha.startsWith(mesActualStr)
     }) || [])

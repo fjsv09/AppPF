@@ -174,18 +174,22 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
         .eq('clientes.asesor_id', userId)
         .in('estado', ['activo', 'desembolsado', 'vigente', 'aprobado', 'finalizado'])
 
-    // Query separado para colocaciones: usa asesor_original_id para dar crédito
-    // al asesor que colocó el cliente, aunque haya sido reasignado después.
-    // solicitudes es LEFT JOIN (préstamos directos no tienen solicitud_id).
-    const { data: prestamosParaColocacion } = await supabaseAdmin
-        .from('prestamos')
-        .select(`
-            id, cliente_id, monto, created_at,
-            clientes!inner (asesor_original_id),
-            solicitudes!solicitud_id (origen)
-        `)
-        .eq('clientes.asesor_original_id', userId)
-        .in('estado', ['activo', 'desembolsado', 'vigente', 'aprobado', 'finalizado'])
+    // Solicitudes aprobadas del mes para colocación (fuente de verdad para Nuevos Clientes y Colocación x Cliente)
+    const inicioMesPeru = `${mesActualStr}-01T00:00:00-05:00`
+    const nextMonthDate = new Date(today.getFullYear(), today.getMonth() + 1, 1)
+    const finMesPeru = nextMonthDate.toLocaleDateString('en-CA', { timeZone: 'America/Lima' }) + 'T00:00:00-05:00'
+
+    const { data: solicitudesAprobadas } = await supabaseAdmin
+        .from('solicitudes')
+        .select('id, cliente_id, monto_solicitado, fecha_aprobacion, origen')
+        .eq('asesor_id', userId)
+        .eq('estado_solicitud', 'aprobado')
+        .gte('fecha_aprobacion', inicioMesPeru)
+        .lt('fecha_aprobacion', finMesPeru)
+
+    const solicitudesFiltradas = (solicitudesAprobadas || []).filter((s: any) =>
+        s.origen !== 'migracion' && s.origen !== 'edicion_cliente'
+    )
 
     // Cartera de clientes — usando isClientStrictActive (fuente de verdad del panel de préstamos)
     // Enriquecemos cada préstamo con el saldo calculado desde cronograma_cuotas
@@ -241,13 +245,6 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
 
     const totalRecaudadoReal = pagosPeriodo?.reduce((acc: number, p: any) => acc + Number(p.monto_pagado || 0), 0) || 0
 
-    const prestamosNuevos = (prestamosParaColocacion?.filter((p: any) => {
-        const origen = (p.solicitudes as any)?.origen  // null si es préstamo directo → se incluye
-        if (origen === 'migracion' || origen === 'edicion_cliente') return false
-        const fecha = new Date(p.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
-        return fecha.startsWith(mesActualStr)
-    }) || [])
-
     let netosComisionablesCount = 0
     let capitalNetoComisionable = 0
     let promedioColocacion = 0
@@ -258,26 +255,26 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
         huecoCalculado = Math.max(0, metaReten.meta_retencion_clientes - clientesActivosNoBloqueados)
     }
 
-    if (prestamosNuevos.length > 0) {
+    if (solicitudesFiltradas.length > 0) {
         const clientesUnicosNuevos = new Set()
-        const prestamosNuevosFiltrados = prestamosNuevos.filter((p: any) => {
-            if (clientesUnicosNuevos.has(p.cliente_id)) return false
-            clientesUnicosNuevos.add(p.cliente_id)
+        const solicitudesUnicas = solicitudesFiltradas.filter((s: any) => {
+            if (clientesUnicosNuevos.has(s.cliente_id)) return false
+            clientesUnicosNuevos.add(s.cliente_id)
             return true
         })
 
         let gapToCover = huecoCalculado
-        prestamosNuevosFiltrados.forEach((p: any) => {
+        solicitudesUnicas.forEach((s: any) => {
             if (gapToCover > 0) {
                 gapToCover--
             } else {
-                capitalNetoComisionable += Number(p.monto || 0)
+                capitalNetoComisionable += Number(s.monto_solicitado || 0)
                 netosComisionablesCount++
             }
         })
 
-        const montoTotalBruto = prestamosNuevos.reduce((acc: number, p: any) => acc + Number(p.monto || 0), 0)
-        promedioColocacion = prestamosNuevos.length > 0 ? montoTotalBruto / prestamosNuevos.length : 0
+        const montoTotalBruto = solicitudesFiltradas.reduce((acc: number, s: any) => acc + Number(s.monto_solicitado || 0), 0)
+        promedioColocacion = solicitudesFiltradas.length > 0 ? montoTotalBruto / solicitudesFiltradas.length : 0
     }
 
     // Calculo Morosidad Bancaria (misma fuente que Panel de Préstamos)
@@ -295,7 +292,7 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
         clientes_colocados_mes: netosComisionablesCount,
         nuevos_clientes: netosComisionablesCount,
         promedio_colocacion: Math.round(promedioColocacion),
-        capital_colocado: prestamosNuevos.reduce((acc: number, p: any) => acc + Number(p.monto || 0), 0),
+        capital_colocado: solicitudesFiltradas.reduce((acc: number, s: any) => acc + Number(s.monto_solicitado || 0), 0),
         capital_neto_comisionable: capitalNetoComisionable,
         recaudacion_total: totalRecaudadoReal,
         clientes_finales_bloqueados: totalFinalClients - clientesActivosNoBloqueados,

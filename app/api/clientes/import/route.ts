@@ -106,7 +106,8 @@ export async function POST(request: Request) {
                         referencia: c.referencia || c.Referencia || null,
                         sector_id: sectorId,
                         estado: 'activo',
-                        asesor_id: user.id
+                        asesor_id: user.id,
+                        asesor_original_id: user.id
                     })
                     .select()
                     .single()

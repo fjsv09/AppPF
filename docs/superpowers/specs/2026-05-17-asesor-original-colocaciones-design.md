@@ -71,12 +71,13 @@ El UPDATE existente solo modifica `asesor_id`. No incluir `asesor_original_id` e
 
 ```typescript
 // Query nuevo — solo para cálculo de colocaciones
+// Nota: solicitudes es LEFT JOIN vía solicitud_id (préstamos directos no tienen solicitud)
 const { data: prestamosParaColocacion } = await supabaseAdmin
     .from('prestamos')
     .select(`
         id, cliente_id, monto, created_at,
         clientes!inner (asesor_original_id),
-        solicitudes (origen)
+        solicitudes!solicitud_id (origen)
     `)
     .eq('clientes.asesor_original_id', userId)
     .in('estado', ['activo', 'desembolsado', 'vigente', 'aprobado', 'finalizado'])
@@ -84,10 +85,10 @@ const { data: prestamosParaColocacion } = await supabaseAdmin
 
 Reemplazar el origen de `prestamosNuevos` (línea ~231) para que use `prestamosParaColocacion` en lugar de `allRecentLoans`.
 
-El filtro de migrados se aplica dentro del cálculo de `prestamosNuevos`:
+El filtro de migrados se aplica dentro del cálculo de `prestamosNuevos`. Los préstamos sin `solicitud_id` (directos) se incluyen siempre:
 ```typescript
 const prestamosNuevos = (prestamosParaColocacion?.filter((p: any) => {
-    const origen = p.solicitudes?.origen
+    const origen = p.solicitudes?.origen  // null si es préstamo directo → se incluye
     if (origen === 'migracion' || origen === 'edicion_cliente') return false
     const fecha = new Date(p.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
     return fecha.startsWith(mesActualStr)

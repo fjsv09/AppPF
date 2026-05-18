@@ -10,7 +10,6 @@ import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
     AlertDialog,
-    AlertDialogAction,
     AlertDialogCancel,
     AlertDialogContent,
     AlertDialogDescription,
@@ -25,6 +24,7 @@ interface ClientProfileActionsProps {
 }
 
 const ASESOR_COMPLETABLE_FIELDS = ['telefono', 'direccion', 'sector_id', 'giro_negocio', 'fuentes_ingresos', 'motivo_prestamo']
+const DOCUMENTOS_REQUERIDOS_KEYS = ['dni_frontal', 'dni_posterior', 'foto_cliente', 'frontis_casa', 'recibo_luz_agua', 'negocio', 'documentos_negocio', 'filtro_sentinel']
 
 export function ClientProfileActions({ cliente, userRole }: ClientProfileActionsProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -39,10 +39,16 @@ export function ClientProfileActions({ cliente, userRole }: ClientProfileActions
   }, [cliente.excepcion_voucher])
 
   const isAsesor = userRole === 'asesor'
-  const asesorHasMissingFields = isAsesor && ASESOR_COMPLETABLE_FIELDS.some(f => {
-    const v = cliente[f]
-    return !v || (typeof v === 'string' && v.trim() === '')
-  })
+  const asesorHasMissingFields = isAsesor && (
+    ASESOR_COMPLETABLE_FIELDS.some(f => {
+      const v = cliente[f]
+      return !v || (typeof v === 'string' && v.trim() === '')
+    }) ||
+    DOCUMENTOS_REQUERIDOS_KEYS.some(key => {
+      const docs = cliente.documentos || {}
+      return !docs[key]
+    })
+  )
 
   if (userRole !== 'admin' && userRole !== 'supervisor' && !asesorHasMissingFields) return null
 

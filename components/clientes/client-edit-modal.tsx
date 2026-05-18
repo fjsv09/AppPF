@@ -175,15 +175,15 @@ export function ClientEditModal({ cliente, isOpen, userRol, onClose, onSuccess }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl bg-slate-950 border-slate-800 text-slate-100 p-0 overflow-hidden flex flex-col">
-        <DialogHeader className="p-4 md:p-6 border-b border-white/5 bg-slate-900/50">
+      <DialogContent className="sm:max-w-2xl bg-slate-950 border-slate-800 text-slate-100 p-0 flex flex-col max-h-[90dvh] overflow-hidden">
+        <DialogHeader className="p-4 md:p-6 border-b border-white/5 bg-slate-900/50 shrink-0">
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <User className="w-5 h-5 text-blue-400" />
             {isAsesor ? 'Completar Datos del Cliente' : 'Editar Perfil del Cliente'}
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-y-auto">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-y-auto min-h-0">
           <div className="p-4 md:p-6 space-y-4 md:space-y-6 pb-24">
              {error && (
                 <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">

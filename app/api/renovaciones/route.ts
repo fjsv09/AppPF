@@ -130,7 +130,7 @@ export async function POST(request: Request) {
         // NUEVA VALIDACIÓN: Verificar estado del préstamo para restricciones de rol
         const { data: prestamoInfo } = await supabaseAdmin
             .from('prestamos')
-            .select('cliente_id, estado, cliente:clientes(nombres, bloqueado_renovacion)')
+            .select('cliente_id, estado, cliente:clientes(nombres, bloqueado_renovacion, asesor_id)')
             .eq('id', prestamo_id)
             .single()
 
@@ -238,7 +238,7 @@ export async function POST(request: Request) {
         const solicitudData = {
             prestamo_id,
             cliente_id: prestamoInfo.cliente_id,
-            asesor_id: user.id,
+            asesor_id: (prestamoInfo.cliente as any)?.asesor_id || user.id,
             monto_solicitado,
             interes,
             cuotas,

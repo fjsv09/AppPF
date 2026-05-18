@@ -41,7 +41,7 @@ export async function PATCH(
             .from('solicitudes_renovacion')
             .select(`
                 *,
-                cliente:cliente_id(id, nombres),
+                cliente:cliente_id(id, nombres, asesor_id),
                 asesor:asesor_id(id, nombre_completo)
             `)
             .eq('id', id)
@@ -118,6 +118,7 @@ export async function PATCH(
         }
 
         const nombreCliente = solicitud.cliente?.nombres || 'Cliente'
+        const asesorRealId = (solicitud.cliente as any)?.asesor_id || solicitud.asesor_id
         const prestamo_nuevo_id = resultado.prestamo_nuevo_id
 
         // PASO CONTABLE ATÓMICO: saldo + movimientos + autopago en una sola transacción DB
@@ -168,7 +169,7 @@ export async function PATCH(
             .eq('id', prestamo_nuevo_id)
 
         const clienteNombres = (solicitud.cliente as any)?.nombres || 'Cliente'
-        await createFullNotification(solicitud.asesor_id, {
+        await createFullNotification(asesorRealId, {
             titulo: '✅ Renovación Aprobada',
             mensaje: `La renovación de ${clienteNombres} ha sido aprobada. Nuevo préstamo creado.`,
             link: `/dashboard/prestamos/${prestamo_nuevo_id}`,
@@ -189,12 +190,12 @@ export async function PATCH(
         })
 
         await supabaseAdmin.from('tareas_evidencia').insert({
-            asesor_id: solicitud.asesor_id,
+            asesor_id: asesorRealId,
             prestamo_id: prestamo_nuevo_id,
             tipo: 'renovacion'
         })
 
-        await createFullNotification(solicitud.asesor_id, {
+        await createFullNotification(asesorRealId, {
             titulo: '📷 Evidencia Requerida',
             mensaje: `Se requiere foto de evidencia para la renovación de ${clienteNombres}.`,
             link: `/dashboard/tareas?tab=evidencia`,

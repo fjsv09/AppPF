@@ -235,15 +235,36 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
         return start
     }
 
+    // Todos los pagos aprobados del mes de los préstamos del asesor,
+    // independientemente de quién registró el pago (asesor, supervisor o admin).
+    // Usamos join nested igual que el panel de Transacciones, sin filtrar por estado del préstamo.
     const startOfPeriod = getPeriodStartDate('mensual')
-    const { data: pagosPeriodo } = await supabaseAdmin
+    const { data: pagosPeriodoRaw } = await supabaseAdmin
         .from('pagos')
-        .select('monto_pagado, created_at')
-        .eq('registrado_por', userId)
+        .select('monto_pagado, created_at, cronograma_cuotas!inner(prestamos!inner(clientes!inner(asesor_id)))')
+        .eq('cronograma_cuotas.prestamos.clientes.asesor_id', userId)
         .gte('created_at', startOfPeriod.toISOString())
-        .eq('estado_verificacion', 'aprobado') 
+        .eq('estado_verificacion', 'aprobado')
 
-    const totalRecaudadoReal = pagosPeriodo?.reduce((acc: number, p: any) => acc + Number(p.monto_pagado || 0), 0) || 0
+    const pagosPeriodo = pagosPeriodoRaw || []
+
+    const totalRecaudadoReal = pagosPeriodo.reduce((acc: number, p: any) => acc + Number(p.monto_pagado || 0), 0)
+
+    const getRecaudacionForPeriod = (periodo: string): number => {
+        const isSecondHalf = parseInt(hoyPeruStr.split('-')[2]) > 15
+        return pagosPeriodo
+            .filter((p: any) => {
+                const fechaPago = new Date(p.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+                if (periodo === 'diario') return fechaPago === hoyPeruStr
+                if (periodo === 'semanal') return fechaPago >= lunesActualStr
+                if (periodo === 'quincenal') {
+                    const bDate = parseInt(fechaPago.split('-')[2])
+                    return (isSecondHalf && bDate > 15) || (!isSecondHalf && bDate <= 15)
+                }
+                return true // mensual: todos los del mes
+            })
+            .reduce((acc: number, p: any) => acc + Number(p.monto_pagado || 0), 0)
+    }
 
     let netosComisionablesCount = 0
     let capitalNetoComisionable = 0
@@ -398,6 +419,13 @@ export async function calculateMetasForUser(supabaseAdmin: any, userId: string, 
                 nombreMotivo = 'Retencion'
             }
         } 
+        else if (meta.meta_recaudacion_total !== null && meta.meta_recaudacion_total !== undefined && meta.meta_recaudacion_total > 0) {
+            const recaudacionPeriodo = getRecaudacionForPeriod(meta.periodo)
+            if (recaudacionPeriodo >= meta.meta_recaudacion_total) {
+                cumplida = true
+                nombreMotivo = 'Recaudación Total'
+            }
+        }
         else if (meta.meta_colocacion_clientes) {
             const montoMin = meta.monto_minimo_prestamo || 500
             const bloquesCapital = Math.floor(statsResult.capital_neto_comisionable / montoMin)
